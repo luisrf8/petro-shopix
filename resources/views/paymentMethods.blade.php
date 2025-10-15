@@ -23,9 +23,9 @@
                 <h6 class="mb-0">Monedas</h6>
               </div>
               <div class="col-6 text-end">
-                <button class="btn bg-gradient-black mb-0" data-bs-toggle="modal" data-bs-target="#createCurrencyModal">
+                <!-- <button class="btn bg-gradient-black mb-0" data-bs-toggle="modal" data-bs-target="#createCurrencyModal">
                   <i class="material-symbols-rounded text-sm">add</i>&nbsp;&nbsp;Nueva Moneda
-                </button>
+                </button> -->
               </div>
             </div>
           </div>
@@ -34,9 +34,9 @@
             <div class="row d-flex flex-wrap">
               @foreach($currencies as $currency)
                 <div class="col-6">
-                  <div class="card card-body border card-plain border-radius-lg d-flex justify-content-between align-items-center flex-row py-0">
+                  <div class="card card-body border card-plain border-radius-lg d-flex justify-content-between align-items-center flex-row py-4">
                     <h6 class="mb-0">{{ $currency->name }} / {{$currency->code}}</h6>
-                    <button class="btn btn-sm toggle-status-currency-btn pt-4 {{ $currency->status ? 'text-success' : 'text-danger'}}" 
+                    <!-- <button class="btn btn-sm toggle-status-currency-btn pt-4 {{ $currency->status ? 'text-success' : 'text-danger'}}" 
                         data-id="{{ $currency->id }}" 
                         data-status="{{ $currency->status ? 'active' : 'inactive' }}">
                           {{ $currency->status ? 'Inactivar' : 'Activar' }}
@@ -47,7 +47,7 @@
                     data-method-id="{{ $currency->id }}"
                     data-name="{{ $currency->name }}"
                     data-code="{{ $currency->code }}"
-                    title="Editar Moneda">edit</i>
+                    title="Editar Moneda">edit</i> -->
                   </div>
                 </div>
               @endforeach
@@ -303,11 +303,13 @@
 <script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
 
   <script>
-
+    const authUser = @json($authUser);
+    const tenantId = Number(authUser.tenant_id);
     document.getElementById('createCurrencyForm').addEventListener('submit', function(event) {
       event.preventDefault(); // Evita el envío normal del formulario
       let formData = new FormData(this); // Crear un FormData con los datos del formulario
       console.log("formData", formData)
+      formData.append('tenant_id', tenantId); // 👈 Agregas el tenant_id
       fetch('api/currencies/create', {
         method: 'POST',
         headers: {
@@ -316,9 +318,10 @@
         body: formData
       })
       .then(response => {
+        console.log("response", response)
         if (response.status === 201) { // Valida el código de estado HTTP
           // alert('Moneda creada correctamente');
-          // window.location.reload();
+          window.location.reload();
         } else {
           throw new Error('Error al crear la Moneda');
         }
@@ -332,8 +335,9 @@
 
     document.getElementById('createPaymentMethodForm').addEventListener('submit', function(event) {
       event.preventDefault(); // Evita el envío normal del formulario
-
       let formData = new FormData(this); // Crear un FormData con los datos del formulario
+      formData.append('tenant_id', tenantId); // 👈 Agregas el tenant_id
+      console.log("formData", formData)
       fetch('api/payment-methods/create', {
         method: 'POST',
         headers: {
@@ -357,8 +361,9 @@
     // Actualizar la tasa del dólar
     document.getElementById('updateDollarRateForm').addEventListener('submit', function(event) {
       event.preventDefault(); // Evita que el formulario se envíe de manera convencional
-
       let formData = new FormData(this); // Crear un FormData con los datos del formulario
+      formData.append('tenant_id', tenantId); // 👈 Agregas el tenant_id
+      console.log("formData", formData)
       fetch('api/dollar-rate/update', {
         method: 'POST',
         headers: {
@@ -367,9 +372,10 @@
         body: formData
       })
         .then(response => {
+          console.log("response", response)
           if (response.status === 201) {
             alert('Tasa del dólar actualizada exitosamente');
-            $('#updateDollarRateModal').modal('hide'); // Cierra el modal
+            // $('#updateDollarRateModal').modal('hide'); // Cierra el modal
             location.reload(); // Recarga la página para mostrar los cambios
           } else {
             alert('Hubo un error al actualizar la tasa del dólar');

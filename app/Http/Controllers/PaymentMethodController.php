@@ -15,7 +15,7 @@ class PaymentMethodController extends Controller
     {
         $user = auth()->user();
 
-        $currencies = Currency::all()->where('tenant_id', $user->tenant_id);
+        $currencies = Currency::all();
         $paymentMethods = PaymentMethod::with('currency')->where('tenant_id', $user->tenant_id)->get();
 
         // Obtener el último valor de la tasa del dólar
@@ -39,6 +39,7 @@ class PaymentMethodController extends Controller
             'dni' => 'nullable|string',
             'bank' => 'nullable|string',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'tenant_id' => 'required'
         ]);
 
         if ($validator->fails()) {
@@ -52,6 +53,7 @@ class PaymentMethodController extends Controller
             'dni' => $request->dni,
             'bank' => $request->bank,
             'image' => $request->image,
+            'tenant_id' => $request->tenant_id
         ]);
         if ($request->hasFile('image')) {
             // Guardar la imagen en la carpeta `qr_images/` en el almacenamiento público
@@ -73,6 +75,7 @@ class PaymentMethodController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'tenant_id' => 'required'
         ]);
 
         if ($validator->fails()) {
@@ -82,6 +85,7 @@ class PaymentMethodController extends Controller
         $currency = Currency::create([
             'name' => $request->name,
             'code' => $request->code,
+            'tenant_id' => $request->tenant_id
         ]);
 
         return response()->json(['message' => 'Método de pago creado exitosamente', 'data' => $currency], 201);
@@ -186,29 +190,33 @@ class PaymentMethodController extends Controller
         return response()->json(['message' => 'Moneda actualizada o creada exitosamente', 'data' => $id], 200);
     }
 
-    // Actualizar la tasa del dólar
     public function updateDollarRate(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'rate' => 'required|numeric',
         ]);
-    
+
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 400);
         }
-    
-        // Suponiendo que tienes un modelo 'DollarRate'
-        $rate = DollarRate::first(); // Obtener el primer registro
+
+        $rate = DollarRate::where('tenant_id', $request->tenant_id)->first();
+
         if (!$rate) {
-            $rate = new DollarRate(); // Crear una nueva instancia si no existe
+            $rate = new DollarRate();
+            $rate->tenant_id = $request->tenant_id; // ✅ se asigna manualmente
         }
-    
+
         $rate->rate = $request->rate;
-        $rate->date = Carbon::now()->format('Y-m-d'); // Asignar la fecha actual
+        $rate->date = Carbon::now()->format('Y-m-d');
         $rate->save();
-    
-        return response()->json(['message' => 'Tasa del dólar actualizada exitosamente', 'data' => $rate], 201);
+
+        return response()->json([
+            'message' => 'Tasa del dólar actualizada exitosamente',
+            'data' => $rate
+        ], 201);
     }
+
     public function getDollarRate()
     {
         $dollarRate = DollarRate::latest('created_at')->first();

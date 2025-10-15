@@ -56,35 +56,29 @@ class SaleController extends Controller
         // Decodificar customerId si viene como JSON string
         $customer = is_string($request->customerId) ? json_decode($request->customerId, true) : $request->customerId;
         $customerId = is_array($customer) ? $customer['id'] : null;
-    
+        $tenantId = $request->tenant_id;
         $itemsSelected = $request->items;
-        $paymentDetails = $request->payments;
-    
+        $paymentDetails = $request->payments ?? [];
+
         if (!$customerId) {
             return response()->json(['error' => 'ID de cliente no válido.'], 400);
         }
-    
-        // Validación de productos
+
         if (empty($itemsSelected) || !is_array($itemsSelected)) {
             return response()->json(['error' => 'No se enviaron productos válidos.'], 400);
         }
-    
-        // Validación de pagos
-        if (empty($paymentDetails) || !is_array($paymentDetails)) {
-            return response()->json(['error' => 'No se enviaron detalles de pago válidos.'], 400);
-        }
-    
-        // Agrupar y procesar datos de productos
+
+        // Agrupar productos
         $groupedData = [];
         foreach ($itemsSelected as $item) {
             $groupedData[] = [
-                'product_variant_id' => $item['id'],  // Enviado directamente como id del variant
+                'product_variant_id' => $item['id'],
                 'quantity' => $item['quantity'],
                 'price' => $item['price'],
                 'amount' => $item['price'] * $item['quantity'],
             ];
         }
-    
+
         // Crear orden de venta
         $salesOrder = SalesOrder::create([
             'user_id' => $customerId,
@@ -92,10 +86,10 @@ class SaleController extends Controller
             'status' => 1,
             'address' => 'Tienda',
             'preference' => 'Tienda',
-            'deliver_status' => 1, // Asignar estado de entrega
+            'tenant_id' => $tenantId,
         ]);
-    
-        // Crear detalles de la venta y actualizar stock
+
+        // Crear detalles y actualizar stock
         foreach ($groupedData as $detail) {
             SalesOrderDetail::create([
                 'sales_order_id' => $salesOrder->id,
@@ -104,7 +98,7 @@ class SaleController extends Controller
                 'price' => $detail['price'],
                 'amount' => $detail['amount'],
             ]);
-    
+
             $productVariant = ProductVariant::find($detail['product_variant_id']);
             if ($productVariant && $productVariant->stock >= $detail['quantity']) {
                 $productVariant->stock -= $detail['quantity'];
@@ -113,22 +107,27 @@ class SaleController extends Controller
                 return response()->json(['error' => 'Stock insuficiente para el producto: ' . $productVariant->id], 400);
             }
         }
-    
-        // Crear pagos
-        foreach ($paymentDetails as $paymentDetail) {
-            $payment = Payment::create([
-                'sales_order_id' => $salesOrder->id,
-                'payment_method' => $paymentDetail['methodId'],  // Se llama methodId en tu objeto
-                'amount' => $paymentDetail['amount'],
-                'currency' => $paymentDetail['currency'],
-                'reference' => $paymentDetail['reference'] ?? null,
-                'status' => 1, // Aprobado por defecto
-            ]);
-    
-            // Si planeas subir imágenes más adelante, aquí va el código
-            // Actualmente el objeto JS no está enviando imágenes
+
+        // Crear pagos (si existen)
+        $approvedPayments = collect();
+        if (!empty($paymentDetails) && is_array($paymentDetails)) {
+            foreach ($paymentDetails as $paymentDetail) {
+                $payment = Payment::create([
+                    'sales_order_id' => $salesOrder->id,
+                    'payment_method' => $paymentDetail['methodId'],
+                    'amount' => $paymentDetail['amount'],
+                    'currency' => $paymentDetail['currency'],
+                    'reference' => $paymentDetail['reference'] ?? null,
+                    'status' => $paymentDetail['status'] ?? 1, // Por defecto aprobado
+                ]);
+
+                if ($payment->status == 1) {
+                    $approvedPayments->push($payment);
+                }
+            }
         }
-        // RECUPERAR la orden ya con todas sus relaciones, como en orderToggleStatus
+
+        // Recuperar orden con relaciones
         $order = SalesOrder::with([
             'user',
             'details',
@@ -136,49 +135,55 @@ class SaleController extends Controller
             'payments.payment'
         ])->findOrFail($salesOrder->id);
 
-        // Datos extra para el PDF
-        $serverIp = request()->getHost(); // IP o dominio
+        // ⚠️ Generar PDF solo si hay pagos aprobados
+        if ($approvedPayments->isNotEmpty()) {
+            $serverIp = request()->getHost();
 
-        $imagePath = storage_path('app/public/products/infblack.png');
-        $imageData = base64_encode(file_get_contents($imagePath));
-        $imageBase64 = 'data:image/png;base64,' . $imageData;
+            $imagePath = storage_path('app/public/products/infblack.png');
+            $imageData = base64_encode(file_get_contents($imagePath));
+            $imageBase64 = 'data:image/png;base64,' . $imageData;
 
-        $totalOrden = $order->details->sum('amount');
-        $totalPagado = $order->payments->sum('amount');
+            $totalOrden = $order->details->sum('amount');
+            $totalPagado = $order->payments->sum('amount');
 
-        // Generar QR
-        $qrUrl = "http://{$serverIp}:8000/publicOrder/{$order->id}";
-        $qrCode = QrCode::create($qrUrl)
-            ->setEncoding(new Encoding('UTF-8'))
-            ->setSize(250)
-            ->setMargin(10);
+            // Generar QR
+            $qrUrl = "http://{$serverIp}:8000/publicOrder/{$order->id}";
+            $qrCode = QrCode::create($qrUrl)
+                ->setEncoding(new Encoding('UTF-8'))
+                ->setSize(250)
+                ->setMargin(10);
 
-        $writer = new PngWriter();
-        $qrCodeImage = $writer->write($qrCode);
-        $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
+            $writer = new PngWriter();
+            $qrCodeImage = $writer->write($qrCode);
+            $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
 
-        // Generar HTML y PDF
-        $pdfContent = view('orderPdf', compact('order', 'totalOrden', 'totalPagado', 'imageBase64', 'qrCodeBase64'))->render();
+            // Generar PDF
+            $pdfContent = view('orderPdf', compact('order', 'totalOrden', 'totalPagado', 'imageBase64', 'qrCodeBase64'))->render();
 
-        $options = new Options();
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isPhpEnabled', true);
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($pdfContent);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', true);
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($pdfContent);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
 
-        // Guardar PDF
-        $fileName = 'orden-' . $order->id . '.pdf';
-        Storage::disk('public')->put('orders/' . $fileName, $dompdf->output());
-        $pdfUrl = asset('storage/orders/' . $fileName);
+            // Guardar PDF
+            $fileName = 'orden-' . $order->id . '.pdf';
+            Storage::disk('public')->put('orders/' . $fileName, $dompdf->output());
+            $pdfUrl = asset('storage/orders/' . $fileName);
+        } else {
+            $pdfUrl = null;
+        }
 
         return response()->json([
-            'message' => 'Venta registrada exitosamente.',
+            'message' => $approvedPayments->isNotEmpty()
+                ? 'Venta registrada exitosamente con pagos aprobados.'
+                : 'Venta registrada sin pagos aprobados (PDF no generado).',
             'pdf_url' => $pdfUrl
         ], 200);
-        
     }
+
     public function downloadPdf($id)
     {
         $order = SalesOrder::with([

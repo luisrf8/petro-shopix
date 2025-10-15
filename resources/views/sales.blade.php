@@ -14,6 +14,8 @@
     <div class="mx-5 d-flex justify-content-between gap-4">
         <div class="w-75">
             <h1>Flujo de Venta</h1>
+            {{$dollarRate}}
+            <span id="dollarRate" data-rate="{{ $dollarRate}}"></span>
             <span id="customerId" data-rate="{{ $customerId}}"></span>
             <form id="purchaseForm">
                 @csrf
@@ -306,8 +308,9 @@
         let payments = []; 
         let totalPaid = 0; 
 
-
-        const dollarRate = parseFloat(document.getElementById('dollarRate').dataset.rate);
+        const dollar = @json($dollarRate);
+        const dollarRate = Number(dollar.rate);
+        
         const customerId = document.getElementById('customerId').dataset.rate; // Asegúrate de que esta variable esté definida correctamente
         document.addEventListener('DOMContentLoaded', function () {
             // Escuchar todos los checkboxes
@@ -416,8 +419,9 @@
                 cartList.appendChild(li);
             });
             // Obtener la tasa del dólar desde el DOM
-            const dollarRateElement = document.getElementById('dollarRate');
-            const dollarRate = parseFloat(dollarRateElement.dataset.rate) || 1;
+
+            const dollar = @json($dollarRate);
+            const dollarRate = Number(dollar.rate);
 
             cartTotal.textContent = totalAmount.toFixed(2); 
             cartTotalBs.textContent = (totalAmount * dollarRate ).toFixed(2); 
@@ -539,6 +543,8 @@
             });
         });
 
+
+        
         document.addEventListener('DOMContentLoaded', function () {
             const currencyButtons = document.querySelectorAll('.currency-tab');
             const sections = document.querySelectorAll('.currency-section');
@@ -564,6 +570,7 @@
             });
             
         });
+        
         function togglePaymentFields(checkbox) {
             const methodId = checkbox.dataset.methodId;
             const paymentFields = document.getElementById(`paymentFields_${methodId}`);
@@ -597,9 +604,8 @@
             const currency = input.dataset.currency;
             const payment = payments.find(payment => payment.methodId === methodId);
 
-            // Obtener la tasa del dólar desde el DOM
-            const dollarRateElement = document.getElementById('dollarRate');
-            const dollarRate = parseFloat(dollarRateElement.dataset.rate) || 1;
+            const dollar = @json($dollarRate);
+            const dollarRate = Number(dollar.rate);
 
             if (payment) {
                 if (input.classList.contains('payment-input')) {
@@ -690,9 +696,9 @@
         function renderSummary() {
             const container = document.getElementById('summaryContainer');
             
-            // Obtener la tasa del dólar desde el DOM
-            const dollarRateElement = document.getElementById('dollarRate');
-            const dollarRate = parseFloat(dollarRateElement.dataset.rate) || 1;
+            const dollar = @json($dollarRate);
+            const dollarRate = Number(dollar.rate);
+
             container.innerHTML = ''; // Limpiar resumen anterior
 
             // Resumen de items
@@ -715,6 +721,7 @@
             container.appendChild(totalDiv);
 
             // Total BS
+            console.log("dollarRate", dollarRate)
             const totalDivBs = document.createElement('p');
             totalDivBs.innerHTML = `<strong>Total a pagar Bs:</strong> Bs${(totalAmount * dollarRate).toFixed(2)}`;
             container.appendChild(totalDivBs);
@@ -746,16 +753,20 @@
         }
         
         document.getElementById('confirmPurchase').addEventListener('click', function() {
+            const authUser = @json($authUser);
+            const tenantId = Number(authUser.tenant_id);
 
             const summary = {
                 customerId: customerId,
                 items: selectedItems,
-                payments: payments
+                payments: payments,
+                tenant_id: tenantId
             };
 
             // Obtener el token CSRF desde el meta tag o un input hidden
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             console.log('Resumen a enviar:', summary);
+            return;
             // Enviar la solicitud al servidor
             fetch('/create-sale', {
                 method: 'POST',
