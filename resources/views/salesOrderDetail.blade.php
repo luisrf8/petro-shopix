@@ -15,7 +15,6 @@
         @if($order->has_returns)
           <span class="text-danger">Devolución Registrada</span>
         @else
-        {{$order->deliver_status}}
           <select id="deliver-status" class="btn btn-sm toggle-status-btn 
             {{ $order->deliver_status == 0 ? 'btn-outline-warning' : ($order->deliver_status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
             onchange="updateDeliverStatus(this, {{ $order->id }})">
@@ -47,9 +46,14 @@
       </div>
 
       <div class="w-100 d-flex justify-content-between mt-3 gap-4">
+        {{-- -- 
         <a href="{{ url('/sales-orders/' . $order->id . '/pdf') }}" class="btn btn-dark">
           Generar PDF
         </a>
+        -- --}}
+        <div>
+          
+        </div>
         <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">
             Registrar Devolución
         </button>
@@ -65,7 +69,7 @@
               <tr>
                 <th>Producto</th>
                 <th>Cantidad</th>
-                <th>Talla</th>
+                <th>Variante</th>
                 <th>Precio Unitario</th>
                 <th>Subtotal</th>
               </tr>

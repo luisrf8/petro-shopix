@@ -179,9 +179,12 @@
               <div class="d-flex flex-column mx-3">
                 <h6 class="text-sm">{{ $product->name }}</h6>
                 <div class="text-sm d-flex flex-column">
+                  <span>
+                    {{ $product->description }}
+                  </span>
                   @foreach ($product->variants as $variant)
                     <span class="text-sm">
-                      Talla: {{ $variant->size }} - {{ $variant->price }} $ - 
+                      {{ $variant->size }} - {{ $variant->price }} $ - 
                     <span class="{{ $variant->stock < 1 ? 'text-danger' : ($variant->stock < 5 ? 'text-warning' : 'text-success') }}">{{ $variant->stock }} unidades</span>
                     </span>
                   @endforeach

@@ -53,7 +53,7 @@
                             <tr>
                                 <th>Producto</th>
                                 <th>Cantidad</th>
-                                <th>Talla</th>
+                                <th>Variante</th>
                                 <th>Precio Unitario</th>
                                 <th>Subtotal</th>
                             </tr>

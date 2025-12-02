@@ -22,8 +22,13 @@ class User extends Authenticatable implements JWTSubject
         'name',
         'email',
         'password',
-        'role_id', // Agregamos role_id para asignación masiva
+        'tenant_id',
+        'role_id',
+        'phone_number',
+        'dni',
+        'is_active',
     ];
+
 
     /**
      * The attributes that should be hidden for serialization.

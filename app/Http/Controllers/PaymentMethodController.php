@@ -31,6 +31,8 @@ class PaymentMethodController extends Controller
     // Crear un nuevo método de pago
     public function create(Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -72,6 +74,8 @@ class PaymentMethodController extends Controller
 
     public function currencyCreate(Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -92,6 +96,8 @@ class PaymentMethodController extends Controller
     }
     public function edit(Request $request, $id)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         // Validar los datos del formulario
         $validated = $request->validate([
             'name' => 'required|string',
@@ -131,6 +137,8 @@ class PaymentMethodController extends Controller
 
     public function toggleStatus($id, Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         // Validar el parámetro de estado (is_active)
         // $validator = Validator::make($request->all(), [
         //     'is_active' => 'required|boolean',  // true para activar, false para inactivar
@@ -155,6 +163,8 @@ class PaymentMethodController extends Controller
 
     public function currencyToggleStatus($id, Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         // Buscar la moneda
         $currency = Currency::findOrFail($id);
     
@@ -176,6 +186,8 @@ class PaymentMethodController extends Controller
     // Crear o editar una moneda
     public function updateCurrency(Currency $id, Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $request->validate([
             'name' => 'required|string|max:255|unique:currencies,name,' . $id->id,
             'code' => 'required|string',
@@ -192,6 +204,8 @@ class PaymentMethodController extends Controller
 
     public function updateDollarRate(Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $validator = Validator::make($request->all(), [
             'rate' => 'required|numeric',
         ]);
@@ -225,6 +239,8 @@ class PaymentMethodController extends Controller
     // Función para eliminar una imagen
     public function removeQrImage($methodId)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $paymentMethod = PaymentMethod::findOrFail($methodId);
     
         // Verificar si existe una imagen QR en el almacenamiento y eliminarla

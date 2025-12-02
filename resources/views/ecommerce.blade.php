@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Shopix</title>
+  <title>Shopix - Gestión de Tiendas Virtuales</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <style>
     body {
@@ -15,6 +15,11 @@
 
     .navbar {
       background-color: #000 !important;
+      width: 100vw;
+    }
+
+    .shadow-soft {
+      filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
     }
 
     .navbar a,
@@ -22,25 +27,35 @@
       color: #000 !important;
     }
 
-    .hero {
-      position: relative;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      color: white;
-    }
+        .hero {
+            position: relative;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: white;
+            /* La imagen de fondo debe ser llamativa y de alta resolución */
+            background: url('../../assets/img/shopixbg.png') no-repeat center center;
+            background-size: cover;
+            overflow: hidden; /* Asegura que la superposición no se salga */
+        }
 
-    .hero video {
-      position: absolute;
-      top: 0;
-      left: 0;
-      object-fit: cover;
-      width: 100%;
-      height: 100%;
-      z-index: -1;
-    }
+        /* Nueva capa oscura para contraste */
+        .hero-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.62); /* Negro semi-transparente */
+            z-index: 0;
+        }
+        
+        /* Contenido del Hero sobre la superposición */
+        .hero .container {
+            z-index: 1; /* Coloca el contenido por encima del overlay */
+        }
 
     .filter-box {
       background: white;
@@ -75,11 +90,12 @@
     }
 
     footer {
-      background: #000;
+      background: #001a49ff;
       color: #fff;
       padding: 40px 0;
       text-align: center;
     }
+
     .glass-header {
       backdrop-filter: blur(16px) saturate(180%);
       -webkit-backdrop-filter: blur(16px) saturate(180%);
@@ -89,198 +105,280 @@
       color: white;
       width: 100%;
     }
+
     .nav-link.white-shadow {
       color: white;
       text-shadow: 1px 1px 3px rgba(1, 0, 0, 2);
     }
     .glass-text {
-      font-size: 5rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.91), rgba(255, 255, 255, 0.86));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.75), 0 4px 8px rgba(0, 0, 0, 0.2);
+        font-size: 5rem;
+        font-weight: 700;
+        /* Color de texto blanco sólido */
+        color: #fff; 
+        /* Sombra negra con mayor desenfoque para que el texto resalte */
+        text-shadow: 2px 2px 8px rgba(0, 0, 0, 1); 
+    }
+
+    /* También puedes aplicar un text-shadow más sutil al menú de navegación */
+    .nav-link.white-shadow {
+        color: white;
+        /* Sombra más definida */
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.91); 
+    }
+    /* Agrega esta nueva clase a tu bloque <style> */
+    .scrolled-shadow {
+      background: rgba(255, 255, 255, 0);
+        /* Define la sombra, por ejemplo, una sutil sombra negra */
+        /* Agrega una transición suave para que la sombra aparezca y desaparezca */
+        transition: box-shadow 0.3s ease-in-out, background 0.3s ease-in-out;
+    }
+
+    /* Modifica la regla del contenedor para incluir la transición inicial */
+    .w-100.position-fixed.top-0.px-4 {
+        transition: box-shadow 0.3s ease-in-out, background 0.3s ease-in-out;
     }
   </style>
 </head>
 
 <body>
 
-<div class="container d-flex justify-content-center position-fixed top-0 start-50 translate-middle-x" style="z-index: 1050; margin-top: 30px;">
-  <div class="card glass-header px-4 py-3 w-100" style="max-width: 90vw;">
-    <div class="row align-items-center">
-      
-      <!-- Menú -->
-      <div class="col-md-4 d-flex justify-content-start">
-        <ul class="nav">
-          <a class="nav-link fw-semibold white-shadow" href="#beneficios">Beneficios</a>
-          <a class="nav-link fw-semibold white-shadow" href="#contacto">Contacto</a>
-          <a class="nav-link fw-semibold white-shadow" href="#contacto">Ubicación</a>
-        </ul>
-      </div>
+  <!-- HEADER -->
+  <div class="w-100 position-fixed top-0 px-4" style="z-index: 1050; ">
+    <div class="py-3 w-100" style="">
+      <div class="row align-items-center">
 
-      <!-- Logo -->
-      <div class="col-md-4 d-flex justify-content-center">
-        <img src="../../assets/img/inf.png" alt="Logo" class="img-fluid" style="height: 60px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));">
-      </div>
+        <!-- Botón -->
+        <div class="col-md-4 d-flex justify-content-start">
+          <a href="http://192.168.1.119:3000/" class="btn btn-light text-dark fw-bold px-4 py-2">
+            <img src="../../assets/img/shopix5.png" alt="Logo Shopix" class="img-fluid" style="width: 100px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0));">
+          </a>
+        </div>
+        
+        <!-- Logo -->
+        <div class="col-md-4 d-flex justify-content-center">
+          </div>
+          <!-- Menú -->
+          <div class="col-md-4 d-flex justify-content-end">
+            <ul class="nav">
+              <a class="nav-link fw-semibold white-shadow" href="#funcionalidades">Funciones</a>
+              <a class="nav-link fw-semibold white-shadow" href="#beneficios">Beneficios</a>
+              <a class="nav-link fw-semibold white-shadow" href="#contacto">Contacto</a>
+            </ul>
+          </div>
 
-      <!-- Botón -->
-      <div class="col-md-4 d-flex justify-content-end">
-        <a href="http://192.168.1.119:3000/" class="btn btn-light text-dark fw-bold px-4 py-2">Comprar</a>
       </div>
-
     </div>
   </div>
-</div>
 
-
-
-  <!-- HERO CON VIDEO DE FONDO -->
+  <!-- HERO -->
   <section class="hero">
-    <video autoplay muted loop playsinline>
+    <!-- <video autoplay muted loop playsinline>
       <source src="../../assets/img/Street.mp4" type="video/mp4" />
-    </video>
+    </video> -->
+    <div class="hero-overlay"></div> 
     <div class="container text-center">
       <h1 class="glass-text">SHOPIX</h1>
-      <h1 class="glass-text">MODA PARA HOY Y SIEMPRE</h1>
-      <p class="lead glass-text" style="font-size: 1.5rem;">Chemises, franelas y jeans que definen tu estilo</p>
-      <!-- Botón -->
-        <a href="http://192.168.1.119:3000/" class="btn btn-light text-dark fw-bold px-4 py-2 w-50">Comprar ahora</a>
+      <h2 class="glass-text">GESTIONA TU TIENDA VIRTUAL FÁCILMENTE</h2>
     </div>
   </section>
 
-  <!-- COLECCIÓN DESTACADA -->
-  <section class="py-5">
+
+  <!-- FUNCIONALIDADES -->
+  <section id="funcionalidades" class="py-5 bg-light">
     <div class="container">
-      <h2 class="section-title mb-4 text-center">Nuestra Colección</h2>
-      <div class="row g-4">
-      @foreach($categories as $category)
-      <div class="col-md-4">
-        <div class="card card-product">
-          <div class="text-center mt-4">
-            <i class="{{ $category->icon }} fs-2"></i>
-          </div>
-          <div class="card-body text-center">
-            <h6 class="text-center mb-0 opacity-9">{{ $category->name }}</h6>
-            <span class="text-xs">{{ $category->description }}</span>
-          </div>
+      <h2 class="section-title mb-5 text-center">Funciones Principales</h2>
+      <div class="row text-center">
+        <div class="col-md-3 icon-box">
+          <i class="bi bi-shop"></i>
+          <h5>Gestión de Tienda</h5>
+          <p>Organiza todos tus productos y categorías fácilmente.</p>
         </div>
-      </div>
-      @endforeach
+        <div class="col-md-3 icon-box">
+          <i class="bi bi-box-seam"></i>
+          <h5>Inventario Inteligente</h5>
+          <p>Control automático de existencias y alertas de stock bajo.</p>
+        </div>
+        <div class="col-md-3 icon-box">
+          <i class="bi bi-cash-stack"></i>
+          <h5>Ventas y Compras</h5>
+          <p>Registra tus movimientos y genera reportes detallados.</p>
+        </div>
+        <div class="col-md-3 icon-box">
+          <i class="bi bi-bar-chart"></i>
+          <h5>Reportes y Pagos</h5>
+          <p>Obtén reportes en tiempo real y administra tus pagos con facilidad.</p>
+        </div>
       </div>
     </div>
   </section>
-<!-- SECCIÓN DE CALIDAD -->
-<section class="py-5 bg-light">
-  <div class="container text-center">
-    <h2 class="section-title mb-5">Calidad Garantizada</h2>
-    <div class="row justify-content-center">
-      @foreach($productItems as $product)
-      <div class="col-md-4 mb-4">
-        <div class="card h-100 shadow-sm">
-          @if(isset($product->images) && count($product->images) > 0)
-            <img src="{{ asset('storage/' . $product->images[0]->path) }}" 
-                 class="card-img-top" 
-                 alt="Imagen del producto"
-                 style="height: 300px; object-fit: cover;">
-          @else
-            <div class="d-flex align-items-center justify-content-center" 
-                 style="height: 300px; background-color: #eee;">
-              <i class="material-symbols-rounded text-muted fs-1">photo_camera</i>
+
+  <section class="p-5">
+    <div class="text-center">
+      <h2 class="section-title mb-5">Planes Disponibles</h2>
+      <div class="d-flex flex-wrap justify-content-center gap-4">
+        @foreach($plans as $plan)
+        <div class="mb-4 d-flex justify-content-center">
+          <div class="card p-4 card-product h-100 d-flex flex-column justify-content-between" style="width: 25rem;">
+            <div class="card-body d-flex flex-column align-items-center">
+              <h6 class="text-uppercase fw-semibold mb-3">{{ $plan->name }}</h6>
+                <img src="{{ $plan->image }}" 
+                    alt="{{ $plan->name }}" 
+                    class="img-fluid mb-3 rounded shadow-soft" 
+                    style="max-width: 220px;">
+
+              
+              <p class="fw-semibold mb-1">Monto a pagar</p>
+              <h4 class="fw-bold mb-4">${{ number_format($plan->price, 2) }} / Mes</h4>
+
+              <h6 class="fw-bold mb-2">Beneficios</h6>
+              <ul class="list-unstyled text-start w-100">
+                @foreach($plan->features as $feature)
+                <li class="mb-1 d-flex align-items-center gap-2">
+                  <i class="bi bi-check2 me-1" style="color: #0d6efd; font-size: 1.5rem; font-weight: 800"></i>{{ $feature }}
+                </li>
+                @endforeach
+              </ul>
             </div>
-          @endif
-          <div class="card-body text-center">
-            <h5 class="card-title fw-bold">{{ $product->name }}</h5>
+            <div class="card-footer bg-transparent border-0 text-center">
+              <a href="/create-tenant-user"
+                target="_blank"
+                class="btn  w-75 fw-semibold rounded-pill">
+                Seleccionar Plan
+              </a>
+            </div>
           </div>
         </div>
+        @endforeach
       </div>
-      @endforeach
     </div>
-    <p class="mt-4">Confeccionamos cada pieza con materiales premium.</p>
-  </div>
-</section>
+  </section>
 
 
   <!-- BENEFICIOS -->
-  <section class="py-5">
-    <div class="container">
-      <div class="row text-center">
+  <section id="beneficios" class="py-5">
+    <div class="container text-center">
+      <h2 class="section-title mb-5">Beneficios de Usar Shopix</h2>
+      <div class="row justify-content-center">
         <div class="col-md-4 icon-box">
-          <i class="bi bi-box-seam"></i>
-          <h5>Hecho a Pedido</h5>
-          <p>Ropa exclusiva confeccionada para ti</p>
+          <i class="bi bi-speedometer"></i>
+          <h5>Rápido y Eficiente</h5>
+          <p>Todo lo que necesitas para tu tienda en un solo panel.</p>
         </div>
         <div class="col-md-4 icon-box">
-          <i class="bi bi-truck"></i>
-          <h5>Envío Gratis</h5>
-          <p>En pedidos a nivel nacional</p>
+          <i class="bi bi-cloud-check"></i>
+          <h5>Accesible desde Cualquier Lugar</h5>
+          <p>Gestiona tu negocio desde tu computadora o teléfono.</p>
         </div>
         <div class="col-md-4 icon-box">
-          <i class="bi bi-arrow-left-right"></i>
-          <h5>Devoluciones Fáciles</h5>
-          <p>Cambios disponibles sin costo adicional</p>
+          <i class="bi bi-people"></i>
+          <h5>Multiusuario</h5>
+          <p>Agrega empleados, asigna roles y trabaja en equipo.</p>
         </div>
       </div>
     </div>
   </section>
 
-<!-- UBICACIÓN -->
-<section id="contacto" class="py-5 bg-light">
-  <div class="container">
-    <div class="row align-items-center">
-      
-      <!-- Texto y botón -->
-      <div class="col-md-6 mb-4 mb-md-0">
-        <h2 class="section-title mb-3">Dónde nos ubicamos</h2>
-        <p class="mb-3">Calle Sucre - Edificio Maturín PB Local 01</p>
-        <a href="https://www.google.com/maps/@9.7527562,-63.1679763,15.25z?entry=ttu" target="_blank" class="btn btn-dark px-4 py-2">
-          Ver en Google Maps
-        </a>
+<!-- Tiendas -->
+<section id="beneficios" class="py-5 bg-light">
+  <div class="container text-center">
+    <h2 class="section-title mb-5 fw-bold">Aliados Comerciales</h2>
 
-        <!-- Redes sociales -->
-        <div class="mt-4 d-flex gap-5">
-          <a href="https://www.instagram.com/infinitycenter.ca/" target="_blank" class="text-dark fs-4">
-            <i class="bi bi-instagram"></i>
-          </a>
-          <a href="https://api.whatsapp.com/send?phone=584122628765" target="_blank" class="text-dark fs-4">
-            <i class="bi bi-whatsapp"></i>
-          </a>
-          <a href="https://facebook.com" target="_blank" class="text-dark fs-4">
-            <i class="bi bi-facebook"></i>
-          </a>
-          <a href="https://t.me" target="_blank" class="text-dark fs-4">
-            <i class="bi bi-telegram"></i>
-          </a>
+    <div id="carouselTiendas" class="carousel slide" data-bs-ride="carousel" data-bs-interval="2000">
+      <div class="carousel-inner">
+
+        @foreach($tenants->chunk(4) as $index => $grupo)
+        <div class="carousel-item @if($index === 0) active @endif">
+          <div class="row justify-content-center">
+            @foreach($grupo as $tienda)
+              <div class="col-md-3 mb-4 d-flex justify-content-center align-items-center">
+                @if($tienda->logo)
+                  <img src="{{ asset('storage/' . $tienda->logo) }}" 
+                       alt="{{ $tienda->name }}" 
+                       class="img-fluid" 
+                       style="max-height: 100px;">
+                @else
+                  <img src="{{ asset('assets/img/shopix5.png') }}" 
+                       alt="{{ $tienda->name }}" 
+                       class="img-fluid" 
+                       style="max-height: 100px;">
+                @endif
+              </div>
+            @endforeach
+          </div>
         </div>
+        @endforeach
+
       </div>
 
-      <!-- Mapa -->
-      <div class="col-md-6">
-        <div class="rounded-4 overflow-hidden shadow" style="height: 300px;">
-          <iframe
-            src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d62734.306809791316!2d-63.1679763!3d9.7527562!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1ses!2sve!4v1700000000000"
-            width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"
-            referrerpolicy="no-referrer-when-downgrade"></iframe>
-        </div>
-      </div>
-
+      <!-- Controles (opcionales) -->
+      <button class="carousel-control-prev" type="button" data-bs-target="#carouselTiendas" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon"></span>
+      </button>
+      <button class="carousel-control-next" type="button" data-bs-target="#carouselTiendas" data-bs-slide="next">
+        <span class="carousel-control-next-icon"></span>
+      </button>
     </div>
   </div>
 </section>
 
 
+  <!-- CONTACTO / UBICACIÓN -->
+  <section id="contacto" class="py-5 bg-light">
+    <div class="container">
+      <div class="row align-items-center">
+        <div class="col-md-6 mb-4 mb-md-0">
+          <h2 class="section-title mb-3">Contáctanos</h2>
+          <p class="mb-3">Obtén una demo personalizada o consulta nuestros planes.</p>
+          <a href="https://api.whatsapp.com/send?phone=584122628765" target="_blank" class="btn btn-primary px-4 py-2">
+            Escríbenos por WhatsApp
+          </a>
+          <div class="mt-4 d-flex gap-4">
+            <a href="https://www.instagram.com/infinitycenter.ca/" target="_blank" class="text-dark fs-4"><i class="bi bi-instagram"></i></a>
+            <a href="https://facebook.com" target="_blank" class="text-dark fs-4"><i class="bi bi-facebook"></i></a>
+            <a href="https://t.me" target="_blank" class="text-dark fs-4"><i class="bi bi-telegram"></i></a>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="rounded-4 overflow-hidden shadow" style="height: 300px;">
+            <iframe
+              src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d62734.306809791316!2d-63.1679763!3d9.7527562!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1ses!2sve!4v1700000000000"
+              width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- FOOTER -->
   <footer>
     <div class="container">
-      <p>© 2025 Shopix. Todos los derechos reservados.</p>
-      <a href="http://192.168.1.119:8000/login" class="btn btn-light text-dark fw-bold px-4 py-2 w-50">Soy Admin</a>
-
+      <p>© 2025 Shopix. Sistema de Gestión de Tiendas Virtuales.</p>
+      <a href="/login" class="btn btn-light text-dark fw-bold px-4 py-2 w-50">Soy Admin</a>
     </div>
   </footer>
-
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 </body>
+<script>
+    // Selecciona el div que contiene el navbar y que tiene la clase 'w-100 position-fixed top-0 px-4'
+    const headerContainer = document.querySelector('.w-100.position-fixed.top-0.px-4');
+    
+    // Función para añadir/eliminar la clase de sombra
+    function toggleShadow() {
+        if (window.scrollY > 0) {
+            // Cuando el scroll es mayor a 0, añadimos la clase de sombra
+            headerContainer.classList.add('scrolled-shadow');
+        } else {
+            // Cuando el scroll está en la parte superior (0), eliminamos la clase
+            headerContainer.classList.remove('scrolled-shadow');
+        }
+    }
 
+    // Escucha el evento de scroll en la ventana
+    window.addEventListener('scroll', toggleShadow);
+    
+    // Ejecuta la función al cargar la página en caso de que ya se haya hecho scroll
+    toggleShadow();
+</script>
 </html>

@@ -11,7 +11,10 @@ use App\Models\SalesOrder;
 use App\Models\User;
 use App\Models\PurchaseOrder;
 use App\Models\DollarRate;
+use App\Models\Tenant;
+use App\Models\Plan;
 use Carbon\Carbon;
+use App\Models\Log;
 use App\Models\SalesOrderDetail;
 use Illuminate\Support\Facades\DB;
 
@@ -19,10 +22,10 @@ class IndexController extends Controller
 {
     public function landing()
     {
-        $categories = Category::all()
-        ->take(3)
-        ;
-    
+        $categories = Category::all()->take(3);
+        $tenants = Tenant::all();
+        $plans = Plan::all();
+        
         // Asocia íconos por nombre o ID
         $icons = [
             'Ropa' => 'bi bi-shirt',
@@ -41,9 +44,13 @@ class IndexController extends Controller
             ->take(3)
             ->get();
     
-        return view('ecommerce', compact('categories', 'productItems'));
+        return view('ecommerce', compact('categories', 'productItems', 'tenants', 'plans'));
     }
-    
+    public function indexLog()
+    {
+        $logs = Log::latest()->take(100)->get();        
+        return view('logs', compact('logs'));
+    }
 
     public function index()
     {

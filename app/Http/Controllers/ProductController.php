@@ -7,10 +7,12 @@ use App\Models\Product;
 use App\Models\Category;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
+use App\Models\Tax;
 use Google\Client;
 use Google\Service\Drive;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
@@ -33,14 +35,25 @@ class ProductController extends Controller
                     ->where('tenant_id', $user->tenant_id)
                     ->with(['variants']);
             }])
+            ->where('is_active', true)
             ->where('tenant_id', $user->tenant_id) // 👈 aquí filtras las categorías
             ->get();
-    
+        $taxes = Tax::all();
+
         $productItems = Product::with(['category', 'images', 'variants'])
             ->where('tenant_id', $user->tenant_id)
             ->orderBy('created_at', 'desc')
             ->get();
-        return view('products', compact('categories', 'productItems'));
+        return view('products', compact('categories', 'productItems', 'taxes'));
+    }
+
+    public function indexCreateProduct()
+    {
+        $user = auth()->user();
+
+        $categories = Category::where('tenant_id', $user->tenant_id)->get();
+        $taxes = Tax::all();
+        return view('createProductItem', compact('categories', 'taxes'));
     }
 
     public function getProducts()
@@ -80,8 +93,12 @@ class ProductController extends Controller
 
     public function showByCategory($categoryId)
     {
+        $user = auth()->user();
+
         $category = Category::findOrFail($categoryId);
-        $categories = Category::all();
+        $categories = Category::where('tenant_id', $user->tenant_id)
+        ->where('is_active', true)
+        ->get();
         $productItems = Product::where('category_id', $category->id)
         ->orderBy('created_at', 'desc')
         ->get();
@@ -118,12 +135,16 @@ class ProductController extends Controller
     
     public function showByProduct($id)
     {
-        $product = Product::with(['variants', 'images', 'category'])->findOrFail($id);
+        $product = Product::with(['variants', 'images', 'category', 'taxes'])->findOrFail($id);
         $categories = Category::all();
-        return view('productItem', compact('product', 'categories'));
+        $taxes = Tax::all();
+        return view('productItem', compact('product', 'categories', 'taxes'));
     }
+    
     public function store(Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'required|string',
@@ -138,26 +159,25 @@ class ProductController extends Controller
     }
     public function create(Request $request)
     {
-        // Validar los datos del producto y las variantes
+        DB::raw("SET @user_id = " . auth()->id());
+
         $request->validate([
-            // 'category_id' => 'required|numeric',
-            // 'productName' => 'required|string|max:255',
-            // 'productDescription' => 'required|string',
-            // 'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            // 'variants' => 'nullable|array',
-        ],
-         [
-            'productName.unique' => 'El nombre del producto ya está registrado. Por favor, elige otro.',
+            // Validaciones que necesites…
         ]);
-    
-        // Crear el producto
+
         $product = Product::create([
             'category_id' => $request->category_id,
             'name' => $request->productName,
             'description' => $request->productDescription,
             'tenant_id' => $request->tenant_id
         ]);
-        // Guardar cada imagen
+
+        // 📌 GUARDAR TAXES SELECCIONADOS (si existen)
+        if ($request->has('tax_ids') && is_array($request->tax_ids)) {
+            $product->taxes()->sync($request->tax_ids);
+        }
+
+        // Guardar imágenes
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
                 $path = $image->store('products', 'public');
@@ -167,32 +187,51 @@ class ProductController extends Controller
                 ]);
             }
         }
+
+        // Guardar Variantes
         $variants = $request->variants;
         if (is_string($variants)) {
             $variants = json_decode($variants, true);
         }
-        // Crear las variantes con stock
+
         if (!empty($variants) && is_array($variants)) {
             foreach ($variants as $variant) {
                 ProductVariant::create([
                     'product_id' => $product->id,
                     'size' => $variant['name'],
                     'price' => $variant['price'],
-                    'stock' => $variant['stock'], // Agregar el stock aquí
+                    'stock' => $variant['stock'],
                 ]);
             }
         }
-    
-        return response()->json(['success' => true, 'message' => 'Product created successfully']);
-        // return response()->json(['message' => 'Category created successfully', 'product' => $product], 201);
 
+        return response()->json(['success' => true, 'message' => 'Product created successfully']);
     }
-        // Función para agregar una imagen
-        public function addImage(Request $request, $productId)
-        {
-            $request->validate([
-                'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
-            ]);
+    public function updateTaxes(Request $request, $id)
+    {
+        DB::raw("SET @user_id = " . auth()->id());
+
+        $product = Product::findOrFail($id);
+
+        $request->validate([
+            'taxes' => 'array',
+            'taxes.*' => 'exists:taxes,id'
+        ]);
+
+        // Sincroniza las relaciones
+        $product->taxes()->sync($request->taxes);
+
+        return response()->json(['success' => true]);
+    }
+
+    // Función para agregar una imagen
+    public function addImage(Request $request, $productId)
+    {
+        DB::raw("SET @user_id = " . auth()->id());
+
+        $request->validate([
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
     
             // Guardar la imagen en el almacenamiento
             $path = $request->file('image')->store('products', 'public');
@@ -272,16 +311,31 @@ class ProductController extends Controller
         return response()->json($product);
     }
     
-    public function update(Request $request, $id) {
+    public function update(Request $request, $id)
+    {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $product = Product::findOrFail($id);
-        $product->name = $request->name;
-        $product->description = $request->description;
-        $product->category_id = $request->category;
-        
-        $product->save();
-        return response()->json(['message' => 'Producto actualizado con éxito.', 'Producto' => $product], 201);
 
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'required|string|max:500',
+            'category' => 'required|exists:categories,id',
+            'is_active' => 'required|boolean',
+        ]);
 
+        $product->update([
+            'name' => $validated['name'],
+            'description' => $validated['description'],
+            'category_id' => $validated['category'],
+            'is_active' => $validated['is_active'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Producto actualizado correctamente',
+            'product' => $product,
+        ]);
     }
 
     public function generateReport(Request $request)

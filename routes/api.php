@@ -13,6 +13,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\GoogleDriveController;
 use App\Http\Controllers\PlanController;
+use App\Http\Controllers\TenantController;
 
 // ------------------------ RUTAS PÚBLICAS ------------------------
 
@@ -111,3 +112,8 @@ Route::post('/get-variants', [PurchaseOrderController::class, 'getVariants']);
 Route::post('/plans', [PlanController::class, 'store'])->name('plans.store');
 Route::post('/plans/{id}', [PlanController::class, 'update']);
 Route::delete('/plans/{id}', [PlanController::class, 'destroy'])->name('plans.destroy');
+
+// ------------------------ TENANTS ------------------------
+
+Route::post('/tenants', [TenantController::class, 'store'])->name('tenants.store');
+Route::post('/tenants/{tenant}', [TenantController::class, 'update']);

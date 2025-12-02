@@ -138,9 +138,22 @@
             </a>
           </li>
           <li class="nav-item">
+            <a class="nav-link text-dark" href="/taxes">
+              <i class="material-symbols-rounded opacity-5">view_in_ar</i>
+              <!-- <i class="bi bi-bag"></i> -->
+              <span class="nav-link-text ms-1">Impuestos</span>
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link text-dark" href="/tenants">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
               <span class="nav-link-text ms-1">Tiendas</span>
+            </a>
+          </li>
+                    <li class="nav-item">
+            <a class="nav-link text-dark" href="/logs">
+              <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
+              <span class="nav-link-text ms-1">Logs</span>
             </a>
           </li>
           <li class="nav-item">

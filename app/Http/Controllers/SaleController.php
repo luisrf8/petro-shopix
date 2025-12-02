@@ -29,6 +29,9 @@ use Endroid\QrCode\Label\Label;
 use Endroid\QrCode\Logo\Logo;
 use Endroid\QrCode\RoundBlockSizeMode;
 use App\Models\DollarRate;
+use App\Models\Tax;
+use App\Models\Tenant;
+use App\Http\Controllers\DB;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 
@@ -39,26 +42,33 @@ class SaleController extends Controller
         $user = auth()->user();
         $customerId = $user;
         // Traer todos los productos con sus variantes
-        $productItems = Product::with(['category', 'images', 'variants'])
+        $productItems = Product::with(['category', 'images', 'variants', 'taxes'])
         ->where('tenant_id', $user->tenant_id)
+        ->where('is_active', true)
         ->orderBy('created_at', 'desc')->get();
         $paymentMethods = PaymentMethod::with('currency')->where('tenant_id', $user->tenant_id)->get();
         $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
+        $taxes = Tax::all();
 
         // Traer todas las categorías
-        $categories = Category::where('tenant_id', $user->tenant_id)->get();
+        $categories = Category::where('tenant_id', $user->tenant_id)
+        ->where('is_active', true)
+        ->get();
 
-        return view('sales', compact('categories', 'paymentMethods', 'productItems', 'dollarRate', 'customerId'));
+        return view('sales', compact('categories', 'paymentMethods', 'productItems', 'dollarRate', 'customerId', 'taxes'));
     }
     
     public function store(Request $request)
     {
+
+        // dd($request->all());
         // Decodificar customerId si viene como JSON string
         $customer = is_string($request->customerId) ? json_decode($request->customerId, true) : $request->customerId;
         $customerId = is_array($customer) ? $customer['id'] : null;
         $tenantId = $request->tenant_id;
         $itemsSelected = $request->items;
         $paymentDetails = $request->payments ?? [];
+        $dollarRate = $request->dollarRate;
 
         if (!$customerId) {
             return response()->json(['error' => 'ID de cliente no válido.'], 400);
@@ -67,18 +77,7 @@ class SaleController extends Controller
         if (empty($itemsSelected) || !is_array($itemsSelected)) {
             return response()->json(['error' => 'No se enviaron productos válidos.'], 400);
         }
-
-        // Agrupar productos
-        $groupedData = [];
-        foreach ($itemsSelected as $item) {
-            $groupedData[] = [
-                'product_variant_id' => $item['id'],
-                'quantity' => $item['quantity'],
-                'price' => $item['price'],
-                'amount' => $item['price'] * $item['quantity'],
-            ];
-        }
-
+        $tienda = Tenant::find($tenantId);
         // Crear orden de venta
         $salesOrder = SalesOrder::create([
             'user_id' => $customerId,
@@ -90,25 +89,44 @@ class SaleController extends Controller
         ]);
 
         // Crear detalles y actualizar stock
-        foreach ($groupedData as $detail) {
-            SalesOrderDetail::create([
+        foreach ($itemsSelected as $item) {
+                $salesDetail = SalesOrderDetail::create([
                 'sales_order_id' => $salesOrder->id,
-                'product_variant_id' => $detail['product_variant_id'],
-                'quantity' => $detail['quantity'],
-                'price' => $detail['price'],
-                'amount' => $detail['amount'],
+                'product_variant_id' => $item['id'],
+                'quantity' => $item['quantity'],
+                'price' => $item['price'],
+                'amount' => $item['price'] * $item['quantity'],
             ]);
+            // ===========================
+            //   GUARDAR TAXES POR ITEM
+            // ===========================
+            if (!empty($item['taxes'])) {
+                foreach ($item['taxes'] as $tax) {
 
-            $productVariant = ProductVariant::find($detail['product_variant_id']);
-            if ($productVariant && $productVariant->stock >= $detail['quantity']) {
-                $productVariant->stock -= $detail['quantity'];
+                    $rate = floatval($tax['rate']); 
+                    $base = $item['price'] * $item['quantity'];
+                    $amount = $base * ($rate / 100);
+
+                    $salesDetail->taxes()->create([
+                        'tax_name'  => $tax['name'],
+                        'tax_rate'  => $rate,
+                        'tax_amount'=> $amount,
+                    ]);
+
+                }
+            }
+
+            // Actualizar stock
+            $productVariant = ProductVariant::find($item['id']);
+            if ($productVariant && $productVariant->stock >= $item['quantity']) {
+                $productVariant->stock -= $item['quantity'];
                 $productVariant->save();
             } else {
-                return response()->json(['error' => 'Stock insuficiente para el producto: ' . $productVariant->id], 400);
+                return response()->json(['error' => 'Stock insuficiente para el producto: ' . $item['id']], 400);
             }
         }
 
-        // Crear pagos (si existen)
+        // Crear pagos
         $approvedPayments = collect();
         if (!empty($paymentDetails) && is_array($paymentDetails)) {
             foreach ($paymentDetails as $paymentDetail) {
@@ -118,7 +136,7 @@ class SaleController extends Controller
                     'amount' => $paymentDetail['amount'],
                     'currency' => $paymentDetail['currency'],
                     'reference' => $paymentDetail['reference'] ?? null,
-                    'status' => $paymentDetail['status'] ?? 1, // Por defecto aprobado
+                    'status' => $paymentDetail['status'] ?? 1,
                 ]);
 
                 if ($payment->status == 1) {
@@ -127,15 +145,18 @@ class SaleController extends Controller
             }
         }
 
-        // Recuperar orden con relaciones
+        // Recuperar la orden con relaciones + taxes
         $order = SalesOrder::with([
             'user',
             'details',
+            'details.taxes.tax',
             'details.variant.product',
             'payments.payment'
         ])->findOrFail($salesOrder->id);
 
-        // ⚠️ Generar PDF solo si hay pagos aprobados
+    // =====================================
+    //   GENERAR PDF SI HAY PAGOS APROBADOS
+    // =====================================
         if ($approvedPayments->isNotEmpty()) {
             $serverIp = request()->getHost();
 
@@ -143,9 +164,11 @@ class SaleController extends Controller
             $imageData = base64_encode(file_get_contents($imagePath));
             $imageBase64 = 'data:image/png;base64,' . $imageData;
 
+            // Totales
             $totalOrden = $order->details->sum('amount');
+            $totalTaxes = $order->details->flatMap->taxes->sum('tax_amount');
             $totalPagado = $order->payments->sum('amount');
-
+            $totalGeneral = $totalOrden + $totalTaxes;
             // Generar QR
             $qrUrl = "http://{$serverIp}:8000/publicOrder/{$order->id}";
             $qrCode = QrCode::create($qrUrl)
@@ -156,31 +179,71 @@ class SaleController extends Controller
             $writer = new PngWriter();
             $qrCodeImage = $writer->write($qrCode);
             $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
-
-            // Generar PDF
-            $pdfContent = view('orderPdf', compact('order', 'totalOrden', 'totalPagado', 'imageBase64', 'qrCodeBase64'))->render();
+            // Renderizar PDF
+            // $pdfContent = view('orderPdf', compact(
+            $pdfContent = view('fiscalOrderPdf', compact(
+                'order',
+                'totalOrden',
+                'totalTaxes',
+                'totalGeneral',
+                'totalPagado',
+                'imageBase64',
+                'qrCodeBase64',
+                'dollarRate'
+            ))->render();
 
             $options = new Options();
             $options->set('isHtml5ParserEnabled', true);
             $options->set('isPhpEnabled', true);
+
             $dompdf = new Dompdf($options);
             $dompdf->loadHtml($pdfContent);
             $dompdf->setPaper('A4', 'portrait');
             $dompdf->render();
 
-            // Guardar PDF
-            $fileName = 'orden-' . $order->id . '.pdf';
+            // $fileName = 'orden-' . $order->id . '.pdf';
+            $fileName = 'factura-' . $order->id . '.pdf';
             Storage::disk('public')->put('orders/' . $fileName, $dompdf->output());
             $pdfUrl = asset('storage/orders/' . $fileName);
+            
+
+            //NOTA DE ENTREGA PDF
+            $pdfContentNota = view('orderPdf', compact(
+                'order',
+                'totalOrden',
+                'totalTaxes',
+                'totalGeneral',
+                'totalPagado',
+                'imageBase64',
+                'qrCodeBase64',
+                'dollarRate',
+                'tienda'
+            ))->render();
+
+            $optionsNota = new Options();
+            $optionsNota->set('isHtml5ParserEnabled', true);
+            $optionsNota->set('isPhpEnabled', true);
+
+            $dompdfNota = new Dompdf($optionsNota);
+            $dompdfNota->loadHtml($pdfContentNota);
+            $dompdfNota->setPaper('A4', 'portrait');
+            $dompdfNota->render();
+
+            // $fileName = 'orden-' . $order->id . '.pdf';
+            $fileNameNota = 'NotaEntrega-' . $order->id . '.pdf';
+            Storage::disk('public')->put('orders/' . $fileNameNota, $dompdfNota->output());
+            $pdfUrlNota = asset('storage/orders/' . $fileNameNota);
         } else {
             $pdfUrl = null;
+            $pdfUrlNota = null;
         }
 
         return response()->json([
             'message' => $approvedPayments->isNotEmpty()
                 ? 'Venta registrada exitosamente con pagos aprobados.'
                 : 'Venta registrada sin pagos aprobados (PDF no generado).',
-            'pdf_url' => $pdfUrl
+                'pdf_url' => $pdfUrl,
+                'nota_entrega_pdf_url' => $pdfUrlNota
         ], 200);
     }
 
@@ -616,6 +679,8 @@ class SaleController extends Controller
     }
     public function orderDeliverToggleStatus($id, Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         // Recuperar la orden con sus relaciones
         $order = SalesOrder::with([
             'user', 
@@ -646,6 +711,8 @@ class SaleController extends Controller
 
     public function paymentToggleStatus($id, Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         // Buscar el pago
         $payment = Payment::findOrFail($id);
         // Cambiar el estado del pago
@@ -669,6 +736,8 @@ class SaleController extends Controller
     }
     public function processReturn(Request $request, $orderId)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $order = SalesOrder::with('details')->findOrFail($orderId);
         $itemsToReturn = $request->input('items'); // array de items con id y cantidad
         $reason = $request->input('reason');

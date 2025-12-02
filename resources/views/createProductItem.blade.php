@@ -3,6 +3,16 @@
 @section('title', 'Crear Producto')
 
 @section('content')
+<style>
+    .tax-card {
+        transition: all .2s ease-in-out;
+        border: 2px solid #ccc !important;
+    }
+    .tax-card.selected {
+        border: 2px solid #000 !important;
+        background-color: #f1f1f1;
+    }
+</style>
     <div class="container">
         <div class="card my-4">
             <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
@@ -24,6 +34,9 @@
                         <label for="categorySelector" class="form-label">Categoría</label>
                         <select id="categorySelector" name="category_id" class="form-select border border-radius-lg p-2" required>
                             <option value="">Seleccione una categoría</option>
+                            @foreach($categories as $category)
+                                <option value="{{ $category->id }}">{{ $category->name }}</option>
+                            @endforeach
                         </select>
                     </div>
 
@@ -40,12 +53,30 @@
                         <div id="imagePreview" class="mt-3 d-flex flex-wrap"></div>
                     </div>
 
+                    <!-- Product Taxes -->
+                    <div class="mb-3">
+                        <label class="form-label">Impuestos</label>
+                        <div id="taxCardsContainer" class="d-flex flex-wrap gap-2">
+                            @foreach($taxes as $tax)
+                                <div class="tax-card border rounded p-2 text-center selectable-tax" 
+                                    data-id="{{ $tax->id }}">
+                                    <strong>{{ $tax->name }}</strong><br>
+                                    <small>{{ $tax->description }}</small>
+                                    <small>{{ $tax->rate }}%</small>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <!-- Input oculto donde se guardarán los IDs seleccionados -->
+                    <div id="taxInputs"></div>
                     <!-- Product Variants -->
                     <div class="mb-3">
                         <label class="form-label">Variantes</label>
                         <div id="variantContainer"></div>
                         <button type="button" id="addVariantBtn" class="btn btn-secondary mt-2">Agregar Variante +</button>
                     </div>
+
                     <!-- Submit Button -->
                     <div class="text-end">
                         <button type="submit" class="btn btn-dark">Crear Producto</button>
@@ -59,33 +90,6 @@
 @push('scripts')
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const authUser = @json($authUser);
-            const tenantId = Number(authUser.tenant_id);
-            fetch(`api/categories?tenant_id=${tenantId}`, {
-                method: 'GET',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                const categorySelector = document.getElementById('categorySelector');
-                
-                // Limpiamos las opciones actuales
-                categorySelector.innerHTML = '<option value="">Selecciona una categoría</option>';
-                
-                // Agregamos cada categoría al selector
-                data.forEach(category => {
-                    const option = document.createElement('option');
-                    option.value = category.id;
-                    option.textContent = category.name;
-                    categorySelector.appendChild(option);
-                });
-            })
-            .catch(error => console.error('Error:', error));
-        });
-
         // Handle image preview
         document.getElementById('productImages').addEventListener('change', function(event) {
             const preview = document.getElementById('imagePreview');
@@ -97,6 +101,27 @@
                 img.style.margin = '5px';
                 img.style.objectFit = 'cover';
                 preview.appendChild(img);
+            });
+        });
+
+        // Selección visual + agregar input hidden
+        document.querySelectorAll(".selectable-tax").forEach(card => {
+            card.addEventListener("click", () => {
+                const id = card.getAttribute("data-id");
+                const taxInputs = document.getElementById("taxInputs");
+
+                if (card.classList.contains("selected")) {
+                    card.classList.remove("selected");
+                    document.getElementById("tax_input_" + id)?.remove();
+                } else {
+                    card.classList.add("selected");
+                    let input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = "tax_ids[]";
+                    input.id = "tax_input_" + id;
+                    input.value = id;
+                    taxInputs.appendChild(input);
+                }
             });
         });
 

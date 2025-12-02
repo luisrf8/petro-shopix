@@ -85,10 +85,15 @@
                       <h2><strong>{{ $product->name }}</strong></h2>
                       <p><strong>Categoría:</strong> {{ $product->category->name }}</p>
                       <p><strong>Descripción:</strong> {{ $product->description }}</p>
-                      <p><strong>Tallas:</strong>
+                      <p><strong>Impuestos:</strong> 
+                        @foreach ($product->taxes as $tax)
+                          {{ $tax->name }} - {{ $tax->rate }} %
+                        @endforeach
+                      </p>
+                      <p><strong>Variantes:</strong>
                         <ul>
                           @foreach ($product->variants as $variant)
-                              <li>Talla: {{ $variant->size }} - Precio: {{ $variant->price }} $ - {{$variant->stock}} unidades disponibles</li>
+                              <li>{{ $variant->size }} - Precio: {{ $variant->price }} $ - {{$variant->stock}} unidades disponibles</li>
                           @endforeach
                         </ul>
                       </p>
@@ -134,8 +139,39 @@
                                 @endforeach
                             </select>
                         </div>
+                        <div class="form-group mb-4">
+                          <label for="productStatus">Estado</label>
+                          <select class="form-control border border-1 p-2" id="productStatus" name="is_active" required>
+                            <option value="1" {{ $product->is_active ? 'selected' : '' }}>Activo</option>
+                            <option value="0" {{ !$product->is_active ? 'selected' : '' }}>Inactivo</option>
+                          </select>
+                        </div>
                         <button type="submit" class="btn btn-dark" id="saveChangesBtn">Guardar Cambios</button>
                     </form>
+                    <div class="form-group">
+                        <label class="fw-bold">Impuestos</label>
+
+                        <div id="taxContainer">
+                            @foreach ($taxes as $tax)
+                                <div class="form-check">
+                                    <input 
+                                        class="form-check-input tax-checkbox" 
+                                        type="checkbox" 
+                                        value="{{ $tax->id }}" 
+                                        id="tax{{ $tax->id }}"
+                                        {{ $product->taxes->contains($tax->id) ? 'checked' : '' }}
+                                    >
+                                    <label class="form-check-label" for="tax{{ $tax->id }}">
+                                        {{ $tax->name }} ({{ $tax->rate }}%)
+                                    </label>
+                                </div>
+                            @endforeach
+                        </div>
+
+                        <button type="button" class="btn btn-dark mt-3" id="saveProductTaxesBtn">
+                            Guardar Impuestos del Producto
+                        </button>
+                    </div>
                     <div class="form-group">
                       <label for="productVariants">Variedades</label>
                       <div id="variantContainer"></div>
@@ -200,7 +236,7 @@
     // Input para el nombre de la variante
     const variantInput = document.createElement('input');
     variantInput.type = 'text';
-    variantInput.placeholder = 'Talla';
+    variantInput.placeholder = 'Variante';
     variantInput.classList.add('form-control', 'border', 'border-1', 'p-2');
     variantInput.name = 'size';
 
@@ -284,6 +320,39 @@ document.getElementById('saveVariantsBtn').addEventListener('click', function ()
         alert('Por favor, completa todos los campos antes de guardar.');
     }
 });
+// ==========================
+//  GUARDAR IMPUESTOS ASOCIADOS AL PRODUCTO
+// ==========================
+
+document.getElementById('saveProductTaxesBtn').addEventListener('click', function () {
+    
+    const productId = document.querySelector('.card').getAttribute('data-product-id');
+
+    // IDs seleccionados
+    const selectedTaxIds = [...document.querySelectorAll('.tax-checkbox:checked')]
+        .map(cb => cb.value);
+
+    fetch(`/products/${productId}/taxes`, {
+        method: 'POST',
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').getAttribute("content")
+        },
+        body: JSON.stringify({
+            taxes: selectedTaxIds
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert("Impuestos del producto actualizados");
+            location.reload();
+        } else {
+            alert("Hubo un error al actualizar");
+        }
+    })
+    .catch(err => console.error(err));
+});
 
 function editProduct() {
   // Obtener los datos del producto desde el DOM o una llamada AJAX
@@ -299,7 +368,7 @@ function editProduct() {
     variantDiv.classList.add('row', 'mb-3');
     variantDiv.innerHTML = `
       <div class="col">
-        <label for="Nombre">Talla</label>
+        <label for="Nombre">Variante</label>
         <input type="text" class="form-control border border-1 p-2" value="${variant.size}" placeholder="Nombre" name="variantName[]">
       </div>
       <div class="col">

@@ -9,7 +9,7 @@ class SalesOrder extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'date', 'address', 'status', 'preference', 'deliver_status'];
+    protected $fillable = ['user_id', 'date', 'address', 'status', 'preference', 'deliver_status', 'tenant_id'];
 
     public function details()
     {

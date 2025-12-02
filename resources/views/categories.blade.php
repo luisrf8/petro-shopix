@@ -33,9 +33,6 @@
       <!-- Modal para crear categoría -->
       <!-- Tabla para mostrar categorías -->
       <div class="row">
-        {{ $authUser?->name }}
-        {{ $authUser?->tenant_id }}
-
         <div class="col-12">
           <div class="card my-4">
             <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">

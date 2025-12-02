@@ -24,14 +24,27 @@
             <div class="col-md-4 mb-4">
               <div class="card h-100 shadow">
                 <div class="card-body d-flex flex-column">
+                  @if($plan->image)
+                    <div class="d-flex justify-content-center">
+                      <img src="{{ $plan->image }}" alt="{{ $plan->name }}" class="img-fluid mb-3 rounded w-50">
+                    </div>
+                  @endif
                   <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="card-title">{{ $plan->name }}</h5>
-                    @if($plan->logo)
-                      <img src="{{ $plan->logo }}" alt="{{ $plan->name }}" style="height:40px;">
-                    @endif
+                    <div class="mt-auto d-flex justify-content-between align-items-center gap-2 h-100">
+                        <i class="material-symbols-rounded btn-edit-plan cursor-pointer text-info"
+                        data-id="{{ $plan->id }}"
+                        data-name="{{ $plan->name }}"
+                        data-price="{{ $plan->price }}"
+                        data-duration="{{ $plan->duration_days }}"
+                        data-features="{{ json_encode($plan->features) }}">
+                          mode_edit
+                        </i>
+                        <i class="material-symbols-rounded btn-delete-plan cursor-pointer text-danger"
+                        data-id="{{ $plan->id }}">horizontal_rule</i>
+                    </div>
                   </div>
 
-                  <h6 class="text-muted">{{ $plan->service_type ?? 'Servicio' }}</h6>
                   <p><strong>Monto a pagar:</strong> <span class="text-dark">${{ number_format($plan->price,2) }}</span></p>
                   <p><strong>Duración:</strong> {{ $plan->duration_days }} días</p>
                     <h6>Características:</h6>
@@ -41,25 +54,9 @@
                             <span>✔ {{ $feature }}</span>
                         @endforeach
                     </div>
-
-                @else
-                    <span>No hay características registradas</span>
-                @endif
-
-                  <div class="mt-auto d-flex justify-content-between">
-                    <button class="btn btn-primary btn-sm btn-edit-plan" 
-                            data-id="{{ $plan->id }}"
-                            data-name="{{ $plan->name }}"
-                            data-price="{{ $plan->price }}"
-                            data-logo="{{ $plan->logo }}"
-                            data-duration="{{ $plan->duration_days }}"
-                            data-features="{{ json_encode($plan->features) }}">
-                      Editar
-                    </button>
-                    <button class="btn btn-danger btn-sm btn-delete-plan" data-id="{{ $plan->id }}">
-                      Eliminar
-                    </button>
-                  </div>
+                    @else
+                        <span>No hay características registradas</span>
+                    @endif
                 </div>
               </div>
             </div>
@@ -74,7 +71,7 @@
 <!-- Modal Crear Plan -->
 <div class="modal fade" id="createPlanModal" tabindex="-1" aria-labelledby="createPlanModalLabel" aria-hidden="true">
   <div class="modal-dialog">
-    <form id="createPlanForm" class="modal-content">
+    <form id="createPlanForm" class="modal-content" enctype="multipart/form-data">
       @csrf
       <div class="modal-header">
         <h5 class="modal-title">Crear Nuevo Plan</h5>
@@ -94,8 +91,15 @@
           <input type="number" class="form-control border border-1 p-2" id="createPlanDuration" name="duration_days" required>
         </div>
         <div class="mb-3">
-          <label for="createPlanLogo" class="form-label">Logo (URL)</label>
-          <input type="text" class="form-control border border-1 p-2" id="createPlanLogo" name="logo">
+          <label for="createPlanImage" class="form-label">Imagen (archivo opcional)</label>
+          <input type="file" class="form-control border border-1 p-2" id="createPlanImage" name="image" accept="image/*">
+        </div>
+        <div class="mb-3">
+          <label for="createPlanStatus" class="form-label">Estado</label>
+          <select class="form-select border border-1 p-2" id="createPlanStatus" name="status">
+            <option value="0">Disponible</option>
+            <option value="1">Inactivo</option>
+          </select>
         </div>
         <div class="mb-3">
           <label for="createPlanFeatures" class="form-label">Características (separadas por coma)</label>
@@ -112,7 +116,7 @@
 <!-- Modal Editar Plan -->
 <div class="modal fade" id="editPlanModal" tabindex="-1" aria-labelledby="editPlanModalLabel" aria-hidden="true">
   <div class="modal-dialog">
-    <form id="editPlanForm" class="modal-content">
+    <form id="editPlanForm" class="modal-content" enctype="multipart/form-data">
       @csrf
       <input type="hidden" id="editPlanId" name="id">
       <div class="modal-header">
@@ -122,23 +126,30 @@
       <div class="modal-body">
         <div class="mb-3">
           <label for="editPlanName" class="form-label">Nombre</label>
-          <input type="text" class="form-control" id="editPlanName" name="name" required>
+          <input type="text" class="form-control border border-1 p-2" id="editPlanName" name="name" required>
         </div>
         <div class="mb-3">
           <label for="editPlanPrice" class="form-label">Precio</label>
-          <input type="number" step="0.01" class="form-control" id="editPlanPrice" name="price" required>
+          <input type="number" step="0.01" class="form-control border border-1 p-2" id="editPlanPrice" name="price" required>
         </div>
         <div class="mb-3">
           <label for="editPlanDuration" class="form-label">Duración (días)</label>
-          <input type="number" class="form-control" id="editPlanDuration" name="duration_days" required>
+          <input type="number" class="form-control border border-1 p-2" id="editPlanDuration" name="duration_days" required>
         </div>
         <div class="mb-3">
-          <label for="editPlanLogo" class="form-label">Logo (URL)</label>
-          <input type="text" class="form-control" id="editPlanLogo" name="logo">
+          <label for="editPlanImage" class="form-label">Imagen (archivo opcional)</label>
+          <input type="file" class="form-control border border-1 p-2" id="editPlanImage" name="image" accept="image/*">
+        </div>
+        <div class="mb-3">
+          <label for="editPlanStatus" class="form-label">Estado</label>
+          <select class="form-select border border-1 p-2" id="editPlanStatus" name="status">
+            <option value="0">Disponible</option>
+            <option value="1">Inactivo</option>
+          </select>
         </div>
         <div class="mb-3">
           <label for="editPlanFeatures" class="form-label">Características (separadas por coma)</label>
-          <textarea class="form-control" id="editPlanFeatures" name="features"></textarea>
+          <textarea class="form-control border border-1 p-2" id="editPlanFeatures" name="features"></textarea>
         </div>
       </div>
       <div class="modal-footer">
@@ -163,10 +174,10 @@
     })
     .then(res => res.json())
     .then(() => { 
-      alert('Plan creado'); 
+      alert('Plan creado correctamente'); 
       location.reload(); 
     })
-    .catch(err => { console.error(err); alert('Error al crear'); });
+    .catch(err => { console.error(err); alert('Error al crear el plan'); });
   });
 
   // Abrir modal con datos de edición
@@ -176,39 +187,40 @@
       document.getElementById('editPlanName').value = this.dataset.name;
       document.getElementById('editPlanPrice').value = this.dataset.price;
       document.getElementById('editPlanDuration').value = this.dataset.duration;
-      document.getElementById('editPlanLogo').value = this.dataset.logo;
-      document.getElementById('editPlanFeatures').value = JSON.parse(this.dataset.features || '[]').join(', ');
+
+      // Si hay estatus en data
+      if (this.dataset.status !== undefined) {
+        document.getElementById('editPlanStatus').value = this.dataset.status;
+      }
+
+      let features = [];
+      try {
+        const parsed = JSON.parse(this.dataset.features || '[]');
+        features = Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        features = (this.dataset.features || '').split(',');
+      }
+      document.getElementById('editPlanFeatures').value = features.join(', ');
+
       new bootstrap.Modal(document.getElementById('editPlanModal')).show();
     });
   });
 
   // Guardar cambios al editar
-document.getElementById('editPlanForm').addEventListener('submit', function(event) {
+  document.getElementById('editPlanForm').addEventListener('submit', function(event) {
     event.preventDefault();
     const planId = document.getElementById('editPlanId').value;
-
-    const data = {
-        name: document.getElementById('editPlanName').value,
-        price: document.getElementById('editPlanPrice').value,
-        duration_days: document.getElementById('editPlanDuration').value,
-        logo: document.getElementById('editPlanLogo').value,
-        features: document.getElementById('editPlanFeatures').value
-    };
+    const formData = new FormData(this);
 
     fetch(`/api/plans/${planId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
-        },
-        body: JSON.stringify(data)
+      method: 'POST',
+      headers: { 'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value },
+      body: formData
     })
     .then(res => res.json())
     .then(() => { alert('Plan actualizado'); location.reload(); })
-    .catch(err => { console.error(err); alert('Error al actualizar'); });
-});
-
-
+    .catch(err => { console.error(err); alert('Error al actualizar el plan'); });
+  });
 
   // Eliminar plan
   document.querySelectorAll('.btn-delete-plan').forEach(button => {
@@ -221,7 +233,7 @@ document.getElementById('editPlanForm').addEventListener('submit', function(even
       })
       .then(res => res.json())
       .then(() => { alert('Plan eliminado'); location.reload(); })
-      .catch(err => { console.error(err); alert('Error al eliminar'); });
+      .catch(err => { console.error(err); alert('Error al eliminar el plan'); });
     });
   });
 </script>

@@ -9,12 +9,30 @@ class SalesOrderDetail extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['sales_order_id', 'product_variant_id', 'quantity', 'price', 'amount'];
+    protected $fillable = ['sales_order_id', 'product_variant_id', 'quantity', 'price', 'amount', 
+        'tax_name',
+        'tax_rate', 'tax_amount'
+    ];
 
     // En el modelo SalesOrderDetail
     public function variant()
     {
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');
     }
-
+    
+    public function tax()
+    {
+        return $this->hasOneThrough(
+            Tax::class,
+            ProductVariant::class,
+            'id',              // Variant.id
+            'id',              // Tax.id
+            'product_variant_id', // SalesOrderDetail.product_variant_id
+            'tax_id'           // Product.tax_id
+        );
+    }
+    public function taxes()
+    {
+        return $this->hasMany(SalesDetailTax::class);
+    }
 }

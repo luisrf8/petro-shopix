@@ -23,10 +23,11 @@
             <table class="table align-items-center mb-0">
               <thead class="text-center">
                 <tr>
-                  <th>Nombre</th>
-                  <th>Slug</th>
-                  <th>Email</th>
                   <th>Logo</th>
+                  <th>Nombre</th>
+                  <th>URL</th>
+                  <th>Email</th>
+                  <th>Plan</th>
                   <th>Editar</th>
                   <th>Eliminar</th>
                 </tr>
@@ -34,10 +35,18 @@
               <tbody class="text-center">
                 @foreach($tenants as $tenant)
                   <tr>
+                    <td>
+                      <img src="{{ $tenant->logo ? asset('storage/' . $tenant->logo) : asset('assets/img/shopix5.png') }}" alt="Logo"
+                      class="navbar-brand-img"
+                      width="100"
+                      height="100"
+                      alt="main_logo"
+                      style="object-fit: contain;">
+                    </td>
                     <td>{{ $tenant->name }}</td>
                     <td>{{ $tenant->slug }}</td>
                     <td>{{ $tenant->email }}</td>
-                    <td>{{ $tenant->logo }}</td>
+
                     <td>
                       @foreach($tenant->tenantPlanPayments as $payment)
                           <p>Plan: {{ $payment->plan->name }} - ${{ $payment->amount }} - Estado: {{ $payment->status }}</p>
@@ -49,14 +58,16 @@
 
                     <td>
                       <a href="javascript:;" 
-                         class="text-secondary font-weight-bold text-xs btn-edit-tenant"
-                         data-bs-toggle="modal" 
-                         data-bs-target="#editTenantModal" 
-                         data-id="{{ $tenant->id }}"
-                         data-name="{{ $tenant->name }}"
-                         data-slug="{{ $tenant->slug }}"
-                         data-email="{{ $tenant->email }}"
-                         data-logo="{{ $tenant->logo }}">
+                        class="text-secondary font-weight-bold text-xs btn-edit-tenant"
+                        data-bs-toggle="modal" 
+                        data-bs-target="#editTenantModal" 
+                        data-id="{{ $tenant->id }}"
+                        data-name="{{ $tenant->name }}"
+                        data-slug="{{ $tenant->slug }}"
+                        data-email="{{ $tenant->email }}"
+                        data-logo="{{ $tenant->logo }}"
+                        data-plan-id="{{ optional($tenant->tenantPlanPayments->last())->plan_id }}"
+                        data-active="{{ $tenant->is_active }}">
                         Editar
                       </a>
                     </td>
@@ -90,6 +101,18 @@
             @csrf
             <input type="hidden" id="editTenantId" name="id">
             <div class="mb-3">
+              <label for="editTenantLogo" class="form-label">Logo</label>
+              <div class="text-center mb-2">
+                <img id="editTenantLogoPreview" 
+                    src="{{ asset('assets/img/shopix5.png') }}" 
+                    alt="Logo"
+                    width="100"
+                    height="100"
+                    style="object-fit: contain; border: 1px solid #ddd; border-radius: 8px;">
+              </div>
+              <input type="text" class="form-control border border-1 p-2" id="editTenantLogo" name="logo" type="hidden" style="display: none;">
+            </div>
+            <div class="mb-3">
               <label for="editTenantName" class="form-label">Nombre</label>
               <input type="text" class="form-control border border-1 p-2" id="editTenantName" name="name" required>
             </div>
@@ -101,9 +124,23 @@
               <label for="editTenantEmail" class="form-label">Email</label>
               <input type="email" class="form-control border border-1 p-2" id="editTenantEmail" name="email">
             </div>
+
             <div class="mb-3">
-              <label for="editTenantLogo" class="form-label">Logo (URL)</label>
-              <input type="text" class="form-control border border-1 p-2" id="editTenantLogo" name="logo">
+              <label for="editTenantPlan" class="form-label">Plan</label>
+              <select class="form-select border border-1 p-2" id="editTenantPlan" name="plan_id" required>
+                <option value="">Selecciona un plan</option>
+                @foreach($plans as $plan)
+                  <option value="{{ $plan->id }}">{{ $plan->name }} - ${{ $plan->price }}</option>
+                @endforeach
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label for="editTenantStatus" class="form-label">Estado</label>
+              <select class="form-select border border-1 p-2" id="editTenantStatus" name="is_active" required>
+                <option value="1">Activo</option>
+                <option value="0">Inactivo</option>
+              </select>
             </div>
             <div class="d-flex flex-row-reverse">
               <button type="submit" class="btn btn-info">Guardar</button>
@@ -126,8 +163,22 @@
       document.getElementById('editTenantSlug').value = this.dataset.slug;
       document.getElementById('editTenantEmail').value = this.dataset.email;
       document.getElementById('editTenantLogo').value = this.dataset.logo;
+      document.getElementById('editTenantPlan').value = this.dataset.planId || '';
+      document.getElementById('editTenantStatus').value = this.dataset.active || '1';
+
+      // 👇 Aquí actualizamos la vista previa del logo dinámicamente
+      const logoPreview = document.getElementById('editTenantLogoPreview');
+      const logoPath = this.dataset.logo ? `/storage/${this.dataset.logo}` : '/assets/img/shopix5.png';
+      logoPreview.src = logoPath;
     });
   });
+  
+  document.getElementById('editTenantLogo').addEventListener('input', function() {
+    const logoPreview = document.getElementById('editTenantLogoPreview');
+    const logoPath = this.value ? `/storage/${this.value}` : '/assets/img/shopix5.png';
+    logoPreview.src = logoPath;
+  });
+
 
   // Actualizar Tenant
   document.getElementById('editTenantForm').addEventListener('submit', function(event) {
@@ -135,7 +186,7 @@
     const formData = new FormData(this);
     const tenantId = formData.get('id');
     fetch(`api/tenants/${tenantId}`, {
-      method: 'POST', // Cambiar a 'PUT' si tu API lo requiere
+      method: 'POST',
       headers: {
         'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
       },

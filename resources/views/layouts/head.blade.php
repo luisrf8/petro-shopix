@@ -49,7 +49,7 @@
 
             <li class="breadcrumb-item text-sm d-flex align-items-center">
               <a class="opacity-5 text-dark" href="/paymentMethods">
-                Tasa Actual: {{ $dollarRate ? number_format($dollarRate->rate, 2) : 'No disponible' }} VES / USD
+                <!-- Tasa Actual: {{ $dollarRate ? number_format($dollarRate->rate, 2) : 'No disponible' }} VES / USD -->
               </a>
             </li>
 

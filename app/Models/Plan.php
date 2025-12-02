@@ -1,5 +1,5 @@
 <?php
-// app/Models/Plan.php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -9,13 +9,18 @@ class Plan extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'price', 'duration_days', 'features'];
+    protected $fillable = [
+        'name',
+        'price',
+        'duration_days',
+        'logo',
+        'image',
+        'features',
+        'status'
+    ];
 
     protected $casts = [
-        'features' => 'array', // Esto convierte automáticamente JSON a array
+        'features' => 'array',
+        'status' => 'integer',
     ];
-    public function payments()
-    {
-        return $this->hasMany(TenantPlanPayment::class);
-    }
 }

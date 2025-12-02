@@ -70,6 +70,7 @@ class PurchaseOrderController extends Controller
     public function store(Request $request)
     {
         // Paso 1: Validar los datos
+        DB::raw("SET @user_id = " . auth()->id());
 
         $itemsSelected = $request->itemsSelected;
         if (empty($itemsSelected) || !is_array($itemsSelected)) {

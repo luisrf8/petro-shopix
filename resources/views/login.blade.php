@@ -21,8 +21,8 @@
 </style>
 <body>
     <div class="container d-flex justify-content-center flex-column align-items-center vh-100">
-        <a class="d-flex justify-content-center align-items-center" href="/">
-            <img src="../../assets/img/shopix5.png" class="" alt="main_logo">
+        <a class="d-flex justify-content-center align-items-center mb-5" href="/">
+            <img src="../../assets/img/shopix5.png" class="w-50" alt="main_logo">
         </a>
         <!-- <img src="../../assets/img/fondo.jpg" class="navbar-brand-img" width="150" height="150" alt="main_logo"> -->
 
@@ -40,9 +40,9 @@
                 </div>
                 <button type="submit" class="btn btn-dark">Ingresar</button>
             </form>
-            <div class="text-center mt-3">
+            <!-- <div class="text-center mt-3">
                 <a>¿Olvidaste tu contraseña?</a>
-            </div>
+            </div> -->
             <!-- <div class="text-center mt-2">
                 <small>¿No tienes una cuenta? <a href="/register">Regístrate aquí</a></small>
             </div> -->

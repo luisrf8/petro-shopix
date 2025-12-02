@@ -20,6 +20,8 @@ class ProductVariantController extends Controller
 
     public function store(Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $request->validate([
             'product_id' => 'required|integer|exists:products,id',
             'variants' => 'required|array',
@@ -47,6 +49,8 @@ class ProductVariantController extends Controller
 
     public function update(Request $request, ProductVariant $productVariant)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $request->validate([
             'size' => 'required|string|max:10',
             'price' => 'required|numeric',
@@ -66,6 +70,8 @@ class ProductVariantController extends Controller
 
     public function destroy(ProductVariant $productVariant)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $productVariant->delete();
 
         return redirect()->route('products.show', $productVariant->product_id)

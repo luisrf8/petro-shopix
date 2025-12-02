@@ -33,6 +33,8 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
@@ -70,6 +72,8 @@ class UserController extends Controller
      */
     public function update(Request $request, $id)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $user = User::findOrFail($id);
     
         $validator = Validator::make($request->all(), [
@@ -97,6 +101,8 @@ class UserController extends Controller
      */
     public function toggleStatus($id)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $user = User::findOrFail($id);
         $user->is_active = !$user->is_active; // Cambia el estado
         $user->save();

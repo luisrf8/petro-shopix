@@ -5,6 +5,16 @@
     .step:not(.d-none) {
         display: block;
     }
+    /* quitar si no se necesita */
+    #cartList {
+        max-height: 450px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        border: 1px solid #e3e6ea;
+        border-radius: .5rem;
+        background-color: #f8f9fa;
+        padding-right: 5px;
+    }
   </style>
   @extends('layouts.app')
 
@@ -14,7 +24,6 @@
     <div class="mx-5 d-flex justify-content-between gap-4">
         <div class="w-75">
             <h1>Flujo de Venta</h1>
-            {{$dollarRate}}
             <span id="dollarRate" data-rate="{{ $dollarRate}}"></span>
             <span id="customerId" data-rate="{{ $customerId}}"></span>
             <form id="purchaseForm">
@@ -46,31 +55,13 @@
                             </a>
                         </div>
                         @foreach($categories as $category)
-                            @php
-                                switch ($category->name) {
-                                    case 'Chemises':
-                                        $icon = 'accessibility_new';
-                                        break;
-                                    case 'Pantalones':
-                                        $icon = 'vignette';
-                                        break;
-                                    case 'Camisas':
-                                        $icon = 'hiking';
-                                        break;
-                                    case 'Franelas':
-                                        $icon = 'view_stream';
-                                        break;
-                                    default:
-                                        $icon = 'category'; // ícono por defecto
-                                }
-                            @endphp
 
                             <div class="category-item flex-shrink-0" style="width: 200px; scroll-snap-align: start;" data-category-name="{{ $category->name }}" data-category="{{ $category->id }}" onclick="filterProductsByCategory('{{ $category->id }}')">
                                 <a href="javascript:void(0)" class="text-decoration-none category-filter">
                                     <div class="card h-100">
                                         <div class="card-header mx-3 p-3 text-center">
                                             <div class="icon icon-shape icon-lg bg-gradient-dark shadow text-center border-radius-lg">
-                                                <i class="material-symbols-rounded opacity-10">{{ $icon }}</i>
+                                                <i class="material-symbols-rounded opacity-10"></i>
                                             </div>
                                         </div>
                                         <div class="card-body pt-0 p-3 text-center">
@@ -116,8 +107,9 @@
                                                     <input type="checkbox" class="form-check-input me-2 variant-checkbox" id="variant_{{ $variant->id }}" name="selectedVariants[]" value="{{ $variant->id }}"
                                                     data-price="{{ $variant->price }}" data-stock="{{ $variant->stock }}"
                                                     data-product-name="{{ $item->name }}"
-                                                    data-size="{{ $variant->size }}">
-                                                    <span>Talla: {{$variant->size}} | {{ $variant->price }} USD | Stock: {{ $variant->stock }}</span>
+                                                    data-size="{{ $variant->size }}"
+                                                    data-taxes="{{ $item->taxes }}">
+                                                    <span>{{$variant->size}} | {{ $variant->price }} USD | Stock: {{ $variant->stock }}</span>
                                                     <i class="check-icon d-none ms-2 text-success fas fa-check"></i>
                                                 </label>
                                                 <i class="material-symbols-rounded text-info" style="cursor: pointer"
@@ -139,10 +131,28 @@
                         <strong>Total a pagar: </strong><span id="totalAmountValue">0.00</span>$
                     </div>
                     <div class="">
+                        <strong>Tasa BCV: </strong><span id="dollarRate" data-rate="{{ number_format($dollarRate->rate, 2, '.', '') }}">{{ number_format($dollarRate->rate, 2) }} Bs.</span>
+                    </div>
+                    <div class="">
                         <strong>Total a pagar: </strong><span id="totalAmountBsValue">0.00</span>Bs 
                     </div>
-                    <div class="mb-3">
-                        {{-- <strong>Tasa BCV: </strong><span id="dollarRate" data-rate="{{ number_format($dollarRate->rate, 2, '.', '') }}">{{ number_format($dollarRate->rate, 2) }} Bs.</span> --}}
+                    <div class="mt-2">
+                        @php
+                            // Buscar el impuesto IGTF dentro de $taxes
+                            $igtfTax = null;
+                            foreach($taxes as $tax) {
+                                if($tax->name === 'IGTF') {
+                                    $igtfTax = $tax;
+                                    break;
+                                }
+                            }
+                        @endphp
+
+                        @if($igtfTax)
+                            <strong>
+                                Si el método de pago seleccionado es dólares (USD) se aplicará el impuesto del IGTF del {{ $igtfTax->rate }}%
+                            </strong>
+                        @endif
                     </div>
                     <div id="paymentMethods" class="mb-3">
                         @php
@@ -221,6 +231,12 @@
                         <strong>Total ingresado: </strong> $ <span id="totalPaid">0.00</span><br>
                         <span class="text-danger paymentMessage"></span>
                     </div>
+                    <div id="paymentsContainer" class="mt-3">
+                        <!-- Aquí se mostrarán los métodos de pago seleccionados -->
+                        <ul id="selectedPaymentMethods" class="list-group">
+                            <!-- Los métodos de pago seleccionados se agregarán aquí dinámicamente -->
+                        </ul>
+                    </div>
                     <div class="d-flex justify-content-between w-100 align-items-center">
                         <button type="button" class="btn btn-secondary mt-3" id="backToStep1">Atrás</button>
                         <button type="button" class="btn btn-info mt-3" id="toStep3" disabled>Siguiente</button>
@@ -244,12 +260,24 @@
         </div>
         <div class="w-25 card p-4 h-100" id="cart">
             <h1>Carrito</h1>
-            <ul id="cartList" class="list-group"></ul>
+            <ul id="cartList" class="list-group gap-1"></ul>
+            <div class="mt-3">
+                <strong>Sub Total:</strong> $<span id="cartSubTotal">0.00</span>
+            </div>
+            <div class="mt-3 igtf-class" style="display: none;">
+                <strong>Total sin IGTF:</strong> $<span id="cartTotalIGTF">0.00</span>
+            </div>
             <div class="mt-3">
                 <strong>Total:</strong> $<span id="cartTotal">0.00</span>
             </div>
             <div class="mt-3">
+                <strong>Sub Total Bs:</strong>Bs<span id="cartSubTotalBs">0.00</span>
+            </div>
+            <div class="mt-3">
                 <strong>Total Bs:</strong>Bs<span id="cartTotalBs">0.00</span>
+            </div>
+            <div class="mt-3" id="taxesContainer">
+                <!-- Aquí se mostrarán los impuestos aplicados -->
             </div>
             <div class="d-flex justify-content-end">
                 <button type="button" class="btn btn-dark mt-3" id="toStep2" disabled>Siguiente</button>
@@ -276,7 +304,7 @@
                         <p id="modalProductDescription"></p>
                         <p><strong>Precio:</strong> $<span id="modalProductPrice"></span></p>
                         <p><strong>Stock:</strong> <span id="modalProductStock"></span></p>
-                        <p><strong>Talla:</strong> <span id="modalProductSize"></span></p>
+                        <p><strong>Variante:</strong> <span id="modalProductSize"></span></p>
                     </div>
                 </div>
             </div>
@@ -305,8 +333,10 @@
     <script>
         var selectedItems = [];
         var totalAmount = 0;
+        var subTotalAmount = 0;
         let payments = []; 
         let totalPaid = 0; 
+        const igtfTax = @json($taxes->firstWhere('name', 'IGTF'));
 
         const dollar = @json($dollarRate);
         const dollarRate = Number(dollar.rate);
@@ -324,8 +354,24 @@
             const id = checkbox.value;
             const productName = checkbox.getAttribute('data-product-name');
             const productSize = checkbox.getAttribute('data-size');
-            const stock = parseInt(checkbox.getAttribute('data-stock')) || 0; // Asegúrate de que sea un número
-            const price = parseFloat(checkbox.getAttribute('data-price')) || 0; // Asegúrate de que sea un número
+            const stock = parseInt(checkbox.getAttribute('data-stock')) || 0;
+            const price = parseFloat(checkbox.getAttribute('data-price')) || 0;
+            const taxesString = checkbox.getAttribute('data-taxes');
+
+            // Convertir a JSON
+            const taxes = taxesString ? JSON.parse(taxesString) : [];
+
+            // Sumar tasas de impuestos
+            const totalTaxRate = taxes.reduce((sum, tax) => sum + parseFloat(tax.rate), 0);
+
+            // Cálculo del impuesto
+            const taxAmount = price * (totalTaxRate / 100);
+
+            // Precio final = precio base + impuestos
+            const totalPrice = price + taxAmount;
+
+            console.log(`Tasas acumuladas (${id}): ${totalTaxRate}%`);
+            console.log(`Precio base: ${price} => Total con impuestos: ${totalPrice}`);
 
             if (checkbox.checked) {
                 selectedItems.push({
@@ -333,13 +379,21 @@
                     productName,
                     productSize,
                     price,
+                    stock,
                     quantity: 1,
-                    stock
+                    taxes,
+                    taxRate: totalTaxRate,
+                    taxAmount,
+                    totalPrice // <--- Guardar precio con impuestos
                 });
-                totalAmount += price;
+
+                // Sumar al total general
+                totalAmount += totalPrice;
+                subTotalAmount += price;
+                console.log("Selected Items:", selectedItems);
             } else {
                 const removedItem = selectedItems.find(item => item.id === id);
-                if (removedItem) totalAmount -= removedItem.price * removedItem.quantity;
+                if (removedItem) totalAmount -= removedItem.totalPrice;
 
                 selectedItems = selectedItems.filter(item => item.id !== id);
             }
@@ -347,37 +401,55 @@
             renderCart();
         }
 
-        function updateQuantity(id, newQty) {
-            const item = selectedItems.find(item => item.id === id);
-            if (item) {
-                newQty = parseInt(newQty) || 1; // Asegúrate de que sea un número válido
-                if (newQty < 1) newQty = 1;
-                if (newQty > item.stock) newQty = item.stock;
+function updateQuantity(id, newQty) {
+    const item = selectedItems.find(item => item.id === id);
+    if (!item) return;
 
-                totalAmount -= item.price * item.quantity; // Quita el anterior
-                item.quantity = newQty;
-                totalAmount += item.price * newQty;        // Agrega el nuevo
-                renderCart();
-            }
-        }
+    newQty = parseInt(newQty) || 1;
+    if (newQty < 1) newQty = 1;
+    if (newQty > item.stock) newQty = item.stock;
+
+    // Restar el subtotal y los impuestos anteriores
+    subTotalAmount -= (item.price * item.quantity);
+
+    // Actualizar cantidad
+    item.quantity = newQty;
+
+    // Sumar precio base nuevo
+    subTotalAmount += (item.price * item.quantity);
+
+    renderCart();
+}
+
 
         function renderCart() {
             const cartList = document.getElementById('cartList');
             const cartTotal = document.getElementById('cartTotal');
+            const cartSubTotal = document.getElementById('cartSubTotal');
             const cartTotalBs = document.getElementById('cartTotalBs');
+            const cartSubTotalBs = document.getElementById('cartSubTotalBs');
+            const cartTotalIGTF = document.getElementById('cartTotalIGTF');
             const totalAmountValue = document.getElementById('totalAmountValue');
             const totalAmountBsValue = document.getElementById('totalAmountBsValue');
             const toStep2Btn = document.getElementById('toStep2');
+
             cartList.innerHTML = '';
 
             selectedItems.forEach(item => {
                 const li = document.createElement('li');
-                li.className = 'list-group-item d-flex justify-content-between align-items-start flex-column mt-2';
+                li.className = 'list-group-item d-flex justify-content-between align-items-start flex-column';
 
                 const textDiv = document.createElement('div');
-                textDiv.innerHTML = `<strong>${item.productName}</strong><br>
-                <strong>Talla: ${item.productSize}</strong><br>
-                Precio: ${item.price.toFixed(2)} USD | Stock: ${item.stock}`;
+                textDiv.innerHTML = `
+                    <strong>${item.productName} ${item.productSize}</strong><br>
+                    Subtotal: ${(item.price * item.quantity).toFixed(2)} USD
+                    <br>
+                    Impuestos:<br>
+                    ${item.taxes.map(tax => `• ${tax.name} (${parseFloat(tax.rate)}%)`).join('<br>')}
+                    <br>
+                    <strong>Total con Impuestos: ${(item.totalPrice * item.quantity).toFixed(2)} USD</strong>
+                `;
+
 
                 const controlsDiv = document.createElement('div');
                 controlsDiv.className = 'd-flex align-items-center justify-content-between w-100 mt-2';
@@ -419,12 +491,40 @@
                 cartList.appendChild(li);
             });
             // Obtener la tasa del dólar desde el DOM
-
             const dollar = @json($dollarRate);
             const dollarRate = Number(dollar.rate);
 
+            const taxesContainer = document.getElementById('taxesContainer');
+
+            const { totalUsd, tax } = calculateUsdTax();
+
+            taxesContainer.innerHTML = `
+                <div class="mt-3 igtf-class" style="display: none;">
+                    <strong>Total Pagado en USD:</strong> $${totalUsd.toFixed(2)}
+                </div>
+                <div class="mt-1 text-danger igtf-class" style="display: none;">
+                    <strong>Impuesto 3% por pago en USD:</strong> $${tax.toFixed(2)}
+                </div>
+            `;
+            
+            let totalItemsWithTaxes = selectedItems.reduce((acc, item) => {
+                return acc + (item.totalPrice * item.quantity);
+            }, 0);
+
+            if(igtfTax && totalUsd > 0) {
+                document.querySelectorAll('.igtf-class').forEach(el => el.style.display = 'block');
+            } else {
+                document.querySelectorAll('.igtf-class').forEach(el => el.style.display = 'none');
+            }
+
+            totalAmount = totalItemsWithTaxes + tax;
+            totalSinIGTF = totalItemsWithTaxes;
+            console.log("Total sin IGTF:", totalSinIGTF);
             cartTotal.textContent = totalAmount.toFixed(2); 
+            cartSubTotal.textContent = subTotalAmount.toFixed(2);
             cartTotalBs.textContent = (totalAmount * dollarRate ).toFixed(2); 
+            cartSubTotalBs.textContent = (subTotalAmount * dollarRate ).toFixed(2);
+            cartTotalIGTF.textContent = totalSinIGTF.toFixed(2);
             totalAmountValue.textContent = totalAmount.toFixed(2); // Asegúrate de mostrar un número válido
             totalAmountBsValue.textContent = (totalAmount * dollarRate ).toFixed(2); // Asegúrate de mostrar un número válido
             toStep2Btn.disabled = selectedItems.length === 0;
@@ -439,9 +539,20 @@
 
             const checkbox = document.getElementById(`variant_${id}`);
             if (checkbox) checkbox.checked = false;
-
+            
+            recalcSubtotals();
             renderCart();
         }
+        function recalcSubtotals() {
+            subTotalAmount = selectedItems.reduce((acc, item) => {
+                return acc + (item.price * item.quantity);
+            }, 0);
+
+            totalAmount = selectedItems.reduce((acc, item) => {
+                return acc + (item.totalPrice * item.quantity);
+            }, 0);
+        }
+
         function filterProductsByCategory(categoryId) {
             const productItems = document.querySelectorAll('.product-item');
 
@@ -552,7 +663,7 @@
             currencyButtons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     const selectedCurrency = btn.dataset.currency;
-
+                    console.log("Moneda seleccionada:", selectedCurrency);
                     // Ocultar todas las secciones
                     sections.forEach(section => {
                         section.classList.add('d-none');
@@ -595,7 +706,7 @@
                 payments = payments.filter(payment => payment.methodId !== methodId); // Eliminar el pago del arreglo
             }
 
-            console.log(payments); // Verificar el arreglo de pagos en la consola
+            console.log("payments", payments); // Verificar el arreglo de pagos en la consola
             validatePaymentDetails(); // Validar los detalles de pago
         }
 
@@ -611,7 +722,6 @@
                 if (input.classList.contains('payment-input')) {
                     let amount = parseFloat(input.value) || 0;
 
-                    // Si la moneda es bolívares, convertir a dólares
                     if (currency === 'BS') {
                         amount = amount / dollarRate;
                     }
@@ -621,78 +731,32 @@
                     payment.reference = input.value;
                 }
             }
-
-            console.log(payments);
+            console.log("payments 2", payments);
+            renderCart();
             validatePaymentDetails();
         }
-        function validatePaymentDetails() {
-            totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
-            const totalPaidSpan = document.getElementById('totalPaid');
-            const paymentMessages = document.querySelectorAll('.paymentMessage');
-            const toStep3Button = document.getElementById('toStep3');
 
-            // Mostrar el total ingresado
-            totalPaidSpan.textContent = totalPaid.toFixed(2);
+        function getUsdPaymentsTotal() {
+            let totalUsd = 0;
 
-            let messageText = '';
-            let messageClass = '';
-            let disableStep3 = false;
-
-            // Verificar si hay referencias vacías (solo si el método requiere referencia)
-            const hasEmptyReference = payments.some(payment => {
-                const methodElement = document.querySelector(`[data-method-id="${payment.methodId}"]`);
-                if (methodElement && methodElement.dataset.currency !== undefined) {
-                    const inputReference = document.getElementById(`reference_${payment.methodId}`);
-                    return inputReference && inputReference.type !== 'hidden' && (!payment.reference || payment.reference.trim() === '');
+            payments.forEach(p => {
+                if (p.currency === 'USD') {
+                    totalUsd += Number(p.amount) || 0;
                 }
-                return false;
             });
 
-            if (hasEmptyReference) {
-                messageText = `Todos los métodos de pago deben tener una referencia válida.`;
-                messageClass = 'text-danger';
-                disableStep3 = true;
-            } else if (totalPaid < totalAmount) {
-                const remaining = (totalAmount - totalPaid).toFixed(2);
-                messageText = `Falta por pagar: $${remaining}`;
-                messageClass = 'text-danger';
-                disableStep3 = true;
-            } else if (totalPaid > totalAmount) {
-                const change = (totalPaid - totalAmount).toFixed(2);
-                messageText = `Debe entregar vuelto: $${change}`;
-                messageClass = 'text-warning';
-                disableStep3 = false;
-            } else {
-                messageText = `Pago exacto.`;
-                messageClass = 'text-success';
-                disableStep3 = false;
-            }
-
-            // Actualizar todos los mensajes en pantalla
-            paymentMessages.forEach(el => {
-                el.textContent = messageText;
-                el.className = `paymentMessage ${messageClass}`; // Mantener la clase base más el color
-            });
-
-            toStep3Button.disabled = disableStep3;
+            return totalUsd;
         }
 
+        function calculateUsdTax() {
+            const totalUsd = getUsdPaymentsTotal();
+            const tax = totalUsd * 0.03; // 3%
+            return {
+                totalUsd,
+                tax
+            };
+        }
 
-        //Funciones para paso 3
-        document.getElementById('toStep3').addEventListener('click', function() {
-            document.getElementById('step2').classList.add('d-none');
-            renderSummary(); // Mostrar el resumen
-            document.getElementById('cart').classList.add('d-none');
-            document.getElementById('step3').classList.remove('d-none');
-            console.log('Resumen:', selectedItems);
-            console.log('Pagos:', payments);
-        });
-        document.getElementById('backToStep2').addEventListener('click', function() {
-            document.getElementById('step3').classList.add('d-none');
-            document.getElementById('step2').classList.remove('d-none');
-            document.getElementById('cart').classList.remove('d-none');
-
-        });
         function renderSummary() {
             const container = document.getElementById('summaryContainer');
             
@@ -709,7 +773,7 @@
             const itemList = document.createElement('ul');
             selectedItems.forEach(item => {
                 const li = document.createElement('li');
-                li.innerText = `${item.productName} - Talla: ${item.productSize} - Cantidad: ${item.quantity} - Subtotal: $${(item.price * item.quantity).toFixed(2)}`;
+                li.innerText = `${item.productName} - Variante: ${item.productSize} - Cantidad: ${item.quantity} - Subtotal: $${(item.price * item.quantity).toFixed(2)}`;
                 itemList.appendChild(li);
             });
             container.appendChild(itemList);
@@ -751,55 +815,171 @@
                 paymentList.className = 'card p-4 gap-2';
             }
         }
-        
-        document.getElementById('confirmPurchase').addEventListener('click', function() {
-            const authUser = @json($authUser);
-            const tenantId = Number(authUser.tenant_id);
 
-            const summary = {
-                customerId: customerId,
-                items: selectedItems,
-                payments: payments,
-                tenant_id: tenantId
-            };
+        function addPayments() {
+            const paymentsContainer = document.getElementById('paymentsContainer');
+            paymentsContainer.innerHTML = ''; // Limpiar contenido previo
 
-            // Obtener el token CSRF desde el meta tag o un input hidden
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-            console.log('Resumen a enviar:', summary);
-            return;
-            // Enviar la solicitud al servidor
-            fetch('/create-sale', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken // Incluir el token CSRF
-                },
-                body: JSON.stringify(summary) // Convertir el resumen a JSON
-            })
-            .then(response => {
-                if (response.ok) {
-                    return response.json(); // Parsear la respuesta como JSON
-                } else {
-                    throw new Error('Error al confirmar la compra.');
-                }
-            })
-            .then(data => {
-                // Manejar la respuesta exitosa
-                alert('Compra confirmada con éxito.');
-                const link = document.createElement('a');
-                link.href = data.pdf_url;
-                link.download = ''; // Puedes darle un nombre: 'orden-venta.pdf'
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                // Redirigir o limpiar el formulario
-                window.location.href = '/sales-orders'; // Cambia la ruta según sea necesario
-            })
-            .catch(error => {
-                // Manejar errores
-                console.error('Error:', error);
-                alert('Error al confirmar la compra.');
+            payments.forEach(payment => {
+                const paymentDiv = document.createElement('div');
+                paymentDiv.className = 'payment-method-summary';
+
+                const amountInput = document.getElementById(`amount_${payment.methodId}`);
+                const referenceInput = document.getElementById(`reference_${payment.methodId}`);
+                const amount = amountInput?.value || 0;
+                const reference = referenceInput?.value || '';
+
+                paymentDiv.innerHTML = `
+                    <strong>Método:</strong> ${payment.currency} <br>
+                    <strong>Monto:</strong> $${parseFloat(amount).toFixed(2)} <br>
+                    <strong>Referencia:</strong> ${reference} <br>
+                    <hr>
+                `;
+
+                paymentsContainer.appendChild(paymentDiv);
             });
+        }
+
+        function validatePaymentDetails() {
+            totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+            console.log("Total pagado:", payments);
+            const totalPaidSpan = document.getElementById('totalPaid');
+            const paymentMessages = document.querySelectorAll('.paymentMessage');
+            const toStep3Button = document.getElementById('toStep3');
+
+            // Mostrar el total ingresado
+            totalPaidSpan.textContent = totalPaid.toFixed(2);
+
+            let messageText = '';
+            let messageClass = '';
+            let disableStep3 = false;
+
+            // Verificar si hay referencias vacías (solo si el método requiere referencia)
+            const hasEmptyReference = payments.some(payment => {
+                const methodElement = document.querySelector(`[data-method-id="${payment.methodId}"]`);
+                if (methodElement && methodElement.dataset.currency !== undefined) {
+                    const inputReference = document.getElementById(`reference_${payment.methodId}`);
+                    return inputReference && inputReference.type !== 'hidden' && (!payment.reference || payment.reference.trim() === '');
+                }
+                return false;
+            });
+
+            if (hasEmptyReference) {
+                messageText = `Todos los métodos de pago deben tener una referencia válida.`;
+                messageClass = 'text-danger';
+                disableStep3 = true;
+            } else if (totalPaid < totalAmount) {
+                const remaining = (totalAmount - totalPaid).toFixed(2);
+                messageText = `Falta por pagar: $${remaining} / BS${(remaining * dollarRate).toFixed(2)}`;
+                messageClass = 'text-danger';
+                disableStep3 = true;
+            } else if (totalPaid > totalAmount) {
+                const change = (totalPaid - totalAmount).toFixed(2);
+                messageText = `Debe entregar vuelto: $${change} / BS${(change * dollarRate).toFixed(2)}`;
+                messageClass = 'text-warning';
+                disableStep3 = false;
+            } else {
+                messageText = `Pago exacto.`;
+                messageClass = 'text-success';
+                disableStep3 = false;
+            }
+
+            // Actualizar todos los mensajes en pantalla
+            paymentMessages.forEach(el => {
+                el.textContent = messageText;
+                el.className = `paymentMessage ${messageClass}`; // Mantener la clase base más el color
+            });
+
+            toStep3Button.disabled = disableStep3;
+        }
+
+
+        //Funciones para paso 3
+        document.getElementById('toStep3').addEventListener('click', function() {
+            document.getElementById('step2').classList.add('d-none');
+            renderSummary(); // Mostrar el resumen
+            document.getElementById('cart').classList.add('d-none');
+            document.getElementById('step3').classList.remove('d-none');
+            console.log('Resumen:', selectedItems);
+            console.log('Pagos:', payments);
         });
+        document.getElementById('backToStep2').addEventListener('click', function() {
+            document.getElementById('step3').classList.add('d-none');
+            document.getElementById('step2').classList.remove('d-none');
+            document.getElementById('cart').classList.remove('d-none');
+
+        });
+        
+        document.getElementById('confirmPurchase').addEventListener('click', function () {
+    const button = this;
+
+    // Activar loading
+    button.disabled = true;
+    const originalText = button.innerHTML;
+    button.innerHTML = `
+        <span class="spinner-border spinner-border-sm me-2"></span>
+        Procesando...
+    `;
+
+    const authUser = @json($authUser);
+    const tenantId = Number(authUser.tenant_id);
+
+    const summary = {
+        customerId: customerId,
+        items: selectedItems,
+        payments: payments,
+        tenant_id: tenantId,
+        dollarRate: dollarRate
+    };
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    console.log('Resumen a enviar:', summary);
+
+    fetch('/create-sale', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken
+        },
+        body: JSON.stringify(summary)
+    })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            } else {
+                throw new Error('Error al confirmar la compra.');
+            }
+        })
+        .then(data => {
+            alert('Compra confirmada con éxito.');
+
+            const link = document.createElement('a');
+            link.href = data.pdf_url;
+            link.download = '';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            const linkNota = document.createElement('a');
+            linkNota.href = data.nota_entrega_pdf_url;
+            linkNota.download = '';
+            document.body.appendChild(linkNota);
+            linkNota.click();
+            document.body.removeChild(linkNota);
+
+            // window.location.href = '/sales-orders';
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al confirmar la compra.');
+        })
+        .finally(() => {
+            // Restaurar botón en cualquier caso
+            button.disabled = false;
+            button.innerHTML = originalText;
+        });
+});
+
+
     </script>
 @endpush

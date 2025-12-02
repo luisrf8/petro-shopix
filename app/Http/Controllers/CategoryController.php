@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use App\Models\Product;
+use Illuminate\Support\Facades\DB;
 
 class CategoryController extends Controller
 {
@@ -50,6 +51,8 @@ class CategoryController extends Controller
 
     public function store(Request $request)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $request->validate([
             'name' => 'required|string|max:255|unique:categories',
             'description' => 'nullable|string',
@@ -79,6 +82,7 @@ class CategoryController extends Controller
 
     public function update(Request $request, Category $category)
     {
+        DB::raw("SET @user_id = " . auth()->id());
         $request->validate([
             'name' => 'required|string|max:255|unique:categories,name,' . $category->id,
             'description' => 'nullable|string',
@@ -99,6 +103,7 @@ class CategoryController extends Controller
 
     public function toggleStatus($id)
     {
+        DB::raw("SET @user_id = " . auth()->id());
         // Buscar la categoría
         $category = Category::findOrFail($id);
     
@@ -120,6 +125,8 @@ class CategoryController extends Controller
 
     public function destroy(Category $category)
     {
+        DB::raw("SET @user_id = " . auth()->id());
+
         $category->delete();
         return redirect()->route('categories.index')->with('success', 'Categoría eliminada con éxito.');
     }

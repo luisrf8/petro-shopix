@@ -29,4 +29,8 @@ class Product extends Model
     {
         return $this->hasMany(ProductVariant::class);
     }
+    public function taxes()
+    {
+        return $this->belongsToMany(Tax::class, 'product_tax');
+    }
 }

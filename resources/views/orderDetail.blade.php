@@ -22,8 +22,8 @@
                                   <span class="mb-2 text-xs">Cantidad: 
                                       <span class="text-dark font-weight-bold ms-sm-2">{{ $detalle->quantity }}</span>
                                   </span>
-                                  <span class="mb-2 text-xs">Talla: 
-                                      <span class="text-dark font-weight-bold ms-sm-2">{{ $detalle->product_variant->size ?? 'Sin talla' }}</span>
+                                  <span class="mb-2 text-xs">Variante: 
+                                      <span class="text-dark font-weight-bold ms-sm-2">{{ $detalle->product_variant->size ?? 'Sin variante' }}</span>
                                   </span>
                                   <span class="mb-2 text-xs">Precio: 
                                       <span class="text-dark font-weight-bold ms-sm-2">{{ $detalle->price ?? 'Sin precio' }}</span>

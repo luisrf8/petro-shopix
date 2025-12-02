@@ -171,7 +171,7 @@ input[type="checkbox"]:checked + .position-absolute {
                             variantRow.classList.add('mb-2', 'border-bottom', 'pb-2');
 
                             const variantLabel = document.createElement('div');
-                            variantLabel.textContent = `Talla: ${variant.size || 'Sin nombre'}`;
+                            variantLabel.textContent = `Variante: ${variant.size || 'Sin nombre'}`;
                             variantLabel.classList.add('me-3', 'fw-bold');
 
                             const sizeLabel = document.createElement('div');
