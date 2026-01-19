@@ -212,7 +212,7 @@
     </div>
   </section>
 
-  <section class="p-5">
+<section class="p-5">
     <div class="text-center">
       <h2 class="section-title mb-5">Planes Disponibles</h2>
       <div class="d-flex flex-wrap justify-content-center gap-4">
@@ -239,14 +239,25 @@
                 @endforeach
               </ul>
             </div>
+            
             <div class="card-footer bg-transparent border-0 text-center">
-              <a href="/create-tenant-user"
-                target="_blank"
-                class="btn  w-75 fw-semibold rounded-pill">
-                Seleccionar Plan
-              </a>
+              @if ($plan->status == 1)
+                <a href="/create-tenant-user"
+                  target="_blank"
+                  class="btn btn-primary w-75 fw-semibold rounded-pill">
+                  Seleccionar Plan
+                </a>
+              @else
+                <button
+                  class="btn btn-secondary w-75 fw-semibold rounded-pill"
+                  disabled
+                  style="cursor: default;"
+                >
+                  Próximamente...
+                </button>
+              @endif
             </div>
-          </div>
+            </div>
         </div>
         @endforeach
       </div>

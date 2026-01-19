@@ -1,0 +1,565 @@
+@extends('layouts.app')
+
+@section('title', 'Tienda')
+
+@section('content')
+<style>
+    .text-black-all * {
+        color: #000 !important;
+    }
+
+    /* Transición para el panel del iframe */
+    #iframeContainer {
+        transition: all 0.3s ease-in-out;
+    }
+    
+    .form-control-color {
+    width: 3rem;
+    height: unset;
+    padding: 0.5rem;
+    }
+
+    .logo-preview {
+      max-height: 90px;
+      border: 1px solid #dee2e6;
+    }
+    .no-border {
+    border: none !important;
+    padding: 0;
+    background: transparent;
+}
+
+/* Chrome, Edge, Safari */
+.no-border::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.no-border::-webkit-color-swatch {
+    border: none;
+    border-radius: 6px; /* opcional */
+}
+
+/* Firefox */
+.no-border::-moz-color-swatch {
+    border: none;
+    border-radius: 6px; /* opcional */
+}
+</style>
+
+<div class="p-4 ">
+    <h1 class="">Gestión de Tienda</h1>
+
+    <div class="row">
+        {{-- Columna izquierda --}}
+        <div class="col-md-6" id="leftColumn">
+            <div class="card h-100">
+                <div class="card-body">
+
+                    {{-- Tabs --}}
+                    <ul class="nav nav-tabs mb-3 text-black-all" id="tenantTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info" type="button" role="tab">
+                                Info de la Empresa
+                            </button>
+                        </li>
+
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="address-tab" data-bs-toggle="tab" data-bs-target="#addressTab" type="button" role="tab">
+                                Dirección
+                            </button>
+                        </li>
+
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="design-tab" data-bs-toggle="tab" data-bs-target="#design" type="button" role="tab">
+                                Identidad
+                            </button>
+                        </li>
+
+                        {{-- NUEVO: Usuarios de la tienda --}}
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">
+                                Usuarios
+                            </button>
+                        </li>
+                    </ul>
+
+                    {{-- Formulario principal --}}
+                    <form id="tenantForm" enctype="multipart/form-data">
+                        @csrf
+
+                        <div class="tab-content" id="tenantTabsContent">
+
+                            {{-- TAB 1 --}}
+                            <div class="tab-pane fade show active" id="info" role="tabpanel">
+                                <div class="mb-3">
+                                    <label class="form-label">Nombre de la Tienda</label>
+                                    <input type="text" class="form-control p-2 border border-radius-lg" name="name" value="{{ $tenant->name ?? '' }}" required>
+                                </div>
+                                <div class="row mb-4">
+                                    <div class="col-md-4">
+                                        <label for="phone_code" class="form-label fw-bold">Código del país</label>
+                                        <select name="phone_code" id="phone_code" class="form-select form-select-lg" required>
+                                        <option value="+58">🇻🇪 +58</option>
+                                        <option value="+1">🇺🇸 +1</option>
+                                        <option value="+34">🇪🇸 +34</option>
+                                        <option value="+57">🇨🇴 +57</option>
+                                        <option value="+55">🇧🇷 +55</option>
+                                        <option value="+52">🇲🇽 +52</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label for="phone_number" class="form-label fw-bold">Número de teléfono</label>
+                                        <input type="text" name="phone_number" id="phone_number" class="form-control form-control-lg border border-radius-lg" placeholder="Ej: 4121234567" required>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Url de la Tienda</label>
+                                    <input type="text" class="form-control p-2 border border-radius-lg" name="slug" value="{{ $tenant->slug ?? '' }}" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Eslogan</label>
+                                    <input type="text" class="form-control p-2 border border-radius-lg" name="slogan" value="{{ $tenant->slogan ?? '' }}">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Descripción</label>
+                                    <textarea class="form-control p-2 border border-radius-lg" name="description" rows="3">{{ $tenant->description ?? '' }}</textarea>
+                                </div>
+                            </div>
+
+                            {{-- TAB 2 --}}
+                            <div class="tab-pane fade" id="addressTab" role="tabpanel">
+                                <div class="mb-3">
+                                    <div class="row mb-3">
+                                        <div class="col-md-4">
+                                            <label for="country" class="form-label ">País</label>
+                                            <select name="country" id="country" class="form-control form-control-lg border border-radius-lg p-2" required>
+                                                <option value="">Selecciona un país</option>
+                                                @foreach($countries as $country)
+                                                    <option value="{{ $country->id }}" {{ isset($tenant->country) && $tenant->country == $country->id ? 'selected' : '' }}>
+                                                        {{ $country->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label for="state" class="form-label fw-bold">Estado / Provincia</label>
+                                            <select name="state" id="state" class="form-control form-control-lg border border-radius-lg p-2" required>
+                                                <option value="">Selecciona un estado</option>
+                                                @if(isset($tenant->state))
+                                                    @foreach($states->where('country_id', $tenant->country) as $state)
+                                                        <option value="{{ $state->id }}" {{ $tenant->state == $state->id ? 'selected' : '' }}>
+                                                            {{ $state->name }}
+                                                        </option>
+                                                    @endforeach
+                                                @endif
+                                            </select>
+                                            <div id="state-loading" style="display:none;">Cargando estados...</div>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label for="city" class="form-label fw-bold">Ciudad</label>
+                                            <select name="city" id="city" class="form-control form-control-lg border border-radius-lg p-2" required>
+                                                <option value="">Selecciona una ciudad</option>
+                                                @if(isset($tenant->city))
+                                                    @foreach($cities->where('state_id', $tenant->state) as $city)
+                                                        <option value="{{ $city->id }}" {{ $tenant->city == $city->id ? 'selected' : '' }}>
+                                                            {{ $city->name }}
+                                                        </option>
+                                                    @endforeach
+                                                @endif
+                                            </select>
+                                            <div id="city-loading" style="display:none;">Cargando ciudades...</div>
+                                        </div>
+                                    </div>
+
+                                    <label class="form-label">Dirección Exacta</label>
+                                    <input type="text" class="form-control p-2 border border-radius-lg" name="address" value="{{ $tenant->address ?? '' }}">
+                                    <!-- 🗺️ MAPA GOOGLE -->
+                                    <div class="mb-4">
+                                        <label class="form-label fw-bold">Ubicación en el mapa</label>
+                                        <div id="map" style="height: 350px; border-radius: 0.5rem;"></div>
+
+                                        <!-- Campos ocultos para latitud y longitud -->
+                                        <input type="hidden" name="latitude" id="latitude" value="{{ $tenant->latitude ?? '' }}">
+                                        <input type="hidden" name="longitude" id="longitude" value="{{ $tenant->longitude ?? '' }}">
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- TAB 3 --}}
+                            <div class="tab-pane fade" id="design" role="tabpanel">
+                                <div class="mb-4">
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <img id="logo-preview" src="{{ asset('storage/' . $tenant->logo) }}" class="logo-preview rounded p-2 bg-white shadow-sm">
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Cambiar Logo (PNG o SVG)</label>
+                                    <input type="file" name="logo" id="logo" class="form-control form-control-lg border border-radius-lg" accept=".png,.svg">
+                                </div>
+                                <div class="mb-4">
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <img id="bg-preview" src="{{ asset('storage/' . $tenant->background_image) }}" class="logo-preview rounded p-2 bg-white shadow-sm">
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Imagen de fondo (PNG o SVG) (1920x1080)</label>
+                                    <input type="file" name="background_image" id="background_image" class="form-control form-control-lg border border-radius-lg" accept=".png,.svg">
+                                </div>
+                                <div class="row mb-4">
+                                    <div class="col-md-4">
+                                        <label for="color_primary" class="form-label fw-bold">Color Primario</label>
+                                        <input type="color"
+                                        name="color_primary"
+                                        id="color_primary"
+                                        class="form-control-color w-100 bg-transparent no-border"
+                                        style="height: 45px;"
+                                        value="{{ $tenant->color_primary ?? '#0d6efd' }}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="color_secondary" class="form-label fw-bold">Color Secundario</label>
+                                        <input type="color"
+                                        name="color_secondary"
+                                        id="color_secondary"
+                                        style="height: 45px;"
+                                        class="form-control-color w-100 bg-transparent no-border"
+                                        value="{{ $tenant->color_secondary ?? '#6c757d' }}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="color_accent" class="form-label fw-bold">Color Acento (letras y detalles)</label>
+                                        <input type="color"
+                                            name="color_accent"
+                                            id="color_accent"
+                                            style="height: 45px;"
+                                            class="form-control-color w-100 bg-transparent no-border"
+                                            value="{{ $tenant->color_accent ?? '#ffc107' }}">
+                                    </div>
+                                </div>
+                                <div class="row mb-4">
+                                    <div class="col-md-4">
+                                        <label for="tiktok" class="form-label fw-bold">TikTok</label>
+                                        <input type="text"
+                                        name="tiktok"
+                                        id="tiktok"
+                                        class="form-control p-2 border border-radius-lg"
+                                        value="{{ $tenant->tiktok ?? '' }}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="instagram" class="form-label fw-bold">Instagram</label>
+                                        <input type="text"
+                                        name="instagram"
+                                        id="instagram"
+                                        class="form-control p-2 border border-radius-lg"
+                                        value="{{ $tenant->instagram ?? '' }}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="facebook" class="form-label fw-bold">Facebook</label>
+                                        <input type="text"
+                                        name="facebook"
+                                        id="facebook"
+                                        class="form-control p-2 border border-radius-lg"
+                                        value="{{ $tenant->facebook ?? '' }}">
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- TAB 4: NUEVO - Usuarios --}}
+                            {{-- <div class="tab-pane fade" id="users" role="tabpanel">
+
+                                <div class="d-flex justify-content-between mb-3">
+                                    <h5 class="mt-2">Usuarios de la tienda</h5>
+                                    <a href="#" class="btn btn-primary btn-sm text-white">Agregar Usuario</a>
+                                </div>- -}}
+
+                                {{-- EJEMPLO DE LISTA DE USUARIOS --}}
+                                 {{-- <ul class="list-group">
+
+                                    @foreach($tenant->users ?? [] as $user)
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>{{ $user->name }}</strong><br>
+                                                <small class="text-muted">{{ $user->email }}</small>
+                                            </div>
+
+                                            <button type="button"
+                                                class="btn btn-sm btn-dark editUserBtn text-white"
+                                                data-id="{{ $user->id }}"
+                                                data-name="{{ $user->name }}"
+                                                data-email="{{ $user->email }}"
+                                            >
+                                                Editar
+                                            </button>
+                                        </li>
+                                    @endforeach
+
+                                    @if(empty($tenant->users) || count($tenant->users) == 0)
+                                        <li class="list-group-item text-center text-muted">No hay usuarios registrados.</li>
+                                    @endif
+
+                                </ul>
+
+
+                            </div> --}}
+                        </div>
+
+                        <button type="submit" class="btn btn-sm btn-dark text-white w-100 mt-3">Guardar Cambios</button>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+
+        {{-- Columna derecha (iframe) --}}
+        <div class="col-md-6" id="iframeContainer">
+            <div class="card h-100">
+
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Vista previa</h5>
+
+                    {{-- Botón para minimizar --}}
+                    <button id="toggleIframe" class="btn btn-outline-dark btn-sm">
+                        Minimizar
+                    </button>
+                </div>
+
+                <div class="card-body p-0" id="iframeContent" style="height: 600px;">
+                    <iframe
+                        id="previewFrame"
+                        src="{{ $tenant->full_url ?? (url('/').'/'.$tenant->slug) }}"
+                        style="width: 100%; height: 100%; border: none;">
+                    </iframe>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+<!-- MODAL EDITAR USUARIO -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Usuario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <form id="editUserForm">
+                @csrf
+                <input type="hidden" name="user_id" id="edit_user_id">
+
+                <div class="modal-body">
+
+                    <!-- Nombre -->
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" name="name" id="edit_user_name" class="form-control" required>
+                    </div>
+
+                    <!-- Correo -->
+                    <div class="mb-3">
+                        <label class="form-label">Correo</label>
+                        <input type="email" name="email" id="edit_user_email" class="form-control" required>
+                    </div>
+
+                    <!-- Contraseña -->
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Contraseña <small class="text-muted">(dejar vacío para no cambiar)</small>
+                        </label>
+                        <input type="password" name="password" id="edit_user_password" class="form-control">
+                    </div>
+
+                    <!-- Rol -->
+                    <div class="mb-3">
+                        <label class="form-label">Rol</label>
+                        <select name="role" id="edit_user_role" class="form-select" required>
+                            <option value="">Seleccione un rol</option>
+                            @foreach($roles as $role)
+                                <option value="{{ $role->name }}">{{ $role->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+</div>
+
+</div>
+
+@endsection
+
+
+@push('scripts')
+    <script async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA5zzN0-ht0NYbOOUeCRP2RRJyWrEDZsRI&libraries=places&callback=initMap">
+    </script>
+<script>
+  let map, marker;
+function initMap() {
+  const defaultPos = { lat: 9.7457, lng: -63.1832 }; // Maturín, Monagas, Venezuela por defecto
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: defaultPos,
+    zoom: 13,
+  });
+
+  marker = new google.maps.Marker({
+    position: defaultPos,
+    map: map,
+    draggable: true,
+  });
+
+  // Actualizar campos ocultos cuando se mueva el marcador
+  google.maps.event.addListener(marker, "dragend", function(event) {
+    document.getElementById("latitude").value = event.latLng.lat();
+    document.getElementById("longitude").value = event.latLng.lng();
+  });
+
+  // Buscar dirección con el input de texto
+  const input = document.getElementById("address");
+  const autocomplete = new google.maps.places.Autocomplete(input);
+  autocomplete.bindTo("bounds", map);
+
+  autocomplete.addListener("place_changed", function() {
+    const place = autocomplete.getPlace();
+    if (!place.geometry) return;
+    map.setCenter(place.geometry.location);
+    map.setZoom(15);
+    marker.setPosition(place.geometry.location);
+    document.getElementById("latitude").value = place.geometry.location.lat();
+    document.getElementById("longitude").value = place.geometry.location.lng();
+  });
+}
+    const logoInput = document.getElementById("logo");
+    const logoPreview = document.getElementById("logo-preview");
+
+    // Vista previa del logo
+    logoInput.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = e => {
+          logoPreview.src = e.target.result;
+          logoPreview.classList.remove("d-none");
+        };
+        reader.readAsDataURL(file);
+      } else {
+        logoPreview.src = "#";
+        logoPreview.classList.add("d-none");
+      }
+    });
+/* Botón para ocultar/mostrar el iframe */
+document.getElementById('toggleIframe').addEventListener('click', function () {
+    const content = document.getElementById('iframeContent');
+    const container = document.getElementById('iframeContainer');
+    const leftColumn = document.getElementById('leftColumn');
+
+    if (content.style.display === "none") {
+        // Mostrar de nuevo
+        content.style.display = "block";
+        container.classList.remove('col-md-12');
+        container.classList.add('col-md-6');
+        leftColumn.classList.remove('col-md-12');
+        leftColumn.classList.add('col-md-6');
+        this.textContent = "Minimizar";
+    } else {
+        // Ocultar iframe
+        content.style.display = "none";
+        container.classList.remove('col-md-6');
+        container.classList.add('col-md-12');
+        leftColumn.classList.remove('col-md-6');
+        leftColumn.classList.add('col-md-12');
+        this.textContent = "Mostrar Vista Previa";
+    }
+});
+// Abrir modal y cargar datos del usuario
+document.querySelectorAll('.editUserBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        const name = btn.dataset.name;
+        const email = btn.dataset.email;
+
+        document.getElementById('edit_user_id').value = id;
+        document.getElementById('edit_user_name').value = name;
+        document.getElementById('edit_user_email').value = email;
+
+        let modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+        modal.show();
+    });
+});
+    // Al cambiar país
+    document.getElementById('country').addEventListener('change', function(){
+        let country_id = this.value;
+        document.getElementById('state').innerHTML = '<option value="">Selecciona un estado</option>';
+        document.getElementById('city').innerHTML = '<option value="">Selecciona una ciudad</option>';
+        if(country_id){
+            document.getElementById('state-loading').style.display = 'block';
+            fetch('/get-states/' + country_id)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('state-loading').style.display = 'none';
+                    data.forEach(state => {
+                        document.getElementById('state').insertAdjacentHTML('beforeend', '<option value="'+state.id+'">'+state.name+'</option>');
+                    });
+                });
+        }
+    });
+
+    // Al cambiar estado
+    document.getElementById('state').addEventListener('change', function(){
+        let state_id = this.value;
+        document.getElementById('city').innerHTML = '<option value="">Selecciona una ciudad</option>';
+        if(state_id){
+            document.getElementById('city-loading').style.display = 'block';
+            fetch('/get-cities/' + state_id)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('city-loading').style.display = 'none';
+                    data.forEach(city => {
+                        document.getElementById('city').insertAdjacentHTML('beforeend', '<option value="'+city.id+'">'+city.name+'</option>');
+                    });
+            });
+        }
+    });
+    const form = document.querySelector('form');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const formData = new FormData(form);
+
+        const response = await fetch("{{ route('tenant.update') }}", {
+            method: "POST",
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert(data.message);
+        } else if (data.errors) {
+            // Mostrar errores de validación
+            console.log(data.errors);
+            alert("Errores: " + JSON.stringify(data.errors));
+        } else {
+            alert(data.message || "Error desconocido");
+        }
+    });
+
+</script>
+@endpush

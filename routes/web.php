@@ -14,7 +14,8 @@ use App\Http\Controllers\{
     UserController,
     TenantController,
     PlanController,
-    TaxController
+    TaxController,
+    LocationController
 };
 
 // RUTAS DE INVITADOS
@@ -65,7 +66,13 @@ Route::middleware('auth')->group(function () {
     // Tenants
     Route::get('/tenants', [TenantController::class, 'index'])->name('tenant.index');
     Route::get('/create-tenant', [TenantController::class, 'createIndex'])->name('createTenant');
+    Route::get('/tenant-store', [TenantController::class, 'getTenant'])->name('tenant.store');
+    Route::post('/tenant-update', [TenantController::class, 'updateTenant'])->name('tenant.update');
     Route::resource('tenants', TenantController::class);
+
+    //ubicacion 
+    Route::get('/get-states/{country}', [LocationController::class, 'getStates']);
+    Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
 
     // Planes
     Route::get('/plans', [PlanController::class, 'index'])->name('plans.index');
@@ -84,5 +91,6 @@ require __DIR__.'/auth.php';
 
 // 🔹 RUTAS PÚBLICAS DEL TENANT (al final)
 Route::get('/{tenant:slug}', [TenantController::class, 'publicTenantindex'])->name('tenant.public');
-Route::get('/{tenant:slug}/categoria/{category:slug}', [TenantController::class, 'publicTenantCategory'])->name('tenant.public.category');
+Route::get('/{tenant:slug}/categorias', [TenantController::class, 'publicTenantCategory'])->name('tenant.public.categories');
+Route::get('/{tenant:slug}/{product:id}', [TenantController::class, 'publicTenantProduct'])->name('tenant.public.product');
 Route::post('/tenants-public', [TenantController::class, 'storePublic'])->name('tenants.storePublic'); // ← fuera del grupo auth

@@ -42,13 +42,15 @@
     }
   </style>
 </head>
+<!-- Activa tu mejor versión. -->
+ <!-- Ropa deportiva que se adapta a tu ritmo y potencia tu confianza. -->
 <body>
   <!-- HEADER -->
   <div class="w-100 position-fixed top-0 px-4" style="z-index: 1050;">
     <div class="py-3 w-100">
       <div class="row align-items-center">
         <div class="col-md-4 d-flex justify-content-start">
-          <a href="http://192.168.1.119:3000/" class="btn btn-light text-dark fw-bold px-4 py-2">
+          <a href="/" class="btn btn-light text-dark fw-bold px-4 py-2">
             <img src="../../assets/img/shopix5.png" alt="Logo Shopix" class="img-fluid" style="width: 100px;">
           </a>
         </div>
@@ -98,16 +100,19 @@
                 </div>
 
                 <div class="mb-4">
-                  <label for="plan_id" class="form-label fw-bold">Selecciona tu plan</label>
-                  <select name="plan_id" id="plan_id" class="form-select form-select-lg" required>
-                    <option value="">-- Elige un plan --</option>
-                    @foreach($plans as $plan)
-                      <option value="{{ $plan->id }}">{{ $plan->name }} - ${{ $plan->price }}</option>
-                    @endforeach
-                  </select>
+                    <label for="plan_id" class="form-label fw-bold">Selecciona tu plan</label>
+                    <select name="plan_id" id="plan_id" class="form-select form-select-lg" required>
+                        <option value="">-- Elige un plan --</option>
+                        @foreach($plans as $plan)
+                            @if ($plan->status == 1)
+                                <option value="{{ $plan->id }}">
+                                    {{ $plan->name }} - ${{ $plan->price }}
+                                </option>
+                            @endif
+                            @endforeach
+                    </select>
                 </div>
-
-                <div class="d-flex justify-content-end">
+                                <div class="d-flex justify-content-end">
                   <button type="button" class="btn btn-primary btn-lg" id="nextBtn">Siguiente ➜</button>
                 </div>
               </div>
@@ -160,34 +165,57 @@
                 <div class="row mb-3">
                     <div class="col-md-4">
                         <label for="country" class="form-label fw-bold">País</label>
-                        <input type="text" name="country" id="country" class="form-control form-control-lg" placeholder="Ej: Venezuela" required>
+                                                                    <select name="country" id="country" class="form-control form-control-lg border border-radius-lg p-2" required>
+                                                <option value="">Selecciona un país</option>
+                                                @foreach($countries as $country)
+                                                    <option value="{{ $country->id }}">
+                                                        {{ $country->name }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
                     </div>
-                <div class="col-md-4">
-                    <label for="state" class="form-label fw-bold">Estado / Provincia</label>
-                    <input type="text" name="state" id="state" class="form-control form-control-lg" placeholder="Ej: Monagas" required>
-                </div>
-                <div class="col-md-4">
-                    <label for="city" class="form-label fw-bold">Ciudad</label>
-                    <input type="text" name="city" id="city" class="form-control form-control-lg" placeholder="Ej: Maturin" required>
-                </div>
+                  <div class="col-md-4">
+                      <label for="state" class="form-label fw-bold">Estado / Provincia</label>
+                      <select name="state" id="state" class="form-control form-control-lg border border-radius-lg p-2" required>
+                          <option value="">Selecciona un estado</option>
+                          @foreach($states as $state)
+                              <option value="{{ $state->id }}">
+                                  {{ $state->name }}
+                              </option>
+                          @endforeach
+                      </select>
+                      <div id="state-loading" style="display:none;">Cargando estados...</div>
+                  </div>
+                  <div class="col-md-4">
+                      <label for="city" class="form-label fw-bold">Ciudad</label>
+                      <select name="city" id="city" class="form-control form-control-lg border border-radius-lg p-2" required>
+                          <option value="">Selecciona una ciudad</option>
+                          @foreach($cities as $city)
+                              <option value="{{ $city->id }}">
+                                  {{ $city->name }}
+                              </option>
+                          @endforeach
+                      </select>
+                      <div id="city-loading" style="display:none;">Cargando ciudades...</div>
+                  </div>
                 </div>
 
                 <div class="row mb-4">
-                <div class="col-md-4">
-                    <label for="phone_code" class="form-label fw-bold">Código del país</label>
-                    <select name="phone_code" id="phone_code" class="form-select form-select-lg" required>
-                    <option value="+58">🇻🇪 +58</option>
-                    <option value="+1">🇺🇸 +1</option>
-                    <option value="+34">🇪🇸 +34</option>
-                    <option value="+57">🇨🇴 +57</option>
-                    <option value="+55">🇧🇷 +55</option>
-                    <option value="+52">🇲🇽 +52</option>
-                    </select>
-                </div>
-                <div class="col-md-8">
-                    <label for="phone_number" class="form-label fw-bold">Número de teléfono</label>
-                    <input type="text" name="phone_number" id="phone_number" class="form-control form-control-lg" placeholder="Ej: 4121234567" required>
-                </div>
+                  <div class="col-md-4">
+                      <label for="phone_code" class="form-label fw-bold">Código del país</label>
+                      <select name="phone_code" id="phone_code" class="form-select form-select-lg" required>
+                      <option value="+58">🇻🇪 +58</option>
+                      <option value="+1">🇺🇸 +1</option>
+                      <option value="+34">🇪🇸 +34</option>
+                      <option value="+57">🇨🇴 +57</option>
+                      <option value="+55">🇧🇷 +55</option>
+                      <option value="+52">🇲🇽 +52</option>
+                      </select>
+                  </div>
+                  <div class="col-md-8">
+                      <label for="phone_number" class="form-label fw-bold">Número de teléfono</label>
+                      <input type="text" name="phone_number" id="phone_number" class="form-control form-control-lg" placeholder="Ej: 4121234567" required>
+                  </div>
                 </div>
                 <hr>
 
@@ -196,6 +224,14 @@
                   <div class="col-md-6 mb-3">
                     <label for="owner_name" class="form-label">Tu nombre</label>
                     <input type="text" name="users[owner][name]" id="owner_name" class="form-control form-control-lg" required>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="owner_dni" class="form-label">DNI</label>
+                    <input type="text" name="users[owner][dni]" id="owner_dni" class="form-control form-control-lg" required>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="owner_phone" class="form-label">Teléfono</label>
+                    <input type="text" name="users[owner][phone_number]" id="owner_phone" class="form-control form-control-lg" required>
                   </div>
                   <div class="col-md-6 mb-3">
                     <label for="owner_email" class="form-label">Tu correo</label>
@@ -297,6 +333,40 @@
       });
     });
   });
+      // Al cambiar país
+    document.getElementById('country').addEventListener('change', function(){
+        let country_id = this.value;
+        document.getElementById('state').innerHTML = '<option value="">Selecciona un estado</option>';
+        document.getElementById('city').innerHTML = '<option value="">Selecciona una ciudad</option>';
+        if(country_id){
+            document.getElementById('state-loading').style.display = 'block';
+            fetch('/get-states/' + country_id)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('state-loading').style.display = 'none';
+                    data.forEach(state => {
+                        document.getElementById('state').insertAdjacentHTML('beforeend', '<option value="'+state.id+'">'+state.name+'</option>');
+                    });
+                });
+        }
+    });
+
+    // Al cambiar estado
+    document.getElementById('state').addEventListener('change', function(){
+        let state_id = this.value;
+        document.getElementById('city').innerHTML = '<option value="">Selecciona una ciudad</option>';
+        if(state_id){
+            document.getElementById('city-loading').style.display = 'block';
+            fetch('/get-cities/' + state_id)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('city-loading').style.display = 'none';
+                    data.forEach(city => {
+                        document.getElementById('city').insertAdjacentHTML('beforeend', '<option value="'+city.id+'">'+city.name+'</option>');
+                    });
+            });
+        }
+    });
   let map, marker;
 
 function initMap() {

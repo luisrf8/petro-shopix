@@ -17,6 +17,20 @@ class Tenant extends Model
         'color_primary',
         'color_secondary',
         'color_accent',
+        'country',
+        'state',
+        'city',
+        'phone_code',
+        'phone_number',
+        'slogan',
+        'description',
+        'address',
+        'latitude',
+        'longitude',
+        'background_image',
+        'tiktok',
+        'instagram',
+        'facebook',
     ];
 
     // Relaciones

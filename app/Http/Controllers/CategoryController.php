@@ -6,6 +6,7 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class CategoryController extends Controller
 {
@@ -54,20 +55,30 @@ class CategoryController extends Controller
         DB::raw("SET @user_id = " . auth()->id());
 
         $request->validate([
-            'name' => 'required|string|max:255|unique:categories',
+            'name'        => 'required|string|max:255|unique:categories',
             'description' => 'nullable|string',
-            'tenant_id' => 'required'
+            'tenant_id'   => 'required',
+            'image'       => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
         ]);
+
+        $imagePath = null;
+
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')
+                ->store('categories/images', 'public');
+        }
 
         $category = Category::create([
-            'name' => $request->name,
+            'name'        => $request->name,
             'description' => $request->description,
-            'tenant_id' => $request->tenant_id
+            'tenant_id'   => $request->tenant_id,
+            'image'       => $imagePath,
         ]);
 
-        // return redirect()->route('categories.index')->with('success', 'Categoría creada con éxito.');
-        return response()->json(['message' => 'Category created successfully', 'category' => $category], 201);
-
+        return response()->json([
+            'message'  => 'Category created successfully',
+            'category' => $category
+        ], 201);
     }
 
     public function show(Category $category)
@@ -83,22 +94,38 @@ class CategoryController extends Controller
     public function update(Request $request, Category $category)
     {
         DB::raw("SET @user_id = " . auth()->id());
+
         $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name,' . $category->id,
+            'name'        => 'required|string|max:255|unique:categories,name,' . $category->id,
             'description' => 'nullable|string',
+            'image'       => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
         ]);
-    
+
+        // Manejar imagen
+        if ($request->hasFile('image')) {
+
+            // Eliminar imagen anterior
+            if ($category->image && Storage::disk('public')->exists($category->image)) {
+                Storage::disk('public')->delete($category->image);
+            }
+
+            // Guardar nueva imagen
+            $category->image = $request->file('image')
+                ->store('categories/images', 'public');
+        }
+
         $category->update([
-            'name' => $request->name,
+            'name'        => $request->name,
             'description' => $request->description,
+            'image'       => $category->image,
         ]);
-    
-        // Recargar la categoría con los datos actualizados
+
         $category->refresh();
+
         return response()->json([
-            'message' => 'Categoría actualizada con éxito.',
+            'message'  => 'Categoría actualizada con éxito.',
             'category' => $category
-        ], 200); // Cambié el código de estado a 200 para indicar éxito en una actualización
+        ], 200);
     }
 
     public function toggleStatus($id)
@@ -127,7 +154,16 @@ class CategoryController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        // Eliminar imagen si existe
+        if ($category->image && Storage::disk('public')->exists($category->image)) {
+            Storage::disk('public')->delete($category->image);
+        }
+
         $category->delete();
-        return redirect()->route('categories.index')->with('success', 'Categoría eliminada con éxito.');
+
+        return redirect()
+            ->route('categories.index')
+            ->with('success', 'Categoría eliminada con éxito.');
     }
+
 }

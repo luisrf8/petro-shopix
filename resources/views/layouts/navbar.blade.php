@@ -73,7 +73,7 @@
     <hr class="horizontal dark mt-0 mb-2">
     <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main">
       <ul class="navbar-nav">
-      @if($user->role_id === 1)
+      @if($user->role_id === 1 || $user->role_id === 5)
         <li class="nav-item">
           <a class="nav-link text-dark" href="/dashboard">
             <i class="material-symbols-rounded opacity-5">dashboard</i>
@@ -98,6 +98,12 @@
             <span class="nav-link-text ms-1">Métodos de Pago</span>
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link text-dark" href="/tenant-store">
+            <i class="material-symbols-rounded opacity-5">view_in_ar</i>
+            <span class="nav-link-text ms-1">Gestión de Tienda</span>
+          </a>
+        </li>
       @endif
         @if($user->role_id === 2 || $user->role_id === 1)
 
@@ -114,7 +120,7 @@
           </a>
         </li>
       @endif
-        @if($user->role_id === 2)
+        @if($user->role_id === 2 || $user->role_id === 5)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>

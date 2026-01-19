@@ -20,7 +20,7 @@
                 </div>
                 <div class="mb-3">
                   <label for="categoryDescription" class="form-label">Descripción</label>
-                  <textarea class="form-control border border-1 p-2" id="categoryDescription" name="description" rows="3" required></textarea>
+                  <textarea class="form-control border border-1 p-2" id="categoryDescription" name="description" rows="3"></textarea>
                 </div>
                 <div class="d-flex flex-row-reverse">
                   <button type="submit" class="btn btn-dark">Guardar</button>
@@ -78,13 +78,13 @@
                         <td>{{ $category->total_available_items ?? 0 }}</td>
                         <td class="align-middle">
                           <a href="javascript:;"
-                          class="text-secondary font-weight-bold text-xs btn-edit-user d-flex align-items-center justify-content-center"
-                          data-bs-toggle="modal" 
-                          data-bs-target="#editCategoryModal" 
-                          data-category-id="{{ $category->id }}"
-                          data-name="{{ $category->name }}"
-                          data-description="{{ $category->description }}">
-                            <!-- <i class="material-symbols-rounded opacity-10">edit</i> -->
+                            class="text-secondary font-weight-bold text-xs btn-edit-user d-flex align-items-center justify-content-center"
+                            data-bs-toggle="modal"
+                            data-bs-target="#editCategoryModal"
+                            data-category-id="{{ $category->id }}"
+                            data-name="{{ $category->name }}"
+                            data-description="{{ $category->description }}"
+                            data-image="{{ $category->image ? asset('storage/'.$category->image) : '' }}">
                             Editar
                           </a>
                         </td>
@@ -117,6 +117,27 @@
               <form id="editCategoryForm" enctype="multipart/form-data">
                 @csrf
                 <input type="hidden" id="editCategoryId" name="id">
+                <div class="mb-3 text-center">
+                    <img id="currentCategoryImage"
+                        src=""
+                        class="img-fluid rounded"
+                        style="max-height:120px; display:none;">
+                </div>
+
+                <div class="mb-3">
+                    <label for="editCategoryImage" class="form-label">Imagen de la categoría</label>
+                    <input
+                        type="file"
+                        class="form-control border border-1 p-2"
+                        id="editCategoryImage"
+                        name="image"
+                        accept=".png,.jpg,.jpeg,.svg"
+                    >
+                    <small class="text-muted">
+                        Dejar vacío si no deseas cambiar la imagen
+                    </small>
+                </div>
+
                 <div class="mb-3">
                   <label for="editCategoryName" class="form-label">Nombre</label>
                   <input type="text" class="form-control border border-1 p-2" id="editCategoryName" name="name" required>
@@ -169,14 +190,41 @@
     // Evento para llenar el modal con los datos de la categoría seleccionada
     document.querySelectorAll('.btn-edit-user').forEach(button => {
       button.addEventListener('click', function () {
+
         const categoryId = this.getAttribute('data-category-id');
         const categoryName = this.getAttribute('data-name');
         const categoryDescription = this.getAttribute('data-description');
+        const categoryImage = this.getAttribute('data-image');
 
         document.getElementById('editCategoryId').value = categoryId;
         document.getElementById('editCategoryName').value = categoryName;
         document.getElementById('editCategoryDescription').value = categoryDescription;
+
+        const imgPreview = document.getElementById('currentCategoryImage');
+
+        if (categoryImage) {
+            imgPreview.src = categoryImage;
+            imgPreview.style.display = 'block';
+        } else {
+            imgPreview.style.display = 'none';
+        }
+
+        // Limpiar input file
+        document.getElementById('editCategoryImage').value = '';
       });
+    });
+
+    document.getElementById('editCategoryImage').addEventListener('change', function () {
+        const file = this.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = document.getElementById('currentCategoryImage');
+            img.src = e.target.result;
+            img.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
     });
 
     // Enviar la actualización al servidor
