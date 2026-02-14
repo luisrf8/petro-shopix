@@ -14,7 +14,7 @@ use App\Models\Product;
 use App\Models\Role;
 use App\Models\Country;
 use App\Models\State;
-use App\Models\city;
+use App\Models\City;
 use Illuminate\Support\Facades\Storage;
 
 
