@@ -38,7 +38,7 @@ class TenantController extends Controller
     public function getTenant()
     {
         $user = auth()->user();
-        $tenant = Tenant::where('id', $user->tenant_id)->first();
+        $tenant = Tenant::with(['users.role'])->where('id', $user->tenant_id)->first();
         $roles = Role::whereNotIn('name', ['owner', 'user', 'super_user'])->get();
         $countries = Country::all();
         $states = State::all();
@@ -163,107 +163,95 @@ class TenantController extends Controller
     }
     public function storePublic(Request $request)
     {
-
-        $request->validate([
-            'name'            => 'required|string|max:255',
-            'slug'            => 'required|string|max:255|unique:tenants,slug',
-            'email'           => 'required|email|unique:tenants,email',
-            'logo'            => 'nullable|image|mimes:png,svg|max:2048',
-            'color_primary'   => 'required|string|max:7',
-            'color_secondary' => 'required|string|max:7',
-            'color_accent'    => 'required|string|max:7',
-            'country'         => 'required|string|max:255',
-            'state'           => 'required|string|max:255',
-            'city'            => 'required|string|max:255',
-            'phone_code'      => 'required|string|max:5',
-            'phone_number'    => 'required|string|max:20',
-            'users'           => 'array',
-            'plan_id'         => 'required|exists:plans,id',
-            'country'        => 'required|exists:countries,id',
-            'state'          => 'required|exists:states,id',
-            'city'           => 'required|exists:cities,id',
-            'latitude'      => 'required|numeric',
-            'longitude'     => 'required|numeric',
-            'address'       => 'required|string|max:255',
-            'slogan'       => 'nullable|string|max:255',
-            'description'  => 'nullable|string',
-
+        $validated = $request->validate([
+            'name'                  => 'required|string|max:255',
+            'slug'                  => 'required|string|max:255|unique:tenants,slug',
+            'email'                 => 'required|email|unique:tenants,email',
+            'logo'                  => 'nullable|image|mimes:png,svg|max:2048',
+            'color_primary'         => 'required|string|max:7',
+            'color_secondary'       => 'required|string|max:7',
+            'color_accent'          => 'required|string|max:7',
+            'country'               => 'required|exists:countries,id',
+            'state'                 => 'required|exists:states,id',
+            'city'                  => 'required|exists:cities,id',
+            'phone_code'            => 'required|string|max:5',
+            'phone_number'          => 'required|string|max:20',
+            'plan_id'               => 'required|exists:plans,id',
+            'address'               => 'nullable|string|max:255',
+            'latitude'              => 'nullable|numeric',
+            'longitude'             => 'nullable|numeric',
+            'slogan'                => 'nullable|string|max:255',
+            'description'           => 'nullable|string',
+            'users.owner.name'      => 'required|string|max:255',
+            'users.owner.email'     => 'required|email|unique:users,email',
+            'users.owner.password'  => 'required|string|min:8',
+            'users.owner.phone_number' => 'nullable|string|max:20',
+            'users.owner.dni'       => 'nullable|string|max:50',
         ]);
 
-        // 📂 Subir logo si existe
-        $logoPath = null;
-        if ($request->hasFile('logo')) {
-            $logoPath = $request->file('logo')->store('tenants/logos', 'public');
-        }
+        DB::beginTransaction();
 
-        $tenant = Tenant::create([
-            'name'            => $request->name,
-            'slug'            => Str::slug($request->slug),
-            'email'           => $request->email,
-            'logo'            => $logoPath,
-            'color_primary'   => $request->color_primary,
-            'color_secondary' => $request->color_secondary,
-            'color_accent'    => $request->color_accent,
-            'country'         => $request->country,
-            'state'           => $request->state,
-            'city'            => $request->city,
-            'phone_code'      => $request->phone_code,
-            'phone_number'    => $request->phone_number,
-        ]);
-
-        // 💳 Crear relación TenantPayment
-        $plan = Plan::findOrFail($request->plan_id);
-
-        TenantPlanPayment::create([
-            'tenant_id' => $tenant->id,
-            'plan_id'   => $plan->id,
-            'amount'    => $plan->price,
-            'status'    => 'paid', // o pending si quieres validar pago
-            'paid_at'   => now(),
-        ]);
-
-        // 🎭 Obtener roles existentes
-        $roles = Role::whereIn('name', ['owner', 'admin', 'vendor'])->get()->keyBy('name');
-
-        // 👥 Crear usuarios enviados en el formulario
-        if ($request->has('users')) {
-            foreach ($request->users as $roleName => $userData) {
-                if (!empty($userData['email'])) {
-                    $user = User::create([
-                        'name'      => $userData['name'] ?? ucfirst($roleName),
-                        'email'     => $userData['email'],
-                        'phone_number' => $userData['phone_number'] ?? null,
-                        'dni'       => $userData['dni'] ?? null,
-                        'password'  => Hash::make($userData['password'] ?? 'password123'),
-                        'tenant_id' => $tenant->id,
-                        'is_active' => 1,
-                    ]);
-
-                    // Asignar rol automáticamente según el nombre
-                    if (isset($roles[$roleName])) {
-                        $user->role_id = $roles[$roleName]->id; // Asignamos el ID directamente
-                        $user->save();
-                    } elseif ($roleName === 'owner') {
-                        $adminRole = Role::where('name', 'owner')->first();
-                        if ($adminRole) {
-                            $user->role_id = $adminRole->id;
-                            $user->save();
-                        }
-                    }
-                }
+        try {
+            $logoPath = null;
+            if ($request->hasFile('logo')) {
+                $logoPath = $request->file('logo')->store('tenants/logos', 'public');
             }
-        }
-        // return view('createTenantUser', compact('tenants', 'plans', 'countries', 'states', 'cities'));
-        return redirect()
-            ->route('login')
-            ->with('status', 'Tu tienda fue creada exitosamente. Ahora inicia sesión con tu cuenta.')
-            ->withInput([
-                'email' => $request->input('users.owner.email'),
+
+            $tenant = Tenant::create([
+                'name'            => $validated['name'],
+                'slug'            => Str::slug($validated['slug']),
+                'email'           => $validated['email'],
+                'logo'            => $logoPath,
+                'color_primary'   => $validated['color_primary'],
+                'color_secondary' => $validated['color_secondary'],
+                'color_accent'    => $validated['color_accent'],
+                'country'         => $validated['country'],
+                'state'           => $validated['state'],
+                'city'            => $validated['city'],
+                'phone_code'      => $validated['phone_code'],
+                'phone_number'    => $validated['phone_number'],
+                'slogan'          => $validated['slogan'] ?? null,
+                'description'     => $validated['description'] ?? null,
+                'address'         => $validated['address'] ?? null,
+                'latitude'        => $validated['latitude'] ?? null,
+                'longitude'       => $validated['longitude'] ?? null,
             ]);
-        // return response()->json([
-        //     'message' => 'Creado Exitosamente',
-        //     'tenant'  => $tenant,
-        // ]);
+
+            $plan = Plan::findOrFail($validated['plan_id']);
+            TenantPlanPayment::create([
+                'tenant_id' => $tenant->id,
+                'plan_id'   => $plan->id,
+                'amount'    => $plan->price,
+                'status'    => 'paid',
+                'paid_at'   => now(),
+            ]);
+
+            $ownerRole = Role::where('name', 'owner')->first();
+            User::create([
+                'name'        => $validated['users']['owner']['name'],
+                'email'       => $validated['users']['owner']['email'],
+                'phone_number'=> $validated['users']['owner']['phone_number'] ?? null,
+                'dni'         => $validated['users']['owner']['dni'] ?? null,
+                'password'    => Hash::make($validated['users']['owner']['password']),
+                'tenant_id'   => $tenant->id,
+                'role_id'     => $ownerRole?->id,
+                'is_active'   => 1,
+            ]);
+
+            DB::commit();
+
+            return redirect()
+                ->route('login')
+                ->with('status', 'Tu tienda fue creada exitosamente. Ahora inicia sesión con tu cuenta.')
+                ->withInput([
+                    'email' => $validated['users']['owner']['email'],
+                ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()
+                ->withErrors(['create_tenant' => 'No se pudo crear la tienda. Intenta nuevamente.'])
+                ->withInput();
+        }
     }
 
     public function show(Tenant $tenant)
@@ -409,19 +397,19 @@ class TenantController extends Controller
 
         try {
             $validated = $request->validate([
-                'name'            => 'required|string|max:255',
-                'slug'            => 'required|string|max:255|unique:tenants,slug,' . $tenant->id,
+                'name'            => 'nullable|string|max:255',
+                'slug'            => 'nullable|string|max:255|unique:tenants,slug,' . $tenant->id,
                 'slogan'          => 'nullable|string|max:255',
                 'description'     => 'nullable|string',
                 'logo'            => 'nullable|image|mimes:png,svg|max:2048',
-                'color_primary'   => 'required|string|max:7',
-                'color_secondary' => 'required|string|max:7',
-                'color_accent'    => 'required|string|max:7',
-                'country'         => 'required',
-                'state'           => 'required',
-                'city'            => 'required',
-                'phone_code'      => 'required|string|max:5',
-                'phone_number'    => 'required|string|max:20',
+                'color_primary'   => 'nullable|string|max:7',
+                'color_secondary' => 'nullable|string|max:7',
+                'color_accent'    => 'nullable|string|max:7',
+                'country'         => 'nullable|exists:countries,id',
+                'state'           => 'nullable|exists:states,id',
+                'city'            => 'nullable|exists:cities,id',
+                'phone_code'      => 'nullable|string|max:5',
+                'phone_number'    => 'nullable|string|max:20',
                 'address'         => 'nullable|string|max:255',
                 'latitude'        => 'nullable|numeric',
                 'longitude'       => 'nullable|numeric',
@@ -430,6 +418,28 @@ class TenantController extends Controller
                 'instagram'         => 'nullable|string|max:255',
                 'facebook'         => 'nullable|string|max:255',
             ]);
+
+            $newUserInput = $request->input('new_user', []);
+            $shouldCreateNewUser = false;
+            if (is_array($newUserInput)) {
+                foreach ($newUserInput as $value) {
+                    if (!is_null($value) && trim((string)$value) !== '') {
+                        $shouldCreateNewUser = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($shouldCreateNewUser) {
+                $newUserValidated = $request->validate([
+                    'new_user.name'         => 'required|string|max:255',
+                    'new_user.email'        => 'required|email|unique:users,email',
+                    'new_user.password'     => 'required|string|min:8',
+                    'new_user.role_id'      => 'required|exists:roles,id',
+                    'new_user.phone_number' => 'nullable|string|max:20',
+                    'new_user.dni'          => 'nullable|string|max:50',
+                ]);
+            }
 
             // Manejar subida de logo
             if ($request->hasFile('logo')) {
@@ -452,19 +462,18 @@ class TenantController extends Controller
             }
             // Actualizar campos
             $tenant->update([
-                'name'            => $validated['name'],
-                'slug'            => Str::slug($validated['slug']),
+                'name'            => $validated['name'] ?? $tenant->name,
+                'slug'            => isset($validated['slug']) ? Str::slug($validated['slug']) : $tenant->slug,
                 'slogan'          => $validated['slogan'] ?? $tenant->slogan,
                 'description'     => $validated['description'] ?? $tenant->description,
-                'color_primary'   => $validated['color_primary'],
-                'color_secondary' => $validated['color_secondary'],
-                'color_accent'    => $validated['color_accent'],
-                'country'         => $validated['country'],
-                'state'           => $validated['state'],
-                'city'            => $validated['city'],
-                'city'            => $validated['city'],
-                'phone_code'            => $validated['phone_code'],
-                'phone_number'            => $validated['phone_number'],
+                'color_primary'   => $validated['color_primary'] ?? $tenant->color_primary,
+                'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
+                'color_accent'    => $validated['color_accent'] ?? $tenant->color_accent,
+                'country'         => $validated['country'] ?? $tenant->country,
+                'state'           => $validated['state'] ?? $tenant->state,
+                'city'            => $validated['city'] ?? $tenant->city,
+                'phone_code'      => $validated['phone_code'] ?? $tenant->phone_code,
+                'phone_number'    => $validated['phone_number'] ?? $tenant->phone_number,
                 'address'         => $validated['address'] ?? $tenant->address,
                 'latitude'        => $validated['latitude'] ?? $tenant->latitude,
                 'longitude'       => $validated['longitude'] ?? $tenant->longitude,
@@ -473,6 +482,19 @@ class TenantController extends Controller
                 'facebook'       => $validated['facebook'] ?? $tenant->facebook,
                 'background_image'=> $tenant->background_image, // 👈 clave
             ]);
+
+            if ($shouldCreateNewUser) {
+                User::create([
+                    'name'        => $newUserValidated['new_user']['name'],
+                    'email'       => $newUserValidated['new_user']['email'],
+                    'password'    => Hash::make($newUserValidated['new_user']['password']),
+                    'tenant_id'   => $tenant->id,
+                    'role_id'     => $newUserValidated['new_user']['role_id'],
+                    'phone_number'=> $newUserValidated['new_user']['phone_number'] ?? null,
+                    'dni'         => $newUserValidated['new_user']['dni'] ?? null,
+                    'is_active'   => 1,
+                ]);
+            }
 
             return response()->json([
                 'success' => true,

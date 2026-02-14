@@ -68,6 +68,17 @@
           </div>
 
           <div class="card-body p-4">
+            @if ($errors->any())
+              <div class="alert alert-danger" role="alert">
+                <strong>No se pudo crear la tienda.</strong>
+                <ul class="mb-0 mt-2">
+                  @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                  @endforeach
+                </ul>
+              </div>
+            @endif
+
             <form id="tenantForm" action="{{ route('tenants.storePublic') }}" method="POST" enctype="multipart/form-data">
               @csrf
 

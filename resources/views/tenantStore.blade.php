@@ -84,7 +84,7 @@
                     </ul>
 
                     {{-- Formulario principal --}}
-                    <form id="tenantForm" enctype="multipart/form-data">
+                    <form id="tenantForm" enctype="multipart/form-data" novalidate>
                         @csrf
 
                         <div class="tab-content" id="tenantTabsContent">
@@ -93,28 +93,28 @@
                             <div class="tab-pane fade show active" id="info" role="tabpanel">
                                 <div class="mb-3">
                                     <label class="form-label">Nombre de la Tienda</label>
-                                    <input type="text" class="form-control p-2 border border-radius-lg" name="name" value="{{ $tenant->name ?? '' }}" required>
+                                    <input type="text" class="form-control p-2 border border-radius-lg" name="name" value="{{ $tenant->name ?? '' }}">
                                 </div>
                                 <div class="row mb-4">
                                     <div class="col-md-4">
                                         <label for="phone_code" class="form-label fw-bold">Código del país</label>
-                                        <select name="phone_code" id="phone_code" class="form-select form-select-lg" required>
-                                        <option value="+58">🇻🇪 +58</option>
-                                        <option value="+1">🇺🇸 +1</option>
-                                        <option value="+34">🇪🇸 +34</option>
-                                        <option value="+57">🇨🇴 +57</option>
-                                        <option value="+55">🇧🇷 +55</option>
-                                        <option value="+52">🇲🇽 +52</option>
+                                        <select name="phone_code" id="phone_code" class="form-select form-select-lg">
+                                        <option value="+58" {{ ($tenant->phone_code ?? '') == '+58' ? 'selected' : '' }}>🇻🇪 +58</option>
+                                        <option value="+1" {{ ($tenant->phone_code ?? '') == '+1' ? 'selected' : '' }}>🇺🇸 +1</option>
+                                        <option value="+34" {{ ($tenant->phone_code ?? '') == '+34' ? 'selected' : '' }}>🇪🇸 +34</option>
+                                        <option value="+57" {{ ($tenant->phone_code ?? '') == '+57' ? 'selected' : '' }}>🇨🇴 +57</option>
+                                        <option value="+55" {{ ($tenant->phone_code ?? '') == '+55' ? 'selected' : '' }}>🇧🇷 +55</option>
+                                        <option value="+52" {{ ($tenant->phone_code ?? '') == '+52' ? 'selected' : '' }}>🇲🇽 +52</option>
                                         </select>
                                     </div>
                                     <div class="col-md-8">
                                         <label for="phone_number" class="form-label fw-bold">Número de teléfono</label>
-                                        <input type="text" name="phone_number" id="phone_number" class="form-control form-control-lg border border-radius-lg" placeholder="Ej: 4121234567" required>
+                                        <input type="text" name="phone_number" id="phone_number" class="form-control form-control-lg border border-radius-lg" placeholder="Ej: 4121234567" value="{{ $tenant->phone_number ?? '' }}">
                                     </div>
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">Url de la Tienda</label>
-                                    <input type="text" class="form-control p-2 border border-radius-lg" name="slug" value="{{ $tenant->slug ?? '' }}" required>
+                                    <input type="text" class="form-control p-2 border border-radius-lg" name="slug" value="{{ $tenant->slug ?? '' }}">
                                 </div>
 
                                 <div class="mb-3">
@@ -134,7 +134,7 @@
                                     <div class="row mb-3">
                                         <div class="col-md-4">
                                             <label for="country" class="form-label ">País</label>
-                                            <select name="country" id="country" class="form-control form-control-lg border border-radius-lg p-2" required>
+                                            <select name="country" id="country" class="form-control form-control-lg border border-radius-lg p-2">
                                                 <option value="">Selecciona un país</option>
                                                 @foreach($countries as $country)
                                                     <option value="{{ $country->id }}" {{ isset($tenant->country) && $tenant->country == $country->id ? 'selected' : '' }}>
@@ -146,7 +146,7 @@
 
                                         <div class="col-md-4">
                                             <label for="state" class="form-label fw-bold">Estado / Provincia</label>
-                                            <select name="state" id="state" class="form-control form-control-lg border border-radius-lg p-2" required>
+                                            <select name="state" id="state" class="form-control form-control-lg border border-radius-lg p-2">
                                                 <option value="">Selecciona un estado</option>
                                                 @if(isset($tenant->state))
                                                     @foreach($states->where('country_id', $tenant->country) as $state)
@@ -161,7 +161,7 @@
 
                                         <div class="col-md-4">
                                             <label for="city" class="form-label fw-bold">Ciudad</label>
-                                            <select name="city" id="city" class="form-control form-control-lg border border-radius-lg p-2" required>
+                                            <select name="city" id="city" class="form-control form-control-lg border border-radius-lg p-2">
                                                 <option value="">Selecciona una ciudad</option>
                                                 @if(isset($tenant->city))
                                                     @foreach($cities->where('state_id', $tenant->state) as $city)
@@ -266,43 +266,57 @@
                                 </div>
                             </div>
 
-                            {{-- TAB 4: NUEVO - Usuarios --}}
-                            {{-- <div class="tab-pane fade" id="users" role="tabpanel">
+                            {{-- TAB 4: Usuarios --}}
+                            <div class="tab-pane fade" id="users" role="tabpanel">
+                                <h5 class="mt-2">Usuarios de la tienda</h5>
 
-                                <div class="d-flex justify-content-between mb-3">
-                                    <h5 class="mt-2">Usuarios de la tienda</h5>
-                                    <a href="#" class="btn btn-primary btn-sm text-white">Agregar Usuario</a>
-                                </div>- -}}
-
-                                {{-- EJEMPLO DE LISTA DE USUARIOS --}}
-                                 {{-- <ul class="list-group">
-
-                                    @foreach($tenant->users ?? [] as $user)
+                                <ul class="list-group mb-4">
+                                    @forelse($tenant->users as $user)
                                         <li class="list-group-item d-flex justify-content-between align-items-center">
                                             <div>
-                                                <strong>{{ $user->name }}</strong><br>
-                                                <small class="text-muted">{{ $user->email }}</small>
+                                                <strong>{{ $user->name }}</strong>
+                                                <small class="d-block text-muted">{{ $user->email }}</small>
                                             </div>
-
-                                            <button type="button"
-                                                class="btn btn-sm btn-dark editUserBtn text-white"
-                                                data-id="{{ $user->id }}"
-                                                data-name="{{ $user->name }}"
-                                                data-email="{{ $user->email }}"
-                                            >
-                                                Editar
-                                            </button>
+                                            <span class="badge bg-dark text-white">{{ optional($user->role)->name ?? 'sin rol' }}</span>
                                         </li>
-                                    @endforeach
-
-                                    @if(empty($tenant->users) || count($tenant->users) == 0)
+                                    @empty
                                         <li class="list-group-item text-center text-muted">No hay usuarios registrados.</li>
-                                    @endif
-
+                                    @endforelse
                                 </ul>
 
-
-                            </div> --}}
+                                <h6 class="mb-3">Agregar nuevo usuario</h6>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Nombre</label>
+                                        <input type="text" name="new_user[name]" class="form-control p-2 border border-radius-lg">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Correo</label>
+                                        <input type="email" name="new_user[email]" class="form-control p-2 border border-radius-lg">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Teléfono</label>
+                                        <input type="text" name="new_user[phone_number]" class="form-control p-2 border border-radius-lg">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">DNI</label>
+                                        <input type="text" name="new_user[dni]" class="form-control p-2 border border-radius-lg">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Contraseña</label>
+                                        <input type="password" name="new_user[password]" class="form-control p-2 border border-radius-lg" autocomplete="new-password">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Rol</label>
+                                        <select name="new_user[role_id]" class="form-control form-control-lg border border-radius-lg p-2">
+                                            <option value="">Selecciona un rol</option>
+                                            @foreach($roles as $role)
+                                                <option value="{{ $role->id }}">{{ $role->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <button type="submit" class="btn btn-sm btn-dark text-white w-100 mt-3">Guardar Cambios</button>
@@ -534,7 +548,7 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
             });
         }
     });
-    const form = document.querySelector('form');
+    const form = document.getElementById('tenantForm');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
