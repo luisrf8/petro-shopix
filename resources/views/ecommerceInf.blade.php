@@ -15,13 +15,32 @@
       color: #000;
     }
 
-    .w-100.position-fixed.top-0.px-4 {
+    .landing-header {
       transition: box-shadow 0.3s ease-in-out, background 0.3s ease-in-out;
       z-index: 1050;
+      background: transparent;
+      padding: 0.5rem 0;
     }
+
+    .landing-header.scrolled-shadow {
+      background: transparent;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .landing-nav-link {
+      font-weight: 600;
+      padding: 0.4rem 0.75rem;
+    }
+
+    .landing-header .navbar-toggler {
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      background: #fff;
+      padding: 0.35rem 0.55rem;
+    }
+
     .hero {
       position: relative;
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -42,17 +61,36 @@
 
     .hero .container {
       z-index: 1;
+      padding-top: 5.5rem;
     }
 
-    .glass-text {
+    .hero-title {
       font-size: 4rem;
       font-weight: 700;
+      line-height: 1.1;
       color: #fff;
       text-shadow: 2px 2px 8px rgba(0, 0, 0, 1);
     }
 
+    .hero-slogan {
+      font-size: 4rem;
+      font-weight: 600;
+      line-height: 1.25;
+      color: #fff;
+      text-shadow: 2px 2px 8px rgba(0, 0, 0, 1);
+      margin-top: 0.5rem;
+    }
+
+    .hero-description {
+      font-size: clamp(0.95rem, 2.8vw, 1.2rem);
+      color: #fff;
+      text-shadow: 1px 1px 6px rgba(0, 0, 0, 0.8);
+      max-width: 850px;
+      margin: 0.75rem auto 0;
+    }
+
     .section-title {
-      font-size: 2rem;
+      font-size: clamp(1.4rem, 4.5vw, 2rem);
       font-weight: 700;
       margin-bottom: 2rem;
       text-align: center;
@@ -114,40 +152,111 @@
 
 .category-title {
     color: #fff;
-    font-size: 1.5rem;
+    font-size: clamp(1rem, 3vw, 1.5rem);
     font-weight: 700;
     text-align: center;
 }
-.header-button {
-  
-}
+
+    @media (max-width: 991.98px) {
+      .landing-header {
+        background: rgba(255, 255, 255, 0.96);
+      }
+
+      .hero {
+        min-height: 85vh;
+      }
+
+      .category-card {
+        height: 220px;
+      }
+
+      .navbar-nav {
+        padding-top: 0.5rem;
+      }
+
+      .navbar-nav .nav-item {
+        margin-bottom: 0.5rem;
+      }
+
+      .hero-title {
+        font-size: clamp(1.6rem, 5.6vw, 3rem);
+      }
+
+      .hero-slogan {
+        font-size: clamp(1rem, 3.2vw, 1.6rem);
+      }
+
+      .landing-nav-link {
+        display: block;
+        width: 100%;
+        text-align: center;
+      }
+    }
+
+    @media (max-width: 575.98px) {
+      .hero .container {
+        padding-top: 6rem;
+      }
+
+      .hero-title {
+        font-size: clamp(1.35rem, 8vw, 2rem);
+      }
+
+      .hero-slogan {
+        font-size: clamp(0.9rem, 4.6vw, 1.25rem);
+      }
+
+      .category-card {
+        height: 190px;
+      }
+
+      .card-product img,
+      .card-product .d-flex.align-items-center.justify-content-center {
+        height: 220px !important;
+      }
+    }
   </style>
 </head>
 
 <body>
 
   <!-- HEADER -->
-  <div class="w-100 position-fixed top-0 px-4" style="z-index: 1050;">
-    <div class="row align-items-center mt-2">
-      <div class="col-md-4 d-flex justify-content-start">
-        @if($tenant->logo)
-          <div class="btn btn-light text-dark fw-bold p-0 m-0">
-            <img src="{{ asset('storage/' . $tenant->logo) }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0));">
-          </div>
-        @endif
-      </div>
-      <div class="col-md-8 d-flex justify-content-end">
-            <ul class="nav gap-2">
-              <a class="btn btn-light text-dark fw-bold p-1 px-3 m-0" href="#funcionalidades">Funciones</a>
-              <a class="btn btn-light text-dark fw-bold p-1 px-3 m-0" href="#beneficios">Beneficios</a>
-              <a class="btn btn-light text-dark fw-bold p-1 px-3 m-0" href="#contacto">Contacto</a>
-            </ul>
-      </div>
+  <header class="landing-header position-fixed top-0 start-0 w-100">
+    <div class="container">
+      <nav class="navbar navbar-expand-lg navbar-light p-0">
+        <a class="navbar-brand d-flex align-items-center" href="#top">
+          @if($tenant->logo)
+            <span class="btn btn-light p-1 px-3 m-0">
+              <img src="{{ asset('storage/' . $tenant->logo) }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
+            </span>
+          @else
+            <span class="fw-bold">{{ $tenant->name }}</span>
+          @endif
+        </a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#landingNavbar" aria-controls="landingNavbar" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="landingNavbar">
+          <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+            <li class="nav-item">
+              <a class="btn btn-light text-dark landing-nav-link" href="#categorias">Categorías</a>
+            </li>
+            <li class="nav-item">
+              <a class="btn btn-light text-dark landing-nav-link" href="#productos">Productos</a>
+            </li>
+            <li class="nav-item">
+              <a class="btn btn-light text-dark landing-nav-link" href="#contacto">Contacto</a>
+            </li>
+          </ul>
+        </div>
+      </nav>
     </div>
-  </div>
+  </header>
 
   <!-- HERO -->
-  <section class="hero" style="
+  <section id="top" class="hero" style="
       @if(isset($tenant->background_image) && $tenant->background_image)
         background-image: url('{{ asset('storage/' . $tenant->background_image) }}');
       @else
@@ -161,9 +270,9 @@
 
     <div class="category-overlay"></div>
     <div class="container text-center">
-      <h1 class="glass-text">{{ strtoupper($tenant->name) }}</h1>
-      <h2 class="glass-text">{{ $tenant->slogan ?? '' }}</h2>
-      <label class="">{{ $tenant->description ?? '' }}</label>
+      <h1 class="hero-title">{{ strtoupper($tenant->name) }}</h1>
+      <h2 class="hero-slogan">{{ $tenant->slogan ?? '' }}</h2>
+      <p class="hero-description">{{ $tenant->description ?? '' }}</p>
     </div>
   </section>
 
@@ -173,7 +282,7 @@
         <h2 class="section-title mb-5 text-center">Categorías Principales</h2>
         <div class="row g-4 justify-content-center"> 
             @foreach($categories as $category)
-                <div class="col-md-3">
+                <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                     <a href="#"
                        class="category-card category-link"
                        data-id="{{ $category->id }}"
@@ -188,12 +297,12 @@
     </div>
 </section>
   <!-- PRODUCTOS -->
-  <section class="py-5 bg-light">
+  <section id="productos" class="py-5 bg-light">
     <div class="container">
       <h2 class="section-title">Productos Destacados</h2>
       <div class="row" id="products-container">
         @foreach($productItems as $product)
-          <div class="col-md-4 mb-4 product-item" data-category="{{ $product->category_id }}">
+          <div class="col-12 col-sm-6 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}">
             <div class="card card-product h-100">
               @if(isset($product->images[0]))
                 <img src="{{ asset('storage/' . $product->images[0]->path) }}" class="card-img-top" style="height: 300px; object-fit: cover;">
@@ -218,7 +327,7 @@
   <section id="contacto" class="py-5 bg-white">
     <div class="container">
       <div class="row align-items-center">
-        <div class="col-md-6 mb-4 mb-md-0">
+        <div class="col-12 col-md-6 mb-4 mb-md-0">
           <h2 class="section-title text-start mb-3">Contáctanos</h2>
           <p class="mb-3">{{ $tenant->name ?? '' }} - {{ $tenant->description ?? '' }}.</p>
           <p class="">Somos una empresa de {{ $tenant->country ?? '' }} - {{ $tenant->state ?? '' }} - {{ $tenant->city ?? '' }}.</p>
@@ -257,7 +366,7 @@
 
           </div>
         </div>
-        <div class="col-md-6">
+        <div class="col-12 col-md-6">
             <div class="rounded-4 overflow-hidden shadow" style="height: 300px;">
               @if($tenant->latitude && $tenant->longitude)
                 <a href="https://www.google.com/maps?q={{ $tenant->latitude }},{{ $tenant->longitude }}"
@@ -286,13 +395,25 @@
 
   <script>
     // Shadow effect on scroll
-    const header = document.querySelector('.w-100.position-fixed.top-0.px-4');
+    const header = document.querySelector('.landing-header');
     window.addEventListener('scroll', () => {
       if(window.scrollY > 0){
         header.classList.add('scrolled-shadow');
       } else {
         header.classList.remove('scrolled-shadow');
       }
+    });
+
+    const navLinks = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
+    const navbarCollapse = document.getElementById('landingNavbar');
+    const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;
+
+    navLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth < 992 && navbarCollapse.classList.contains('show') && bsCollapse) {
+          bsCollapse.hide();
+        }
+      });
     });
 
     // Filtrado de productos por categoría

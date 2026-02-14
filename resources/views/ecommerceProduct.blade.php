@@ -15,6 +15,29 @@
       color: #000;
     }
 
+    .landing-header {
+      transition: box-shadow 0.3s ease-in-out, background 0.3s ease-in-out;
+      z-index: 1050;
+      background: transparent;
+      padding: 0.5rem 0;
+    }
+
+    .landing-header.scrolled-shadow {
+      background: transparent;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .landing-header .navbar-toggler {
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      background: #fff;
+      padding: 0.35rem 0.55rem;
+    }
+
+    .landing-nav-link {
+      font-weight: 600;
+      padding: 0.4rem 0.75rem;
+    }
+
     .product-detail-card {
       max-width: 90vw;
       min-height: 70vh;
@@ -88,36 +111,102 @@
         color: #999;
         cursor: not-allowed;
     }
+
+    .product-gallery-thumbs {
+      order: 1;
+      margin-right: 1rem;
+    }
+
+    .product-gallery-main {
+      order: 2;
+    }
+
+    @media (max-width: 991.98px) {
+      .landing-header {
+        background: rgba(255, 255, 255, 0.96);
+      }
+
+      .navbar-nav {
+        padding-top: 0.5rem;
+      }
+
+      .navbar-nav .nav-item {
+        margin-bottom: 0.5rem;
+      }
+
+      .landing-nav-link {
+        display: block;
+        width: 100%;
+        text-align: center;
+      }
+
+      .product-detail-card {
+        max-width: 95vw;
+        margin: 35px auto;
+        padding: 20px;
+      }
+
+      .product-gallery-main {
+        order: 1;
+        width: 100%;
+      }
+
+      .product-gallery-thumbs {
+        order: 2;
+        width: 100%;
+        margin-right: 0;
+      }
+
+      #thumbnail-gallery {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 0.5rem;
+        overflow-x: auto;
+        padding-bottom: 0.25rem;
+      }
+
+      #thumbnail-gallery .thumbnail-image,
+      #thumbnail-gallery .border.rounded-3 {
+        flex: 0 0 auto;
+      }
+    }
   </style>
 </head>
 
 <body>
-  <div class="w-100 position-fixed top-0 px-4" style="z-index: 1050;">
-    <div class="row align-items-center mt-2">
-      <div class="col-md-4 d-flex justify-content-start">
-        @if($tenant->logo)
-          <div class="btn btn-light text-dark fw-bold p-0 m-0">
-            <img src="{{ asset('storage/' . $tenant->logo) }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0));">
-          </div>
-        @endif
-      </div>
-      <div class="col-md-8 d-flex justify-content-end">
-            <ul class="nav gap-2">
-              <a class="btn btn-light text-dark fw-bold p-1 px-3 m-0 category-link"
-                href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}"
-                data-id="">
-                Volver
-                </a>
-            </ul>
-      </div>
+  <header class="landing-header position-fixed top-0 start-0 w-100">
+    <div class="container">
+      <nav class="navbar navbar-expand-lg navbar-light p-0">
+        <a class="navbar-brand d-flex align-items-center" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}">
+          @if($tenant->logo)
+            <span class="btn btn-light p-1 px-3 m-0">
+              <img src="{{ asset('storage/' . $tenant->logo) }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
+            </span>
+          @else
+            <span class="btn btn-light text-dark fw-bold">{{ $tenant->name }}</span>
+          @endif
+        </a>
+
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#landingNavbar" aria-controls="landingNavbar" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="landingNavbar">
+          <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+            <li class="nav-item">
+              <a class="btn btn-light text-dark landing-nav-link" href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}">Volver</a>
+            </li>
+          </ul>
+        </div>
+      </nav>
     </div>
-  </div>
+  </header>
   <section class="py-5">
     <div class="">
       <div class="product-detail-card">
         <div class="row">
-          <div class="col-md-5 d-flex flex-md-row flex-column mb-4 mb-md-0 gap-4 align-items-start">
-            <div class="me-3">
+          <div class="col-md-5 d-flex flex-column flex-md-row mb-4 mb-md-0 gap-3 align-items-start">
+            <div class="product-gallery-thumbs">
               <div class="d-flex flex-column gap-2" id="thumbnail-gallery">
                 @if(count($product->images) > 0)
                   @foreach($product->images as $index => $image)
@@ -136,7 +225,7 @@
               </div>
             </div>
             
-            <div class="flex-grow-1">
+            <div class="product-gallery-main flex-grow-1">
               @if(isset($product->images[0]))
                 <img 
                   src="{{ asset('storage/' . $product->images[0]->path) }}" 
@@ -202,6 +291,27 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+        const header = document.querySelector('.landing-header');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 0) {
+                header.classList.add('scrolled-shadow');
+            } else {
+                header.classList.remove('scrolled-shadow');
+            }
+        });
+
+        const navLinks = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
+        const navbarCollapse = document.getElementById('landingNavbar');
+        const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;
+
+        navLinks.forEach(link => {
+          link.addEventListener('click', () => {
+            if (window.innerWidth < 992 && navbarCollapse.classList.contains('show') && bsCollapse) {
+              bsCollapse.hide();
+            }
+          });
+        });
+
         const mainImage = document.getElementById('main-product-image');
         const thumbnails = document.querySelectorAll('.thumbnail-image');
 

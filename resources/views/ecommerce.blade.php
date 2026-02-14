@@ -13,23 +13,36 @@
       color: #000;
     }
 
-    .navbar {
-      background-color: #000 !important;
-      width: 100vw;
+    .landing-header {
+      transition: box-shadow 0.3s ease-in-out, background 0.3s ease-in-out;
+      z-index: 1050;
+      background: transparent;
+      padding: 0.5rem 0;
+    }
+
+    .landing-header.scrolled-shadow {
+      background: transparent;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .landing-header .navbar-toggler {
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      background: #fff;
+      padding: 0.35rem 0.55rem;
+    }
+
+    .landing-nav-link {
+      font-weight: 600;
+      padding: 0.4rem 0.75rem;
     }
 
     .shadow-soft {
       filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
     }
 
-    .navbar a,
-    .navbar-toggler-icon {
-      color: #000 !important;
-    }
-
         .hero {
             position: relative;
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -54,7 +67,8 @@
         
         /* Contenido del Hero sobre la superposición */
         .hero .container {
-            z-index: 1; /* Coloca el contenido por encima del overlay */
+          z-index: 1; /* Coloca el contenido por encima del overlay */
+          padding-top: 5.5rem;
         }
 
     .filter-box {
@@ -65,7 +79,7 @@
     }
 
     .section-title {
-      font-size: 2rem;
+      font-size: clamp(1.4rem, 4.5vw, 2rem);
       font-weight: 700;
     }
 
@@ -110,13 +124,21 @@
       color: white;
       text-shadow: 1px 1px 3px rgba(1, 0, 0, 2);
     }
-    .glass-text {
-        font-size: 5rem;
+    .hero-title {
+      font-size: 5rem;
         font-weight: 700;
-        /* Color de texto blanco sólido */
+      line-height: 1.1;
         color: #fff; 
-        /* Sombra negra con mayor desenfoque para que el texto resalte */
         text-shadow: 2px 2px 8px rgba(0, 0, 0, 1); 
+    }
+
+    .hero-slogan {
+      font-size: 5rem;
+      font-weight: 600;
+      line-height: 1.25;
+      color: #fff;
+      text-shadow: 2px 2px 8px rgba(0, 0, 0, 1);
+      margin-top: 0.5rem;
     }
 
     /* También puedes aplicar un text-shadow más sutil al menú de navegación */
@@ -126,16 +148,46 @@
         text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.91); 
     }
     /* Agrega esta nueva clase a tu bloque <style> */
-    .scrolled-shadow {
-      background: rgba(255, 255, 255, 0);
-        /* Define la sombra, por ejemplo, una sutil sombra negra */
-        /* Agrega una transición suave para que la sombra aparezca y desaparezca */
-        transition: box-shadow 0.3s ease-in-out, background 0.3s ease-in-out;
+    @media (max-width: 991.98px) {
+      .landing-header {
+        background: rgba(255, 255, 255, 0.96);
+      }
+
+      .navbar-nav {
+        padding-top: 0.5rem;
+      }
+
+      .navbar-nav .nav-item {
+        margin-bottom: 0.5rem;
+      }
+
+      .hero-title {
+        font-size: clamp(1.6rem, 5.6vw, 3rem);
+      }
+
+      .hero-slogan {
+        font-size: clamp(1rem, 3.2vw, 1.6rem);
+      }
+
+      .landing-nav-link {
+        display: block;
+        width: 100%;
+        text-align: center;
+      }
     }
 
-    /* Modifica la regla del contenedor para incluir la transición inicial */
-    .w-100.position-fixed.top-0.px-4 {
-        transition: box-shadow 0.3s ease-in-out, background 0.3s ease-in-out;
+    @media (max-width: 575.98px) {
+      .hero .container {
+        padding-top: 6rem;
+      }
+
+      .hero-title {
+        font-size: clamp(1.35rem, 8vw, 2rem);
+      }
+
+      .hero-slogan {
+        font-size: clamp(0.9rem, 4.6vw, 1.25rem);
+      }
     }
   </style>
 </head>
@@ -143,42 +195,45 @@
 <body>
 
   <!-- HEADER -->
-  <div class="w-100 position-fixed top-0 px-4" style="z-index: 1050; ">
-    <div class="py-3 w-100" style="">
-      <div class="row align-items-center">
+  <header class="landing-header position-fixed top-0 start-0 w-100">
+    <div class="container">
+      <nav class="navbar navbar-expand-lg navbar-light p-0">
+        <a class="navbar-brand d-flex align-items-center" href="#top">
+          <span class="btn btn-light p-1 px-3 m-0">
+            <img src="../../assets/img/shopix5.png" alt="Logo Shopix" class="img-fluid" style="width: 100px; object-fit: contain;">
+          </span>
+        </a>
 
-        <!-- Botón -->
-        <div class="col-md-4 d-flex justify-content-start">
-          <a href="http://192.168.1.119:3000/" class="btn btn-light text-dark fw-bold px-4 py-2">
-            <img src="../../assets/img/shopix5.png" alt="Logo Shopix" class="img-fluid" style="width: 100px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0));">
-          </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#landingNavbar" aria-controls="landingNavbar" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="landingNavbar">
+          <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+            <li class="nav-item">
+              <a class="btn btn-light text-dark landing-nav-link" href="#funcionalidades">Funciones</a>
+            </li>
+            <li class="nav-item">
+              <a class="btn btn-light text-dark landing-nav-link" href="#beneficios">Beneficios</a>
+            </li>
+            <li class="nav-item">
+              <a class="btn btn-light text-dark landing-nav-link" href="#contacto">Contacto</a>
+            </li>
+          </ul>
         </div>
-        
-        <!-- Logo -->
-        <div class="col-md-4 d-flex justify-content-center">
-          </div>
-          <!-- Menú -->
-          <div class="col-md-4 d-flex justify-content-end">
-            <ul class="nav">
-              <a class="nav-link fw-semibold white-shadow" href="#funcionalidades">Funciones</a>
-              <a class="nav-link fw-semibold white-shadow" href="#beneficios">Beneficios</a>
-              <a class="nav-link fw-semibold white-shadow" href="#contacto">Contacto</a>
-            </ul>
-          </div>
-
-      </div>
+      </nav>
     </div>
-  </div>
+  </header>
 
   <!-- HERO -->
-  <section class="hero">
+  <section id="top" class="hero">
     <!-- <video autoplay muted loop playsinline>
       <source src="../../assets/img/Street.mp4" type="video/mp4" />
     </video> -->
     <div class="hero-overlay"></div> 
     <div class="container text-center">
-      <h1 class="glass-text">SHOPIX</h1>
-      <h2 class="glass-text">GESTIONA TU TIENDA VIRTUAL FÁCILMENTE</h2>
+      <h1 class="hero-title">SHOPIX</h1>
+      <h2 class="hero-slogan">GESTIONA TU TIENDA VIRTUAL FÁCILMENTE</h2>
     </div>
   </section>
 
@@ -188,22 +243,22 @@
     <div class="container">
       <h2 class="section-title mb-5 text-center">Funciones Principales</h2>
       <div class="row text-center">
-        <div class="col-md-3 icon-box">
+        <div class="col-12 col-sm-6 col-lg-3 icon-box mb-4 mb-lg-0">
           <i class="bi bi-shop"></i>
           <h5>Gestión de Tienda</h5>
           <p>Organiza todos tus productos y categorías fácilmente.</p>
         </div>
-        <div class="col-md-3 icon-box">
+        <div class="col-12 col-sm-6 col-lg-3 icon-box mb-4 mb-lg-0">
           <i class="bi bi-box-seam"></i>
           <h5>Inventario Inteligente</h5>
           <p>Control automático de existencias y alertas de stock bajo.</p>
         </div>
-        <div class="col-md-3 icon-box">
+        <div class="col-12 col-sm-6 col-lg-3 icon-box mb-4 mb-lg-0">
           <i class="bi bi-cash-stack"></i>
           <h5>Ventas y Compras</h5>
           <p>Registra tus movimientos y genera reportes detallados.</p>
         </div>
-        <div class="col-md-3 icon-box">
+        <div class="col-12 col-sm-6 col-lg-3 icon-box mb-4 mb-lg-0">
           <i class="bi bi-bar-chart"></i>
           <h5>Reportes y Pagos</h5>
           <p>Obtén reportes en tiempo real y administra tus pagos con facilidad.</p>
@@ -270,17 +325,17 @@
     <div class="container text-center">
       <h2 class="section-title mb-5">Beneficios de Usar Shopix</h2>
       <div class="row justify-content-center">
-        <div class="col-md-4 icon-box">
+        <div class="col-12 col-md-4 icon-box mb-4 mb-md-0">
           <i class="bi bi-speedometer"></i>
           <h5>Rápido y Eficiente</h5>
           <p>Todo lo que necesitas para tu tienda en un solo panel.</p>
         </div>
-        <div class="col-md-4 icon-box">
+        <div class="col-12 col-md-4 icon-box mb-4 mb-md-0">
           <i class="bi bi-cloud-check"></i>
           <h5>Accesible desde Cualquier Lugar</h5>
           <p>Gestiona tu negocio desde tu computadora o teléfono.</p>
         </div>
-        <div class="col-md-4 icon-box">
+        <div class="col-12 col-md-4 icon-box mb-4 mb-md-0">
           <i class="bi bi-people"></i>
           <h5>Multiusuario</h5>
           <p>Agrega empleados, asigna roles y trabaja en equipo.</p>
@@ -301,7 +356,7 @@
         <div class="carousel-item @if($index === 0) active @endif">
           <div class="row justify-content-center">
             @foreach($grupo as $tienda)
-              <div class="col-md-3 mb-4 d-flex justify-content-center align-items-center">
+              <div class="col-6 col-md-3 mb-4 d-flex justify-content-center align-items-center">
                 @if($tienda->logo)
                   <img src="{{ asset('storage/' . $tienda->logo) }}" 
                        alt="{{ $tienda->name }}" 
@@ -337,7 +392,7 @@
   <section id="contacto" class="py-5 bg-light">
     <div class="container">
       <div class="row align-items-center">
-        <div class="col-md-6 mb-4 mb-md-0">
+        <div class="col-12 col-md-6 mb-4 mb-md-0">
           <h2 class="section-title mb-3">Contáctanos</h2>
           <p class="mb-3">Obtén una demo personalizada o consulta nuestros planes.</p>
           <a href="https://api.whatsapp.com/send?phone=584148859372" target="_blank" class="btn btn-primary px-4 py-2">
@@ -349,7 +404,7 @@
             <a href="https://t.me" target="_blank" class="text-dark fs-4"><i class="bi bi-telegram"></i></a>
           </div>
         </div>
-        <div class="col-md-6">
+        <div class="col-12 col-md-6">
           <div class="rounded-4 overflow-hidden shadow" style="height: 300px;">
             <iframe
               src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d62734.306809791316!2d-63.1679763!3d9.7527562!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1ses!2sve!4v1700000000000"
@@ -372,8 +427,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 </body>
 <script>
-    // Selecciona el div que contiene el navbar y que tiene la clase 'w-100 position-fixed top-0 px-4'
-    const headerContainer = document.querySelector('.w-100.position-fixed.top-0.px-4');
+    const headerContainer = document.querySelector('.landing-header');
     
     // Función para añadir/eliminar la clase de sombra
     function toggleShadow() {
@@ -388,6 +442,18 @@
 
     // Escucha el evento de scroll en la ventana
     window.addEventListener('scroll', toggleShadow);
+
+    const navLinks = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
+    const navbarCollapse = document.getElementById('landingNavbar');
+    const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;
+
+    navLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth < 992 && navbarCollapse.classList.contains('show') && bsCollapse) {
+          bsCollapse.hide();
+        }
+      });
+    });
     
     // Ejecuta la función al cargar la página en caso de que ya se haya hecho scroll
     toggleShadow();
