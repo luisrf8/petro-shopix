@@ -37,6 +37,8 @@
                         data-name="{{ $plan->name }}"
                         data-price="{{ $plan->price }}"
                         data-duration="{{ $plan->duration_days }}"
+                        data-status="{{ $plan->status }}"
+                        data-image="{{ $plan->image }}"
                         data-features="{{ json_encode($plan->features) }}">
                           mode_edit
                         </i>
@@ -92,6 +94,9 @@
         </div>
         <div class="mb-3">
           <label for="createPlanImage" class="form-label">Imagen (archivo opcional)</label>
+          <div class="mb-2 text-center">
+            <img id="createPlanImagePreview" src="" alt="Vista previa de imagen" class="img-fluid rounded" style="max-height:140px; display:none;">
+          </div>
           <input type="file" class="form-control border border-1 p-2" id="createPlanImage" name="image" accept="image/*">
         </div>
         <div class="mb-3">
@@ -102,8 +107,11 @@
           </select>
         </div>
         <div class="mb-3">
-          <label for="createPlanFeatures" class="form-label">Características (separadas por coma)</label>
-          <textarea class="form-control border border-1 p-2" id="createPlanFeatures" name="features"></textarea>
+          <label class="form-label">Características</label>
+          <div id="createFeaturesContainer" class="d-flex flex-column gap-2"></div>
+          <div class="mt-2">
+            <button type="button" class="btn btn-outline-dark btn-sm" id="addCreateFeatureBtn">+ Agregar característica</button>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -138,6 +146,11 @@
         </div>
         <div class="mb-3">
           <label for="editPlanImage" class="form-label">Imagen (archivo opcional)</label>
+          <div class="mb-2 text-center">
+            <img id="editPlanCurrentImage" src="" alt="Imagen actual del plan" class="img-fluid rounded" style="max-height:140px; display:none;">
+            <small id="editPlanNoImage" class="text-muted d-block">Este plan no tiene imagen actual</small>
+            <img id="editPlanNewImagePreview" src="" alt="Vista previa nueva imagen" class="img-fluid rounded mt-2" style="max-height:140px; display:none;">
+          </div>
           <input type="file" class="form-control border border-1 p-2" id="editPlanImage" name="image" accept="image/*">
         </div>
         <div class="mb-3">
@@ -148,8 +161,11 @@
           </select>
         </div>
         <div class="mb-3">
-          <label for="editPlanFeatures" class="form-label">Características (separadas por coma)</label>
-          <textarea class="form-control border border-1 p-2" id="editPlanFeatures" name="features"></textarea>
+          <label class="form-label">Características</label>
+          <div id="editFeaturesContainer" class="d-flex flex-column gap-2"></div>
+          <div class="mt-2">
+            <button type="button" class="btn btn-outline-dark btn-sm" id="addEditFeatureBtn">+ Agregar característica</button>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -162,10 +178,79 @@
 
 @push('scripts')
 <script>
+  function createFeatureRow(value = '') {
+    const row = document.createElement('div');
+    row.className = 'input-group';
+    row.innerHTML = `
+      <input type="text" class="form-control border border-1 p-2 feature-input" placeholder="Ej: Soporte 24/7" value="${value.replace(/"/g, '&quot;')}">
+      <button type="button" class="btn btn-outline-danger remove-feature-btn">-</button>
+    `;
+
+    row.querySelector('.remove-feature-btn').addEventListener('click', () => {
+      row.remove();
+    });
+
+    return row;
+  }
+
+  function getFeaturesFromContainer(containerId) {
+    return Array.from(document.querySelectorAll(`#${containerId} .feature-input`))
+      .map(input => input.value.trim())
+      .filter(Boolean);
+  }
+
+  function setFeaturesInContainer(containerId, features) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    const items = Array.isArray(features) && features.length ? features : [''];
+    items.forEach(feature => {
+      container.appendChild(createFeatureRow(feature));
+    });
+  }
+
+  document.getElementById('addCreateFeatureBtn').addEventListener('click', () => {
+    document.getElementById('createFeaturesContainer').appendChild(createFeatureRow(''));
+  });
+
+  document.getElementById('addEditFeatureBtn').addEventListener('click', () => {
+    document.getElementById('editFeaturesContainer').appendChild(createFeatureRow(''));
+  });
+
+  setFeaturesInContainer('createFeaturesContainer', ['']);
+
+  function bindImagePreview(inputId, previewId) {
+    const input = document.getElementById(inputId);
+    const preview = document.getElementById(previewId);
+
+    if (!input || !preview) return;
+
+    input.addEventListener('change', event => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        preview.src = '';
+        preview.style.display = 'none';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  bindImagePreview('createPlanImage', 'createPlanImagePreview');
+  bindImagePreview('editPlanImage', 'editPlanNewImagePreview');
+
   // Crear Plan
   document.getElementById('createPlanForm').addEventListener('submit', function(event) {
     event.preventDefault();
     const formData = new FormData(this);
+    const createFeatures = getFeaturesFromContainer('createFeaturesContainer');
+    formData.set('features', createFeatures.join(','));
 
     fetch(`/api/plans`, {
       method: 'POST',
@@ -187,20 +272,37 @@
       document.getElementById('editPlanName').value = this.dataset.name;
       document.getElementById('editPlanPrice').value = this.dataset.price;
       document.getElementById('editPlanDuration').value = this.dataset.duration;
+      document.getElementById('editPlanStatus').value = this.dataset.status ?? '0';
 
-      // Si hay estatus en data
-      if (this.dataset.status !== undefined) {
-        document.getElementById('editPlanStatus').value = this.dataset.status;
+      const currentImage = document.getElementById('editPlanCurrentImage');
+      const noImageText = document.getElementById('editPlanNoImage');
+      const imagePath = this.dataset.image;
+
+      if (imagePath) {
+        currentImage.src = imagePath;
+        currentImage.style.display = 'block';
+        noImageText.style.display = 'none';
+      } else {
+        currentImage.src = '';
+        currentImage.style.display = 'none';
+        noImageText.style.display = 'block';
       }
+
+      const editNewPreview = document.getElementById('editPlanNewImagePreview');
+      const editImageInput = document.getElementById('editPlanImage');
+      editImageInput.value = '';
+      editNewPreview.src = '';
+      editNewPreview.style.display = 'none';
 
       let features = [];
       try {
         const parsed = JSON.parse(this.dataset.features || '[]');
         features = Array.isArray(parsed) ? parsed : [];
       } catch (e) {
-        features = (this.dataset.features || '').split(',');
+        features = (this.dataset.features || '').split(',').map(item => item.trim());
       }
-      document.getElementById('editPlanFeatures').value = features.join(', ');
+
+      setFeaturesInContainer('editFeaturesContainer', features);
 
       new bootstrap.Modal(document.getElementById('editPlanModal')).show();
     });
@@ -211,6 +313,8 @@
     event.preventDefault();
     const planId = document.getElementById('editPlanId').value;
     const formData = new FormData(this);
+    const editFeatures = getFeaturesFromContainer('editFeaturesContainer');
+    formData.set('features', editFeatures.join(','));
 
     fetch(`/api/plans/${planId}`, {
       method: 'POST',
@@ -231,7 +335,7 @@
         method: 'DELETE',
         headers: { 'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value }
       })
-      .then(res => res.json())
+      .then(() => null)
       .then(() => { alert('Plan eliminado'); location.reload(); })
       .catch(err => { console.error(err); alert('Error al eliminar el plan'); });
     });

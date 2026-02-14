@@ -5,9 +5,29 @@ namespace App\Http\Controllers;
 use App\Models\Plan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class PlanController extends Controller
 {
+    private function normalizeFeatures($features): array
+    {
+        if (is_array($features)) {
+            return array_values(array_filter(array_map(function ($item) {
+                return trim((string) $item);
+            }, $features), function ($item) {
+                return $item !== '';
+            }));
+        }
+
+        if (is_string($features)) {
+            return array_values(array_filter(array_map('trim', explode(',', $features)), function ($item) {
+                return $item !== '';
+            }));
+        }
+
+        return [];
+    }
+
     public function index()
     {
         $plans = Plan::all();
@@ -23,15 +43,12 @@ class PlanController extends Controller
             'price'         => 'required|numeric|min:0',
             'duration_days' => 'required|integer|min:1',
             'logo'          => 'nullable|string|max:500',
-            'features'      => 'nullable|string',
+            'features'      => 'nullable',
             'status'        => 'nullable|in:0,1',
             'image'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
         ]);
 
-        // ✅ Normalizar `features` (siempre será JSON array)
-        $validated['features'] = $validated['features']
-            ? json_encode(array_map('trim', explode(',', $validated['features'])))
-            : json_encode([]);
+        $validated['features'] = $this->normalizeFeatures($request->input('features'));
 
         // ✅ Manejo de imagen
         if ($request->hasFile('image')) {
@@ -61,9 +78,7 @@ class PlanController extends Controller
             'image'         => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
         ]);
 
-        $validated['features'] = $validated['features']
-            ? array_map('trim', explode(',', $validated['features']))
-            : [];
+        $validated['features'] = $this->normalizeFeatures($request->input('features'));
         // ✅ Manejo de imagen (reemplazar si llega nueva)
         if ($request->hasFile('image')) {
             if ($plan->image && file_exists(public_path($plan->image))) {
