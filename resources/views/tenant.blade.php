@@ -48,10 +48,16 @@
                     <td>{{ $tenant->email }}</td>
 
                     <td>
+                      @php
+                        $owner = $tenant->users->first(function($user) {
+                          return optional($user->role)->name === 'owner';
+                        }) ?? $tenant->users->first();
+                      @endphp
+                      <p>Dueño: {{ $owner?->name ?? 'Sin dueño' }}</p>
+                      <p>Usuarios: {{ $tenant->users->count() }}</p>
                       @foreach($tenant->tenantPlanPayments as $payment)
                           <p>Plan: {{ $payment->plan->name }} - ${{ $payment->amount }} - Estado: {{ $payment->status }}</p>
                       @endforeach
-                  
                       {{-- O solo plan activo --}}
                       {{-- <p>Plan activo: {{ $tenant->activePlanPayment->plan->name ?? 'Sin plan' }}</p> --}}
                     </td>
@@ -66,6 +72,8 @@
                         data-slug="{{ $tenant->slug }}"
                         data-email="{{ $tenant->email }}"
                         data-logo="{{ $tenant->logo }}"
+                        data-owner-name="{{ $owner?->name }}"
+                        data-owner-email="{{ $owner?->email }}"
                         data-plan-id="{{ optional($tenant->tenantPlanPayments->last())->plan_id }}"
                         data-active="{{ $tenant->is_active }}">
                         Editar
@@ -126,6 +134,21 @@
             </div>
 
             <div class="mb-3">
+              <label for="editOwnerName" class="form-label">Nombre dueño</label>
+              <input type="text" class="form-control border border-1 p-2" id="editOwnerName" name="owner_name">
+            </div>
+
+            <div class="mb-3">
+              <label for="editOwnerEmail" class="form-label">Email dueño</label>
+              <input type="email" class="form-control border border-1 p-2" id="editOwnerEmail" name="owner_email">
+            </div>
+
+            <div class="mb-3">
+              <label for="editOwnerPassword" class="form-label">Nueva contraseña dueño (opcional)</label>
+              <input type="password" class="form-control border border-1 p-2" id="editOwnerPassword" name="owner_password" autocomplete="new-password">
+            </div>
+
+            <div class="mb-3">
               <label for="editTenantPlan" class="form-label">Plan</label>
               <select class="form-select border border-1 p-2" id="editTenantPlan" name="plan_id" required>
                 <option value="">Selecciona un plan</option>
@@ -163,6 +186,9 @@
       document.getElementById('editTenantSlug').value = this.dataset.slug;
       document.getElementById('editTenantEmail').value = this.dataset.email;
       document.getElementById('editTenantLogo').value = this.dataset.logo;
+      document.getElementById('editOwnerName').value = this.dataset.ownerName || '';
+      document.getElementById('editOwnerEmail').value = this.dataset.ownerEmail || '';
+      document.getElementById('editOwnerPassword').value = '';
       document.getElementById('editTenantPlan').value = this.dataset.planId || '';
       document.getElementById('editTenantStatus').value = this.dataset.active || '1';
 
@@ -185,21 +211,28 @@
     event.preventDefault();
     const formData = new FormData(this);
     const tenantId = formData.get('id');
-    fetch(`api/tenants/${tenantId}`, {
+    fetch(`/api/tenants/${tenantId}`, {
       method: 'POST',
       headers: {
+        'Accept': 'application/json',
         'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
       },
       body: formData
     })
-    .then(response => response.json())
+    .then(async response => {
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Ocurrió un error al actualizar la tienda');
+      }
+      return data;
+    })
     .then(data => {
       alert('Tienda actualizada correctamente');
       window.location.reload();
     })
     .catch(error => {
       console.error('Error:', error);
-      alert('Ocurrió un error al actualizar la tienda');
+      alert(error.message || 'Ocurrió un error al actualizar la tienda');
     });
   });
 
@@ -207,20 +240,27 @@
   document.querySelectorAll('.btn-delete-tenant').forEach(button => {
     button.addEventListener('click', function () {
       const tenantId = this.dataset.id;
-      fetch(`api/tenants/${tenantId}`, {
+      fetch(`/api/tenants/${tenantId}`, {
         method: 'DELETE',
         headers: {
+          'Accept': 'application/json',
           'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
         }
       })
-      .then(response => response.json())
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Ocurrió un error al eliminar la tienda');
+        }
+        return data;
+      })
       .then(data => {
         alert('Tienda eliminada correctamente');
         window.location.reload();
       })
       .catch(error => {
         console.error('Error:', error);
-        alert('Ocurrió un error al eliminar la tienda');
+        alert(error.message || 'Ocurrió un error al eliminar la tienda');
       });
     });
   });

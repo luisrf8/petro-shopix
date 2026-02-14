@@ -264,149 +264,198 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const step1 = document.getElementById("step1");
-    const step2 = document.getElementById("step2");
-    const nextBtn = document.getElementById("nextBtn");
-    const prevBtn = document.getElementById("prevBtn");
-    const slugInput = document.getElementById("slug");
-    const slugPreview = document.getElementById("slug-preview");
-    const logoInput = document.getElementById("logo");
-    const logoPreview = document.getElementById("logo-preview");
+    let map = null;
+    let marker = null;
+    let googleScriptLoaded = false;
+    let googleScriptLoading = false;
+    const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
 
-    // Vista previa del slug
-    slugInput.addEventListener("input", () => {
-      slugPreview.textContent = slugInput.value || "mi-empresa";
-    });
-
-    // Vista previa del logo
-    logoInput.addEventListener("change", (event) => {
-      const file = event.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = e => {
-          logoPreview.src = e.target.result;
-          logoPreview.classList.remove("d-none");
-        };
-        reader.readAsDataURL(file);
-      } else {
-        logoPreview.src = "#";
-        logoPreview.classList.add("d-none");
-      }
-    });
-
-    // Navegación entre pasos
-    nextBtn.addEventListener("click", () => {
-    // Solo validar los campos visibles del paso 1
-    const inputsStep1 = step1.querySelectorAll("input[required], select[required]");
-    let valid = true;
-
-    inputsStep1.forEach(input => {
-        if (!input.value.trim()) {
-        input.classList.add("is-invalid");
-        valid = false;
-        } else {
-        input.classList.remove("is-invalid");
-        }
-    });
-
-    if (!valid) {
+    function initializeMap() {
+      if (!window.google || !window.google.maps || map) {
         return;
+      }
+
+      const defaultPos = { lat: 9.7457, lng: -63.1832 };
+      map = new google.maps.Map(document.getElementById('map'), {
+        center: defaultPos,
+        zoom: 13,
+      });
+
+      marker = new google.maps.Marker({
+        position: defaultPos,
+        map,
+        draggable: true,
+      });
+
+      document.getElementById('latitude').value = defaultPos.lat;
+      document.getElementById('longitude').value = defaultPos.lng;
+
+      google.maps.event.addListener(marker, 'dragend', function(event) {
+        document.getElementById('latitude').value = event.latLng.lat();
+        document.getElementById('longitude').value = event.latLng.lng();
+      });
+
+      const input = document.getElementById('address');
+      const autocomplete = new google.maps.places.Autocomplete(input);
+      autocomplete.bindTo('bounds', map);
+
+      autocomplete.addListener('place_changed', function() {
+        const place = autocomplete.getPlace();
+        if (!place.geometry) return;
+        map.setCenter(place.geometry.location);
+        map.setZoom(15);
+        marker.setPosition(place.geometry.location);
+        document.getElementById('latitude').value = place.geometry.location.lat();
+        document.getElementById('longitude').value = place.geometry.location.lng();
+      });
     }
 
-    // Si todo está correcto, pasar al siguiente paso
-    step1.classList.remove("active");
-    step2.classList.add("active");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-    prevBtn.addEventListener("click", () => {
-      step2.classList.remove("active");
-      step1.classList.add("active");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
+    function loadGoogleMapsScript() {
+      if (googleScriptLoaded) {
+        initializeMap();
+        return;
+      }
 
-    // Mostrar / ocultar contraseña
-    document.querySelectorAll(".toggle-password").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const input = document.getElementById(btn.dataset.target);
-        input.type = input.type === "password" ? "text" : "password";
+      if (googleScriptLoading) {
+        return;
+      }
+
+      if (!googleMapsApiKey) {
+        console.error('Falta GOOGLE_MAPS_API_KEY en .env');
+        return;
+      }
+
+      googleScriptLoading = true;
+      window.initMap = function() {
+        googleScriptLoaded = true;
+        googleScriptLoading = false;
+        initializeMap();
+      };
+
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=initMap`;
+      script.async = true;
+      script.defer = true;
+      script.onerror = function() {
+        googleScriptLoading = false;
+        console.error('No se pudo cargar Google Maps. Verifica la API key y restricciones de dominio.');
+      };
+      document.head.appendChild(script);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const step1 = document.getElementById('step1');
+      const step2 = document.getElementById('step2');
+      const nextBtn = document.getElementById('nextBtn');
+      const prevBtn = document.getElementById('prevBtn');
+      const slugInput = document.getElementById('slug');
+      const slugPreview = document.getElementById('slug-preview');
+      const logoInput = document.getElementById('logo');
+      const logoPreview = document.getElementById('logo-preview');
+      const countrySelect = document.getElementById('country');
+      const stateSelect = document.getElementById('state');
+      const citySelect = document.getElementById('city');
+      const stateLoading = document.getElementById('state-loading');
+      const cityLoading = document.getElementById('city-loading');
+
+      slugInput.addEventListener('input', () => {
+        slugPreview.textContent = slugInput.value || 'mi-empresa';
+      });
+
+      logoInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = e => {
+            logoPreview.src = e.target.result;
+            logoPreview.classList.remove('d-none');
+          };
+          reader.readAsDataURL(file);
+        } else {
+          logoPreview.src = '#';
+          logoPreview.classList.add('d-none');
+        }
+      });
+
+      nextBtn.addEventListener('click', () => {
+        const inputsStep1 = step1.querySelectorAll('input[required], select[required]');
+        let valid = true;
+
+        inputsStep1.forEach(input => {
+          if (!String(input.value).trim()) {
+            input.classList.add('is-invalid');
+            valid = false;
+          } else {
+            input.classList.remove('is-invalid');
+          }
+        });
+
+        if (!valid) {
+          return;
+        }
+
+        step1.classList.remove('active');
+        step2.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        loadGoogleMapsScript();
+      });
+
+      prevBtn.addEventListener('click', () => {
+        step2.classList.remove('active');
+        step1.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      document.querySelectorAll('.toggle-password').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const input = document.getElementById(btn.dataset.target);
+          input.type = input.type === 'password' ? 'text' : 'password';
+        });
+      });
+
+      countrySelect.addEventListener('change', async function() {
+        const countryId = this.value;
+        stateSelect.innerHTML = '<option value="">Selecciona un estado</option>';
+        citySelect.innerHTML = '<option value="">Selecciona una ciudad</option>';
+
+        if (!countryId) return;
+
+        stateLoading.style.display = 'block';
+        try {
+          const response = await fetch(`/get-states/${countryId}`);
+          if (!response.ok) throw new Error('No se pudieron cargar los estados');
+          const data = await response.json();
+          data.forEach(state => {
+            stateSelect.insertAdjacentHTML('beforeend', `<option value="${state.id}">${state.name}</option>`);
+          });
+        } catch (error) {
+          console.error(error);
+        } finally {
+          stateLoading.style.display = 'none';
+        }
+      });
+
+      stateSelect.addEventListener('change', async function() {
+        const stateId = this.value;
+        citySelect.innerHTML = '<option value="">Selecciona una ciudad</option>';
+
+        if (!stateId) return;
+
+        cityLoading.style.display = 'block';
+        try {
+          const response = await fetch(`/get-cities/${stateId}`);
+          if (!response.ok) throw new Error('No se pudieron cargar las ciudades');
+          const data = await response.json();
+          data.forEach(city => {
+            citySelect.insertAdjacentHTML('beforeend', `<option value="${city.id}">${city.name}</option>`);
+          });
+        } catch (error) {
+          console.error(error);
+        } finally {
+          cityLoading.style.display = 'none';
+        }
       });
     });
-  });
-      // Al cambiar país
-    document.getElementById('country').addEventListener('change', function(){
-        let country_id = this.value;
-        document.getElementById('state').innerHTML = '<option value="">Selecciona un estado</option>';
-        document.getElementById('city').innerHTML = '<option value="">Selecciona una ciudad</option>';
-        if(country_id){
-            document.getElementById('state-loading').style.display = 'block';
-            fetch('/get-states/' + country_id)
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('state-loading').style.display = 'none';
-                    data.forEach(state => {
-                        document.getElementById('state').insertAdjacentHTML('beforeend', '<option value="'+state.id+'">'+state.name+'</option>');
-                    });
-                });
-        }
-    });
-
-    // Al cambiar estado
-    document.getElementById('state').addEventListener('change', function(){
-        let state_id = this.value;
-        document.getElementById('city').innerHTML = '<option value="">Selecciona una ciudad</option>';
-        if(state_id){
-            document.getElementById('city-loading').style.display = 'block';
-            fetch('/get-cities/' + state_id)
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('city-loading').style.display = 'none';
-                    data.forEach(city => {
-                        document.getElementById('city').insertAdjacentHTML('beforeend', '<option value="'+city.id+'">'+city.name+'</option>');
-                    });
-            });
-        }
-    });
-  let map, marker;
-
-function initMap() {
-  const defaultPos = { lat: 9.7457, lng: -63.1832 }; // Maturín, Monagas, Venezuela por defecto
-  map = new google.maps.Map(document.getElementById("map"), {
-    center: defaultPos,
-    zoom: 13,
-  });
-
-  marker = new google.maps.Marker({
-    position: defaultPos,
-    map: map,
-    draggable: true,
-  });
-
-  // Actualizar campos ocultos cuando se mueva el marcador
-  google.maps.event.addListener(marker, "dragend", function(event) {
-    document.getElementById("latitude").value = event.latLng.lat();
-    document.getElementById("longitude").value = event.latLng.lng();
-  });
-
-  // Buscar dirección con el input de texto
-  const input = document.getElementById("address");
-  const autocomplete = new google.maps.places.Autocomplete(input);
-  autocomplete.bindTo("bounds", map);
-
-  autocomplete.addListener("place_changed", function() {
-    const place = autocomplete.getPlace();
-    if (!place.geometry) return;
-    map.setCenter(place.geometry.location);
-    map.setZoom(15);
-    marker.setPosition(place.geometry.location);
-    document.getElementById("latitude").value = place.geometry.location.lat();
-    document.getElementById("longitude").value = place.geometry.location.lng();
-  });
-}
   </script>
-  <!-- Carga la API de Google Maps con tu clave -->
-    <script async
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA5zzN0-ht0NYbOOUeCRP2RRJyWrEDZsRI&libraries=places&callback=initMap">
-    </script>
 </body>
 </html>

@@ -117,3 +117,4 @@ Route::delete('/plans/{id}', [PlanController::class, 'destroy'])->name('plans.de
 
 Route::post('/tenants', [TenantController::class, 'store'])->name('tenants.store');
 Route::post('/tenants/{tenant}', [TenantController::class, 'update']);
+Route::delete('/tenants/{tenant}', [TenantController::class, 'destroy']);

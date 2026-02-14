@@ -340,7 +340,7 @@
         <div class="col-md-6 mb-4 mb-md-0">
           <h2 class="section-title mb-3">Contáctanos</h2>
           <p class="mb-3">Obtén una demo personalizada o consulta nuestros planes.</p>
-          <a href="https://api.whatsapp.com/send?phone=584122628765" target="_blank" class="btn btn-primary px-4 py-2">
+          <a href="https://api.whatsapp.com/send?phone=584148859372" target="_blank" class="btn btn-primary px-4 py-2">
             Escríbenos por WhatsApp
           </a>
           <div class="mt-4 d-flex gap-4">

@@ -32,6 +32,8 @@ Route::get('/', [IndexController::class, 'landing'])->name('landing');
 Route::get('/index', fn() => view('index'));
 Route::get('/publicOrder/{id}', [SaleController::class, 'showPublicOrder']);
 Route::get('/create-tenant-user', [TenantController::class, 'createIndexUser'])->name('createTenantUser');
+Route::get('/get-states/{country}', [LocationController::class, 'getStates']);
+Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
 
 // RUTAS CON AUTENTICACIÓN
 Route::middleware('auth')->group(function () {
@@ -69,10 +71,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/tenant-store', [TenantController::class, 'getTenant'])->name('tenant.store');
     Route::post('/tenant-update', [TenantController::class, 'updateTenant'])->name('tenant.update');
     Route::resource('tenants', TenantController::class);
-
-    //ubicacion 
-    Route::get('/get-states/{country}', [LocationController::class, 'getStates']);
-    Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
 
     // Planes
     Route::get('/plans', [PlanController::class, 'index'])->name('plans.index');

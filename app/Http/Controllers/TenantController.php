@@ -16,6 +16,7 @@ use App\Models\Country;
 use App\Models\State;
 use App\Models\City;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 
 class TenantController extends Controller
@@ -23,7 +24,8 @@ class TenantController extends Controller
     public function index()
     {
         // Trae todos los tenants con todos sus planes asociados
-        $tenants = Tenant::with(['tenantPlanPayments.plan'])->get();
+        $tenants = Tenant::with(['tenantPlanPayments.plan', 'users.role'])->get();
+
 
         // O solo el plan activo de cada tenant
         // $tenants = Tenant::with(['activePlanPayment.plan'])->get();
@@ -252,7 +254,12 @@ class TenantController extends Controller
             }
         }
         // return view('createTenantUser', compact('tenants', 'plans', 'countries', 'states', 'cities'));
-        return redirect()->route('login')->with('success', 'Tenant creado exitosamente. Por favor, inicie sesión.');
+        return redirect()
+            ->route('login')
+            ->with('status', 'Tu tienda fue creada exitosamente. Ahora inicia sesión con tu cuenta.')
+            ->withInput([
+                'email' => $request->input('users.owner.email'),
+            ]);
         // return response()->json([
         //     'message' => 'Creado Exitosamente',
         //     'tenant'  => $tenant,
@@ -273,15 +280,106 @@ class TenantController extends Controller
             'slug'  => 'sometimes|string|max:255|unique:tenants,slug,' . $tenant->id,
             'email' => 'nullable|email',
             'logo'  => 'nullable|string',
+            'color_primary'   => 'nullable|string|max:7',
+            'color_secondary' => 'nullable|string|max:7',
+            'color_accent'    => 'nullable|string|max:7',
+            'country'         => 'nullable|string|max:255',
+            'state'           => 'nullable|string|max:255',
+            'city'            => 'nullable|string|max:255',
+            'phone_code'      => 'nullable|string|max:5',
+            'phone_number'    => 'nullable|string|max:20',
+            'slogan'          => 'nullable|string|max:255',
+            'description'     => 'nullable|string',
+            'address'         => 'nullable|string|max:255',
+            'latitude'        => 'nullable|numeric',
+            'longitude'       => 'nullable|numeric',
+            'background_image'=> 'nullable|string',
+            'tiktok'          => 'nullable|string|max:255',
+            'instagram'       => 'nullable|string|max:255',
+            'facebook'        => 'nullable|string|max:255',
+            'owner_name'      => 'nullable|string|max:255',
+            'owner_email'     => 'nullable|email|max:255',
+            'owner_phone_number' => 'nullable|string|max:20',
+            'owner_dni'       => 'nullable|string|max:50',
+            'owner_password'  => 'nullable|string|min:8',
             'plan_id' => 'nullable|exists:plans,id',
             'is_active' => 'nullable|boolean',
         ]);
+
+        $ownerRole = Role::where('name', 'owner')->first();
+        $owner = $tenant->users()
+            ->when($ownerRole, function ($query) use ($ownerRole) {
+                $query->where('role_id', $ownerRole->id);
+            })
+            ->first();
+
+        if (!empty($validated['owner_email'])) {
+            $ownerEmailExists = User::where('email', $validated['owner_email'])
+                ->when($owner, function ($query) use ($owner) {
+                    $query->where('id', '!=', $owner->id);
+                })
+                ->exists();
+
+            if ($ownerEmailExists) {
+                return response()->json([
+                    'message' => 'El correo del dueño ya está en uso por otro usuario',
+                ], 422);
+            }
+        }
+
+        if (
+            !empty($validated['owner_name']) ||
+            !empty($validated['owner_email']) ||
+            !empty($validated['owner_phone_number']) ||
+            !empty($validated['owner_dni']) ||
+            !empty($validated['owner_password'])
+        ) {
+            if (!$owner) {
+                $owner = new User();
+                $owner->tenant_id = $tenant->id;
+                if ($ownerRole) {
+                    $owner->role_id = $ownerRole->id;
+                }
+                $owner->is_active = 1;
+            }
+
+            $owner->name = $validated['owner_name'] ?? $owner->name ?? 'Owner';
+            $owner->email = $validated['owner_email'] ?? $owner->email;
+            $owner->phone_number = $validated['owner_phone_number'] ?? $owner->phone_number;
+            $owner->dni = $validated['owner_dni'] ?? $owner->dni;
+
+            if (!empty($validated['owner_password'])) {
+                $owner->password = Hash::make($validated['owner_password']);
+            } elseif (!$owner->exists) {
+                $owner->password = Hash::make('password123');
+            }
+
+            $owner->save();
+        }
+
         // Actualizar datos del tenant
         $tenant->update([
             'name' => $validated['name'] ?? $tenant->name,
             'slug' => $validated['slug'] ?? $tenant->slug,
             'email' => $validated['email'] ?? $tenant->email,
             'logo' => $validated['logo'] ?? $tenant->logo,
+            'color_primary' => $validated['color_primary'] ?? $tenant->color_primary,
+            'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
+            'color_accent' => $validated['color_accent'] ?? $tenant->color_accent,
+            'country' => $validated['country'] ?? $tenant->country,
+            'state' => $validated['state'] ?? $tenant->state,
+            'city' => $validated['city'] ?? $tenant->city,
+            'phone_code' => $validated['phone_code'] ?? $tenant->phone_code,
+            'phone_number' => $validated['phone_number'] ?? $tenant->phone_number,
+            'slogan' => $validated['slogan'] ?? $tenant->slogan,
+            'description' => $validated['description'] ?? $tenant->description,
+            'address' => $validated['address'] ?? $tenant->address,
+            'latitude' => $validated['latitude'] ?? $tenant->latitude,
+            'longitude' => $validated['longitude'] ?? $tenant->longitude,
+            'background_image' => $validated['background_image'] ?? $tenant->background_image,
+            'tiktok' => $validated['tiktok'] ?? $tenant->tiktok,
+            'instagram' => $validated['instagram'] ?? $tenant->instagram,
+            'facebook' => $validated['facebook'] ?? $tenant->facebook,
             'is_active' => $validated['is_active'] ?? $tenant->is_active,
         ]);
 
@@ -300,7 +398,7 @@ class TenantController extends Controller
 
         return response()->json([
             'message' => 'Tenant actualizado correctamente',
-            'tenant'  => $tenant,
+            'tenant'  => $tenant->load(['tenantPlanPayments.plan', 'users.role']),
         ]);
     }
 
