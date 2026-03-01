@@ -3,6 +3,39 @@
 @section('title', 'Categorías')
 
 @section('content')
+    <style>
+      .ai-chat-box {
+        border: 1px solid #dee2e6;
+        border-radius: .5rem;
+        padding: .75rem;
+        background: #f8f9fa;
+        height: 220px;
+        overflow-y: auto;
+      }
+      .ai-attach-btn {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+      }
+      .ai-loading-dots {
+        display: inline-flex;
+        margin-left: 0.35rem;
+      }
+      .ai-loading-dots span {
+        width: 6px;
+        height: 6px;
+        margin: 0 2px;
+        background: #212529;
+        border-radius: 50%;
+        animation: aiPulse 0.9s infinite ease-in-out;
+      }
+      .ai-loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+      .ai-loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+      @keyframes aiPulse {
+        0%, 100% { opacity: 0.3; transform: translateY(0); }
+        50% { opacity: 1; transform: translateY(-3px); }
+      }
+    </style>
     <div class="container-fluid py-2">
       <div class="row">
         <div class="col-md-12 mt-4">
@@ -66,10 +99,18 @@
                               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             <div class="modal-body">
+                              <div class="mb-3 text-center">
+                                <img id="addImagePreview" src="" class="img-fluid rounded" style="max-height:160px; display:none;">
+                              </div>
                               <div class="mb-3">
                                 <label for="image" class="form-label">Seleccionar imagen</label>
                                 <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
                               </div>
+                              <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-outline-dark w-100" id="openProductAiBtn">🤖 Generar con IA</button>
+                                <button type="button" class="btn btn-outline-secondary w-100" id="removeBgBtn">Quitar fondo IA</button>
+                              </div>
+                              <small class="text-muted d-block mt-2">Puedes generar una imagen nueva o subir una y quitarle el fondo.</small>
                             </div>
                             <div class="modal-footer">
                               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -105,6 +146,48 @@
                         <button class="btn btn-dark" onclick="deleteProduct({{ $product->id }})">Eliminar</button>
                       </div>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal fade" id="productAiModal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Generar imagen de producto con IA</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div id="productAiPreviewWrapper" class="mb-3 d-none">
+                      <label class="form-label fw-bold mb-2">Resultado actual</label>
+                      <img id="productAiPreview" src="#" class="img-fluid rounded border" alt="Imagen producto IA">
+                    </div>
+
+                    <div id="productAiChat" class="ai-chat-box mb-3"></div>
+
+                    <div id="productAiLoading" class="mt-2 d-none">
+                      <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2 text-dark" role="status"></div>
+                        <span>Generando imagen</span>
+                        <span class="ai-loading-dots"><span></span><span></span><span></span></span>
+                      </div>
+                    </div>
+
+                    <div class="mt-3">
+                      <input type="file" id="productAiReferenceImage" class="d-none" accept=".png,.jpg,.jpeg,.webp">
+                      <div class="d-flex gap-2 align-items-end">
+                        <button type="button" class="btn btn-outline-dark ai-attach-btn" id="productAiAttachBtn" title="Adjuntar imagen">📎</button>
+                        <textarea id="productAiPrompt" class="form-control" rows="2" placeholder="Escribe tu mensaje para la IA..."></textarea>
+                        <button type="button" class="btn btn-dark" id="productAiSendBtn" title="Enviar">➤</button>
+                      </div>
+                      <small class="text-muted d-block mt-1" id="productAiAttachedName">Sin imagen adjunta</small>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="productAiCloseBtn">Cerrar</button>
+                    <button type="button" class="btn btn-outline-dark" id="productAiDownloadBtn" disabled>Descargar</button>
+                    <button type="button" class="btn btn-outline-success" id="productAiUseBtn" disabled>Usar esta imagen</button>
                   </div>
                 </div>
               </div>
@@ -199,6 +282,200 @@
 
 
 <script>
+    const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
+    let productAiModalInstance = null;
+    let productAiHistory = [];
+    let productAiLatestResult = null;
+
+    function productAiAppendMessage(role, content) {
+      const chatBox = document.getElementById('productAiChat');
+      const item = document.createElement('div');
+      item.className = `mb-2 ${role === 'assistant' ? '' : 'text-end'}`;
+      const bubble = document.createElement('div');
+      bubble.className = role === 'assistant' ? 'd-inline-block p-2 rounded bg-white border' : 'd-inline-block p-2 rounded text-white bg-dark';
+      bubble.style.maxWidth = '90%';
+      bubble.textContent = content;
+      item.appendChild(bubble);
+      chatBox.appendChild(item);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function productAiSetLoading(isLoading) {
+      document.getElementById('productAiLoading').classList.toggle('d-none', !isLoading);
+      document.getElementById('productAiSendBtn').disabled = isLoading;
+      document.getElementById('productAiAttachBtn').disabled = isLoading;
+      document.getElementById('productAiCloseBtn').disabled = isLoading;
+    }
+
+    function productAiRenderPreview() {
+      const wrapper = document.getElementById('productAiPreviewWrapper');
+      const preview = document.getElementById('productAiPreview');
+      const downloadBtn = document.getElementById('productAiDownloadBtn');
+      const useBtn = document.getElementById('productAiUseBtn');
+
+      if (!productAiLatestResult) {
+        wrapper.classList.add('d-none');
+        downloadBtn.disabled = true;
+        useBtn.disabled = true;
+        return;
+      }
+
+      preview.src = `data:${productAiLatestResult.mimeType};base64,${productAiLatestResult.base64Data}`;
+      wrapper.classList.remove('d-none');
+      downloadBtn.disabled = false;
+      useBtn.disabled = false;
+    }
+
+    function productAiGetReferenceData() {
+      const input = document.getElementById('productAiReferenceImage');
+      const file = input?.files?.[0];
+      if (!file) {
+        return Promise.resolve(null);
+      }
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = String(reader.result || '');
+          const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+          resolve({ data: base64, mime: file.type || 'image/png' });
+        };
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen adjunta.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function productAiApplyToInput(base64Data, mimeType, fileName = 'producto-gemini.png') {
+      const input = document.getElementById('image');
+      const preview = document.getElementById('addImagePreview');
+      if (!input || !preview || !base64Data) {
+        return;
+      }
+
+      const bytes = atob(base64Data);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i += 1) {
+        arr[i] = bytes.charCodeAt(i);
+      }
+      const blob = new Blob([arr], { type: mimeType || 'image/png' });
+      const file = new File([blob], fileName, { type: mimeType || 'image/png' });
+
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = 'block';
+    }
+
+    async function productAiSend() {
+      const promptInput = document.getElementById('productAiPrompt');
+      const prompt = String(promptInput.value || '').trim();
+      if (!prompt) {
+        alert('Escribe un mensaje para generar la imagen.');
+        return;
+      }
+
+      productAiAppendMessage('user', prompt);
+      productAiHistory.push({ role: 'user', content: prompt });
+      productAiSetLoading(true);
+
+      try {
+        const referenceData = await productAiGetReferenceData();
+        const response = await fetch(tenantAiImageEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+          },
+          body: JSON.stringify({
+            type: 'product',
+            image_operation: 'generate',
+            prompt,
+            messages: productAiHistory,
+            reference_image_data: referenceData?.data || null,
+            reference_image_mime: referenceData?.mime || null,
+          })
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || payload.message || 'No se pudo generar la imagen.');
+        }
+
+        productAiLatestResult = {
+          base64Data: payload.data,
+          mimeType: payload.mime_type || 'image/png',
+          fileName: 'producto-gemini.png',
+        };
+
+        productAiRenderPreview();
+        productAiAppendMessage('assistant', 'Listo, aquí tienes una versión. ¿La ajustamos o la usamos?');
+        productAiHistory.push({ role: 'assistant', content: 'Imagen generada y mostrada al usuario.' });
+        promptInput.value = '';
+      } catch (error) {
+        productAiAppendMessage('assistant', 'No pude generar la imagen. Ajusta tu mensaje e intenta de nuevo.');
+        alert(error.message || 'Error al generar imagen con IA.');
+      } finally {
+        productAiSetLoading(false);
+      }
+    }
+
+    async function removeBackgroundFromUpload() {
+      const input = document.getElementById('image');
+      const file = input?.files?.[0];
+      if (!file) {
+        alert('Primero sube una imagen para quitar el fondo.');
+        return;
+      }
+
+      const data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = String(reader.result || '');
+          const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+          resolve({ base64, mime: file.type || 'image/png' });
+        };
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen subida.'));
+        reader.readAsDataURL(file);
+      });
+
+      const removeBgBtn = document.getElementById('removeBgBtn');
+      const oldText = removeBgBtn.textContent;
+      removeBgBtn.disabled = true;
+      removeBgBtn.textContent = 'Procesando...';
+
+      try {
+        const response = await fetch(tenantAiImageEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+          },
+          body: JSON.stringify({
+            type: 'product',
+            image_operation: 'remove_background',
+            prompt: 'Quita el fondo de este producto y déjalo con transparencia limpia.',
+            reference_image_data: data.base64,
+            reference_image_mime: data.mime,
+          })
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || payload.message || 'No se pudo quitar el fondo.');
+        }
+
+        await productAiApplyToInput(payload.data, payload.mime_type || 'image/png', 'producto-sin-fondo.png');
+        alert('Fondo eliminado y imagen cargada en el formulario.');
+      } catch (error) {
+        alert(error.message || 'Error al quitar fondo con IA.');
+      } finally {
+        removeBgBtn.disabled = false;
+        removeBgBtn.textContent = oldText;
+      }
+    }
+
     let currentImageId = {{ $product->images[0]->id ?? 'null' }};
 
     function changeMainImage(imagePath, imageId) {
@@ -468,6 +745,84 @@ document.getElementById('editProductForm').addEventListener('submit', function(e
     .catch(error => {
         console.error('Error:', error);
     });
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  const addImageModalEl = document.getElementById('addImageModal');
+  const productAiModalEl = document.getElementById('productAiModal');
+  const addImageModalInstance = bootstrap.Modal.getOrCreateInstance(addImageModalEl);
+  productAiModalInstance = bootstrap.Modal.getOrCreateInstance(productAiModalEl);
+
+  document.getElementById('image').addEventListener('change', function () {
+    const file = this.files?.[0];
+    const preview = document.getElementById('addImagePreview');
+    if (!file) {
+      preview.style.display = 'none';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      preview.src = e.target.result;
+      preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById('openProductAiBtn').addEventListener('click', () => {
+    productAiHistory = [];
+    productAiLatestResult = null;
+    document.getElementById('productAiPrompt').value = '';
+    document.getElementById('productAiReferenceImage').value = '';
+    document.getElementById('productAiAttachedName').textContent = 'Sin imagen adjunta';
+    document.getElementById('productAiChat').innerHTML = '';
+    productAiAppendMessage('assistant', 'Hola, te ayudo a generar la imagen de tu producto. ¿Qué deseas crear?');
+    productAiRenderPreview();
+    productAiSetLoading(false);
+
+    addImageModalEl.addEventListener('hidden.bs.modal', () => productAiModalInstance.show(), { once: true });
+    addImageModalInstance.hide();
+  });
+
+  productAiModalEl.addEventListener('hidden.bs.modal', () => {
+    addImageModalInstance.show();
+  });
+
+  document.getElementById('removeBgBtn').addEventListener('click', removeBackgroundFromUpload);
+  document.getElementById('productAiAttachBtn').addEventListener('click', () => document.getElementById('productAiReferenceImage').click());
+  document.getElementById('productAiReferenceImage').addEventListener('change', function () {
+    const file = this.files?.[0];
+    document.getElementById('productAiAttachedName').textContent = file ? `Adjunto: ${file.name}` : 'Sin imagen adjunta';
+  });
+  document.getElementById('productAiSendBtn').addEventListener('click', productAiSend);
+  document.getElementById('productAiPrompt').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      productAiSend();
+    }
+  });
+  document.getElementById('productAiDownloadBtn').addEventListener('click', () => {
+    if (!productAiLatestResult) return;
+    const bytes = atob(productAiLatestResult.base64Data);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i += 1) {
+      arr[i] = bytes.charCodeAt(i);
+    }
+    const blob = new Blob([arr], { type: productAiLatestResult.mimeType || 'image/png' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = productAiLatestResult.fileName || 'producto-gemini.png';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2500);
+  });
+  document.getElementById('productAiUseBtn').addEventListener('click', async () => {
+    if (!productAiLatestResult) return;
+    await productAiApplyToInput(productAiLatestResult.base64Data, productAiLatestResult.mimeType, productAiLatestResult.fileName || 'producto-gemini.png');
+    productAiAppendMessage('assistant', 'Imagen aplicada al formulario. Puedes seguir ajustando o cerrar con la X.');
+  });
 });
 
 </script>

@@ -57,6 +57,8 @@ Route::post('categories/{id}/toggle-status', [CategoryController::class, 'toggle
 Route::post('/products/{id}', [ProductController::class, 'update'])->name('products.update');
 Route::post('/create-product', [ProductController::class, 'create']);
 // Route::post('/create-product', [ProductController::class, 'store'])->name('products.store');
+Route::post('/products/import-catalog', [ProductController::class, 'importCatalog'])->name('products.importCatalog');
+Route::get('/products/import-template', [ProductController::class, 'downloadImportTemplate'])->name('products.importTemplate');
 Route::post('/addImage/{productId}', [ProductController::class, 'addImage'])->name('products.addImage');
 Route::delete('/product/remove-image/{imageId}', [ProductController::class, 'removeImage'])->name('products.removeImage');
 Route::get('/products/report', [ProductController::class, 'generateReport']);

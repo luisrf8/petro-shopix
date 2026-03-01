@@ -110,6 +110,9 @@
               <a class="nav-link text-black" href="/createProduct">
                 + Agregar Producto
               </a>
+              <a class="nav-link text-black" href="javascript:;" data-bs-toggle="modal" data-bs-target="#importCatalogModal">
+                + Importar Catálogo
+              </a>
               <a class="nav-link text-black" href="/purchase">
                 + Generar Compra
               </a>
@@ -163,6 +166,47 @@
       </div>
     </div>
     <!-- Fin Modal para crear producto -->
+
+    <div class="modal fade" id="importCatalogModal" tabindex="-1" aria-labelledby="importCatalogModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="importCatalogModalLabel">Importar catálogo</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="importCatalogForm" enctype="multipart/form-data">
+              @csrf
+              <div class="mb-3">
+                <label for="catalogFile" class="form-label">Archivo (CSV, JSON, SQL)</label>
+                <input type="file" class="form-control border border-1 p-2" id="catalogFile" name="file" accept=".csv,.json,.sql,.txt">
+              </div>
+
+              <div class="mb-3">
+                <label for="googleSheetUrl" class="form-label">Google Sheets (URL pública opcional)</label>
+                <input type="url" class="form-control border border-1 p-2" id="googleSheetUrl" name="google_sheet_url" placeholder="https://docs.google.com/spreadsheets/d/...">
+              </div>
+
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" value="1" id="useGeminiMapping" name="use_gemini_mapping" checked>
+                <label class="form-check-label" for="useGeminiMapping">
+                  Usar Gemini para mapear columnas automáticamente
+                </label>
+              </div>
+
+              <small class="text-muted d-block mb-3">
+                Estructura recomendada: category_name, category_description, product_name, product_description, variant_size, variant_price, variant_stock, variant_unit_type.
+              </small>
+
+              <div class="d-flex flex-row-reverse">
+                <button type="submit" class="btn btn-dark" id="importCatalogSubmitBtn">Importar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="px-3">
       <div class="row">
         <!-- Buscador -->
@@ -209,6 +253,63 @@
 <script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
 
   <script>
+    const importCatalogEndpoint = @json(route('products.importCatalogWeb'));
+    const importCatalogForm = document.getElementById('importCatalogForm');
+    if (importCatalogForm) {
+      importCatalogForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+          || document.querySelector('input[name="_token"]')?.value;
+
+        const submitBtn = document.getElementById('importCatalogSubmitBtn');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Importando...';
+
+        try {
+          const formData = new FormData(this);
+          if (!formData.get('file') && !String(formData.get('google_sheet_url') || '').trim()) {
+            alert('Debes subir un archivo o colocar una URL de Google Sheets.');
+            return;
+          }
+
+          const response = await fetch(importCatalogEndpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Accept': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+              'X-CSRF-TOKEN': csrfToken || '',
+            },
+            body: formData,
+          });
+
+          const payload = await response.json();
+          if (!response.ok || !payload.success) {
+            throw new Error(payload.error || payload.message || 'No se pudo importar el catálogo.');
+          }
+
+          const summary = payload.summary || {};
+          alert(
+            `Importación completada.\n` +
+            `Categorías creadas: ${summary.created_categories ?? 0}\n` +
+            `Productos creados: ${summary.created_products ?? 0}\n` +
+            `Variantes procesadas: ${summary.processed_variants ?? 0}\n` +
+            `Filas omitidas: ${summary.skipped_rows ?? 0}`
+          );
+
+          window.location.reload();
+        } catch (error) {
+          console.error(error);
+          alert(error.message || 'Error al importar catálogo.');
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+        }
+      });
+    }
+
     document.getElementById('createProductForm').addEventListener('submit', function(event) {
       event.preventDefault(); // Evita el envío normal del formulario
 

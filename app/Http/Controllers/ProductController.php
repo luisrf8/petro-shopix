@@ -13,6 +13,9 @@ use Google\Service\Drive;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
@@ -260,6 +263,679 @@ class ProductController extends Controller
     
             return response()->json(['success' => true, 'message' => 'Imagen eliminada correctamente.']);
         }
+
+    public function importCatalog(Request $request)
+    {
+        $request->validate([
+            'file' => 'nullable|file|max:20480',
+            'google_sheet_url' => 'nullable|url',
+            'use_gemini_mapping' => 'nullable|boolean',
+        ]);
+
+        $user = auth()->user();
+        if (!$user || empty($user->tenant_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo identificar el tenant del usuario.',
+            ], 422);
+        }
+
+        if (!$request->hasFile('file') && !$request->filled('google_sheet_url')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debes subir un archivo o indicar la URL de Google Sheets.',
+            ], 422);
+        }
+
+        try {
+            $rows = [];
+            $useGemini = filter_var($request->input('use_gemini_mapping', true), FILTER_VALIDATE_BOOL);
+
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $extension = strtolower($file->getClientOriginalExtension());
+
+                if (in_array($extension, ['xlsx', 'xls'], true)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Este sistema no permite importar archivos XLSX/XLS. Usa CSV, JSON o SQL.',
+                    ], 422);
+                }
+
+                $rows = $this->extractRowsFromUploadedFile($file->getRealPath(), $extension);
+
+                if (empty($rows) && $useGemini && $extension === 'sql') {
+                    $rows = $this->extractRowsFromSqlWithGemini(file_get_contents($file->getRealPath()) ?: '');
+                }
+            } else {
+                $rows = $this->extractRowsFromGoogleSheets($request->string('google_sheet_url')->toString());
+            }
+
+            if (empty($rows)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontraron registros válidos para importar.',
+                ], 422);
+            }
+
+            $mapping = $this->resolveImportMapping(array_keys($rows[0] ?? []), $useGemini, $rows);
+            $normalizedRows = $this->normalizeImportRows($rows, $mapping);
+
+            DB::beginTransaction();
+
+            $hasVariantUnitTypeColumn = Schema::hasColumn('product_variants', 'unit_type');
+
+            $createdCategories = 0;
+            $createdProducts = 0;
+            $createdVariants = 0;
+            $skippedRows = 0;
+
+            foreach ($normalizedRows as $row) {
+                $categoryName = trim((string) ($row['category_name'] ?? ''));
+                $productName = trim((string) ($row['product_name'] ?? ''));
+
+                if ($categoryName === '' || $productName === '') {
+                    $skippedRows++;
+                    continue;
+                }
+
+                $categoryDefaults = [
+                    'description' => $row['category_description'] ?? null,
+                    'tenant_id' => $user->tenant_id,
+                    'is_active' => isset($row['category_is_active']) ? (bool) $row['category_is_active'] : true,
+                ];
+
+                $category = Category::firstOrCreate(
+                    ['name' => $categoryName],
+                    $categoryDefaults
+                );
+
+                if ($category->wasRecentlyCreated) {
+                    $createdCategories++;
+                }
+
+                if ((int) $category->tenant_id !== (int) $user->tenant_id) {
+                    $category->tenant_id = $user->tenant_id;
+                    $category->save();
+                }
+
+                $product = Product::firstOrCreate(
+                    [
+                        'tenant_id' => $user->tenant_id,
+                        'category_id' => $category->id,
+                        'name' => $productName,
+                    ],
+                    [
+                        'description' => $row['product_description'] ?? 'Sin descripción',
+                        'is_active' => isset($row['product_is_active']) ? (bool) $row['product_is_active'] : true,
+                    ]
+                );
+
+                if ($product->wasRecentlyCreated) {
+                    $createdProducts++;
+                }
+
+                $variants = $row['variants'] ?? [];
+                if (!is_array($variants) || empty($variants)) {
+                    if (!empty($row['variant_size']) || isset($row['variant_price']) || isset($row['variant_stock'])) {
+                        $variants = [[
+                            'size' => $row['variant_size'] ?? 'Única',
+                            'price' => $row['variant_price'] ?? 0,
+                            'stock' => $row['variant_stock'] ?? 0,
+                            'unit_type' => $row['variant_unit_type'] ?? 'unidad',
+                        ]];
+                    }
+                }
+
+                foreach ($variants as $variant) {
+                    $size = trim((string) ($variant['size'] ?? ''));
+                    if ($size === '') {
+                        $size = 'Única';
+                    }
+
+                    $unitType = trim((string) ($variant['unit_type'] ?? 'unidad'));
+                    if ($unitType === '') {
+                        $unitType = 'unidad';
+                    }
+
+                    $price = is_numeric($variant['price'] ?? null) ? (float) $variant['price'] : 0;
+                    $stock = is_numeric($variant['stock'] ?? null) ? (int) $variant['stock'] : 0;
+
+                    $variantLookup = [
+                        'product_id' => $product->id,
+                        'size' => $size,
+                    ];
+
+                    if ($hasVariantUnitTypeColumn) {
+                        $variantLookup['unit_type'] = $unitType;
+                    }
+
+                    $variantValues = [
+                        'tenant_id' => $user->tenant_id,
+                        'price' => $price,
+                        'stock' => $stock,
+                    ];
+
+                    if ($hasVariantUnitTypeColumn) {
+                        $variantValues['unit_type'] = $unitType;
+                    }
+
+                    ProductVariant::updateOrCreate($variantLookup, $variantValues);
+
+                    $createdVariants++;
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Importación completada correctamente.',
+                'summary' => [
+                    'created_categories' => $createdCategories,
+                    'created_products' => $createdProducts,
+                    'processed_variants' => $createdVariants,
+                    'skipped_rows' => $skippedRows,
+                ],
+                'mapping' => $mapping,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo completar la importación.',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    private function extractRowsFromUploadedFile(string $path, string $extension): array
+    {
+        if (in_array($extension, ['csv', 'txt'])) {
+            return $this->extractRowsFromCsvContent(file_get_contents($path) ?: '');
+        }
+
+        if (in_array($extension, ['json'])) {
+            $decoded = json_decode(file_get_contents($path) ?: '[]', true);
+            return is_array($decoded) ? $this->normalizeRawRows($decoded) : [];
+        }
+
+        if (in_array($extension, ['sql'])) {
+            return $this->extractRowsFromSqlContent(file_get_contents($path) ?: '');
+        }
+
+        if (in_array($extension, ['xlsx', 'xls'], true)) {
+            throw new \RuntimeException('Este sistema no permite importar XLSX/XLS. Usa CSV, JSON o SQL.');
+        }
+
+        throw new \RuntimeException('Formato no soportado. Usa CSV, JSON o SQL.');
+    }
+
+    private function extractRowsFromGoogleSheets(string $url): array
+    {
+        preg_match('/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/', $url, $docMatches);
+        if (empty($docMatches[1])) {
+            throw new \RuntimeException('URL de Google Sheets inválida.');
+        }
+
+        preg_match('/[?&]gid=(\d+)/', $url, $gidMatches);
+        $gid = $gidMatches[1] ?? '0';
+
+        $csvUrl = "https://docs.google.com/spreadsheets/d/{$docMatches[1]}/export?format=csv&gid={$gid}";
+        $response = Http::timeout(30)->get($csvUrl);
+
+        if (!$response->successful()) {
+            throw new \RuntimeException('No se pudo descargar la hoja de Google Sheets. Verifica permisos de acceso.');
+        }
+
+        return $this->extractRowsFromCsvContent($response->body());
+    }
+
+    private function extractRowsFromCsvContent(string $content): array
+    {
+        $lines = preg_split('/\r\n|\r|\n/', $content);
+        $parsed = [];
+
+        foreach ($lines as $line) {
+            if (trim($line) === '') {
+                continue;
+            }
+            $parsed[] = str_getcsv($line);
+        }
+
+        if (empty($parsed)) {
+            return [];
+        }
+
+        $headers = array_map(fn ($h) => trim((string) $h), array_shift($parsed));
+        $rows = [];
+
+        foreach ($parsed as $row) {
+            $assoc = [];
+            foreach ($headers as $index => $header) {
+                if ($header === '') {
+                    continue;
+                }
+                $assoc[$header] = $row[$index] ?? null;
+            }
+            $rows[] = $assoc;
+        }
+
+        return $rows;
+    }
+
+    private function extractRowsFromSqlContent(string $sql): array
+    {
+        preg_match_all('/INSERT\s+INTO\s+`?([a-zA-Z0-9_]+)`?\s*\(([^\)]+)\)\s*VALUES\s*(.+?);/is', $sql, $matches, PREG_SET_ORDER);
+
+        $categoriesById = [];
+        $productsById = [];
+        $variantsByProductId = [];
+        $categoryAutoId = 1;
+        $productAutoId = 1;
+
+        foreach ($matches as $match) {
+            $table = strtolower(trim($match[1]));
+            $columns = array_map(function ($item) {
+                return trim(str_replace('`', '', $item));
+            }, explode(',', $match[2]));
+
+            $isCategoryTable = in_array($table, ['categories', 'category', 'categorias', 'categoria'], true);
+            $isProductTable = in_array($table, ['products', 'product', 'productos', 'producto'], true);
+            $isVariantTable = in_array($table, ['product_variants', 'variants', 'variantes', 'product_variant'], true);
+
+            preg_match_all('/\((.*?)\)(?=,\s*\(|$)/s', $match[3], $valueGroups);
+            foreach ($valueGroups[1] as $group) {
+                $values = str_getcsv($group, ',', "'", '\\');
+                $row = [];
+                foreach ($columns as $index => $column) {
+                    $value = $values[$index] ?? null;
+                    $row[$column] = $this->decodeSqlValue($value);
+                }
+
+                if ($isCategoryTable) {
+                    $categoryId = (string) ($this->extractFirstSqlValue($row, ['id', 'id_categoria', 'category_id']) ?? $categoryAutoId++);
+                    $categoryName = $this->extractFirstSqlValue($row, ['name', 'nombre', 'nombre_categoria', 'category_name']);
+                    if (!is_null($categoryName) && trim((string) $categoryName) !== '') {
+                        $categoriesById[$categoryId] = [
+                            'name' => $categoryName,
+                            'description' => $this->extractFirstSqlValue($row, ['description', 'descripcion', 'descripcion_categoria', 'category_description']),
+                        ];
+                    }
+                }
+                if ($isProductTable) {
+                    $productId = (string) ($this->extractFirstSqlValue($row, ['id', 'id_producto', 'product_id']) ?? $productAutoId++);
+                    $productsById[$productId] = [
+                        'id' => $productId,
+                        'category_id' => $this->extractFirstSqlValue($row, ['category_id', 'id_categoria', 'categoria_id']),
+                        'name' => $this->extractFirstSqlValue($row, ['name', 'nombre', 'product_name', 'nombre_producto']),
+                        'description' => $this->extractFirstSqlValue($row, ['description', 'descripcion', 'product_description', 'descripcion_producto']),
+                        'price' => $this->extractFirstSqlValue($row, ['price', 'precio', 'variant_price']),
+                        'stock' => $this->extractFirstSqlValue($row, ['stock', 'existencia', 'inventario', 'variant_stock']),
+                        'unit_type' => $this->extractFirstSqlValue($row, ['unit_type', 'tipo_unidad', 'unidad', 'variant_unit_type']),
+                    ];
+                }
+                if ($isVariantTable) {
+                    $productId = (string) ($this->extractFirstSqlValue($row, ['product_id', 'id_producto']) ?? '');
+                    if (!isset($variantsByProductId[$productId])) {
+                        $variantsByProductId[$productId] = [];
+                    }
+                    $variantsByProductId[$productId][] = [
+                        'size' => $this->extractFirstSqlValue($row, ['size', 'talla', 'variant_size']),
+                        'price' => $this->extractFirstSqlValue($row, ['price', 'precio', 'variant_price']),
+                        'stock' => $this->extractFirstSqlValue($row, ['stock', 'existencia', 'inventario', 'variant_stock']),
+                        'unit_type' => $this->extractFirstSqlValue($row, ['unit_type', 'tipo_unidad', 'unidad', 'variant_unit_type']),
+                    ];
+                }
+            }
+        }
+
+        $rows = [];
+        foreach ($productsById as $productId => $product) {
+            $categoryId = (string) ($product['category_id'] ?? '');
+            $category = $categoriesById[$categoryId] ?? [];
+            $variants = $variantsByProductId[$productId] ?? [];
+
+            if (empty($variants)) {
+                $rows[] = [
+                    'category_name' => $category['name'] ?? null,
+                    'category_description' => $category['description'] ?? null,
+                    'product_name' => $product['name'] ?? null,
+                    'product_description' => $product['description'] ?? null,
+                    'variant_size' => 'Única',
+                    'variant_price' => $product['price'] ?? 0,
+                    'variant_stock' => $product['stock'] ?? 0,
+                    'variant_unit_type' => $product['unit_type'] ?? 'unidad',
+                ];
+                continue;
+            }
+
+            foreach ($variants as $variant) {
+                $rows[] = [
+                    'category_name' => $category['name'] ?? null,
+                    'category_description' => $category['description'] ?? null,
+                    'product_name' => $product['name'] ?? null,
+                    'product_description' => $product['description'] ?? null,
+                    'variant_size' => $variant['size'] ?? null,
+                    'variant_price' => $variant['price'] ?? null,
+                    'variant_stock' => $variant['stock'] ?? null,
+                    'variant_unit_type' => $variant['unit_type'] ?? null,
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
+    private function extractRowsFromSqlWithGemini(string $sql): array
+    {
+        $apiKey = config('services.gemini.api_key');
+        if (empty($apiKey)) {
+            return [];
+        }
+
+        $trimmedSql = trim($sql);
+        if ($trimmedSql === '') {
+            return [];
+        }
+
+        $prompt = "Convierte este SQL en un JSON array para importar catálogo de ecommerce. "
+            . "Cada objeto debe tener: category_name, category_description, product_name, product_description, variant_size, variant_price, variant_stock, variant_unit_type. "
+            . "Si no hay variantes, crea una variante única por producto. Responde SOLO JSON válido, sin markdown ni texto extra. SQL: "
+            . mb_substr($trimmedSql, 0, 14000);
+
+        $response = Http::timeout(40)->post(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={$apiKey}",
+            [
+                'contents' => [
+                    ['parts' => [['text' => $prompt]]],
+                ],
+            ]
+        );
+
+        if (!$response->successful()) {
+            return [];
+        }
+
+        $text = data_get($response->json(), 'candidates.0.content.parts.0.text', '');
+        if (!is_string($text) || trim($text) === '') {
+            return [];
+        }
+
+        $clean = trim($text);
+        $clean = preg_replace('/^```json\s*/', '', $clean);
+        $clean = preg_replace('/^```\s*/', '', (string) $clean);
+        $clean = preg_replace('/\s*```$/', '', (string) $clean);
+
+        $decoded = json_decode((string) $clean, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($decoded as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $categoryName = trim((string) ($row['category_name'] ?? ''));
+            $productName = trim((string) ($row['product_name'] ?? ''));
+            if ($categoryName === '' || $productName === '') {
+                continue;
+            }
+
+            $rows[] = [
+                'category_name' => $categoryName,
+                'category_description' => $row['category_description'] ?? null,
+                'product_name' => $productName,
+                'product_description' => $row['product_description'] ?? null,
+                'variant_size' => $row['variant_size'] ?? 'Única',
+                'variant_price' => $row['variant_price'] ?? 0,
+                'variant_stock' => $row['variant_stock'] ?? 0,
+                'variant_unit_type' => $row['variant_unit_type'] ?? 'unidad',
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function extractFirstSqlValue(array $row, array $candidates)
+    {
+        foreach ($candidates as $candidate) {
+            if (!array_key_exists($candidate, $row)) {
+                continue;
+            }
+
+            $value = $row[$candidate];
+            if (!is_null($value) && trim((string) $value) !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function decodeSqlValue($value)
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim((string) $value);
+        if (strtoupper($trimmed) === 'NULL') {
+            return null;
+        }
+
+        if (Str::startsWith($trimmed, "'") && Str::endsWith($trimmed, "'")) {
+            return stripcslashes(substr($trimmed, 1, -1));
+        }
+
+        return $trimmed;
+    }
+
+    private function normalizeRawRows(array $rows): array
+    {
+        if (empty($rows)) {
+            return [];
+        }
+
+        if (array_is_list($rows) && is_array($rows[0] ?? null)) {
+            return $rows;
+        }
+
+        return [];
+    }
+
+    private function resolveImportMapping(array $headers, bool $useGemini, array $rows = []): array
+    {
+        $mapping = $this->guessMappingByHeuristics($headers);
+
+        if (!$useGemini) {
+            return $this->sanitizeImportMapping($mapping);
+        }
+
+        $geminiMapping = $this->guessMappingWithGemini($headers, $rows);
+        return $this->sanitizeImportMapping(array_merge($mapping, array_filter($geminiMapping)));
+    }
+
+    private function guessMappingByHeuristics(array $headers): array
+    {
+        $synonyms = [
+            'category_name' => ['category_name', 'nombre_categoria', 'categoria_nombre', 'category', 'categoria'],
+            'category_description' => ['category_description', 'descripcion_categoria', 'desc_categoria'],
+            'product_name' => ['product_name', 'nombre_producto', 'producto_nombre', 'name', 'nombre'],
+            'product_description' => ['product_description', 'descripcion_producto', 'description', 'descripcion'],
+            'variant_size' => ['size', 'talla', 'variant_size'],
+            'variant_price' => ['price', 'precio', 'variant_price', 'costo'],
+            'variant_stock' => ['stock', 'existencia', 'inventario', 'variant_stock'],
+            'variant_unit_type' => ['unit_type', 'unidad', 'tipo_unidad'],
+            'variants' => ['variants', 'variantes'],
+            'product_is_active' => ['product_is_active', 'activo_producto', 'estado_producto'],
+            'category_is_active' => ['category_is_active', 'activo_categoria', 'estado_categoria'],
+        ];
+
+        $mapping = [];
+        foreach ($headers as $header) {
+            $normalizedHeader = Str::lower(Str::ascii(trim((string) $header)));
+            $normalizedHeader = preg_replace('/[^a-z0-9_]+/', '_', $normalizedHeader);
+
+            if ($this->isLikelyIdHeader((string) $normalizedHeader)) {
+                continue;
+            }
+
+            foreach ($synonyms as $target => $words) {
+                foreach ($words as $word) {
+                    if (
+                        $normalizedHeader === $word
+                        || Str::startsWith($normalizedHeader, $word . '_')
+                        || Str::endsWith($normalizedHeader, '_' . $word)
+                    ) {
+                        if (!isset($mapping[$target])) {
+                            $mapping[$target] = $header;
+                        }
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        return $mapping;
+    }
+
+    private function guessMappingWithGemini(array $headers, array $rows = []): array
+    {
+        $apiKey = config('services.gemini.api_key');
+        if (empty($apiKey) || empty($headers)) {
+            return [];
+        }
+
+        $targetFields = [
+            'category_name',
+            'category_description',
+            'product_name',
+            'product_description',
+            'variant_size',
+            'variant_price',
+            'variant_stock',
+            'variant_unit_type',
+            'variants',
+            'product_is_active',
+            'category_is_active',
+        ];
+
+        $sampleRows = array_values(array_filter(array_map(function ($row) {
+            return is_array($row) ? $row : null;
+        }, array_slice($rows, 0, 3))));
+
+        $prompt = "Mapea estos headers a campos del sistema. Responde SOLO JSON objeto {campoSistema: headerOriginal}. Headers: "
+            . json_encode(array_values($headers), JSON_UNESCAPED_UNICODE)
+            . ". Muestra de filas: " . json_encode($sampleRows, JSON_UNESCAPED_UNICODE)
+            . ". Campos permitidos: " . json_encode($targetFields, JSON_UNESCAPED_UNICODE);
+
+        $response = Http::timeout(25)->post(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={$apiKey}",
+            [
+                'contents' => [
+                    ['parts' => [['text' => $prompt]]],
+                ],
+            ]
+        );
+
+        if (!$response->successful()) {
+            return [];
+        }
+
+        $text = data_get($response->json(), 'candidates.0.content.parts.0.text', '');
+        if (!is_string($text) || trim($text) === '') {
+            return [];
+        }
+
+        $clean = trim($text);
+        $clean = preg_replace('/^```json\s*/', '', $clean);
+        $clean = preg_replace('/\s*```$/', '', (string) $clean);
+
+        $decoded = json_decode($clean, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $allowed = array_flip($targetFields);
+        $result = [];
+        foreach ($decoded as $key => $value) {
+            if (isset($allowed[$key]) && is_string($value)) {
+                $result[$key] = $value;
+            }
+        }
+
+        return $result;
+    }
+
+    private function sanitizeImportMapping(array $mapping): array
+    {
+        $result = [];
+        foreach ($mapping as $target => $sourceHeader) {
+            if (!is_string($sourceHeader)) {
+                continue;
+            }
+
+            $normalizedHeader = Str::lower(Str::ascii(trim($sourceHeader)));
+            $normalizedHeader = preg_replace('/[^a-z0-9_]+/', '_', $normalizedHeader);
+
+            if (
+                in_array($target, ['product_name', 'category_name'], true)
+                && $this->isLikelyIdHeader((string) $normalizedHeader)
+            ) {
+                continue;
+            }
+
+            $result[$target] = $sourceHeader;
+        }
+
+        return $result;
+    }
+
+    private function isLikelyIdHeader(string $normalizedHeader): bool
+    {
+        $header = trim($normalizedHeader);
+        if ($header === '' || $header === 'id') {
+            return true;
+        }
+
+        return Str::startsWith($header, 'id_')
+            || Str::endsWith($header, '_id')
+            || in_array($header, ['idproducto', 'idcategoria', 'id_variant', 'id_variante', 'product_id', 'category_id', 'id_producto', 'id_categoria'], true);
+    }
+
+    private function normalizeImportRows(array $rows, array $mapping): array
+    {
+        $output = [];
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $normalized = [];
+            foreach ($mapping as $target => $sourceHeader) {
+                $normalized[$target] = $row[$sourceHeader] ?? null;
+            }
+
+            if (isset($normalized['variants']) && is_string($normalized['variants'])) {
+                $trim = trim($normalized['variants']);
+                if (Str::startsWith($trim, '[') || Str::startsWith($trim, '{')) {
+                    $decoded = json_decode($trim, true);
+                    if (is_array($decoded)) {
+                        $normalized['variants'] = array_is_list($decoded) ? $decoded : [$decoded];
+                    }
+                }
+            }
+
+            $output[] = $normalized;
+        }
+
+        return $output;
+    }
     
     public function storeGoogle(Request $request)
     {
@@ -355,6 +1031,21 @@ class ProductController extends Controller
 
         return Response::make($csvData, 200, [
             'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename={$fileName}",
+        ]);
+    }
+
+    public function downloadImportTemplate()
+    {
+        $csvData = "category_name,category_description,product_name,product_description,variant_size,variant_price,variant_stock,variant_unit_type,category_is_active,product_is_active\n";
+        $csvData .= "Calzado,Calzado deportivo,Tenis Runner,Tenis para correr con amortiguacion,40,59.99,15,par,1,1\n";
+        $csvData .= "Calzado,Calzado deportivo,Tenis Runner,Tenis para correr con amortiguacion,41,59.99,12,par,1,1\n";
+        $csvData .= "Accesorios,Accesorios fitness,Botella Termica,Botella acero inoxidable 750ml,Unica,14.50,30,unidad,1,1\n";
+
+        $fileName = 'plantilla_importacion_catalogo_shopix.csv';
+
+        return Response::make($csvData, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => "attachment; filename={$fileName}",
         ]);
     }

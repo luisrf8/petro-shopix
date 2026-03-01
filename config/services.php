@@ -30,4 +30,11 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'project' => env('GEMINI_PROJECT'),
+        'project_number' => env('GEMINI_PROJECT_NUMBER'),
+        'model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.0-flash-exp-image-generation'),
+    ],
+
 ];

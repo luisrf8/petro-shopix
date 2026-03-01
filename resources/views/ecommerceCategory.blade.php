@@ -16,15 +16,10 @@
     }
 
     .landing-header {
-      transition: box-shadow 0.3s ease-in-out, background 0.3s ease-in-out;
+      transition: background 0.3s ease-in-out;
       z-index: 1050;
       background: transparent;
       padding: 0.5rem 0;
-    }
-
-    .landing-header.scrolled-shadow {
-      background: transparent;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
     }
 
     .landing-header .navbar-toggler {
@@ -232,15 +227,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-  const header = document.querySelector('.landing-header');
-  window.addEventListener('scroll', () => {
-    if (window.scrollY > 0) {
-      header.classList.add('scrolled-shadow');
-    } else {
-      header.classList.remove('scrolled-shadow');
-    }
-  });
-
   const navLinksCollapse = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
   const navbarCollapse = document.getElementById('landingNavbar');
   const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;

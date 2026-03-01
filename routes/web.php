@@ -34,6 +34,7 @@ Route::get('/publicOrder/{id}', [SaleController::class, 'showPublicOrder']);
 Route::get('/create-tenant-user', [TenantController::class, 'createIndexUser'])->name('createTenantUser');
 Route::get('/get-states/{country}', [LocationController::class, 'getStates']);
 Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
+Route::post('/tenant-ai-image', [TenantController::class, 'generateTenantImage'])->name('tenant.ai-image');
 
 // RUTAS CON AUTENTICACIÓN
 Route::middleware('auth')->group(function () {
@@ -43,6 +44,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/categories', [ProductController::class, 'categoriesIndex'])->name('categories.index');
 
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+    Route::post('/products/import-catalog', [ProductController::class, 'importCatalog'])->name('products.importCatalogWeb');
     Route::get('/products/{category}', [ProductController::class, 'showByCategory'])->name('products.byCategory');
     Route::get('/products/product/{id}', [ProductController::class, 'showByProduct'])->name('productItem');
     Route::get('/createProduct', [ProductController::class, 'indexCreateProduct'])->name('createProductItem');
@@ -90,5 +92,5 @@ require __DIR__.'/auth.php';
 // 🔹 RUTAS PÚBLICAS DEL TENANT (al final)
 Route::get('/{tenant:slug}', [TenantController::class, 'publicTenantindex'])->name('tenant.public');
 Route::get('/{tenant:slug}/categorias', [TenantController::class, 'publicTenantCategory'])->name('tenant.public.categories');
-Route::get('/{tenant:slug}/{product:id}', [TenantController::class, 'publicTenantProduct'])->name('tenant.public.product');
+Route::get('/{tenant:slug}/{product:id}', [TenantController::class, 'publicTenantProduct'])->whereNumber('product')->name('tenant.public.product');
 Route::post('/tenants-public', [TenantController::class, 'storePublic'])->name('tenants.storePublic'); // ← fuera del grupo auth

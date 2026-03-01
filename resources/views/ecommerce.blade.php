@@ -14,15 +14,10 @@
     }
 
     .landing-header {
-      transition: box-shadow 0.3s ease-in-out, background 0.3s ease-in-out;
+      transition: background 0.3s ease-in-out;
       z-index: 1050;
       background: transparent;
       padding: 0.5rem 0;
-    }
-
-    .landing-header.scrolled-shadow {
-      background: transparent;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
     }
 
     .landing-header .navbar-toggler {
@@ -427,22 +422,6 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 </body>
 <script>
-    const headerContainer = document.querySelector('.landing-header');
-    
-    // Función para añadir/eliminar la clase de sombra
-    function toggleShadow() {
-        if (window.scrollY > 0) {
-            // Cuando el scroll es mayor a 0, añadimos la clase de sombra
-            headerContainer.classList.add('scrolled-shadow');
-        } else {
-            // Cuando el scroll está en la parte superior (0), eliminamos la clase
-            headerContainer.classList.remove('scrolled-shadow');
-        }
-    }
-
-    // Escucha el evento de scroll en la ventana
-    window.addEventListener('scroll', toggleShadow);
-
     const navLinks = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
     const navbarCollapse = document.getElementById('landingNavbar');
     const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;
@@ -455,7 +434,5 @@
       });
     });
     
-    // Ejecuta la función al cargar la página en caso de que ya se haya hecho scroll
-    toggleShadow();
 </script>
 </html>

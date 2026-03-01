@@ -17,10 +17,254 @@ use App\Models\State;
 use App\Models\City;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 
 
 class TenantController extends Controller
 {
+    public function generateTenantImage(Request $request)
+    {
+        $validated = $request->validate([
+            'type' => 'required|in:logo,background,category,product',
+            'prompt' => 'nullable|string|max:2000',
+            'messages' => 'nullable|array',
+            'messages.*.role' => 'required_with:messages|in:user,assistant',
+            'messages.*.content' => 'required_with:messages|string|max:2000',
+            'reference_image' => 'nullable|image|mimes:png,jpg,jpeg,webp|max:4096',
+            'reference_image_data' => 'nullable|string',
+            'reference_image_mime' => 'nullable|string|max:100',
+            'shop_colors' => 'nullable|array',
+            'shop_colors.color_primary' => 'nullable|string|max:20',
+            'shop_colors.color_secondary' => 'nullable|string|max:20',
+            'shop_colors.color_accent' => 'nullable|string|max:20',
+            'background_ratio' => 'nullable|string|max:20',
+            'image_operation' => 'nullable|in:generate,remove_background',
+        ]);
+
+        $apiKey = config('services.gemini.api_key');
+        $preferredModel = config('services.gemini.model', 'gemini-2.0-flash-exp-image-generation');
+
+        if (empty($apiKey)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No está configurada la clave de Gemini API.',
+            ], 500);
+        }
+
+        $operation = $validated['image_operation'] ?? 'generate';
+
+        if ($validated['type'] === 'logo') {
+            $typePrompt = 'Genera un logo profesional, limpio, sin texto, con fondo transparente.';
+        } elseif ($validated['type'] === 'background') {
+            $typePrompt = 'Genera una imagen de fondo profesional para ecommerce en formato horizontal 1920x1080.';
+        } elseif ($validated['type'] === 'product') {
+            if ($operation === 'remove_background') {
+                $typePrompt = 'Elimina completamente el fondo de la imagen de producto adjunta. Mantén solo el producto principal recortado con bordes limpios, sin sombras de fondo y con fondo transparente.';
+            } else {
+                $typePrompt = 'Genera una imagen de producto para ecommerce, centrada, con iluminación de estudio, alta calidad y fondo limpio o transparente.';
+            }
+        } else {
+            $typePrompt = 'Genera una imagen para categoría de productos ecommerce, clara, atractiva y centrada en el objeto principal.';
+        }
+
+        $messages = collect($validated['messages'] ?? [])
+            ->filter(fn ($item) => !empty($item['content']))
+            ->values();
+
+        $prompt = trim((string) ($validated['prompt'] ?? ''));
+
+        if ($messages->isEmpty() && $prompt === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debes enviar un prompt para generar la imagen.',
+            ], 422);
+        }
+
+        $conversationText = $messages->map(function ($item) {
+            return ($item['role'] === 'assistant' ? 'Asistente' : 'Usuario') . ': ' . $item['content'];
+        })->implode("\n");
+
+        $colorContext = '';
+        if (!empty($validated['shop_colors']) && is_array($validated['shop_colors'])) {
+            $primary = $validated['shop_colors']['color_primary'] ?? null;
+            $secondary = $validated['shop_colors']['color_secondary'] ?? null;
+            $accent = $validated['shop_colors']['color_accent'] ?? null;
+            $parts = array_filter([
+                $primary ? "primario {$primary}" : null,
+                $secondary ? "secundario {$secondary}" : null,
+                $accent ? "acento {$accent}" : null,
+            ]);
+
+            if (!empty($parts)) {
+                $colorContext = "Usa esta paleta de colores de la tienda: " . implode(', ', $parts) . ".\n";
+            }
+        }
+
+        $ratioContext = '';
+        if (!empty($validated['background_ratio'])) {
+            $ratioContext = "Mantén una composición compatible con proporción aproximada {$validated['background_ratio']} (ancho/alto).\n";
+        }
+
+        $fullPrompt = trim($typePrompt . "\n\n" . $colorContext . $ratioContext . ($conversationText !== '' ? "Contexto del chat:\n{$conversationText}\n\n" : '') . ($prompt !== '' ? "Solicitud actual: {$prompt}\n\n" : '') . 'Devuelve únicamente la mejor versión de la imagen final.');
+
+        $referenceImagePartCamel = null;
+        $referenceImagePartSnake = null;
+        if ($request->hasFile('reference_image')) {
+            $referenceFile = $request->file('reference_image');
+            $referenceBase64 = base64_encode(file_get_contents($referenceFile->getRealPath()));
+            $referenceMime = $referenceFile->getMimeType() ?: 'image/png';
+
+            $referenceImagePartCamel = [
+                'inlineData' => [
+                    'mimeType' => $referenceMime,
+                    'data' => $referenceBase64,
+                ],
+            ];
+
+            $referenceImagePartSnake = [
+                'inline_data' => [
+                    'mime_type' => $referenceMime,
+                    'data' => $referenceBase64,
+                ],
+            ];
+        } elseif (!empty($validated['reference_image_data'])) {
+            $referenceBase64 = preg_replace('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', '', (string) $validated['reference_image_data']);
+            $referenceMime = $validated['reference_image_mime'] ?? 'image/png';
+
+            $referenceImagePartCamel = [
+                'inlineData' => [
+                    'mimeType' => $referenceMime,
+                    'data' => $referenceBase64,
+                ],
+            ];
+
+            $referenceImagePartSnake = [
+                'inline_data' => [
+                    'mime_type' => $referenceMime,
+                    'data' => $referenceBase64,
+                ],
+            ];
+        }
+
+        $candidateModels = array_values(array_unique(array_filter([
+            $preferredModel,
+            'gemini-2.0-flash-exp-image-generation',
+            'gemini-2.0-flash-preview-image-generation',
+            'gemini-2.5-flash-image-preview',
+            'gemini-2.0-flash',
+        ])));
+
+        $apiVersions = ['v1beta', 'v1'];
+        $lastError = null;
+
+        $basePartsCamel = [['text' => $fullPrompt]];
+        $basePartsSnake = [['text' => $fullPrompt]];
+        if (!is_null($referenceImagePartCamel)) {
+            $basePartsCamel[] = $referenceImagePartCamel;
+        }
+        if (!is_null($referenceImagePartSnake)) {
+            $basePartsSnake[] = $referenceImagePartSnake;
+        }
+
+        $basePayloadCamel = [
+            'contents' => [
+                [
+                    'parts' => $basePartsCamel,
+                ],
+            ],
+        ];
+
+        $basePayloadSnake = [
+            'contents' => [
+                [
+                    'parts' => $basePartsSnake,
+                ],
+            ],
+        ];
+
+        $payloadVariants = [
+            array_merge($basePayloadCamel, [
+                'generationConfig' => [
+                    'responseModalities' => ['TEXT', 'IMAGE'],
+                ],
+            ]),
+            array_merge($basePayloadSnake, [
+                'generation_config' => [
+                    'response_modalities' => ['TEXT', 'IMAGE'],
+                ],
+            ]),
+            $basePayloadCamel,
+            $basePayloadSnake,
+        ];
+
+        foreach ($candidateModels as $model) {
+            foreach ($apiVersions as $version) {
+                foreach ($payloadVariants as $payload) {
+                    $response = Http::timeout(90)->post(
+                        "https://generativelanguage.googleapis.com/{$version}/models/{$model}:generateContent?key={$apiKey}",
+                        $payload
+                    );
+
+                    if (!$response->successful()) {
+                        $errorMessage = $response->json('error.message') ?? $response->body();
+                        $lastError = $errorMessage;
+
+                        $normalizedError = Str::lower((string) $errorMessage);
+                        if (Str::contains($normalizedError, ['quota exceeded', 'rate limit', 'billing', 'limit: 0'])) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Tu clave de Gemini no tiene cuota disponible en este proyecto.',
+                                'error' => $errorMessage,
+                                'tried_models' => $candidateModels,
+                            ], 429);
+                        }
+
+                        if (Str::contains($normalizedError, ['api key not valid', 'permission denied', 'unauthenticated', 'forbidden'])) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'La clave de Gemini no es válida o no tiene permisos para generar imágenes.',
+                                'error' => $errorMessage,
+                                'tried_models' => $candidateModels,
+                            ], 403);
+                        }
+
+                        continue;
+                    }
+
+                    $parts = data_get($response->json(), 'candidates.0.content.parts', []);
+                    $inlinePart = collect($parts)->first(function ($part) {
+                        return isset($part['inlineData']['data']) || isset($part['inline_data']['data']);
+                    });
+
+                    $base64 = data_get($inlinePart, 'inlineData.data') ?? data_get($inlinePart, 'inline_data.data');
+                    $mimeType = data_get($inlinePart, 'inlineData.mimeType') ?? data_get($inlinePart, 'inline_data.mime_type') ?? 'image/png';
+
+                    if (!empty($base64)) {
+                        return response()->json([
+                            'success' => true,
+                            'data' => $base64,
+                            'mime_type' => $mimeType,
+                        ]);
+                    }
+
+                    $textReply = data_get($response->json(), 'candidates.0.content.parts.0.text');
+                    if (!empty($textReply)) {
+                        $lastError = 'El modelo respondió solo texto y no imagen.';
+                    } else {
+                        $lastError = 'El modelo respondió, pero no devolvió imagen inline.';
+                    }
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'No se pudo generar la imagen con Gemini.',
+            'error' => $lastError ?: 'No se encontró un modelo compatible para generación de imagen.',
+            'tried_models' => $candidateModels,
+        ], 422);
+    }
+
     public function index()
     {
         // Trae todos los tenants con todos sus planes asociados
@@ -168,6 +412,7 @@ class TenantController extends Controller
             'slug'                  => 'required|string|max:255|unique:tenants,slug',
             'email'                 => 'required|email|unique:tenants,email',
             'logo'                  => 'nullable|image|mimes:png,svg|max:2048',
+            'background_image'      => 'nullable|image|mimes:png,jpg,jpeg|max:4096',
             'color_primary'         => 'required|string|max:7',
             'color_secondary'       => 'required|string|max:7',
             'color_accent'          => 'required|string|max:7',
@@ -197,6 +442,11 @@ class TenantController extends Controller
                 $logoPath = $request->file('logo')->store('tenants/logos', 'public');
             }
 
+            $backgroundPath = null;
+            if ($request->hasFile('background_image')) {
+                $backgroundPath = $request->file('background_image')->store('tenants/backgrounds', 'public');
+            }
+
             $tenant = Tenant::create([
                 'name'            => $validated['name'],
                 'slug'            => Str::slug($validated['slug']),
@@ -215,6 +465,7 @@ class TenantController extends Controller
                 'address'         => $validated['address'] ?? null,
                 'latitude'        => $validated['latitude'] ?? null,
                 'longitude'       => $validated['longitude'] ?? null,
+                'background_image'=> $backgroundPath,
             ]);
 
             $plan = Plan::findOrFail($validated['plan_id']);

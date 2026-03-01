@@ -36,9 +36,46 @@
         border-color: #dc3545;
         box-shadow: 0 0 0 0.2rem rgba(220,53,69,.25);
     }
+    .ai-spark {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .ai-loading-dots {
+      display: inline-flex;
+      margin-left: 0.35rem;
+    }
+    .ai-loading-dots span {
+      width: 6px;
+      height: 6px;
+      margin: 0 2px;
+      background: #0d6efd;
+      border-radius: 50%;
+      animation: aiPulse 0.9s infinite ease-in-out;
+    }
+    .ai-loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .ai-loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+    .ai-chat-box {
+      border: 1px solid #dee2e6;
+      border-radius: .5rem;
+      padding: .75rem;
+      background: #f8f9fa;
+      height: 220px;
+      overflow-y: auto;
+    }
+    .ai-attach-btn {
+      width: 42px;
+      height: 42px;
+    font-size: 20px;
+      border-radius: 50%;
+    }
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes aiPulse {
+      0%, 100% { opacity: 0.3; transform: translateY(0); }
+      50% { opacity: 1; transform: translateY(-3px); }
     }
   </style>
 </head>
@@ -109,7 +146,11 @@
                     <input type="file" name="logo" id="logo" class="form-control form-control-lg" accept=".png,.svg">
                   </div>
                 </div>
-
+                <div class="mb-3">
+                  <button type="button" class="btn btn-outline-primary w-100" id="openLogoAiModalBtn">
+                    <span class="ai-spark">🤖 IA Gemini</span> para generar logo
+                  </button>
+                </div>
                 <div class="mb-4">
                     <label for="plan_id" class="form-label fw-bold">Selecciona tu plan</label>
                     <select name="plan_id" id="plan_id" class="form-select form-select-lg" required>
@@ -139,7 +180,7 @@
 
                 <div class="mb-3">
                   <label for="description" class="form-label fw-bold">Descripción</label>
-                  <textarea name="description" id="description" class="form-control form-control-lg" rows="3" placeholder="Cuéntanos sobre tu empresa..."></textarea>
+                  <textarea name="description" id="description" class="form-control form-control-lg border border-radius-lg p-2" rows="3" placeholder="Cuéntanos sobre tu empresa..."></textarea>
                 </div>
 
                 <!-- 🏠 DIRECCIÓN EXACTA -->
@@ -273,13 +314,262 @@
     </div>
   </div>
 
+  <div class="modal fade" id="aiGenerateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="aiModalTitle">Generar imagen con IA</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2" id="aiModalQuestion">Habla con Gemini para generar y ajustar tu imagen.</p>
+          <div id="aiPreviewWrapper" class="mb-3 d-none">
+            <label class="form-label fw-bold mb-2">Resultado actual</label>
+            <img id="aiGeneratedPreview" src="#" class="img-fluid rounded border" alt="Imagen generada por IA">
+          </div>
+          <div id="aiChatMessages" class="ai-chat-box mb-3"></div>
+          <div id="aiGeneratingStatus" class="mt-3 d-none">
+            <div class="d-flex align-items-center">
+              <div class="spinner-border spinner-border-sm me-2 text-primary" role="status"></div>
+              <span>Generando imagen</span>
+              <span class="ai-loading-dots"><span></span><span></span><span></span></span>
+            </div>
+            <small class="text-muted d-block mt-2">Puedes seguir pidiendo ajustes hasta que te guste el resultado.</small>
+          </div>
+          <div class="mt-3">
+            <input type="file" id="aiReferenceImage" class="d-none" accept=".png,.jpg,.jpeg,.webp">
+            <div class="d-flex gap-2 align-items-end">
+              <button type="button" class="btn ai-attach-btn" id="aiAttachBtn" title="Adjuntar imagen">📎</button>
+              <textarea id="aiPromptInput" class="form-control" rows="2" placeholder="Escribe tu mensaje para la IA..."></textarea>
+              <button type="button" class="btn btn-primary" id="aiGenerateBtn" title="Enviar mensaje">➤</button>
+            </div>
+            <small class="text-muted d-block mt-1" id="aiAttachedName"></small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="aiCancelBtn">Cancelar</button>
+          <button type="button" class="btn btn-outline-primary" id="aiDownloadBtn" disabled>Descargar</button>
+          <button type="button" class="btn btn-outline-success" id="aiUseImageBtn" disabled>Usar esta imagen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     let map = null;
     let marker = null;
     let googleScriptLoaded = false;
     let googleScriptLoading = false;
+    const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
     const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
+    let aiModalInstance = null;
+    let currentAiTarget = null;
+    let aiChatHistory = [];
+    let aiLatestResult = null;
+
+    async function setGeneratedImageInInput({ inputId, previewId, base64Data, mimeType, fileName }) {
+      const input = document.getElementById(inputId);
+      const preview = document.getElementById(previewId);
+      if (!input || !preview || !base64Data) {
+        return;
+      }
+
+      const byteChars = atob(base64Data);
+      const byteNumbers = new Array(byteChars.length);
+      for (let index = 0; index < byteChars.length; index += 1) {
+        byteNumbers[index] = byteChars.charCodeAt(index);
+      }
+
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mimeType || 'image/png' });
+      const file = new File([blob], fileName, { type: mimeType || 'image/png' });
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      input.files = dataTransfer.files;
+
+      preview.src = URL.createObjectURL(file);
+      preview.classList.remove('d-none');
+    }
+
+    function appendAiMessage(role, content) {
+      const chatBox = document.getElementById('aiChatMessages');
+      const item = document.createElement('div');
+      item.className = `mb-2 ${role === 'assistant' ? '' : 'text-end'}`;
+      const bubble = document.createElement('div');
+      bubble.className = role === 'assistant' ? 'd-inline-block p-2 rounded bg-white border' : 'd-inline-block p-2 rounded text-white bg-primary';
+      bubble.style.maxWidth = '90%';
+      bubble.textContent = content;
+      item.appendChild(bubble);
+      chatBox.appendChild(item);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function getReferenceImageData() {
+      const input = document.getElementById('aiReferenceImage');
+      const file = input?.files?.[0];
+      if (!file) {
+        return Promise.resolve(null);
+      }
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = String(reader.result || '');
+          const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+          resolve({ data: base64, mime: file.type || 'image/png' });
+        };
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen de referencia.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function setAiLoadingState(isLoading) {
+      const status = document.getElementById('aiGeneratingStatus');
+      const generateBtn = document.getElementById('aiGenerateBtn');
+      const cancelBtn = document.getElementById('aiCancelBtn');
+      const attachBtn = document.getElementById('aiAttachBtn');
+      status.classList.toggle('d-none', !isLoading);
+      generateBtn.disabled = isLoading;
+      cancelBtn.disabled = isLoading;
+      if (attachBtn) {
+        attachBtn.disabled = isLoading;
+      }
+    }
+
+    function openAiModal(target) {
+      currentAiTarget = target;
+      aiLatestResult = null;
+      aiChatHistory = [];
+      const title = document.getElementById('aiModalTitle');
+      const question = document.getElementById('aiModalQuestion');
+      const prompt = document.getElementById('aiPromptInput');
+      const chatBox = document.getElementById('aiChatMessages');
+      const downloadBtn = document.getElementById('aiDownloadBtn');
+      const useBtn = document.getElementById('aiUseImageBtn');
+      const previewWrapper = document.getElementById('aiPreviewWrapper');
+      const referenceInput = document.getElementById('aiReferenceImage');
+      const attachedName = document.getElementById('aiAttachedName');
+
+      title.textContent = 'Generar logo con IA';
+      question.textContent = 'Chatea con Gemini hasta que el logo quede como quieres.';
+      prompt.placeholder = 'Ej: logo minimalista para tienda deportiva en tonos azul y blanco, sin texto';
+
+      prompt.value = '';
+      referenceInput.value = '';
+      attachedName.textContent = '';
+      chatBox.innerHTML = '';
+      appendAiMessage('assistant', 'Estoy listo para ayudarte. Describe la imagen que quieres generar.');
+      previewWrapper.classList.add('d-none');
+      downloadBtn.disabled = true;
+      useBtn.disabled = true;
+      setAiLoadingState(false);
+      aiModalInstance.show();
+    }
+
+    function renderGeneratedPreview() {
+      const previewWrapper = document.getElementById('aiPreviewWrapper');
+      const preview = document.getElementById('aiGeneratedPreview');
+      const downloadBtn = document.getElementById('aiDownloadBtn');
+      const useBtn = document.getElementById('aiUseImageBtn');
+
+      if (!aiLatestResult) {
+        previewWrapper.classList.add('d-none');
+        downloadBtn.disabled = true;
+        useBtn.disabled = true;
+        return;
+      }
+
+      preview.src = `data:${aiLatestResult.mimeType};base64,${aiLatestResult.base64Data}`;
+      previewWrapper.classList.remove('d-none');
+      downloadBtn.disabled = false;
+      useBtn.disabled = false;
+    }
+
+    function downloadLatestImage() {
+      if (!aiLatestResult) {
+        return;
+      }
+
+      const byteChars = atob(aiLatestResult.base64Data);
+      const byteNumbers = new Array(byteChars.length);
+      for (let index = 0; index < byteChars.length; index += 1) {
+        byteNumbers[index] = byteChars.charCodeAt(index);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: aiLatestResult.mimeType || 'image/png' });
+      const fileUrl = URL.createObjectURL(blob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = fileUrl;
+      downloadLink.download = aiLatestResult.fileName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      setTimeout(() => URL.revokeObjectURL(fileUrl), 2500);
+    }
+
+    async function generateImageWithGemini({ type, prompt, inputId, previewId, fileName }) {
+      if (!prompt) {
+        alert('Debes escribir un prompt para generar la imagen.');
+        return;
+      }
+
+      appendAiMessage('user', prompt);
+      aiChatHistory.push({ role: 'user', content: prompt });
+      setAiLoadingState(true);
+
+      try {
+        const referenceData = await getReferenceImageData();
+        const useStoreColors = true;
+        const colorPrimary = document.getElementById('color_primary')?.value || null;
+        const colorSecondary = document.getElementById('color_secondary')?.value || null;
+        const colorAccent = document.getElementById('color_accent')?.value || null;
+
+        const response = await fetch(tenantAiImageEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+          },
+          body: JSON.stringify({
+            type,
+            prompt,
+            messages: aiChatHistory,
+            reference_image_data: referenceData?.data || null,
+            reference_image_mime: referenceData?.mime || null,
+            shop_colors: useStoreColors ? {
+              color_primary: colorPrimary,
+              color_secondary: colorSecondary,
+              color_accent: colorAccent,
+            } : null,
+          }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || payload.message || 'No se pudo generar la imagen.');
+        }
+
+        aiLatestResult = {
+          base64Data: payload.data,
+          mimeType: payload.mime_type || 'image/png',
+          fileName,
+          inputId,
+          previewId,
+        };
+
+        renderGeneratedPreview();
+        appendAiMessage('assistant', 'Listo. Te dejé una nueva versión de la imagen. Puedes pedir cambios o usar esta versión.');
+        aiChatHistory.push({ role: 'assistant', content: 'Imagen generada y mostrada al usuario.' });
+        document.getElementById('aiPromptInput').value = '';
+
+      } catch (error) {
+        appendAiMessage('assistant', 'No pude generar la imagen. Ajusta el prompt e intenta nuevamente.');
+        alert(error.message || 'Error al generar la imagen con Gemini.');
+      } finally {
+        setAiLoadingState(false);
+      }
+    }
 
     function initializeMap() {
       if (!window.google || !window.google.maps || map) {
@@ -302,6 +592,12 @@
       document.getElementById('longitude').value = defaultPos.lng;
 
       google.maps.event.addListener(marker, 'dragend', function(event) {
+        document.getElementById('latitude').value = event.latLng.lat();
+        document.getElementById('longitude').value = event.latLng.lng();
+      });
+
+      map.addListener('click', function(event) {
+        marker.setPosition(event.latLng);
         document.getElementById('latitude').value = event.latLng.lat();
         document.getElementById('longitude').value = event.latLng.lng();
       });
@@ -363,11 +659,20 @@
       const slugPreview = document.getElementById('slug-preview');
       const logoInput = document.getElementById('logo');
       const logoPreview = document.getElementById('logo-preview');
+      const openLogoAiModalBtn = document.getElementById('openLogoAiModalBtn');
+      const aiGenerateBtn = document.getElementById('aiGenerateBtn');
+      const aiDownloadBtn = document.getElementById('aiDownloadBtn');
+      const aiUseImageBtn = document.getElementById('aiUseImageBtn');
+      const aiAttachBtn = document.getElementById('aiAttachBtn');
+      const aiReferenceImage = document.getElementById('aiReferenceImage');
+      const aiPromptInput = document.getElementById('aiPromptInput');
       const countrySelect = document.getElementById('country');
       const stateSelect = document.getElementById('state');
       const citySelect = document.getElementById('city');
       const stateLoading = document.getElementById('state-loading');
       const cityLoading = document.getElementById('city-loading');
+
+      aiModalInstance = new bootstrap.Modal(document.getElementById('aiGenerateModal'));
 
       slugInput.addEventListener('input', () => {
         slugPreview.textContent = slugInput.value || 'mi-empresa';
@@ -387,6 +692,78 @@
           logoPreview.classList.add('d-none');
         }
       });
+
+      if (openLogoAiModalBtn) {
+        openLogoAiModalBtn.addEventListener('click', () => {
+          openAiModal({
+            type: 'logo',
+            inputId: 'logo',
+            previewId: 'logo-preview',
+            fileName: 'logo-gemini.png',
+          });
+        });
+      }
+
+      if (aiAttachBtn) {
+        aiAttachBtn.addEventListener('click', () => aiReferenceImage?.click());
+      }
+
+      if (aiReferenceImage) {
+        aiReferenceImage.addEventListener('change', () => {
+          const file = aiReferenceImage.files?.[0];
+          const attachedName = document.getElementById('aiAttachedName');
+          attachedName.textContent = file ? `Adjunto: ${file.name}` : '';
+        });
+      }
+
+      if (aiGenerateBtn) {
+        aiGenerateBtn.addEventListener('click', async () => {
+          if (!currentAiTarget) {
+            return;
+          }
+
+          await generateImageWithGemini({
+            type: currentAiTarget.type,
+            prompt: aiPromptInput.value.trim(),
+            inputId: currentAiTarget.inputId,
+            previewId: currentAiTarget.previewId,
+            fileName: currentAiTarget.fileName,
+          });
+        });
+      }
+
+      if (aiDownloadBtn) {
+        aiDownloadBtn.addEventListener('click', () => {
+          downloadLatestImage();
+        });
+      }
+
+      if (aiUseImageBtn) {
+        aiUseImageBtn.addEventListener('click', async () => {
+          if (!aiLatestResult) {
+            return;
+          }
+
+          await setGeneratedImageInInput({
+            inputId: aiLatestResult.inputId,
+            previewId: aiLatestResult.previewId,
+            base64Data: aiLatestResult.base64Data,
+            mimeType: aiLatestResult.mimeType,
+            fileName: aiLatestResult.fileName,
+          });
+
+          appendAiMessage('assistant', 'Imagen aplicada al formulario. Puedes seguir iterando o cerrar el modal cuando quieras.');
+        });
+      }
+
+      if (aiPromptInput) {
+        aiPromptInput.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            aiGenerateBtn?.click();
+          }
+        });
+      }
 
       nextBtn.addEventListener('click', () => {
         const inputsStep1 = step1.querySelectorAll('input[required], select[required]');
