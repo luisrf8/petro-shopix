@@ -294,27 +294,29 @@
   <!-- PRODUCTOS -->
   <section id="productos" class="py-5 bg-light">
     <div class="container">
-      <h2 class="section-title">Productos Destacados</h2>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="section-title text-start mb-0">Productos Destacados</h2>
+        <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-primary btn-sm">Ver más</a>
+      </div>
       <div class="row" id="products-container">
         @foreach($productItems as $product)
           <div class="col-12 col-sm-6 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}">
-            <div class="card card-product h-100">
-              @if(isset($product->images[0]))
-                <img src="{{ asset('storage/' . $product->images[0]->path) }}" class="card-img-top" style="height: 300px; object-fit: cover;">
-              @else
-                <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
-                  <i class="bi bi-image text-muted fs-1"></i>
+            <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="text-decoration-none d-block h-100">
+              <div class="card card-product h-100">
+                @if(isset($product->images[0]))
+                  <img src="{{ asset('storage/' . $product->images[0]->path) }}" class="card-img-top" style="height: 300px; object-fit: cover;">
+                @else
+                  <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
+                    <i class="bi bi-image text-muted fs-1"></i>
+                  </div>
+                @endif
+                <div class="card-body text-center">
+                  <h5 class="fw-bold text-dark">{{ $product->name }}</h5>
                 </div>
-              @endif
-              <div class="card-body text-center">
-                <h5 class="fw-bold text-dark">{{ $product->name }}</h5>
               </div>
-            </div>
+            </a>
           </div>
         @endforeach
-      </div>
-      <div class="text-center">
-        <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-primary">Ver todos los productos</a>
       </div>
     </div>
   </section>
@@ -329,10 +331,31 @@
           <p class="">Ubicada en {{ $tenant->address ?? '' }}.</p>
           @php
               $whatsapp = preg_replace('/\D/', '', $tenant->phone_code . $tenant->phone_number);
+              $mapsUrl = null;
+              if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
+                  $mapsUrl = 'https://www.google.com/maps?q=' . $tenant->latitude . ',' . $tenant->longitude;
+              } else {
+                  $addressParts = array_filter([
+                      $tenant->address ?? '',
+                      $tenant->city ?? '',
+                      $tenant->state ?? '',
+                      $tenant->country ?? '',
+                  ]);
+                  if (!empty($addressParts)) {
+                      $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(implode(', ', $addressParts));
+                  }
+              }
           @endphp
-          <a href="https://api.whatsapp.com/send?phone={{ $whatsapp }}" target="_blank" class="btn btn-primary px-4 py-2">
-            Escríbenos por WhatsApp
-          </a>
+          <div class="d-flex flex-wrap gap-2">
+            <a href="https://api.whatsapp.com/send?phone={{ $whatsapp }}" target="_blank" class="btn btn-primary px-4 py-2">
+              Escríbenos por WhatsApp
+            </a>
+            @if(!empty($mapsUrl))
+              <a href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-dark px-4 py-2">
+                Ver ubicación en Google Maps
+              </a>
+            @endif
+          </div>
           <div class="mt-4 d-flex gap-4">
 
               @if(!empty($tenant->instagram))
