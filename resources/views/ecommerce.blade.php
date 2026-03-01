@@ -390,9 +390,14 @@
         <div class="col-12 col-md-6 mb-4 mb-md-0">
           <h2 class="section-title mb-3">Contáctanos</h2>
           <p class="mb-3">Obtén una demo personalizada o consulta nuestros planes.</p>
-          <a href="https://api.whatsapp.com/send?phone=584148859372" target="_blank" class="btn btn-primary px-4 py-2">
-            Escríbenos por WhatsApp
-          </a>
+          <div class="d-flex flex-wrap gap-2">
+            <a href="https://api.whatsapp.com/send?phone=584148859372" target="_blank" class="btn btn-primary px-4 py-2">
+              Escríbenos por WhatsApp
+            </a>
+            <a href="https://www.google.com/maps?q=9.7527562,-63.1679763" target="_blank" rel="noopener noreferrer" class="btn btn-outline-dark px-4 py-2">
+              Ver ubicación en Google Maps
+            </a>
+          </div>
           <div class="mt-4 d-flex gap-4">
             <a href="https://www.instagram.com/infinitycenter.ca/" target="_blank" class="text-dark fs-4"><i class="bi bi-instagram"></i></a>
             <a href="https://facebook.com" target="_blank" class="text-dark fs-4"><i class="bi bi-facebook"></i></a>
