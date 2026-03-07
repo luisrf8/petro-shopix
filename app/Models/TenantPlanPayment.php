@@ -9,7 +9,12 @@ class TenantPlanPayment extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['tenant_id', 'plan_id', 'amount', 'status', 'paid_at'];
+    protected $fillable = ['tenant_id', 'plan_id', 'amount', 'status', 'paid_at', 'expires_at'];
+
+    protected $casts = [
+        'paid_at' => 'datetime',
+        'expires_at' => 'datetime',
+    ];
 
     public function tenant()
     {

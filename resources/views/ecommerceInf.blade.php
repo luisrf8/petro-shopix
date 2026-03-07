@@ -244,6 +244,7 @@
             <li class="nav-item">
               <a class="btn btn-light text-dark landing-nav-link" href="#contacto">Contacto</a>
             </li>
+            @include('partials.tenant-cart-nav')
           </ul>
         </div>
       </nav>
@@ -408,6 +409,8 @@
   <footer class="py-4 text-center bg-dark text-white">
     <p>© 2025 {{ $tenant->name }} - SHOPIX. Todos los derechos reservados.</p>
   </footer>
+
+  @include('partials.tenant-cart-offcanvas')
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 

@@ -188,6 +188,7 @@
 
         <div class="collapse navbar-collapse" id="landingNavbar">
           <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+            @include('partials.tenant-cart-nav')
             <li class="nav-item">
               <a class="btn btn-light text-dark landing-nav-link" href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}">Volver</a>
             </li>
@@ -262,16 +263,34 @@
                 @endforelse
             </div>
 
-            <div class="mt-4 pt-2 border-top d-flex justify-content-center">
-                <button 
-                    id="whatsapp-button"
-                    class="btn btn-success btn-lg w-60"
-                    disabled
+            @if($cartEnabled)
+              <div class="mt-4 pt-2 border-top d-flex flex-column flex-sm-row justify-content-center gap-2">
+                <button
+                  id="add-to-cart-button"
+                  class="btn btn-primary btn-lg"
+                  disabled
                 >
-                    <i class="bi bi-whatsapp me-2"></i> Comunicarme por WhatsApp por este producto
+                  <i class="bi bi-cart-plus me-2"></i> Agregar al carrito
                 </button>
-                
-                </div>
+                <button
+                  id="open-cart-button"
+                  class="btn btn-outline-dark btn-lg"
+                  type="button"
+                >
+                  <i class="bi bi-cart3 me-2"></i> Ver carrito
+                </button>
+              </div>
+            @else
+              <div class="mt-4 pt-2 border-top d-flex justify-content-center">
+                <button
+                  id="whatsapp-button"
+                  class="btn btn-success btn-lg"
+                  disabled
+                >
+                  <i class="bi bi-whatsapp me-2"></i> Comunicarme por WhatsApp por este producto
+                </button>
+              </div>
+            @endif
                       </div>
                     </div>
                   </div>
@@ -281,6 +300,8 @@
   <footer class="py-4 text-center bg-dark text-white">
     <p>© 2025 {{ $tenant->name }} - SHOPIX. Todos los derechos reservados.</p>
   </footer>
+
+  @include('partials.tenant-cart-offcanvas')
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -314,13 +335,14 @@
             });
         }
         const variantButtons = document.querySelectorAll('.variant-button:not([disabled])');
+        const cartEnabled = @json((bool) ($cartEnabled ?? false));
+        const addToCartButton = document.getElementById('add-to-cart-button');
+        const openCartButton = document.getElementById('open-cart-button');
         const whatsappButton = document.getElementById('whatsapp-button');
         let selectedVariant = null;
-        
-        // ** Inyectar las variables del tenant desde Blade a JavaScript **
-        // Usamos JSON.stringify para manejar correctamente los valores, especialmente si son strings.
-        const tenantPhoneCode = '{{ $tenant->phone_code }}';
-        const tenantPhoneNumber = '{{ $tenant->phone_number }}';
+
+        const tenantPhoneCode = @json($tenant->phone_code ?? '');
+        const tenantPhoneNumber = @json($tenant->phone_number ?? '');
 
         // --- Lógica de selección de variantes ---
         variantButtons.forEach(button => {
@@ -335,40 +357,70 @@
                 selectedVariant = {
                     size: button.dataset.size,
                     price: button.dataset.price,
-                    productName: button.dataset.productName
+                  productName: button.dataset.productName,
+                  productId: @json($product->id)
                 };
-                
-                // 4. Habilitar el botón de WhatsApp
-                whatsappButton.disabled = false;
+
+                if (cartEnabled && addToCartButton) {
+                  addToCartButton.disabled = false;
+                }
+
+                if (!cartEnabled && whatsappButton) {
+                  whatsappButton.disabled = false;
+                }
             });
         });
 
-        // --- Lógica del botón de WhatsApp ---
-        whatsappButton.addEventListener('click', () => {
-            if (!selectedVariant) {
-                alert('Por favor, selecciona una variante primero.');
+        if (cartEnabled && addToCartButton) {
+          addToCartButton.addEventListener('click', () => {
+              if (!selectedVariant) {
+                  alert('Por favor, selecciona una variante primero.');
+                  return;
+              }
+
+              if (!window.ShopixCart || typeof window.ShopixCart.addItem !== 'function') {
+                alert('No se pudo inicializar el carrito.');
                 return;
+              }
+
+              window.ShopixCart.addItem({
+                productId: selectedVariant.productId,
+                productName: selectedVariant.productName,
+                variantSize: selectedVariant.size,
+                price: Number(selectedVariant.price),
+                qty: 1
+              });
+
+              window.ShopixCart.open();
+          });
+        }
+
+        if (cartEnabled && openCartButton) {
+          openCartButton.addEventListener('click', () => {
+              if (window.ShopixCart && typeof window.ShopixCart.open === 'function') {
+                window.ShopixCart.open();
+              }
+          });
+        }
+
+        if (!cartEnabled && whatsappButton) {
+          whatsappButton.addEventListener('click', () => {
+            if (!selectedVariant) {
+              alert('Por favor, selecciona una variante primero.');
+              return;
             }
 
-            // 1. Construir el número de teléfono
-            // Asegúrate de que el código de país se combine correctamente con el número.
-            // Los números de WhatsApp deben ser numéricos, sin '+' inicial ni guiones.
-            const fullPhoneNumber = tenantPhoneCode.replace(/\+/g, '') + tenantPhoneNumber;
-            
-            // 2. Construir el mensaje
-            const message = `Hola, estoy interesado en el producto *${selectedVariant.productName}* ` +
-                            `en la variante **${selectedVariant.size}** con precio de *${selectedVariant.price} $*. ` +
-                            `¿Podrían darme más información?`;
+            const fullPhoneNumber = String(tenantPhoneCode).replace(/\D/g, '') + String(tenantPhoneNumber).replace(/\D/g, '');
+            if (!fullPhoneNumber) {
+              alert('La tienda no tiene un número de WhatsApp configurado.');
+              return;
+            }
 
-            // 3. Codificar el mensaje para la URL
-            const encodedMessage = encodeURIComponent(message);
-            
-            // 4. Crear el enlace
-            const whatsappLink = `https://wa.me/${fullPhoneNumber}?text=${encodedMessage}`;
-
-            // 5. Redireccionar
+            const message = `Hola, estoy interesado en el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio de *${selectedVariant.price} $*. ¿Podrían darme más información?`;
+            const whatsappLink = `https://wa.me/${fullPhoneNumber}?text=${encodeURIComponent(message)}`;
             window.open(whatsappLink, '_blank');
-        });
+          });
+        }
     });
   </script>
 </body>

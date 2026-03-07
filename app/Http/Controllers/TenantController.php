@@ -18,6 +18,8 @@ use App\Models\City;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
+use Carbon\Carbon;
 
 
 class TenantController extends Controller
@@ -319,7 +321,10 @@ class TenantController extends Controller
             ->limit(9)
             ->get();
 
-        return view('ecommerceInf', compact('tenant', 'categories', 'productItems'));
+        $cartEnabled = $this->tenantHasProPlan($tenant);
+        $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+
+        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'cartEnabled', 'cartPlanName'));
     }
 
     public function store(Request $request)
@@ -367,13 +372,19 @@ class TenantController extends Controller
         // 💳 Crear relación TenantPayment
         $plan = Plan::findOrFail($request->plan_id);
 
-        TenantPlanPayment::create([
+        $tenantPlanPaymentData = [
             'tenant_id' => $tenant->id,
             'plan_id'   => $plan->id,
             'amount'    => $plan->price,
             'status'    => 'paid', // o pending si quieres validar pago
             'paid_at'   => now(),
-        ]);
+        ];
+
+        if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
+            $tenantPlanPaymentData['expires_at'] = now()->addDays((int) ($plan->duration_days ?? 0));
+        }
+
+        TenantPlanPayment::create($tenantPlanPaymentData);
 
         // 🎭 Obtener roles existentes
         $roles = Role::whereIn('name', ['owner', 'admin', 'vendor'])->get()->keyBy('name');
@@ -469,13 +480,19 @@ class TenantController extends Controller
             ]);
 
             $plan = Plan::findOrFail($validated['plan_id']);
-            TenantPlanPayment::create([
+            $tenantPlanPaymentData = [
                 'tenant_id' => $tenant->id,
                 'plan_id'   => $plan->id,
                 'amount'    => $plan->price,
                 'status'    => 'paid',
                 'paid_at'   => now(),
-            ]);
+            ];
+
+            if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
+                $tenantPlanPaymentData['expires_at'] = now()->addDays((int) ($plan->duration_days ?? 0));
+            }
+
+            TenantPlanPayment::create($tenantPlanPaymentData);
 
             $ownerRole = Role::where('name', 'owner')->first();
             User::create([
@@ -517,7 +534,7 @@ class TenantController extends Controller
         $validated = $request->validate([
             'name'  => 'sometimes|string|max:255',
             'slug'  => 'sometimes|string|max:255|unique:tenants,slug,' . $tenant->id,
-            'email' => 'nullable|email',
+            'email' => 'nullable|email|unique:tenants,email,' . $tenant->id,
             'logo'  => 'nullable|string',
             'color_primary'   => 'nullable|string|max:7',
             'color_secondary' => 'nullable|string|max:7',
@@ -545,6 +562,16 @@ class TenantController extends Controller
             'is_active' => 'nullable|boolean',
         ]);
 
+        $latestPaidPlanPayment = $tenant->tenantPlanPayments()
+            ->where('status', 'paid')
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $currentPlanId = $latestPaidPlanPayment?->plan_id;
+        $incomingPlanId = isset($validated['plan_id']) ? (int) $validated['plan_id'] : null;
+        $planChanged = !is_null($incomingPlanId) && ((int) $currentPlanId !== $incomingPlanId);
+
         $ownerRole = Role::where('name', 'owner')->first();
         $owner = $tenant->users()
             ->when($ownerRole, function ($query) use ($ownerRole) {
@@ -552,27 +579,106 @@ class TenantController extends Controller
             })
             ->first();
 
-        if (!empty($validated['owner_email'])) {
-            $ownerEmailExists = User::where('email', $validated['owner_email'])
-                ->when($owner, function ($query) use ($owner) {
-                    $query->where('id', '!=', $owner->id);
-                })
-                ->exists();
+        if (!$owner) {
+            $owner = $tenant->users()->orderBy('id')->first();
+        }
 
-            if ($ownerEmailExists) {
-                return response()->json([
-                    'message' => 'El correo del dueño ya está en uso por otro usuario',
-                ], 422);
+        if (!empty($validated['owner_email'])) {
+            $existingUserWithEmail = User::where('email', $validated['owner_email'])->first();
+
+            if ($existingUserWithEmail) {
+                $sameOwner = $owner && ((int) $existingUserWithEmail->id === (int) $owner->id);
+                $belongsToSameTenant = (int) $existingUserWithEmail->tenant_id === (int) $tenant->id;
+
+                if (!$sameOwner && !$belongsToSameTenant) {
+                    return response()->json([
+                        'message' => 'El correo del dueño ya está en uso por otro usuario',
+                    ], 422);
+                }
+
+                if (!$owner && $belongsToSameTenant) {
+                    $owner = $existingUserWithEmail;
+                }
+            }
+
+        }
+
+        $ownerDataProvided =
+            array_key_exists('owner_name', $validated) ||
+            array_key_exists('owner_email', $validated) ||
+            array_key_exists('owner_phone_number', $validated) ||
+            array_key_exists('owner_dni', $validated) ||
+            array_key_exists('owner_password', $validated);
+
+        $ownerHasChanges = false;
+
+        if ($ownerDataProvided) {
+            if (!$owner) {
+                $ownerHasChanges =
+                    !empty($validated['owner_name']) ||
+                    !empty($validated['owner_email']) ||
+                    !empty($validated['owner_phone_number']) ||
+                    !empty($validated['owner_dni']) ||
+                    !empty($validated['owner_password']);
+            } else {
+                if (array_key_exists('owner_name', $validated) && (string) ($validated['owner_name'] ?? '') !== (string) $owner->name) {
+                    $ownerHasChanges = true;
+                }
+
+                if (array_key_exists('owner_email', $validated) && (string) ($validated['owner_email'] ?? '') !== (string) $owner->email) {
+                    $ownerHasChanges = true;
+                }
+
+                if (array_key_exists('owner_phone_number', $validated) && (string) ($validated['owner_phone_number'] ?? '') !== (string) ($owner->phone_number ?? '')) {
+                    $ownerHasChanges = true;
+                }
+
+                if (array_key_exists('owner_dni', $validated) && (string) ($validated['owner_dni'] ?? '') !== (string) ($owner->dni ?? '')) {
+                    $ownerHasChanges = true;
+                }
+
+                if (!empty($validated['owner_password'])) {
+                    $ownerHasChanges = true;
+                }
             }
         }
 
-        if (
-            !empty($validated['owner_name']) ||
-            !empty($validated['owner_email']) ||
-            !empty($validated['owner_phone_number']) ||
-            !empty($validated['owner_dni']) ||
-            !empty($validated['owner_password'])
-        ) {
+        $tenantData = [
+            'name' => $validated['name'] ?? $tenant->name,
+            'slug' => array_key_exists('slug', $validated) ? Str::slug((string) $validated['slug']) : $tenant->slug,
+            'email' => $validated['email'] ?? $tenant->email,
+            'logo' => $validated['logo'] ?? $tenant->logo,
+            'color_primary' => $validated['color_primary'] ?? $tenant->color_primary,
+            'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
+            'color_accent' => $validated['color_accent'] ?? $tenant->color_accent,
+            'country' => $validated['country'] ?? $tenant->country,
+            'state' => $validated['state'] ?? $tenant->state,
+            'city' => $validated['city'] ?? $tenant->city,
+            'phone_code' => $validated['phone_code'] ?? $tenant->phone_code,
+            'phone_number' => $validated['phone_number'] ?? $tenant->phone_number,
+            'slogan' => $validated['slogan'] ?? $tenant->slogan,
+            'description' => $validated['description'] ?? $tenant->description,
+            'address' => $validated['address'] ?? $tenant->address,
+            'latitude' => $validated['latitude'] ?? $tenant->latitude,
+            'longitude' => $validated['longitude'] ?? $tenant->longitude,
+            'background_image' => $validated['background_image'] ?? $tenant->background_image,
+            'tiktok' => $validated['tiktok'] ?? $tenant->tiktok,
+            'instagram' => $validated['instagram'] ?? $tenant->instagram,
+            'facebook' => $validated['facebook'] ?? $tenant->facebook,
+            'is_active' => $validated['is_active'] ?? $tenant->is_active,
+        ];
+
+        $tenant->fill($tenantData);
+        $tenantHasChanges = $tenant->isDirty();
+
+        if (!$tenantHasChanges && !$ownerHasChanges && !$planChanged) {
+            return response()->json([
+                'message' => 'No se detectaron cambios para actualizar',
+                'tenant'  => $tenant->load(['tenantPlanPayments.plan', 'users.role']),
+            ]);
+        }
+
+        if ($ownerHasChanges) {
             if (!$owner) {
                 $owner = new User();
                 $owner->tenant_id = $tenant->id;
@@ -596,43 +702,29 @@ class TenantController extends Controller
             $owner->save();
         }
 
-        // Actualizar datos del tenant
-        $tenant->update([
-            'name' => $validated['name'] ?? $tenant->name,
-            'slug' => $validated['slug'] ?? $tenant->slug,
-            'email' => $validated['email'] ?? $tenant->email,
-            'logo' => $validated['logo'] ?? $tenant->logo,
-            'color_primary' => $validated['color_primary'] ?? $tenant->color_primary,
-            'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
-            'color_accent' => $validated['color_accent'] ?? $tenant->color_accent,
-            'country' => $validated['country'] ?? $tenant->country,
-            'state' => $validated['state'] ?? $tenant->state,
-            'city' => $validated['city'] ?? $tenant->city,
-            'phone_code' => $validated['phone_code'] ?? $tenant->phone_code,
-            'phone_number' => $validated['phone_number'] ?? $tenant->phone_number,
-            'slogan' => $validated['slogan'] ?? $tenant->slogan,
-            'description' => $validated['description'] ?? $tenant->description,
-            'address' => $validated['address'] ?? $tenant->address,
-            'latitude' => $validated['latitude'] ?? $tenant->latitude,
-            'longitude' => $validated['longitude'] ?? $tenant->longitude,
-            'background_image' => $validated['background_image'] ?? $tenant->background_image,
-            'tiktok' => $validated['tiktok'] ?? $tenant->tiktok,
-            'instagram' => $validated['instagram'] ?? $tenant->instagram,
-            'facebook' => $validated['facebook'] ?? $tenant->facebook,
-            'is_active' => $validated['is_active'] ?? $tenant->is_active,
-        ]);
+        if ($tenantHasChanges) {
+            $tenant->save();
+        }
 
         // Si cambia el plan
-        if (!empty($validated['plan_id'])) {
-            $plan = Plan::find($validated['plan_id']);
+        if ($planChanged) {
+            $plan = Plan::findOrFail($incomingPlanId);
+            $paidAt = Carbon::now();
+            $expiresAt = (clone $paidAt)->addDays((int) ($plan->duration_days ?? 0));
 
-            TenantPlanPayment::create([
+            $tenantPlanPaymentData = [
                 'tenant_id' => $tenant->id,
                 'plan_id' => $plan->id,
                 'amount' => $plan->price,
                 'status' => 'paid',
-                'paid_at' => now(),
-            ]);
+                'paid_at' => $paidAt,
+            ];
+
+            if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
+                $tenantPlanPaymentData['expires_at'] = $expiresAt;
+            }
+
+            TenantPlanPayment::create($tenantPlanPaymentData);
         }
 
         return response()->json([
@@ -785,10 +877,15 @@ class TenantController extends Controller
             ->with('images')
             ->get();
 
+        $cartEnabled = $this->tenantHasProPlan($tenant);
+        $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+
         return view('ecommerceCategory', compact(
             'tenant',
             'categories',
-            'products'
+            'products',
+            'cartEnabled',
+            'cartPlanName'
         ));
     }
     public function publicTenantProduct(Tenant $tenant, Product $product)
@@ -796,10 +893,36 @@ class TenantController extends Controller
         // $tenant y $product son inyectados automáticamente por el model binding de Laravel
         // gracias a la ruta '/{tenant:slug}/{product:slug}'
         
+        if ((int) $product->tenant_id !== (int) $tenant->id) {
+            abort(404);
+        }
+
         // Cargar cualquier relación necesaria (ej: category, variants, images)
         $product->load(['category', 'variants', 'images']);
 
-        return view('ecommerceProduct', compact('tenant', 'product'));
+        $cartEnabled = $this->tenantHasProPlan($tenant);
+        $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+
+        return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'cartPlanName'));
+    }
+
+    private function getTenantCurrentPlanName(Tenant $tenant): ?string
+    {
+        $latestPaidPlanPayment = $tenant->tenantPlanPayments()
+            ->with('plan')
+            ->where('status', 'paid')
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->first();
+
+        return $latestPaidPlanPayment?->plan?->name;
+    }
+
+    private function tenantHasProPlan(Tenant $tenant): bool
+    {
+        $planName = Str::lower((string) $this->getTenantCurrentPlanName($tenant));
+
+        return Str::contains($planName, 'pro');
     }
 
     public function destroy(Tenant $tenant)

@@ -52,12 +52,23 @@
                         $owner = $tenant->users->first(function($user) {
                           return optional($user->role)->name === 'owner';
                         }) ?? $tenant->users->first();
+
+                        $latestPayment = $tenant->tenantPlanPayments
+                          ->where('status', 'paid')
+                          ->sortBy(function ($payment) {
+                            return optional($payment->paid_at)->timestamp ?? 0;
+                          })
+                          ->last();
                       @endphp
                       <p>Dueño: {{ $owner?->name ?? 'Sin dueño' }}</p>
                       <p>Usuarios: {{ $tenant->users->count() }}</p>
-                      @foreach($tenant->tenantPlanPayments as $payment)
-                          <p>Plan: {{ $payment->plan->name }} - ${{ $payment->amount }} - Estado: {{ $payment->status }}</p>
-                      @endforeach
+                      @if($latestPayment)
+                        <p>Plan actual: {{ $latestPayment->plan->name }} - ${{ $latestPayment->amount }} - Estado: {{ $latestPayment->status }}</p>
+                        <p>Vence: {{ optional($latestPayment->expires_at)->format('d/m/Y H:i') ?? 'Sin fecha' }}</p>
+                      @else
+                        <p>Plan actual: Sin plan</p>
+                        <p>Vence: Sin fecha</p>
+                      @endif
                       {{-- O solo plan activo --}}
                       {{-- <p>Plan activo: {{ $tenant->activePlanPayment->plan->name ?? 'Sin plan' }}</p> --}}
                     </td>
@@ -74,7 +85,7 @@
                         data-logo="{{ $tenant->logo }}"
                         data-owner-name="{{ $owner?->name }}"
                         data-owner-email="{{ $owner?->email }}"
-                        data-plan-id="{{ optional($tenant->tenantPlanPayments->last())->plan_id }}"
+                        data-plan-id="{{ $latestPayment?->plan_id }}"
                         data-active="{{ $tenant->is_active }}">
                         Editar
                       </a>
@@ -227,7 +238,7 @@
       return data;
     })
     .then(data => {
-      alert('Tienda actualizada correctamente');
+      alert(data.message || 'Tienda actualizada correctamente');
       window.location.reload();
     })
     .catch(error => {
