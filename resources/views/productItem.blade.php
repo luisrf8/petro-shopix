@@ -126,6 +126,8 @@
                       <h2><strong>{{ $product->name }}</strong></h2>
                       <p><strong>Categoría:</strong> {{ $product->category->name }}</p>
                       <p><strong>Descripción:</strong> {{ $product->description }}</p>
+                      <p><strong>Descuento del producto:</strong> {{ number_format((float) ($product->discount_percentage ?? 0), 2) }}%</p>
+                      <button type="button" class="btn btn-outline-dark btn-sm mb-3" id="generateProductCodesBtn">Generar códigos de todas las variantes</button>
                       <p><strong>Impuestos:</strong> 
                         @foreach ($product->taxes as $tax)
                           {{ $tax->name }} - {{ $tax->rate }} %
@@ -134,7 +136,59 @@
                       <p><strong>Variantes:</strong>
                         <ul>
                           @foreach ($product->variants as $variant)
-                              <li>{{ $variant->size }} - Precio: {{ $variant->price }} $ - {{$variant->stock}} unidades disponibles</li>
+                              @php
+                                $productDiscount = (float) ($product->discount_percentage ?? 0);
+                                $variantDiscount = (float) ($variant->discount_percentage ?? 0);
+                                $effectivePrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+                              @endphp
+                              <li class="mb-2">
+                                {{ $variant->size }} - Precio: {{ number_format($effectivePrice, 2) }} $
+                                @if($productDiscount > 0 || $variantDiscount > 0)
+                                  <small class="text-muted">(base: {{ number_format((float) $variant->price, 2) }} $, desc: {{ number_format($productDiscount + $variantDiscount, 2) }}%)</small>
+                                @endif
+                                - {{$variant->stock}} unidades disponibles
+                                <div class="small text-muted mt-1">
+                                  QR: <span id="variantQrCode-{{ $variant->id }}">{{ $variant->qr_code ?: '—' }}</span>
+                                  | Barras: <span id="variantBarcode-{{ $variant->id }}">{{ $variant->barcode ?: '—' }}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  class="btn btn-outline-secondary btn-sm mt-1 generate-variant-codes-btn"
+                                  data-variant-id="{{ $variant->id }}"
+                                >
+                                  Generar códigos variante
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn btn-outline-secondary btn-sm mt-1 open-qr-modal-btn"
+                                  data-qr-title="QR variante {{ $variant->size }}"
+                                  data-qr-url="{{ route('variants.qrImage', $variant->id) }}"
+                                  data-qr-filename="variante-{{ $variant->id }}-qr.png"
+                                  id="showVariantQrBtn-{{ $variant->id }}"
+                                  {{ empty($variant->qr_code) ? 'disabled' : '' }}
+                                >
+                                  Ver QR variante
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn btn-outline-secondary btn-sm mt-1 download-qr-btn"
+                                  data-qr-url="{{ route('variants.qrImage', $variant->id) }}"
+                                  data-qr-filename="variante-{{ $variant->id }}-qr.png"
+                                  id="downloadVariantQrBtn-{{ $variant->id }}"
+                                  {{ empty($variant->qr_code) ? 'disabled' : '' }}
+                                >
+                                  Descargar QR
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn btn-outline-secondary btn-sm mt-1 print-qr-btn"
+                                  data-qr-url="{{ route('variants.qrImage', $variant->id) }}"
+                                  id="printVariantQrBtn-{{ $variant->id }}"
+                                  {{ empty($variant->qr_code) ? 'disabled' : '' }}
+                                >
+                                  Imprimir QR
+                                </button>
+                              </li>
                           @endforeach
                         </ul>
                       </p>
@@ -229,6 +283,10 @@
                             <option value="0" {{ !$product->is_active ? 'selected' : '' }}>Inactivo</option>
                           </select>
                         </div>
+                        <div class="form-group mb-4">
+                          <label for="productDiscountPercentage">Descuento del producto (%)</label>
+                          <input type="number" class="form-control border border-1 p-2" id="productDiscountPercentage" name="discount_percentage" min="0" max="100" step="0.01" value="{{ number_format((float) ($product->discount_percentage ?? 0), 2, '.', '') }}">
+                        </div>
                         <button type="submit" class="btn btn-dark" id="saveChangesBtn">Guardar Cambios</button>
                     </form>
                     <div class="form-group">
@@ -266,6 +324,28 @@
               </div>
             </div>
             <!-- End Modal -->
+
+            <div class="modal fade" id="productQrModal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="productQrModalTitle">Código QR</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body text-center">
+                    <img id="productQrModalImage" src="" alt="Código QR" class="img-fluid border rounded" style="max-width: 320px;">
+                    <div id="productQrModalError" class="alert alert-warning d-none mt-3 mb-0">
+                      No se pudo cargar la imagen QR. Vuelve a generar el código o intenta de nuevo.
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-dark" id="productQrModalDownload">Descargar</button>
+                    <button type="button" class="btn btn-outline-secondary" id="productQrModalPrint">Imprimir</button>
+                    <button type="button" class="btn btn-dark" data-bs-dismiss="modal">Cerrar</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
       </div>
     </div>
@@ -524,6 +604,16 @@
     priceInput.classList.add('form-control', 'border', 'border-1', 'p-2');
     priceInput.name = 'price';
 
+    const discountInput = document.createElement('input');
+    discountInput.type = 'number';
+    discountInput.placeholder = 'Descuento %';
+    discountInput.classList.add('form-control', 'border', 'border-1', 'p-2');
+    discountInput.name = 'discount_percentage';
+    discountInput.min = '0';
+    discountInput.max = '100';
+    discountInput.step = '0.01';
+    discountInput.value = '0';
+
     // Input para el stock
     const stockInput = document.createElement('input');
     stockInput.type = 'number';
@@ -544,6 +634,7 @@
     // Agregar inputs al contenedor de inputs
     inputContainer.appendChild(variantInput);
     inputContainer.appendChild(priceInput);
+    inputContainer.appendChild(discountInput);
     inputContainer.appendChild(stockInput);
 
     // Agregar los elementos al div de variante
@@ -565,11 +656,12 @@ document.getElementById('saveVariantsBtn').addEventListener('click', function ()
     variantContainer.querySelectorAll('.input-group').forEach(inputGroup => {
         const size = inputGroup.querySelector('input[name="size"]').value;
         const price = inputGroup.querySelector('input[name="price"]').value;
+        const discount_percentage = inputGroup.querySelector('input[name="discount_percentage"]').value;
         const stock = inputGroup.querySelector('input[name="stock"]').value;
 
         // Validar que los campos no estén vacíos
         if (size && price && stock) {
-            variants.push({ size, price, stock });
+          variants.push({ size, price, discount_percentage: discount_percentage || 0, stock });
         }
     });
 
@@ -653,6 +745,10 @@ function editProduct() {
         <input type="number" class="form-control border border-1 p-2" value="${variant.price}" placeholder="Precio" name="variantPrice[]">
       </div>
       <div class="col">
+        <label for="Descuento">Desc. %</label>
+        <input type="number" class="form-control border border-1 p-2" value="${variant.discount_percentage || 0}" placeholder="Descuento %" name="variantDiscount[]" min="0" max="100" step="0.01">
+      </div>
+      <div class="col">
         <label for="Stock">Stock</label>
         <input type="number" class="form-control border border-1 p-2" value="${variant.stock}" placeholder="Stock" name="variantStock[]">
       </div>
@@ -670,6 +766,7 @@ function editProduct() {
       const variantRow = this.closest('.row');
       const size = variantRow.querySelector('input[name="variantName[]"]').value;
       const price = variantRow.querySelector('input[name="variantPrice[]"]').value;
+      const discount_percentage = variantRow.querySelector('input[name="variantDiscount[]"]').value;
       const stock = variantRow.querySelector('input[name="variantStock[]"]').value;
 
       // Realizar una solicitud AJAX para actualizar la variante
@@ -679,7 +776,7 @@ function editProduct() {
           'Content-Type': 'application/json',
           'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
         },
-        body: JSON.stringify({ size, price, stock })
+        body: JSON.stringify({ size, price, discount_percentage, stock })
       })
         .then(response => {
           if (response.ok) {
@@ -748,6 +845,181 @@ document.getElementById('editProductForm').addEventListener('submit', function(e
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  const productCard = document.querySelector('.card[data-product-id]');
+  const productId = productCard?.getAttribute('data-product-id');
+  const productQrModalEl = document.getElementById('productQrModal');
+  const productQrModal = productQrModalEl ? new bootstrap.Modal(productQrModalEl) : null;
+  const productQrModalTitle = document.getElementById('productQrModalTitle');
+  const productQrModalImage = document.getElementById('productQrModalImage');
+  const productQrModalError = document.getElementById('productQrModalError');
+  const productQrModalDownload = document.getElementById('productQrModalDownload');
+  const productQrModalPrint = document.getElementById('productQrModalPrint');
+  let productQrCurrentUrl = '';
+  let productQrCurrentFileName = 'qr.png';
+
+  function downloadQrImage(url, fileName) {
+    if (!url) return;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName || 'qr.png';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  function printQrImage(url) {
+    if (!url) return;
+    const printWindow = window.open('', '_blank', 'width=600,height=700');
+    if (!printWindow) {
+      alert('Debes permitir ventanas emergentes para imprimir el QR.');
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head><title>Imprimir QR</title></head>
+        <body style="display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;">
+          <img src="${url}" style="max-width:420px;width:100%;" onload="window.print();window.close();" />
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
+
+  document.querySelectorAll('.open-qr-modal-btn').forEach((button) => {
+    button.addEventListener('click', function () {
+      productQrCurrentUrl = this.getAttribute('data-qr-url') || '';
+      productQrCurrentFileName = this.getAttribute('data-qr-filename') || 'qr.png';
+      if (productQrModalTitle) {
+        productQrModalTitle.textContent = this.getAttribute('data-qr-title') || 'Código QR';
+      }
+      if (productQrModalImage) {
+        const separator = productQrCurrentUrl.includes('?') ? '&' : '?';
+        const freshUrl = `${productQrCurrentUrl}${separator}t=${Date.now()}`;
+        productQrModalImage.classList.remove('d-none');
+        productQrModalError?.classList.add('d-none');
+        productQrModalImage.onerror = function () {
+          productQrModalImage.classList.add('d-none');
+          productQrModalError?.classList.remove('d-none');
+        };
+        productQrModalImage.onload = function () {
+          productQrModalImage.classList.remove('d-none');
+          productQrModalError?.classList.add('d-none');
+        };
+        productQrModalImage.src = freshUrl;
+      }
+      productQrModal?.show();
+    });
+  });
+
+  document.querySelectorAll('.download-qr-btn').forEach((button) => {
+    button.addEventListener('click', function () {
+      downloadQrImage(this.getAttribute('data-qr-url') || '', this.getAttribute('data-qr-filename') || 'qr.png');
+    });
+  });
+
+  document.querySelectorAll('.print-qr-btn').forEach((button) => {
+    button.addEventListener('click', function () {
+      printQrImage(this.getAttribute('data-qr-url') || '');
+    });
+  });
+
+  productQrModalDownload?.addEventListener('click', function () {
+    downloadQrImage(productQrCurrentUrl, productQrCurrentFileName);
+  });
+
+  productQrModalPrint?.addEventListener('click', function () {
+    printQrImage(productQrCurrentUrl);
+  });
+
+  const generateProductCodesBtn = document.getElementById('generateProductCodesBtn');
+  generateProductCodesBtn?.addEventListener('click', async function () {
+    if (!productId) {
+      return;
+    }
+
+    const originalText = this.textContent;
+    this.disabled = true;
+    this.textContent = 'Generando...';
+
+    try {
+      const response = await fetch(`/products/${productId}/generate-codes`, {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+        },
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'No se pudieron generar los códigos de variantes.');
+      }
+
+      (payload.variants || []).forEach((variant) => {
+        const variantId = String(variant.id || '');
+        if (!variantId) return;
+        const qrElement = document.getElementById(`variantQrCode-${variantId}`);
+        const barcodeElement = document.getElementById(`variantBarcode-${variantId}`);
+        if (qrElement) qrElement.textContent = variant.qr_code || '—';
+        if (barcodeElement) barcodeElement.textContent = variant.barcode || '—';
+        document.getElementById(`showVariantQrBtn-${variantId}`)?.removeAttribute('disabled');
+        document.getElementById(`downloadVariantQrBtn-${variantId}`)?.removeAttribute('disabled');
+        document.getElementById(`printVariantQrBtn-${variantId}`)?.removeAttribute('disabled');
+      });
+
+      alert(`Códigos de variantes actualizados. Generados: ${payload.generated || 0} de ${payload.total_variants || 0}.`);
+    } catch (error) {
+      alert(error.message || 'Error al generar códigos de variantes.');
+    } finally {
+      this.disabled = false;
+      this.textContent = originalText;
+    }
+  });
+
+  document.querySelectorAll('.generate-variant-codes-btn').forEach((button) => {
+    button.addEventListener('click', async function () {
+      const variantId = this.getAttribute('data-variant-id');
+      if (!variantId) {
+        return;
+      }
+
+      const originalText = this.textContent;
+      this.disabled = true;
+      this.textContent = 'Generando...';
+
+      try {
+        const response = await fetch(`/variants/${variantId}/generate-codes`, {
+          method: 'POST',
+          headers: {
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+          },
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || 'No se pudieron generar los códigos de la variante.');
+        }
+
+        const qrElement = document.getElementById(`variantQrCode-${variantId}`);
+        const barcodeElement = document.getElementById(`variantBarcode-${variantId}`);
+        if (qrElement) qrElement.textContent = payload.qr_code || '—';
+        if (barcodeElement) barcodeElement.textContent = payload.barcode || '—';
+        document.getElementById(`showVariantQrBtn-${variantId}`)?.removeAttribute('disabled');
+        document.getElementById(`downloadVariantQrBtn-${variantId}`)?.removeAttribute('disabled');
+        document.getElementById(`printVariantQrBtn-${variantId}`)?.removeAttribute('disabled');
+        alert('Códigos de variante generados correctamente.');
+      } catch (error) {
+        alert(error.message || 'Error al generar códigos de variante.');
+      } finally {
+        this.disabled = false;
+        this.textContent = originalText;
+      }
+    });
+  });
+
   const addImageModalEl = document.getElementById('addImageModal');
   const productAiModalEl = document.getElementById('productAiModal');
   const addImageModalInstance = bootstrap.Modal.getOrCreateInstance(addImageModalEl);

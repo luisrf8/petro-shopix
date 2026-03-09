@@ -46,6 +46,11 @@
                         <textarea id="productDescription" name="productDescription" class="form-control border border-radius-lg p-2" rows="3" placeholder="Ingrese la descripcion del producto"></textarea>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="productDiscount" class="form-label">Descuento del producto (%)</label>
+                        <input type="number" id="productDiscount" name="productDiscount" min="0" max="100" step="0.01" value="0" class="form-control border border-radius-lg p-2" placeholder="0">
+                    </div>
+
                     <!-- Product Images -->
                     <div class="mb-3">
                         <label for="productImages" class="form-label">Imagenes</label>
@@ -73,6 +78,7 @@
                     <!-- Product Variants -->
                     <div class="mb-3">
                         <label class="form-label">Variantes</label>
+                        <small class="text-muted d-block mb-2">Al guardar, se generan automáticamente QR y código de barras para las variantes.</small>
                         <div id="variantContainer"></div>
                         <button type="button" id="addVariantBtn" class="btn btn-secondary mt-2">Agregar Variante +</button>
                     </div>
@@ -134,6 +140,7 @@
                 <div class="input-group">
                     <input type="text" name="variantName[]" class="form-control border border-radius-lg p-2 h-100" placeholder="Variant name" required>
                     <input type="number" name="variantPrice[]" class="form-control border border-radius-lg p-2 h-100" placeholder="Variant price" required>
+                    <input type="number" name="variantDiscount[]" class="form-control border border-radius-lg p-2 h-100" placeholder="Discount %" min="0" max="100" step="0.01" value="0" required>
                     <input type="number" name="variantStock[]" class="form-control border border-radius-lg p-2 h-100" placeholder="Variant stock" required>
                     <button type="button" class="btn btn-danger remove-variant-btn">Remove</button>
                 </div>
@@ -159,9 +166,10 @@
             document.querySelectorAll('#variantContainer .variant-row').forEach((row) => {
                 const name = row.querySelector('input[name="variantName[]"]').value;
                 const price = row.querySelector('input[name="variantPrice[]"]').value;
+                const discount = row.querySelector('input[name="variantDiscount[]"]').value;
                 const stock = row.querySelector('input[name="variantStock[]"]').value;
                 if (name && price && stock) {
-                    variants.push({ name, price, stock });
+                    variants.push({ name, price, discount_percentage: discount || 0, stock });
                 }
             });
 

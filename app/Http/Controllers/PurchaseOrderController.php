@@ -4,10 +4,13 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
-use App\Models\ProductImage;
 use App\Models\ProductVariant;
+use App\Models\ProductVariantWarehouseStock;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderDetail;
+use App\Models\Warehouse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 
 
@@ -15,13 +18,26 @@ class PurchaseOrderController extends Controller
 {
     public function index()
     {
-        $categories = Category::all();
-        $productItems = Product::all();
-        return view('purchase', compact('categories', 'productItems')); // Asegúrate de tener una vista para mostrar las categorías.
+        $user = auth()->user();
+        $categories = Category::where('tenant_id', $user->tenant_id)->get();
+        $productItems = Product::with(['images', 'variants'])
+            ->where('tenant_id', $user->tenant_id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        $warehouses = Warehouse::where('tenant_id', $user->tenant_id)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
+
+        return view('purchase', compact('categories', 'productItems', 'warehouses')); // Asegúrate de tener una vista para mostrar las categorías.
     }
 
     public function getVariants(Request $request)
     {
+        $user = auth()->user();
         $itemIds = $request->input('item_ids');
     
         // Validar que se reciban IDs válidos
@@ -30,15 +46,28 @@ class PurchaseOrderController extends Controller
         }
     
         // Obtener variantes y agruparlas por producto
-        $variants = ProductVariant::whereIn('product_id', $itemIds)->get();
+        $variants = ProductVariant::with(['product.images'])
+            ->whereHas('product', function ($query) use ($itemIds, $user) {
+                $query->whereIn('id', $itemIds)
+                    ->where('tenant_id', $user->tenant_id);
+            })
+            ->get();
+
         $groupedVariants = $variants->groupBy('product_id')->map(function ($group, $productId) {
+            $product = $group->first()->product;
+
             return [
                 'product_id' => $productId,
+                'product_name' => $product?->name,
+                'product_image' => $product && $product->images->first()
+                    ? asset('storage/' . $product->images->first()->path)
+                    : asset('assets/img/shopix5.png'),
                 'variants' => $group->map(function ($variant) {
                     return [
                         'id' => $variant->id,
                         'type' => $variant->type,
                         'size' => $variant->size,
+                        'price' => $variant->price,
                         'stock' => $variant->stock,
                         'storage_description' => $variant->storage_description,
                         'shelf_life_description' => $variant->shelf_life_description,
@@ -69,92 +98,168 @@ class PurchaseOrderController extends Controller
 
     public function store(Request $request)
     {
-        // Paso 1: Validar los datos
-        DB::raw("SET @user_id = " . auth()->id());
+        $user = auth()->user();
+        $itemsSelected = $request->input('itemsSelected');
+        $purchaseDate = $request->input('purchase_date');
+        $warehouseId = (int) $request->input('warehouse_id');
 
-        $itemsSelected = $request->itemsSelected;
+        $warehouse = Warehouse::where('tenant_id', $user->tenant_id)
+            ->where('is_active', true)
+            ->where('id', $warehouseId)
+            ->first();
+
+        if (!$warehouse) {
+            return response()->json(['error' => 'Debes seleccionar un almacén válido.'], 422);
+        }
+
+        if (!empty($purchaseDate)) {
+            try {
+                $purchaseDate = \Carbon\Carbon::parse($purchaseDate)->toDateString();
+            } catch (\Throwable $exception) {
+                return response()->json(['error' => 'La fecha de compra no es válida.'], 422);
+            }
+        } else {
+            $purchaseDate = now()->toDateString();
+        }
+
         if (empty($itemsSelected) || !is_array($itemsSelected)) {
             return response()->json(['error' => 'No se enviaron productos válidos.'], 400);
         }
-    
-        // Paso 2: Agrupar y sumar cantidades por provider_id
+
         $groupedData = [];
+
         foreach ($itemsSelected as $item) {
-            if (!isset($item['providers']) || !is_array($item['providers'])) {
-                return response()->json(['error' => 'Los proveedores no están definidos correctamente.'], 400);
+            $variantId = (int) data_get($item, 'variant.id', 0);
+            $quantity = (int) data_get($item, 'quantity', 0);
+            $price = (float) data_get($item, 'price', 0);
+            $providers = data_get($item, 'providers', []);
+
+            if ($variantId <= 0 || $quantity <= 0 || $price <= 0 || !is_array($providers) || empty($providers)) {
+                return response()->json(['error' => 'Hay productos con datos incompletos (variante, cantidad, precio o proveedor).'], 422);
             }
-        
-            foreach ($item['providers'] as $providerId) {
-                if (!isset($groupedData[$providerId])) {
-                    $groupedData[$providerId] = [
-                        'provider_id' => $providerId,
-                        'total_quantity' => 0,
+
+            foreach ($providers as $providerNameRaw) {
+                $providerName = trim((string) $providerNameRaw);
+                if ($providerName === '') {
+                    continue;
+                }
+
+                if (!isset($groupedData[$providerName])) {
+                    $groupedData[$providerName] = [
+                        'provider_id' => $providerName,
                         'details' => [],
                     ];
                 }
-        
-                // Sumar las cantidades y agregar detalles
-                $groupedData[$providerId]['total_quantity'] += $item['quantity'];
-                $groupedData[$providerId]['details'][] = [
-                    'product_variant_id' => $item['variant']['id'],
-                    'quantity' => $item['quantity'],
-                    'price' => $item['price'], // Asegúrate de incluir el 'price' aquí
+
+                $groupedData[$providerName]['details'][] = [
+                    'product_variant_id' => $variantId,
+                    'quantity' => $quantity,
+                    'price' => $price,
                 ];
             }
         }
-        // Paso 3: Crear las órdenes de compra y sus detalles
-        foreach ($groupedData as $providerId => $orderData) {
-            // Crear la orden principal
-            $purchaseOrder = PurchaseOrder::create([
-                'provider_id' => $orderData['provider_id'],
-                'date' => now()->toDateString(),
-                'total' => $orderData['total_quantity'],
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-    
-            // Crear los detalles de la orden
-            foreach ($orderData['details'] as $detail) {
-                PurchaseOrderDetail::create([
-                    'purchase_order_id' => $purchaseOrder->id,
-                    'product_variant_id' => $detail['product_variant_id'],
-                    'quantity' => $detail['quantity'],
-                    'amount' => $detail['price'],
-                    'price' => $detail['price'],
-                    // 'price' => isset($detail['price']) ? $detail['price'] : 0,
-                ]);
 
-                // Actualizar el stock de la variante del producto
-                $productVariant = ProductVariant::find($detail['product_variant_id']);
-                if ($productVariant) {
-                    $productVariant->stock += $detail['quantity']; // Sumar al stock existente
+        if (empty($groupedData)) {
+            return response()->json(['error' => 'Debes indicar al menos un proveedor válido.'], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($groupedData as $orderData) {
+                $orderPayload = [
+                    'provider_id' => $orderData['provider_id'],
+                    'warehouse_id' => $warehouse->id,
+                    'date' => $purchaseDate,
+                ];
+
+                if (Schema::hasColumn('purchase_orders', 'tenant_id')) {
+                    $orderPayload['tenant_id'] = $user->tenant_id;
+                }
+
+                $purchaseOrder = PurchaseOrder::create($orderPayload);
+
+                foreach ($orderData['details'] as $detail) {
+                    $productVariant = ProductVariant::with('product')->find($detail['product_variant_id']);
+
+                    if (!$productVariant || !$productVariant->product || (int) $productVariant->product->tenant_id !== (int) $user->tenant_id) {
+                        throw new \RuntimeException('Se intentó registrar una variante inválida para esta tienda.');
+                    }
+
+                    $detailPayload = [
+                        'purchase_order_id' => $purchaseOrder->id,
+                        'product_variant_id' => $detail['product_variant_id'],
+                        'quantity' => $detail['quantity'],
+                        'price' => $detail['price'],
+                        'amount' => $detail['price'] * $detail['quantity'],
+                    ];
+
+                    if (Schema::hasColumn('purchase_order_detail', 'tenant_id')) {
+                        $detailPayload['tenant_id'] = $user->tenant_id;
+                    }
+
+                    PurchaseOrderDetail::create($detailPayload);
+
+                    $productVariant->stock += $detail['quantity'];
                     $productVariant->save();
+
+                    $warehouseStock = ProductVariantWarehouseStock::firstOrNew([
+                        'tenant_id' => $user->tenant_id,
+                        'warehouse_id' => $warehouse->id,
+                        'product_variant_id' => $detail['product_variant_id'],
+                    ]);
+
+                    $warehouseStock->quantity = (float) ($warehouseStock->quantity ?? 0) + (float) $detail['quantity'];
+                    $warehouseStock->save();
                 }
             }
+
+            DB::commit();
+            return response()->json(['message' => 'Entrada de inventario registrada y stock actualizado correctamente.'], 200);
+        } catch (\Throwable $exception) {
+            DB::rollBack();
+            return response()->json([
+                'error' => 'No se pudo registrar la entrada de inventario.',
+                'detail' => $exception->getMessage(),
+            ], 500);
         }
-    
-        // Retornar respuesta exitosa
-        return response()->json(['message' => 'Orden de compra creada exitosamente y stock actualizado.'], 200);
     }
 
     public function viewOrders()
     {
-        // Obtener las órdenes de compra ordenadas por fecha
-        $purchaseOrders = PurchaseOrder::with('detalles')
+        $user = auth()->user();
+        $purchaseOrders = PurchaseOrder::with(['warehouse', 'detalles', 'detalles.productVariant.product.images'])
+        ->where('tenant_id', $user->tenant_id)
         ->orderBy('date', 'desc')
         ->get();
+
         foreach ($purchaseOrders as $order) {
-            $order->total_items = $order->detalles->sum('quantity'); // Sumar la cantidad de productos en los detalles
+            $order->total_items = $order->detalles->sum('quantity');
+            $order->total_amount = $order->detalles->sum('amount');
+            $order->total_variants = $order->detalles->count();
+            $firstDetail = $order->detalles->first();
+            $order->preview_image = $firstDetail
+                && $firstDetail->productVariant
+                && $firstDetail->productVariant->product
+                && $firstDetail->productVariant->product->images->first()
+                    ? asset('storage/' . $firstDetail->productVariant->product->images->first()->path)
+                    : asset('assets/img/shopix5.png');
         }
-        // Formatear los datos para enviarlos a la vista si es necesario
+
         return view('purchaseOrders', compact('purchaseOrders'));
     }
     
     public function showByOrder($id)
     {
-        // Busca la orden con sus relaciones
-        $order = PurchaseOrder::with(['detalles', 'detalles.productVariant', 'detalles.productVariant.product'])->find($id);
-        // Devuelve la vista con los datos de la orden
+        $user = auth()->user();
+        $order = PurchaseOrder::with(['warehouse', 'detalles', 'detalles.productVariant', 'detalles.productVariant.product.images'])
+            ->where('tenant_id', $user->tenant_id)
+            ->findOrFail($id);
+
+        $order->total_items = $order->detalles->sum('quantity');
+        $order->total_amount = $order->detalles->sum('amount');
+        $order->total_variants = $order->detalles->count();
+
         return view('orderDetail', compact('order'));
     }
 }

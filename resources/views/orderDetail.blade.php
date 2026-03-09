@@ -3,75 +3,118 @@
 @section('title', 'Categorías')
 
 @section('content')
-    <div class="container-fluid py-2">
-      <div class="row">
-        <div class="col-md-12 mt-4">
-        <div class="">
-            <div class="pb-0 px-3">
-              <h1>Detalles de la Orden Nro {{ $order->id }}</h1>
-              <h4 class="mb-0">Proveedor: {{$order->provider_id}}</h4>
-              <h6 class="mb-0">Fecha: {{$order->date}}</h6>
-            </div>
-            <div class="pt-4">
-              <div class="row">
-                @foreach($order->detalles as $detalle)
-                      <div class="col-md-4 mb-4">
-                          <div class="card p-4 d-flex flex-row">
-                              <div class="d-flex flex-column mx-3">
-                                  <h6 class="mb-2 text-sm">{{ $detalle->product_variant->product->name ?? 'Sin nombre' }}</h6>
-                                  <span class="mb-2 text-xs">Cantidad: 
-                                      <span class="text-dark font-weight-bold ms-sm-2">{{ $detalle->quantity }}</span>
-                                  </span>
-                                  <span class="mb-2 text-xs">Variante: 
-                                      <span class="text-dark font-weight-bold ms-sm-2">{{ $detalle->product_variant->size ?? 'Sin variante' }}</span>
-                                  </span>
-                                  <span class="mb-2 text-xs">Precio: 
-                                      <span class="text-dark font-weight-bold ms-sm-2">{{ $detalle->price ?? 'Sin precio' }}</span>
-                                  </span>
-                              </div>
-                          </div>
-                      </div>
-                  @endforeach
-              </div>
-          </div>
+<div class="container-fluid py-2">
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h3 class="mb-1">Detalle de entrada #{{ $order->id }}</h3>
+                    <p class="text-sm text-muted mb-0">Información completa del ingreso al inventario.</p>
         </div>
+                <a href="/purchase-orders" class="btn btn-outline-secondary btn-sm mb-0">Volver al historial</a>
       </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <p class="text-xs text-secondary mb-1">Proveedor</p>
+                            <h6 class="mb-0">{{ $order->provider_id }}</h6>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <p class="text-xs text-secondary mb-1">Almacén</p>
+                            <h6 class="mb-0">{{ $order->warehouse->name ?? 'No asignado' }}</h6>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <p class="text-xs text-secondary mb-1">Fecha de compra</p>
+                            <h6 class="mb-0">{{ $order->date }}</h6>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-2">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <p class="text-xs text-secondary mb-1">Variantes</p>
+                            <h6 class="mb-0">{{ $order->total_variants }}</h6>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-2">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <p class="text-xs text-secondary mb-1">Unidades</p>
+                            <h6 class="mb-0">{{ $order->total_items }}</h6>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-2">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <p class="text-xs text-secondary mb-1">Monto total</p>
+                            <h6 class="mb-0">{{ number_format($order->total_amount, 2) }} USD</h6>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header p-3 pb-0">
+                    <h6 class="mb-0">Productos ingresados</h6>
+                </div>
+                <div class="card-body p-3">
+                    <div class="table-responsive">
+                        <table class="table align-items-center mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Imagen</th>
+                                    <th>Producto</th>
+                                    <th>Variante</th>
+                                    <th class="text-end">Cantidad</th>
+                                    <th class="text-end">Costo unitario</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($order->detalles as $detalle)
+                                    @php
+                                        $product = $detalle->productVariant?->product;
+                                        $image = $product && $product->images->first()
+                                                ? asset('storage/' . $product->images->first()->path)
+                                                : asset('assets/img/shopix5.png');
+                                    @endphp
+                                    <tr>
+                                        <td>
+                                            <img src="{{ $image }}" alt="{{ $product?->name ?? 'Producto' }}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;">
+                                        </td>
+                                        <td>{{ $product?->name ?? 'Sin nombre' }}</td>
+                                        <td>{{ $detalle->productVariant?->size ?? 'Sin variante' }}</td>
+                                        <td class="text-end">{{ $detalle->quantity }}</td>
+                                        <td class="text-end">{{ number_format($detalle->price, 2) }} USD</td>
+                                        <td class="text-end">{{ number_format($detalle->amount, 2) }} USD</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="3" class="text-end">Totales:</th>
+                                    <th class="text-end">{{ $order->total_items }}</th>
+                                    <th></th>
+                                    <th class="text-end">{{ number_format($order->total_amount, 2) }} USD</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
     </div>
-    @endsection
-
-@push('scripts')
-<!-- Core JS Files -->
-<script src="{{ asset('assets/js/core/popper.min.js') }}"></script>
-<script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
-
-<!-- Github buttons -->
-<script async defer src="https://buttons.github.io/buttons.js"></script>
-
-<!-- Control Center for Material Dashboard: parallax effects, scripts for the example pages etc -->
-<script>
-    document.querySelectorAll('form').forEach(form => {
-        form.addEventListener('submit', function (e) {
-            e.preventDefault();
-
-            let formData = new FormData(form);
-            
-            fetch(form.action, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': form.querySelector('input[name="_token"]').value,
-                },
-                body: formData,
-            })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message);
-                // Opcional: actualizar la interfaz de usuario o limpiar los campos
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Ocurrió un error al registrar la llegada.');
-            });
-        });
-    });
-</script>
-@endpush
+    </div>
+</div>
+@endsection

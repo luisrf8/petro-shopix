@@ -15,14 +15,63 @@
         background-color: #f8f9fa;
         padding-right: 5px;
     }
+
+    .admin-cart-fab {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 1080;
+    }
+
+    #cart {
+        --bs-offcanvas-zindex: 2000;
+    }
+
+    @media (min-width: 1200px) {
+        #cart.offcanvas-admin-desktop {
+            position: sticky;
+            top: 90px;
+            height: calc(100vh - 120px);
+            border: 1px solid #e3e6ea;
+            border-radius: .75rem;
+            background: #fff;
+            transform: none !important;
+            visibility: visible !important;
+        }
+
+        #cart.offcanvas-admin-desktop .offcanvas-body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #cart.offcanvas-admin-desktop #cartList {
+            max-height: 48vh;
+        }
+
+        #cart.offcanvas-admin-desktop .offcanvas-header {
+            border-bottom: 1px solid #e3e6ea !important;
+        }
+    }
   </style>
   @extends('layouts.app')
 
     @section('title', 'Categorías')
 
     @section('content')
-    <div class="mx-5 d-flex justify-content-between gap-4">
-        <div class="w-75">
+    <div class="container-fluid px-2 px-md-4">
+        <button type="button"
+            id="openAdminCartBtn"
+            class="btn btn-dark admin-cart-fab d-xl-none"
+            data-bs-toggle="offcanvas"
+            data-bs-target="#cart"
+            aria-controls="cart">
+            <i class="material-symbols-rounded align-middle">shopping_cart</i>
+            <span class="ms-1">Carrito</span>
+            <span class="badge bg-light text-dark ms-2" id="adminCartCount">0</span>
+        </button>
+
+        <div class="row g-4">
+        <div class="col-12 col-xl-8">
             <h1>Flujo de Venta</h1>
             <span id="dollarRate" data-rate="{{ $dollarRate}}"></span>
             <span id="customerId" data-rate="{{ $customerId}}"></span>
@@ -71,6 +120,23 @@
                                 </a>
                             </div>
                         @endforeach
+
+                        @if(isset($materialPackages) && $materialPackages->count() > 0)
+                            <div class="category-item flex-shrink-0" style="width: 200px; scroll-snap-align: start;" data-category-name="paquetes" data-category="packages" onclick="filterProductsByCategory('packages')">
+                                <a href="javascript:void(0)" class="text-decoration-none category-filter">
+                                    <div class="card h-100">
+                                        <div class="card-header mx-3 p-3 text-center">
+                                            <div class="icon icon-shape icon-lg bg-gradient-dark shadow text-center border-radius-lg">
+                                                <i class="material-symbols-rounded opacity-10">inventory_2</i>
+                                            </div>
+                                        </div>
+                                        <div class="card-body pt-0 p-3 text-center">
+                                            <h6 class="text-center mb-0 opacity-9">Paquetes</h6>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                        @endif
                     </div>
                     <div class="mb-3">
                         <input 
@@ -80,6 +146,84 @@
                             placeholder="Buscar producto..." 
                             onkeyup="filterProducts()">
                     </div>
+
+                    <div class="card border mb-3">
+                        <div class="card-body">
+                            <h6 class="mb-2">Agregar por QR / Código de barras</h6>
+                            <div class="d-flex gap-2">
+                                <input type="text" id="scanCodeInput" class="form-control border border-1 p-2 bg-white" placeholder="Escanea o pega el código">
+                                <button type="button" class="btn btn-dark mb-0" id="scanCodeBtn">Agregar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                                @if(isset($materialPackages) && $materialPackages->count() > 0)
+                                    <div id="materialPackagesSection" class="card border mb-3 material-packages-section" data-category="packages">
+                                        <div class="card-body">
+                                            <h6 class="mb-3">Paquetes / Listas de materiales</h6>
+                                            <div class="row g-3">
+                                                @foreach($materialPackages as $package)
+                                                    @php
+                                                        $firstItem = $package->items->first();
+                                                        $firstImage = $firstItem && $firstItem->variant && $firstItem->variant->product && isset($firstItem->variant->product->images[0])
+                                                            ? asset('storage/' . $firstItem->variant->product->images[0]->path)
+                                                            : null;
+                                                        $packageTotalBeforeDiscount = $package->items->sum(function($it) {
+                                                            $basePrice = (float) ($it->variant->price ?? 0);
+                                                            $productDiscount = (float) ($it->variant->product->discount_percentage ?? 0);
+                                                            $variantDiscount = (float) ($it->variant->discount_percentage ?? 0);
+                                                            $price = $basePrice
+                                                                * ((100 - $productDiscount) / 100)
+                                                                * ((100 - $variantDiscount) / 100);
+                                                            $qty = (float) ($it->quantity ?? 0);
+                                                            return $price * $qty;
+                                                        });
+                                                        $packageDiscount = (float) ($package->discount_percentage ?? 0);
+                                                        $packageTotalCalculated = $packageTotalBeforeDiscount * ((100 - $packageDiscount) / 100);
+                                                        $packageTotal = !is_null($package->package_price)
+                                                            ? (float) $package->package_price
+                                                            : $packageTotalCalculated;
+                                                    @endphp
+                                                    <div class="col-12 col-md-6 col-lg-4 package-item" data-name="{{ strtolower($package->name) }}">
+                                                        <div class="card h-100 shadow-sm">
+                                                            <div class="card-body">
+                                                                <div class="d-flex gap-3 align-items-center mb-2">
+                                                                    <div class="icon icon-shape icon-xl shadow bg-transparent text-center border border-1 border-black text-info border-radius-lg flex-shrink-0" style="width: 70px; height: 70px;">
+                                                                        @if($firstImage)
+                                                                            <img src="{{ $firstImage }}" alt="{{ $package->name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
+                                                                        @else
+                                                                            <i class="material-symbols-rounded text-dark">inventory_2</i>
+                                                                        @endif
+                                                                    </div>
+                                                                    <div class="flex-grow-1">
+                                                                        <h6 class="mb-1">{{ $package->name }}</h6>
+                                                                        <p class="text-sm text-muted mb-0">{{ $package->items->count() }} materiales</p>
+                                                                        <p class="text-sm fw-bold mb-0">{{ number_format($packageTotal, 2) }} USD</p>
+                                                                        @if(!is_null($package->package_price))
+                                                                            <p class="text-xs text-dark mb-0">Precio fijo combo</p>
+                                                                        @endif
+                                                                        @if($packageDiscount > 0)
+                                                                            <p class="text-xs text-success mb-0">Descuento paquete: {{ number_format($packageDiscount, 2) }}%</p>
+                                                                        @endif
+                                                                    </div>
+                                                                </div>
+                                                                <div class="d-flex gap-2 align-items-center mt-2">
+                                                                    <input type="number" min="1" value="1" class="form-control form-control-sm" id="packageQty_{{ $package->id }}" style="max-width: 90px;">
+                                                                    <button
+                                                                        type="button"
+                                                                        class="btn btn-sm btn-outline-dark mb-0"
+                                                                        onclick="addMaterialPackageToSale({{ $package->id }})"
+                                                                    >Agregar paquete</button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    </div>
+                                @endif
+
                     <div id="itemSelector" class="row row-cols-1 row-cols-md-3 g-3">
                         @foreach($productItems as $item)
                             <div class="col product-item" data-category="{{ $item->category_id }}" data-name="{{ strtolower($item->name) }}">
@@ -102,18 +246,33 @@
                                         </div>
                                         @foreach($item->variants as $variant)
                                             @if($variant->stock > 0)
+                                            @php
+                                                $productDiscount = (float) ($item->discount_percentage ?? 0);
+                                                $variantDiscount = (float) ($variant->discount_percentage ?? 0);
+                                                $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+                                            @endphp
                                             <div class="d-flex gap-5 justify-content-between align-items-center">
                                                 <label for="variant_{{ $variant->id }}" class="d-block mt-2 variant-label" style="cursor: pointer;" data-product-name="{{ $item->name }}">
                                                     <input type="checkbox" class="form-check-input me-2 variant-checkbox" id="variant_{{ $variant->id }}" name="selectedVariants[]" value="{{ $variant->id }}"
-                                                    data-price="{{ $variant->price }}" data-stock="{{ $variant->stock }}"
+                                                    data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}" data-stock="{{ $variant->stock }}"
                                                     data-product-name="{{ $item->name }}"
                                                     data-size="{{ $variant->size }}"
                                                     data-taxes="{{ $item->taxes }}">
-                                                    <span>{{$variant->size}} | {{ $variant->price }} USD | Stock: {{ $variant->stock }}</span>
+                                                    <span>
+                                                        {{$variant->size}} |
+                                                        @if($productDiscount > 0 || $variantDiscount > 0)
+                                                            <span class="text-decoration-line-through text-muted">{{ number_format((float) $variant->price, 2) }} USD</span>
+                                                            <span class="fw-semibold">{{ number_format($effectiveVariantPrice, 2) }} USD</span>
+                                                            <small class="text-success">(-{{ number_format($productDiscount + $variantDiscount, 2) }}%)</small>
+                                                        @else
+                                                            {{ number_format((float) $variant->price, 2) }} USD
+                                                        @endif
+                                                        | Stock: {{ $variant->stock }}
+                                                    </span>
                                                     <i class="check-icon d-none ms-2 text-success fas fa-check"></i>
                                                 </label>
                                                 <i class="material-symbols-rounded text-info" style="cursor: pointer"
-                                                    onclick="showProductDetails('{{ $item->name }}', '{{ $item->description }}', '{{ isset($item->images) && count($item->images) > 0 ? asset('storage/' . $item->images[0]->path) : '' }}', '{{ $variant->price }}', '{{ $variant->stock }}', '{{ $variant->size }}')">
+                                                    onclick="showProductDetails('{{ $item->name }}', '{{ $item->description }}', '{{ isset($item->images) && count($item->images) > 0 ? asset('storage/' . $item->images[0]->path) : '' }}', '{{ number_format($effectiveVariantPrice, 2, '.', '') }}', '{{ $variant->stock }}', '{{ $variant->size }}')">
                                                     info
                                                 </i>
                                             </div>
@@ -190,33 +349,20 @@
                                                 @if ($method->dni)
                                                     <div><small>DNI/Correo: {{ $method->dni }}</small></div>
                                                 @endif
-                                                <div id="paymentFields_{{ $method->id }}" class="d-none d-flex flex-row gap-2 align-items-center">
-                                                    <label for="amount_{{ $method->id }}">Monto:</label>
-                                                    <input type="number" step="0.01" min="0" class="form-control payment-input border border-1 p-2" 
-                                                        id="amount_{{ $method->id }}" 
-                                                        data-method-id="{{ $method->id }}" 
-                                                        data-currency="{{ $currencyCode }}" 
-                                                        oninput="updatePayment(this)">
-
-                                                    @php
-                                                        $noReference = in_array(strtolower($method->name), ['efectivo', 'punto de venta', 'pago movil']);
-                                                    @endphp
-
-                                                    @if (!$noReference)
-                                                        <label for="reference_{{ $method->id }}">Referencia:</label>
-                                                        <input type="text" class="form-control payment-reference-input border border-1 p-2" 
-                                                            id="reference_{{ $method->id }}" 
-                                                            data-method-id="{{ $method->id }}" 
-                                                            oninput="updatePayment(this)">
-                                                    @else
-                                                        <input type="hidden" id="reference_{{ $method->id }}" value="00">
-                                                    @endif
+                                                @php
+                                                    $noReference = in_array(strtolower($method->name), ['efectivo', 'punto de venta', 'pago movil']);
+                                                @endphp
+                                                <div id="paymentFields_{{ $method->id }}" class="d-none mt-2" data-currency="{{ $currencyCode }}" data-no-reference="{{ $noReference ? '1' : '0' }}">
+                                                    <div id="paymentRows_{{ $method->id }}" class="d-flex flex-column gap-2"></div>
+                                                    <button type="button" class="btn btn-outline-dark btn-sm mt-2" onclick="addPaymentEntry('{{ $method->id }}', '{{ $currencyCode }}', {{ $noReference ? 'true' : 'false' }})">
+                                                        + Agregar otro pago
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
                                         <div class="mt-2">
                                             <input type="checkbox" class="form-check-input payment-method-checkbox" id="method_{{ $method->id }}" 
-                                                data-method-id="{{ $method->id }}" data-currency="{{ $currencyCode }}" 
+                                                data-method-id="{{ $method->id }}" data-method-name="{{ $method->name }}" data-currency="{{ $currencyCode }}" 
                                                 onchange="togglePaymentFields(this)">
                                         </div>
                                     </div>
@@ -247,6 +393,25 @@
                     <h4>Paso 3: Confirmación</h4>
                     <p>Resumen de la compra y confirmación.</p>
 
+                    <div class="card p-3 mb-3">
+                        <h6 class="mb-3">Tipo de entrega</h6>
+                        <div class="d-flex gap-4 flex-wrap">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="delivery_type" id="delivery_pickup" value="pickup" checked>
+                                <label class="form-check-label" for="delivery_pickup">Retiro en tienda</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="delivery_type" id="delivery_shipping" value="shipping">
+                                <label class="form-check-label" for="delivery_shipping">Envío</label>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 d-none" id="deliveryAddressContainer">
+                            <label for="deliveryAddress" class="form-label">Dirección de envío</label>
+                            <input type="text" id="deliveryAddress" class="form-control border border-1 p-2 bg-white" placeholder="Ej: Av. Libertador, Local 22, Maturín">
+                        </div>
+                    </div>
+
                     <div id="summaryContainer" class="mt-3 card p-4"></div> <!-- Aquí se insertará el resumen -->
                     <span class="text-danger paymentMessage"></span>
 
@@ -258,30 +423,41 @@
 
             </form>
         </div>
-        <div class="w-25 card p-4 h-100" id="cart">
-            <h1>Carrito</h1>
-            <ul id="cartList" class="list-group gap-1"></ul>
-            <div class="mt-3">
-                <strong>Sub Total:</strong> $<span id="cartSubTotal">0.00</span>
+        <div class="col-12 col-xl-4">
+            <div class="offcanvas offcanvas-end offcanvas-admin-desktop" tabindex="-1" id="cart" aria-labelledby="cartOffcanvasLabel" data-bs-scroll="true" data-bs-backdrop="true">
+                <div class="offcanvas-header border-bottom">
+                    <h4 class="offcanvas-title m-0" id="cartOffcanvasLabel">Carrito</h4>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm d-xl-none" data-bs-dismiss="offcanvas">Cerrar</button>
+                        <button type="button" class="btn-close d-xl-none" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="offcanvas-body p-3 p-xl-4">
+                    <ul id="cartList" class="list-group gap-1"></ul>
+                    <div class="mt-3">
+                        <strong>Sub Total:</strong> $<span id="cartSubTotal">0.00</span>
+                    </div>
+                    <div class="mt-3 igtf-class" style="display: none;">
+                        <strong>Total sin IGTF:</strong> $<span id="cartTotalIGTF">0.00</span>
+                    </div>
+                    <div class="mt-3">
+                        <strong>Total:</strong> $<span id="cartTotal">0.00</span>
+                    </div>
+                    <div class="mt-3">
+                        <strong>Sub Total Bs:</strong>Bs<span id="cartSubTotalBs">0.00</span>
+                    </div>
+                    <div class="mt-3">
+                        <strong>Total Bs:</strong>Bs<span id="cartTotalBs">0.00</span>
+                    </div>
+                    <div class="mt-3" id="taxesContainer">
+                        <!-- Aquí se mostrarán los impuestos aplicados -->
+                    </div>
+                    <div class="d-flex justify-content-end mt-auto">
+                        <button type="button" class="btn btn-dark mt-3" id="toStep2" disabled>Siguiente</button>
+                    </div>
+                </div>
             </div>
-            <div class="mt-3 igtf-class" style="display: none;">
-                <strong>Total sin IGTF:</strong> $<span id="cartTotalIGTF">0.00</span>
-            </div>
-            <div class="mt-3">
-                <strong>Total:</strong> $<span id="cartTotal">0.00</span>
-            </div>
-            <div class="mt-3">
-                <strong>Sub Total Bs:</strong>Bs<span id="cartSubTotalBs">0.00</span>
-            </div>
-            <div class="mt-3">
-                <strong>Total Bs:</strong>Bs<span id="cartTotalBs">0.00</span>
-            </div>
-            <div class="mt-3" id="taxesContainer">
-                <!-- Aquí se mostrarán los impuestos aplicados -->
-            </div>
-            <div class="d-flex justify-content-end">
-                <button type="button" class="btn btn-dark mt-3" id="toStep2" disabled>Siguiente</button>
-            </div>
+        </div>
         </div>
     </div>
 <!-- Modal para Detalles del Producto -->
@@ -342,13 +518,153 @@
         const dollarRate = Number(dollar.rate);
         
         const customerId = document.getElementById('customerId').dataset.rate; // Asegúrate de que esta variable esté definida correctamente
+        @php
+            $materialPackagesPayload = ($materialPackages ?? collect())->map(function ($package) {
+                return [
+                    'id' => $package->id,
+                    'name' => $package->name,
+                    'discount_percentage' => (float) ($package->discount_percentage ?? 0),
+                    'package_price' => !is_null($package->package_price) ? (float) $package->package_price : null,
+                    'items' => $package->items->map(function ($item) {
+                        $basePrice = (float) ($item->variant->price ?? 0);
+                        $productDiscount = (float) ($item->variant->product->discount_percentage ?? 0);
+                        $variantDiscount = (float) ($item->variant->discount_percentage ?? 0);
+                        $effectivePrice = $basePrice * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+
+                        return [
+                            'variant_id' => $item->product_variant_id,
+                            'variant_size' => $item->variant->size ?? '',
+                            'variant_price' => (float) $effectivePrice,
+                            'product_name' => $item->variant->product->name ?? 'Producto',
+                            'quantity' => (float) ($item->quantity ?? 0),
+                            'taxes' => ($item->variant && $item->variant->product && $item->variant->product->taxes)
+                                ? $item->variant->product->taxes->map(function ($tax) {
+                                    return [
+                                        'name' => $tax->name,
+                                        'rate' => (float) $tax->rate,
+                                    ];
+                                })->values()->toArray()
+                                : [],
+                        ];
+                    })->values()->toArray(),
+                ];
+            })->values();
+        @endphp
+        const materialPackages = @json($materialPackagesPayload);
+
+        function calculateTaxRateFromTaxes(taxes) {
+            return (taxes || []).reduce((sum, tax) => sum + (parseFloat(tax.rate) || 0), 0);
+        }
+
+        function addMaterialPackageToSale(packageId) {
+            const pkg = materialPackages.find(p => Number(p.id) === Number(packageId));
+            if (!pkg) {
+                alert('No se encontró el paquete seleccionado.');
+                return;
+            }
+
+            const qtyInput = document.getElementById(`packageQty_${packageId}`);
+            const packQty = Math.max(1, parseInt(qtyInput?.value || '1', 10));
+
+            pkg.items.forEach(component => {
+                const variantId = String(component.variant_id);
+                const componentQty = (parseFloat(component.quantity) || 0) * packQty;
+                if (componentQty <= 0) {
+                    return;
+                }
+
+                const taxes = component.taxes || [];
+                const taxRate = calculateTaxRateFromTaxes(taxes);
+                const packageDiscount = Math.max(0, Math.min(100, parseFloat(pkg.discount_percentage || 0)));
+                const priceBeforePackageDiscount = parseFloat(component.variant_price) || 0;
+                const baseLineMultiplier = ((100 - packageDiscount) / 100);
+
+                const packageBaseTotal = pkg.items.reduce((sum, row) => {
+                    const rowQty = parseFloat(row.quantity) || 0;
+                    const rowBasePrice = parseFloat(row.variant_price) || 0;
+                    return sum + (rowBasePrice * ((100 - packageDiscount) / 100) * rowQty);
+                }, 0);
+
+                const targetPackageTotal = (pkg.package_price !== null && pkg.package_price !== undefined)
+                    ? (parseFloat(pkg.package_price) || 0)
+                    : packageBaseTotal;
+
+                const priceScale = packageBaseTotal > 0 ? (targetPackageTotal / packageBaseTotal) : 1;
+                const combinedLineMultiplier = baseLineMultiplier * priceScale;
+                const price = priceBeforePackageDiscount * combinedLineMultiplier;
+                const taxAmount = price * (taxRate / 100);
+                const totalPrice = price + taxAmount;
+                const combinedLineDiscount = (1 - combinedLineMultiplier) * 100;
+
+                const existing = selectedItems.find(item => String(item.id) === variantId);
+                if (existing) {
+                    existing.quantity = Number(existing.quantity || 0) + componentQty;
+                } else {
+                    selectedItems.push({
+                        id: variantId,
+                        productName: `${component.product_name} [${pkg.name}]`,
+                        productSize: component.variant_size,
+                        price,
+                        stock: 999999,
+                        quantity: componentQty,
+                        line_discount_percentage: combinedLineDiscount,
+                        taxes,
+                        taxRate,
+                        taxAmount,
+                        totalPrice,
+                    });
+                }
+
+                const checkbox = document.getElementById(`variant_${variantId}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+
+            recalcSubtotals();
+            renderCart();
+            alert(`Paquete "${pkg.name}" agregado al carrito.`);
+        }
         document.addEventListener('DOMContentLoaded', function () {
             // Escuchar todos los checkboxes
             const checkboxes = document.querySelectorAll('input[name="selectedVariants[]"]');
             checkboxes.forEach(checkbox => {
                 checkbox.addEventListener('change', handleCheckboxChange);
             });
+
+            const cartElement = document.getElementById('cart');
+            if (cartElement) {
+                cartElement.addEventListener('hidden.bs.offcanvas', function () {
+                    document.body.classList.remove('modal-open');
+                    document.body.style.removeProperty('overflow');
+                    document.body.style.removeProperty('padding-right');
+                    document.querySelectorAll('.offcanvas-backdrop').forEach(el => el.remove());
+                });
+            }
         });
+
+        function closeCartOffcanvas(forceCleanup = false) {
+            const cartElement = document.getElementById('cart');
+            if (!cartElement) return;
+
+            const isMobileOffcanvas = window.innerWidth < 1200;
+
+            if (isMobileOffcanvas) {
+                const offcanvas = bootstrap.Offcanvas.getInstance(cartElement);
+                if (offcanvas) {
+                    offcanvas.hide();
+                }
+            }
+
+            if (forceCleanup) {
+                setTimeout(() => {
+                    document.body.classList.remove('modal-open');
+                    document.body.style.removeProperty('overflow');
+                    document.body.style.removeProperty('padding-right');
+                    document.querySelectorAll('.offcanvas-backdrop').forEach(el => el.remove());
+                }, 120);
+            }
+        }
         function handleCheckboxChange(e) {
             const checkbox = e.target;
             const id = checkbox.value;
@@ -381,6 +697,7 @@
                     price,
                     stock,
                     quantity: 1,
+                    line_discount_percentage: 0,
                     taxes,
                     taxRate: totalTaxRate,
                     taxAmount,
@@ -426,6 +743,7 @@ function updateQuantity(id, newQty) {
             const cartList = document.getElementById('cartList');
             const cartTotal = document.getElementById('cartTotal');
             const cartSubTotal = document.getElementById('cartSubTotal');
+            const adminCartCount = document.getElementById('adminCartCount');
             const cartTotalBs = document.getElementById('cartTotalBs');
             const cartSubTotalBs = document.getElementById('cartSubTotalBs');
             const cartTotalIGTF = document.getElementById('cartTotalIGTF');
@@ -490,6 +808,11 @@ function updateQuantity(id, newQty) {
                 li.appendChild(controlsDiv);
                 cartList.appendChild(li);
             });
+
+            const cartTotalQty = selectedItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+            if (adminCartCount) {
+                adminCartCount.textContent = cartTotalQty;
+            }
             // Obtener la tasa del dólar desde el DOM
             const dollar = @json($dollarRate);
             const dollarRate = Number(dollar.rate);
@@ -553,17 +876,26 @@ function updateQuantity(id, newQty) {
             }, 0);
         }
 
+        let activeCategory = 'all';
+
         function filterProductsByCategory(categoryId) {
+            activeCategory = categoryId;
             const productItems = document.querySelectorAll('.product-item');
+            const packagesSection = document.getElementById('materialPackagesSection');
 
             productItems.forEach(item => {
                 const itemCategory = item.getAttribute('data-category');
-                if (categoryId === 'all' || itemCategory === categoryId) {
+                if (categoryId === 'all' || (categoryId !== 'packages' && itemCategory === categoryId)) {
                     item.style.display = 'block'; // Mostrar si coincide con la categoría seleccionada
                 } else {
                     item.style.display = 'none'; // Ocultar si no coincide
                 }
             });
+
+            if (packagesSection) {
+                const showPackages = categoryId === 'all' || categoryId === 'packages';
+                packagesSection.style.display = showPackages ? 'block' : 'none';
+            }
 
             // Limpiar el campo de búsqueda de productos al cambiar de categoría
             document.getElementById('searchInput').value = '';
@@ -573,15 +905,38 @@ function updateQuantity(id, newQty) {
             const searchInput = document.getElementById('searchInput');
             const filter = searchInput.value.toLowerCase();
             const productItems = document.querySelectorAll('.product-item');
+            const packageItems = document.querySelectorAll('.package-item');
+            const packagesSection = document.getElementById('materialPackagesSection');
+
+            const isAll = activeCategory === 'all';
+            const isPackages = activeCategory === 'packages';
 
             productItems.forEach(item => {
                 const name = item.getAttribute('data-name');
-                if (name.includes(filter)) {
+                const itemCategory = item.getAttribute('data-category');
+                const matchCategory = isAll || (!isPackages && itemCategory === activeCategory);
+
+                if (matchCategory && name.includes(filter)) {
                     item.style.display = 'block'; // Mostrar si coincide
                 } else {
                     item.style.display = 'none'; // Ocultar si no coincide
                 }
             });
+
+            if (packagesSection) {
+                let hasVisiblePackage = false;
+
+                packageItems.forEach(item => {
+                    const name = item.getAttribute('data-name') || '';
+                    const shouldShow = (isAll || isPackages) && name.includes(filter);
+                    item.style.display = shouldShow ? 'block' : 'none';
+                    if (shouldShow) {
+                        hasVisiblePackage = true;
+                    }
+                });
+
+                packagesSection.style.display = hasVisiblePackage ? 'block' : 'none';
+            }
         }
 
         function showProductDetails(name, description, imageUrl, price, stock, size) {
@@ -610,6 +965,86 @@ function updateQuantity(id, newQty) {
             const qrModal = new bootstrap.Modal(document.getElementById('qrModal'));
             qrModal.show(); // Mostrar el modal
         }
+
+        async function addByScanCode() {
+            const input = document.getElementById('scanCodeInput');
+            const code = String(input?.value || '').trim();
+            if (!code) {
+                return;
+            }
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const response = await fetch('/sales/scan-code', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ code }),
+            });
+
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+                alert(payload.message || 'Código no encontrado.');
+                return;
+            }
+
+            if (payload.type === 'package') {
+                addMaterialPackageToSale(payload.package_id);
+                input.value = '';
+                return;
+            }
+
+            if (payload.type === 'variant' && payload.variant) {
+                const variant = payload.variant;
+                const checkbox = document.getElementById(`variant_${variant.id}`);
+                if (checkbox) {
+                    if (!checkbox.checked) {
+                        checkbox.checked = true;
+                        checkbox.dispatchEvent(new Event('change'));
+                    } else {
+                        const existing = selectedItems.find(item => String(item.id) === String(variant.id));
+                        if (existing) {
+                            existing.quantity = Number(existing.quantity || 0) + 1;
+                            recalcSubtotals();
+                            renderCart();
+                        }
+                    }
+                    input.value = '';
+                    return;
+                }
+
+                const taxes = variant.taxes || [];
+                const totalTaxRate = taxes.reduce((sum, tax) => sum + parseFloat(tax.rate || 0), 0);
+                const price = parseFloat(variant.price || 0);
+                const taxAmount = price * (totalTaxRate / 100);
+                const totalPrice = price + taxAmount;
+
+                const existing = selectedItems.find(item => String(item.id) === String(variant.id));
+                if (existing) {
+                    existing.quantity = Number(existing.quantity || 0) + 1;
+                } else {
+                    selectedItems.push({
+                        id: String(variant.id),
+                        productName: variant.product_name,
+                        productSize: variant.size,
+                        price,
+                        stock: parseFloat(variant.stock || 0),
+                        quantity: 1,
+                        line_discount_percentage: 0,
+                        taxes,
+                        taxRate: totalTaxRate,
+                        taxAmount,
+                        totalPrice,
+                    });
+                }
+
+                recalcSubtotals();
+                renderCart();
+                input.value = '';
+            }
+        }
         function filterCategories() {
             const searchValue = document.getElementById('searchCategory').value.toLowerCase();
             const categories = document.querySelectorAll('.category-item');
@@ -623,6 +1058,14 @@ function updateQuantity(id, newQty) {
                 }
             });
         }
+
+        document.getElementById('scanCodeBtn')?.addEventListener('click', addByScanCode);
+        document.getElementById('scanCodeInput')?.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                addByScanCode();
+            }
+        });
         document.getElementById('toStep2').addEventListener('click', function() {
             document.getElementById('step1').classList.add('d-none');
             document.getElementById('step2').classList.remove('d-none');
@@ -637,6 +1080,8 @@ function updateQuantity(id, newQty) {
             document.querySelectorAll('.delete-button').forEach(btn => {
                 btn.classList.add('d-none');
             });
+
+            closeCartOffcanvas(true);
         });
 
         document.getElementById('backToStep1').addEventListener('click', function() {
@@ -682,38 +1127,97 @@ function updateQuantity(id, newQty) {
             
         });
         
-        function togglePaymentFields(checkbox) {
-            const methodId = checkbox.dataset.methodId;
-            const paymentFields = document.getElementById(`paymentFields_${methodId}`);
+        function generatePaymentEntryId() {
+            return `${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+        }
 
-            if (checkbox.checked) {
-                paymentFields.classList.remove('d-none'); // Mostrar los campos de monto y referencia
-                payments.push({
-                    methodId: methodId,
-                    currency: checkbox.dataset.currency,
-                    amount: 0,
-                    reference: ''
-                });
-            } else {
-                // Limpiar los valores de los inputs
-                const amountInput = document.getElementById(`amount_${methodId}`);
-                const referenceInput = document.getElementById(`reference_${methodId}`);
+        function createPaymentRowHtml(methodId, currency, noReference, entryId) {
+            const referenceInput = noReference
+                ? `<input type="hidden" class="payment-reference-input" data-method-id="${methodId}" data-entry-id="${entryId}" data-requires-reference="0" value="00">`
+                : `<input type="text" class="form-control payment-reference-input border border-1 p-2" data-method-id="${methodId}" data-entry-id="${entryId}" data-requires-reference="1" placeholder="Referencia" oninput="updatePayment(this)">`;
 
-                if (amountInput) amountInput.value = ''; // Limpiar el campo de monto
-                if (referenceInput) referenceInput.value = ''; // Limpiar el campo de referencia
+            return `
+                <div class="d-flex flex-row gap-2 align-items-center" data-payment-entry-row="${entryId}">
+                    <label class="m-0">Monto:</label>
+                    <input type="number" step="0.01" min="0" class="form-control payment-input border border-1 p-2"
+                        data-method-id="${methodId}"
+                        data-entry-id="${entryId}"
+                        data-currency="${currency}"
+                        oninput="updatePayment(this)">
+                    ${referenceInput}
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="removePaymentEntry('${methodId}', '${entryId}')">X</button>
+                </div>
+            `;
+        }
 
-                paymentFields.classList.add('d-none'); // Ocultar los campos
-                payments = payments.filter(payment => payment.methodId !== methodId); // Eliminar el pago del arreglo
+        function addPaymentEntry(methodId, currency, noReference = false, methodName = '') {
+            const rowsContainer = document.getElementById(`paymentRows_${methodId}`);
+            if (!rowsContainer) return;
+
+            const entryId = generatePaymentEntryId();
+            rowsContainer.insertAdjacentHTML('beforeend', createPaymentRowHtml(methodId, currency, noReference, entryId));
+
+            payments.push({
+                entryId,
+                methodId: String(methodId),
+                methodName: methodName || `Método ${methodId}`,
+                currency,
+                amount: 0,
+                reference: noReference ? '00' : ''
+            });
+
+            validatePaymentDetails();
+        }
+
+        function removePaymentEntry(methodId, entryId) {
+            const row = document.querySelector(`[data-payment-entry-row="${entryId}"]`);
+            if (row) row.remove();
+
+            payments = payments.filter(payment => payment.entryId !== entryId);
+
+            const hasEntriesForMethod = payments.some(payment => payment.methodId === String(methodId));
+            if (!hasEntriesForMethod) {
+                const checkbox = document.getElementById(`method_${methodId}`);
+                const paymentFields = document.getElementById(`paymentFields_${methodId}`);
+                const rowsContainer = document.getElementById(`paymentRows_${methodId}`);
+                if (rowsContainer) rowsContainer.innerHTML = '';
+                if (checkbox) checkbox.checked = false;
+                if (paymentFields) paymentFields.classList.add('d-none');
             }
 
-            console.log("payments", payments); // Verificar el arreglo de pagos en la consola
-            validatePaymentDetails(); // Validar los detalles de pago
+            renderCart();
+            validatePaymentDetails();
+        }
+
+        function togglePaymentFields(checkbox) {
+            const methodId = checkbox.dataset.methodId;
+            const methodName = checkbox.dataset.methodName || `Método ${methodId}`;
+            const paymentFields = document.getElementById(`paymentFields_${methodId}`);
+            const currency = paymentFields?.dataset.currency || checkbox.dataset.currency;
+            const noReference = paymentFields?.dataset.noReference === '1';
+
+            if (checkbox.checked) {
+                paymentFields.classList.remove('d-none');
+                const hasEntriesForMethod = payments.some(payment => payment.methodId === String(methodId));
+                if (!hasEntriesForMethod) {
+                    addPaymentEntry(methodId, currency, noReference, methodName);
+                }
+            } else {
+                const rowsContainer = document.getElementById(`paymentRows_${methodId}`);
+                if (rowsContainer) rowsContainer.innerHTML = '';
+                paymentFields.classList.add('d-none');
+                payments = payments.filter(payment => payment.methodId !== String(methodId));
+            }
+
+            console.log("payments", payments);
+            validatePaymentDetails();
         }
 
         function updatePayment(input) {
             const methodId = input.dataset.methodId;
+            const entryId = input.dataset.entryId;
             const currency = input.dataset.currency;
-            const payment = payments.find(payment => payment.methodId === methodId);
+            const payment = payments.find(payment => payment.methodId === String(methodId) && payment.entryId === entryId);
 
             const dollar = @json($dollarRate);
             const dollarRate = Number(dollar.rate);
@@ -759,6 +1263,9 @@ function updateQuantity(id, newQty) {
 
         function renderSummary() {
             const container = document.getElementById('summaryContainer');
+            const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
+            const deliveryAddress = (document.getElementById('deliveryAddress')?.value || '').trim();
+            const deliveryPreferenceLabel = deliveryType === 'shipping' ? 'Envío' : 'Retiro en tienda';
             
             const dollar = @json($dollarRate);
             const dollarRate = Number(dollar.rate);
@@ -790,6 +1297,14 @@ function updateQuantity(id, newQty) {
             totalDivBs.innerHTML = `<strong>Total a pagar Bs:</strong> Bs${(totalAmount * dollarRate).toFixed(2)}`;
             container.appendChild(totalDivBs);
 
+            const deliveryDiv = document.createElement('p');
+            deliveryDiv.innerHTML = `<strong>Entrega:</strong> ${deliveryPreferenceLabel}`;
+            container.appendChild(deliveryDiv);
+
+            const addressDiv = document.createElement('p');
+            addressDiv.innerHTML = `<strong>Dirección:</strong> ${deliveryType === 'shipping' ? (deliveryAddress || 'No indicada') : 'Tienda'}`;
+            container.appendChild(addressDiv);
+
             // Resumen de métodos de pago
             const paymentsTitle = document.createElement('h5');
             paymentsTitle.innerText = 'Métodos de pago';
@@ -802,17 +1317,25 @@ function updateQuantity(id, newQty) {
             } else {
                 const paymentList = document.createElement('ul');
                 payments.forEach(payment => {
-                    const amountInput = document.getElementById(`amount_${payment.methodId}`);
-                    const referenceInput = document.getElementById(`reference_${payment.methodId}`);
-                    const amount = amountInput?.value || 0;
-                    const reference = referenceInput?.value || '';
+                    const amount = Number(payment.amount || 0);
+                    const reference = payment.reference || 'N/A';
+
+                    if (amount <= 0) {
+                        return;
+                    }
 
                     const li = document.createElement('li');
-                    li.innerText = `Método: ${payment.currency} - Monto: $${parseFloat(amount).toFixed(2)} - Referencia: ${reference}`;
+                    li.innerText = `${payment.methodName} (${payment.currency}) - Monto: $${amount.toFixed(2)} - Referencia: ${reference}`;
                     paymentList.appendChild(li);
                 });
-                container.appendChild(paymentList);
-                paymentList.className = 'card p-4 gap-2';
+                if (paymentList.children.length > 0) {
+                    container.appendChild(paymentList);
+                    paymentList.className = 'card p-4 gap-2';
+                } else {
+                    const noPaymentAmount = document.createElement('p');
+                    noPaymentAmount.innerText = 'No hay montos cargados en los métodos seleccionados.';
+                    container.appendChild(noPaymentAmount);
+                }
             }
         }
 
@@ -821,17 +1344,18 @@ function updateQuantity(id, newQty) {
             paymentsContainer.innerHTML = ''; // Limpiar contenido previo
 
             payments.forEach(payment => {
+                const amount = Number(payment.amount || 0);
+                if (amount <= 0) {
+                    return;
+                }
+
                 const paymentDiv = document.createElement('div');
                 paymentDiv.className = 'payment-method-summary';
-
-                const amountInput = document.getElementById(`amount_${payment.methodId}`);
-                const referenceInput = document.getElementById(`reference_${payment.methodId}`);
-                const amount = amountInput?.value || 0;
-                const reference = referenceInput?.value || '';
+                const reference = payment.reference || 'N/A';
 
                 paymentDiv.innerHTML = `
-                    <strong>Método:</strong> ${payment.currency} <br>
-                    <strong>Monto:</strong> $${parseFloat(amount).toFixed(2)} <br>
+                    <strong>Método:</strong> ${payment.methodName} (${payment.currency})<br>
+                    <strong>Monto:</strong> $${amount.toFixed(2)} <br>
                     <strong>Referencia:</strong> ${reference} <br>
                     <hr>
                 `;
@@ -854,14 +1378,16 @@ function updateQuantity(id, newQty) {
             let messageClass = '';
             let disableStep3 = false;
 
-            // Verificar si hay referencias vacías (solo si el método requiere referencia)
+            // Verificar si hay referencias vacías (solo si el método requiere referencia y monto > 0)
             const hasEmptyReference = payments.some(payment => {
-                const methodElement = document.querySelector(`[data-method-id="${payment.methodId}"]`);
-                if (methodElement && methodElement.dataset.currency !== undefined) {
-                    const inputReference = document.getElementById(`reference_${payment.methodId}`);
-                    return inputReference && inputReference.type !== 'hidden' && (!payment.reference || payment.reference.trim() === '');
-                }
-                return false;
+                const amount = Number(payment.amount) || 0;
+                if (amount <= 0) return false;
+
+                const inputReference = document.querySelector(`.payment-reference-input[data-entry-id="${payment.entryId}"]`);
+                const requiresReference = inputReference ? inputReference.dataset.requiresReference === '1' : true;
+
+                if (!requiresReference) return false;
+                return !payment.reference || payment.reference.trim() === '';
             });
 
             if (hasEmptyReference) {
@@ -896,10 +1422,12 @@ function updateQuantity(id, newQty) {
 
         //Funciones para paso 3
         document.getElementById('toStep3').addEventListener('click', function() {
+            closeCartOffcanvas(true);
             document.getElementById('step2').classList.add('d-none');
             renderSummary(); // Mostrar el resumen
             document.getElementById('cart').classList.add('d-none');
             document.getElementById('step3').classList.remove('d-none');
+            document.getElementById('openAdminCartBtn')?.classList.add('d-none');
             console.log('Resumen:', selectedItems);
             console.log('Pagos:', payments);
         });
@@ -907,7 +1435,35 @@ function updateQuantity(id, newQty) {
             document.getElementById('step3').classList.add('d-none');
             document.getElementById('step2').classList.remove('d-none');
             document.getElementById('cart').classList.remove('d-none');
+            document.getElementById('openAdminCartBtn')?.classList.remove('d-none');
 
+        });
+
+        function updateDeliveryAddressVisibility() {
+            const selectedType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
+            const addressContainer = document.getElementById('deliveryAddressContainer');
+            const addressInput = document.getElementById('deliveryAddress');
+
+            if (selectedType === 'shipping') {
+                addressContainer.classList.remove('d-none');
+            } else {
+                addressContainer.classList.add('d-none');
+                addressInput.value = '';
+            }
+
+            if (!document.getElementById('step3').classList.contains('d-none')) {
+                renderSummary();
+            }
+        }
+
+        document.querySelectorAll('input[name="delivery_type"]').forEach(input => {
+            input.addEventListener('change', updateDeliveryAddressVisibility);
+        });
+
+        document.getElementById('deliveryAddress').addEventListener('input', function () {
+            if (!document.getElementById('step3').classList.contains('d-none')) {
+                renderSummary();
+            }
         });
         
         document.getElementById('confirmPurchase').addEventListener('click', function () {
@@ -923,13 +1479,26 @@ function updateQuantity(id, newQty) {
 
     const authUser = @json($authUser);
     const tenantId = Number(authUser.tenant_id);
+    const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
+    const deliveryAddress = (document.getElementById('deliveryAddress')?.value || '').trim();
+
+    if (deliveryType === 'shipping' && !deliveryAddress) {
+        alert('Debes indicar la dirección cuando la entrega es por envío.');
+        button.disabled = false;
+        button.innerHTML = originalText;
+        return;
+    }
+
+    const validPayments = payments.filter(payment => Number(payment.amount || 0) > 0);
 
     const summary = {
         customerId: customerId,
         items: selectedItems,
-        payments: payments,
+        payments: validPayments,
         tenant_id: tenantId,
-        dollarRate: dollarRate
+        dollarRate: dollarRate,
+        delivery_type: deliveryType,
+        delivery_address: deliveryType === 'shipping' ? deliveryAddress : 'Tienda'
     };
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');

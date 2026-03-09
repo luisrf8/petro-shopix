@@ -13,6 +13,7 @@
         "guzzlehttp/guzzle": "^7.0.1",
         "laravel/breeze": "^2.3",
         "laravel/framework": "^11.0",
+        "laravel/reverb": "^1.8",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.5",
         "simplesoftwareio/simple-qrcode": "^4.2",

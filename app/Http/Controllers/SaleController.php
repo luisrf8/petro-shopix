@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\Currency;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\MaterialPackage;
 use App\Models\SalesReturn;
 use App\Models\SalesReturnItem;
 use Dompdf\Dompdf;
@@ -31,9 +32,11 @@ use Endroid\QrCode\RoundBlockSizeMode;
 use App\Models\DollarRate;
 use App\Models\Tax;
 use App\Models\Tenant;
-use App\Http\Controllers\DB;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Support\WorkflowNotifier;
 
 class SaleController extends Controller
 {
@@ -46,6 +49,11 @@ class SaleController extends Controller
         ->where('tenant_id', $user->tenant_id)
         ->where('is_active', true)
         ->orderBy('created_at', 'desc')->get();
+        $materialPackages = MaterialPackage::with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images', 'items.variant.product.taxes'])
+            ->where('tenant_id', $user->tenant_id)
+            ->where('is_active', true)
+            ->orderBy('created_at', 'desc')
+            ->get();
         $paymentMethods = PaymentMethod::with('currency')->where('tenant_id', $user->tenant_id)->get();
         $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
         $taxes = Tax::all();
@@ -55,11 +63,15 @@ class SaleController extends Controller
         ->where('is_active', true)
         ->get();
 
-        return view('sales', compact('categories', 'paymentMethods', 'productItems', 'dollarRate', 'customerId', 'taxes'));
+        return view('sales', compact('categories', 'paymentMethods', 'productItems', 'materialPackages', 'dollarRate', 'customerId', 'taxes'));
     }
     
     public function store(Request $request)
     {
+        $validated = $request->validate([
+            'delivery_type' => 'nullable|in:pickup,shipping',
+            'delivery_address' => 'nullable|string|max:500',
+        ]);
 
         // dd($request->all());
         // Decodificar customerId si viene como JSON string
@@ -69,6 +81,15 @@ class SaleController extends Controller
         $itemsSelected = $request->items;
         $paymentDetails = $request->payments ?? [];
         $dollarRate = $request->dollarRate;
+        $deliveryType = $validated['delivery_type'] ?? 'pickup';
+        $deliveryAddress = trim((string) ($validated['delivery_address'] ?? ''));
+
+        if ($deliveryType === 'shipping' && $deliveryAddress === '') {
+            return response()->json(['error' => 'La dirección es obligatoria para entregas por envío.'], 422);
+        }
+
+        $preference = $deliveryType === 'shipping' ? 'Envío' : 'Retiro en tienda';
+        $address = $deliveryType === 'shipping' ? $deliveryAddress : 'Tienda';
 
         if (!$customerId) {
             return response()->json(['error' => 'ID de cliente no válido.'], 400);
@@ -83,19 +104,32 @@ class SaleController extends Controller
             'user_id' => $customerId,
             'date' => now()->toDateString(),
             'status' => 1,
-            'address' => 'Tienda',
-            'preference' => 'Tienda',
+            'address' => $address,
+            'preference' => $preference,
             'tenant_id' => $tenantId,
         ]);
 
         // Crear detalles y actualizar stock
         foreach ($itemsSelected as $item) {
-                $salesDetail = SalesOrderDetail::create([
+            $productVariant = ProductVariant::with('product')->find($item['id']);
+            if (!$productVariant) {
+                return response()->json(['error' => 'Variante no encontrada: ' . $item['id']], 400);
+            }
+
+            if ($productVariant->stock < $item['quantity']) {
+                return response()->json(['error' => 'Stock insuficiente para el producto: ' . $item['id']], 400);
+            }
+
+            $baseUnitPrice = $this->getVariantDiscountedUnitPrice($productVariant);
+            $lineDiscountPercentage = max(0, min(100, (float) ($item['line_discount_percentage'] ?? 0)));
+            $unitPrice = round($baseUnitPrice * ((100 - $lineDiscountPercentage) / 100), 2);
+
+            $salesDetail = SalesOrderDetail::create([
                 'sales_order_id' => $salesOrder->id,
                 'product_variant_id' => $item['id'],
                 'quantity' => $item['quantity'],
-                'price' => $item['price'],
-                'amount' => $item['price'] * $item['quantity'],
+                'price' => $unitPrice,
+                'amount' => $unitPrice * $item['quantity'],
             ]);
             // ===========================
             //   GUARDAR TAXES POR ITEM
@@ -104,7 +138,7 @@ class SaleController extends Controller
                 foreach ($item['taxes'] as $tax) {
 
                     $rate = floatval($tax['rate']); 
-                    $base = $item['price'] * $item['quantity'];
+                    $base = $unitPrice * $item['quantity'];
                     $amount = $base * ($rate / 100);
 
                     $salesDetail->taxes()->create([
@@ -115,15 +149,9 @@ class SaleController extends Controller
 
                 }
             }
-
             // Actualizar stock
-            $productVariant = ProductVariant::find($item['id']);
-            if ($productVariant && $productVariant->stock >= $item['quantity']) {
-                $productVariant->stock -= $item['quantity'];
-                $productVariant->save();
-            } else {
-                return response()->json(['error' => 'Stock insuficiente para el producto: ' . $item['id']], 400);
-            }
+            $productVariant->stock -= $item['quantity'];
+            $productVariant->save();
         }
 
         // Crear pagos
@@ -565,6 +593,17 @@ class SaleController extends Controller
         return response()->json($formattedPaymentMethods, 200);
     }
 
+    private function getVariantDiscountedUnitPrice(ProductVariant $variant): float
+    {
+        $basePrice = (float) ($variant->price ?? 0);
+        $productDiscount = max(0, min(100, (float) ($variant->product->discount_percentage ?? 0)));
+        $variantDiscount = max(0, min(100, (float) ($variant->discount_percentage ?? 0)));
+
+        $afterProductDiscount = $basePrice * ((100 - $productDiscount) / 100);
+
+        return round($afterProductDiscount * ((100 - $variantDiscount) / 100), 2);
+    }
+
     public function getVariants(Request $request)
     {
         $itemIds = $request->input('item_ids');
@@ -603,8 +642,76 @@ class SaleController extends Controller
         return response()->json($groupedVariants, 200);
     }
 
+    public function resolveScanCode(Request $request)
+    {
+        $request->validate([
+            'code' => 'required|string|max:150',
+        ]);
+
+        $user = auth()->user();
+        $tenantId = (int) ($user->tenant_id ?? 0);
+        $code = trim((string) $request->input('code'));
+
+        $variant = ProductVariant::with(['product.taxes'])
+            ->where(function ($query) use ($code) {
+                $query->where('qr_code', $code)->orWhere('barcode', $code);
+            })
+            ->whereHas('product', function ($query) use ($tenantId) {
+                $query->where('tenant_id', $tenantId);
+            })
+            ->first();
+
+        if ($variant) {
+            $price = $this->getVariantDiscountedUnitPrice($variant);
+
+            return response()->json([
+                'success' => true,
+                'type' => 'variant',
+                'variant' => [
+                    'id' => $variant->id,
+                    'product_name' => $variant->product->name ?? 'Producto',
+                    'size' => $variant->size,
+                    'stock' => (float) $variant->stock,
+                    'price' => $price,
+                    'taxes' => ($variant->product->taxes ?? collect())->map(function ($tax) {
+                        return [
+                            'name' => $tax->name,
+                            'rate' => (float) $tax->rate,
+                        ];
+                    })->values(),
+                ],
+            ]);
+        }
+
+        $package = MaterialPackage::with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.taxes'])
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->where(function ($query) use ($code) {
+                $query->where('qr_code', $code)->orWhere('barcode', $code);
+            })
+            ->first();
+
+        if ($package) {
+            return response()->json([
+                'success' => true,
+                'type' => 'package',
+                'package_id' => $package->id,
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'No se encontró una variante o paquete con ese código.',
+        ], 404);
+    }
+
     public function orderToggleStatus($id, Request $request)
     {
+        $roleName = strtolower((string) optional(auth()->user()?->role)->name);
+        if ($roleName === 'almacen') {
+            return response()->json(['message' => 'No autorizado para cambiar el estado de la orden.'], 403);
+        }
+
         // Recuperar la orden con sus relaciones
         $order = SalesOrder::with([
             'user', 
@@ -616,6 +723,26 @@ class SaleController extends Controller
         // Actualizar el estado de la orden
         $order->status = $request->status;
         $order->save();
+
+        WorkflowNotifier::notifyUser($order->user, [
+            'title' => 'Estado de pedido actualizado',
+            'message' => 'Tu pedido #' . $order->id . ' cambió de estado.',
+            'type' => 'order-status',
+            'tenant_id' => $order->tenant_id,
+            'order_id' => $order->id,
+            'action' => 'order_status_updated',
+        ]);
+
+        if ((int) $order->status === 1) {
+            WorkflowNotifier::notifyTenantRoles((int) $order->tenant_id, ['almacen'], [
+                'title' => 'Pedido listo para entrega',
+                'message' => 'El pedido #' . $order->id . ' fue aprobado y está listo para gestionar entrega.',
+                'type' => 'delivery-pending',
+                'tenant_id' => $order->tenant_id,
+                'order_id' => $order->id,
+                'action' => 'prepare_delivery',
+            ]);
+        }
     
         // Si el nuevo estado es 1, generar el PDF y enviar el correo
         if ($order->status == 1) {
@@ -663,7 +790,18 @@ class SaleController extends Controller
             $pdfUrl = asset('storage/orders/' . $fileName);
     
             // Enviar el correo con el PDF generado
-            // Mail::to($order->user->email)->send(new OrderPdfMail($order, $filePath));
+            // Enviar notificación al cliente con el PDF
+            if (!empty($order->user?->email)) {
+                try {
+                    Mail::to($order->user->email)->send(new OrderPdfMail($order, $filePath));
+                } catch (\Throwable $e) {
+                    Log::warning('No se pudo enviar correo de aprobación de orden', [
+                        'order_id' => $order->id,
+                        'email' => $order->user->email,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
     
             return response()->json([
                 'success' => true,
@@ -692,10 +830,29 @@ class SaleController extends Controller
         // Actualizar el estado de la orden
         $order->deliver_status = $request->status;
         $order->save();
+
+        WorkflowNotifier::notifyUser($order->user, [
+            'title' => 'Actualización de entrega',
+            'message' => 'Tu pedido #' . $order->id . ' cambió su estado de entrega.',
+            'type' => 'delivery-status',
+            'tenant_id' => $order->tenant_id,
+            'order_id' => $order->id,
+            'action' => 'delivery_status_updated',
+        ]);
     
-        // Si el nuevo estado es 1, enviar el correo de confirmación
-        if ($order->status == 1 && $order->preference == "Envio") {
-            // Mail::to($order->user->email)->send(new OrderConfirmationMail($order));
+        // Si la entrega está marcada como realizada, enviar correo de confirmación
+        if ((int) $order->deliver_status === 1) {
+            if (!empty($order->user?->email)) {
+                try {
+                    Mail::to($order->user->email)->send(new OrderConfirmationMail($order));
+                } catch (\Throwable $e) {
+                    Log::warning('No se pudo enviar correo de entrega', [
+                        'order_id' => $order->id,
+                        'email' => $order->user->email,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
         
             return response()->json([
                 'success' => true,
@@ -713,14 +870,69 @@ class SaleController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $roleName = strtolower((string) optional(auth()->user()?->role)->name);
+        if ($roleName === 'almacen') {
+            return response()->json(['message' => 'No autorizado para cambiar el estado de pagos.'], 403);
+        }
+
         // Buscar el pago
         $payment = Payment::findOrFail($id);
         // Cambiar el estado del pago
         $payment->status = $request->status;
         $payment->save();
+        $payment->loadMissing(['salesOrder.user']);
+
+        if ($payment->salesOrder) {
+            $orderId = $payment->salesOrder->id;
+            $tenantId = (int) ($payment->salesOrder->tenant_id ?? 0);
+
+            WorkflowNotifier::notifyTenantRoles($tenantId, ['administrador', 'admin', 'vendedor'], [
+                'title' => 'Pago actualizado',
+                'message' => 'El pago #' . $payment->id . ' del pedido #' . $orderId . ' cambió de estado.',
+                'type' => 'payment-status',
+                'tenant_id' => $tenantId,
+                'order_id' => $orderId,
+                'payment_id' => $payment->id,
+                'action' => 'payment_status_updated',
+            ]);
+
+            if ((int) $payment->status === 1) {
+                WorkflowNotifier::notifyUser($payment->salesOrder->user, [
+                    'title' => 'Pago aprobado',
+                    'message' => 'Tu pago del pedido #' . $orderId . ' fue aprobado.',
+                    'type' => 'payment-approved',
+                    'tenant_id' => $tenantId,
+                    'order_id' => $orderId,
+                    'payment_id' => $payment->id,
+                    'action' => 'payment_approved',
+                ]);
+
+                WorkflowNotifier::notifyTenantRoles($tenantId, ['almacen'], [
+                    'title' => 'Pedido por entregar',
+                    'message' => 'El pedido #' . $orderId . ' tiene pago aprobado. Proceder con entrega.',
+                    'type' => 'delivery-pending',
+                    'tenant_id' => $tenantId,
+                    'order_id' => $orderId,
+                    'payment_id' => $payment->id,
+                    'action' => 'deliver_order',
+                ]);
+            }
+        }
         // Enviar correo de confirmación si el pago es aprobado
         if ($payment->status == 1) {
-            // Mail::to($request->email)->send(new PaymentConfirmationMail($payment));
+            $userEmail = $payment->salesOrder?->user?->email;
+            if (!empty($userEmail)) {
+                try {
+                    Mail::to($userEmail)->send(new PaymentConfirmationMail($payment));
+                } catch (\Throwable $e) {
+                    Log::warning('No se pudo enviar correo de aprobación de pago', [
+                        'payment_id' => $payment->id,
+                        'email' => $userEmail,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             return response()->json([
                 'status' => 'success',
                 'new_status' => $payment->status,
@@ -737,6 +949,11 @@ class SaleController extends Controller
     public function processReturn(Request $request, $orderId)
     {
         DB::raw("SET @user_id = " . auth()->id());
+
+        $roleName = strtolower((string) optional(auth()->user()?->role)->name);
+        if ($roleName === 'almacen') {
+            return response()->json(['message' => 'No autorizado para registrar devoluciones.'], 403);
+        }
 
         $order = SalesOrder::with('details')->findOrFail($orderId);
         $itemsToReturn = $request->input('items'); // array de items con id y cantidad

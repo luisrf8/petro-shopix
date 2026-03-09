@@ -25,20 +25,30 @@
                   <table class="table align-items-center mb-0">
                     <thead class="text-center">
                       <tr>
+                        <th>Vista</th>
                         <th># Orden</th>
                         <th>Fecha</th>
+                        <th>Almacén</th>
                         <th>Proveedor</th>
+                        <th># Variantes</th>
                         <th># Productos</th>
+                        <th>Total (USD)</th>
                         <th>Acciones</th>
                       </tr>
                     </thead>
                     <tbody class="text-center">
                       @foreach($purchaseOrders as $order)
                         <tr>
+                          <td>
+                            <img src="{{ $order->preview_image }}" alt="preview" style="width:48px;height:48px;object-fit:cover;border-radius:8px;">
+                          </td>
                           <td>{{ $order->id }}</td>
                           <td>{{ $order->date }}</td>
+                          <td>{{ $order->warehouse->name ?? 'N/A' }}</td>
                           <td>{{ $order->provider_id }}</td>
+                          <td>{{ $order->total_variants }}</td>
                           <td>{{ $order->total_items }}</td>
+                          <td>{{ number_format($order->total_amount, 2) }}</td>
                           <td>
                             <a href="/order/{{ $order->id }}" class="text-secondary font-weight-bold text-xs toggle-status-btn">Ver Detalles</a>
                           </td>

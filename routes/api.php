@@ -14,6 +14,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\GoogleDriveController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\TenantController;
+use App\Http\Controllers\NotificationController;
 
 // ------------------------ RUTAS PÚBLICAS ------------------------
 
@@ -44,6 +45,8 @@ Route::get('/payment-methods/ecomm', [SaleController::class, 'getPaymentMethodsE
 Route::middleware('auth.jwt')->group(function () {
     Route::get('/user', [AuthenticatedSessionController::class, 'getUserFromToken']);
     Route::post('/create-sale/ecomm', [SaleController::class, 'storeEcommerceSale']);
+    Route::get('/notifications', [NotificationController::class, 'apiIndex']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'apiMarkAsRead']);
 });
 
 // ------------------------ CATEGORÍAS ------------------------
@@ -55,6 +58,7 @@ Route::post('categories/{id}/toggle-status', [CategoryController::class, 'toggle
 // ------------------------ PRODUCTOS ------------------------
 
 Route::post('/products/{id}', [ProductController::class, 'update'])->name('products.update');
+Route::post('/products/{product}/generate-codes', [ProductController::class, 'generateCodes'])->name('products.generateCodes');
 Route::post('/create-product', [ProductController::class, 'create']);
 // Route::post('/create-product', [ProductController::class, 'store'])->name('products.store');
 Route::post('/products/import-catalog', [ProductController::class, 'importCatalog'])->name('products.importCatalog');
@@ -67,6 +71,7 @@ Route::get('/products/report', [ProductController::class, 'generateReport']);
 
 Route::post('/variants/store', [ProductVariantController::class, 'store'])->name('variants.store');
 Route::put('/variants/{productVariant}', [ProductVariantController::class, 'update'])->name('variants.update');
+Route::post('/variants/{productVariant}/generate-codes', [ProductVariantController::class, 'generateCodes'])->name('variants.generateCodes');
 
 // ------------------------ MÉTODOS DE PAGO ------------------------
 

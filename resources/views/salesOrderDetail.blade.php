@@ -3,6 +3,10 @@
 @section('title', 'Categorías')
 
 @section('content')
+    @php
+      $roleName = strtolower((string) optional(auth()->user()->role)->name);
+      $isWarehouseRole = $roleName === 'almacen';
+    @endphp
     <div class="container-fluid">
       <h1>Detalles de la Orden Nro {{ $order->id }}</h1>
       <input type="text" id="user-name" class="d-none" value="{{ $order->user->name }}" readonly>
@@ -34,6 +38,7 @@
               @if($order->has_returns)
                 <span class="text-danger">Devolución Registrada</span>
               @else
+              @if(!$isWarehouseRole)
               <select id="order-status" class="btn btn-sm toggle-status-btn 
                 {{ $order->status == 0 ? 'btn-outline-warning' : ($order->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
                 onchange="updateOrderStatus(this, {{ $order->id }})">
@@ -41,6 +46,9 @@
                   <option value="1" {{ $order->status == 1 ? 'selected' : '' }}>Aprobado ↓</option>
                   <option value="2" {{ $order->status == 2 ? 'selected' : '' }}>Negado ↓</option>
               </select>
+              @else
+                <span class="text-sm">{{ $order->status == 0 ? 'En Proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado') }}</span>
+              @endif
               @endif
           </div>
       </div>
@@ -54,9 +62,11 @@
         <div>
           
         </div>
-        <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">
-            Registrar Devolución
-        </button>
+        @if(!$isWarehouseRole)
+          <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">
+              Registrar Devolución
+          </button>
+        @endif
       </div>
       <!-- Tabla de Detalles de la Orden -->
       <div class="card">
@@ -119,13 +129,17 @@
                 <td>{{ $payment->payment->bank }}</td>
                 <td>{{ $payment->reference ?? 'N/A' }}</td>
                 <td>
-                    <select class="btn btn-sm toggle-status-btn 
-                      {{ $payment->status == 0 ? 'btn-outline-warning' : ($payment->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
-                      onchange="updatePaymentStatus(this, {{ $payment->id }})">
-                        <option value="0" {{ $payment->status == 0 ? 'selected' : '' }}>En Proceso ↓</option>
-                        <option value="1" {{ $payment->status == 1 ? 'selected' : '' }}>Pagado ↓</option>
-                        <option value="3" {{ $payment->status == 3 ? 'selected' : '' }}>Cancelado ↓</option>
-                    </select>
+                    @if(!$isWarehouseRole)
+                      <select class="btn btn-sm toggle-status-btn 
+                        {{ $payment->status == 0 ? 'btn-outline-warning' : ($payment->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
+                        onchange="updatePaymentStatus(this, {{ $payment->id }})">
+                          <option value="0" {{ $payment->status == 0 ? 'selected' : '' }}>En Proceso ↓</option>
+                          <option value="1" {{ $payment->status == 1 ? 'selected' : '' }}>Pagado ↓</option>
+                          <option value="3" {{ $payment->status == 3 ? 'selected' : '' }}>Cancelado ↓</option>
+                      </select>
+                    @else
+                      <span class="text-sm">{{ $payment->status == 0 ? 'En Proceso' : ($payment->status == 1 ? 'Pagado' : 'Cancelado') }}</span>
+                    @endif
                 </td>
               </tr>
               @endforeach
@@ -137,6 +151,7 @@
       </div>
 
       <!-- Modal para realizar devoluciones -->
+      @if(!$isWarehouseRole)
       <div class="modal fade" id="returnModal" tabindex="-1" aria-labelledby="returnModalLabel" aria-hidden="true">
           <div class="modal-dialog modal-lg">
               <div class="modal-content">
@@ -192,6 +207,7 @@
               </div>
           </div>
       </div>
+      @endif
     </div>
     @endsection
 

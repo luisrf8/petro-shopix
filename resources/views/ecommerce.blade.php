@@ -228,7 +228,7 @@
     <div class="hero-overlay"></div> 
     <div class="container text-center">
       <h1 class="hero-title">SHOPIX</h1>
-      <h2 class="hero-slogan">GESTIONA TU TIENDA VIRTUAL FÁCILMENTE</h2>
+      <h2 class="hero-slogan">GESTIONA TU TIENDA O SERVICIO VIRTUAL FÁCILMENTE</h2>
     </div>
   </section>
 

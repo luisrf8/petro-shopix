@@ -4,10 +4,23 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 class Tenant extends Model
 {
     use HasFactory;
+
+    protected static function booted()
+    {
+        static::created(function (Tenant $tenant) {
+            if (Schema::hasTable('warehouses') && class_exists(Warehouse::class)) {
+                Warehouse::firstOrCreate(
+                    ['tenant_id' => $tenant->id, 'name' => 'Almacén Principal'],
+                    ['is_default' => true, 'is_active' => true]
+                );
+            }
+        });
+    }
 
     protected $fillable = [
         'name',
@@ -127,6 +140,11 @@ class Tenant extends Model
     public function tenantPlanPayments()
     {
         return $this->hasMany(TenantPlanPayment::class);
+    }
+
+    public function warehouses()
+    {
+        return $this->hasMany(Warehouse::class);
     }
 
     // Si quieres solo el plan activo:

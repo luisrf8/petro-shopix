@@ -5,16 +5,25 @@ namespace App\Http\Controllers;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use App\Support\WorkflowNotifier;
 use App\Models\User;
 use App\Models\Plan;
 use Illuminate\Support\Facades\Hash;
 use App\Models\TenantPlanPayment;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\MaterialPackage;
 use App\Models\Role;
 use App\Models\Country;
 use App\Models\State;
 use App\Models\City;
+use App\Models\PaymentMethod;
+use App\Models\Currency;
+use App\Models\ProductVariant;
+use App\Models\SalesOrder;
+use App\Models\SalesOrderDetail;
+use App\Models\Payment;
+use App\Models\DollarRate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -321,10 +330,17 @@ class TenantController extends Controller
             ->limit(9)
             ->get();
 
+        $materialPackages = MaterialPackage::with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images'])
+            ->where('tenant_id', $tenant->id)
+            ->where('is_active', true)
+            ->orderBy('created_at', 'desc')
+            ->limit(6)
+            ->get();
+
         $cartEnabled = $this->tenantHasProPlan($tenant);
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
 
-        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'cartEnabled', 'cartPlanName'));
+        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName'));
     }
 
     public function store(Request $request)
@@ -877,6 +893,12 @@ class TenantController extends Controller
             ->with('images')
             ->get();
 
+        $materialPackages = MaterialPackage::with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images'])
+            ->where('tenant_id', $tenant->id)
+            ->where('is_active', true)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
         $cartEnabled = $this->tenantHasProPlan($tenant);
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
 
@@ -884,6 +906,7 @@ class TenantController extends Controller
             'tenant',
             'categories',
             'products',
+            'materialPackages',
             'cartEnabled',
             'cartPlanName'
         ));
@@ -904,6 +927,218 @@ class TenantController extends Controller
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
 
         return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'cartPlanName'));
+    }
+
+    public function publicTenantPaymentMethods(Tenant $tenant)
+    {
+        $paymentMethods = PaymentMethod::with('currency')
+            ->where('tenant_id', $tenant->id)
+            ->where('status', 1)
+            ->get()
+            ->filter(function ($paymentMethod) {
+                return !in_array(Str::lower((string) $paymentMethod->name), ['efectivo', 'punto de venta']);
+            })
+            ->values();
+
+        $dollarRate = DollarRate::where('tenant_id', $tenant->id)
+            ->latest('created_at')
+            ->value('rate');
+
+        return response()->json([
+            'success' => true,
+            'methods' => $paymentMethods,
+            'dollar_rate' => $dollarRate ? (float) $dollarRate : 0,
+        ]);
+    }
+
+    public function publicTenantResolveScanCode(Request $request, Tenant $tenant)
+    {
+        $request->validate([
+            'code' => 'required|string|max:150',
+        ]);
+
+        $code = trim((string) $request->input('code'));
+
+        $variant = ProductVariant::with(['product'])
+            ->where(function ($query) use ($code) {
+                $query->where('qr_code', $code)->orWhere('barcode', $code);
+            })
+            ->whereHas('product', function ($query) use ($tenant) {
+                $query->where('tenant_id', $tenant->id)->where('is_active', true);
+            })
+            ->first();
+
+        if ($variant) {
+            $price = $this->getVariantDiscountedUnitPrice($variant);
+
+            return response()->json([
+                'success' => true,
+                'type' => 'variant',
+                'variant' => [
+                    'id' => $variant->id,
+                    'product_name' => $variant->product->name ?? 'Producto',
+                    'size' => $variant->size,
+                    'price' => $price,
+                ],
+            ]);
+        }
+
+        $package = MaterialPackage::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('is_active', true)
+            ->where(function ($query) use ($code) {
+                $query->where('qr_code', $code)->orWhere('barcode', $code);
+            })
+            ->first();
+
+        if ($package) {
+            return response()->json([
+                'success' => true,
+                'type' => 'package',
+                'package_id' => $package->id,
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Código no encontrado.',
+        ], 404);
+    }
+
+    public function publicTenantProCheckout(Request $request, Tenant $tenant)
+    {
+        if (!$this->tenantHasProPlan($tenant)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El checkout completo solo está disponible para planes Pro.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'customer_id' => 'required|exists:users,id',
+            'delivery_type' => 'required|in:pickup,shipping',
+            'delivery_address' => 'nullable|string|max:500',
+            'items' => 'required|array|min:1',
+            'items.*.variant_id' => 'required|integer|exists:product_variants,id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.unit_price' => 'nullable|numeric|min:0',
+            'payments' => 'required|array|min:1',
+            'payments.*.method_id' => 'required|integer|exists:payment_methods,id',
+            'payments.*.amount' => 'required|numeric|min:0.01',
+            'payments.*.reference' => 'nullable|string|max:255',
+        ]);
+
+        if ($validated['delivery_type'] === 'shipping' && empty(trim((string) ($validated['delivery_address'] ?? '')))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La dirección es obligatoria para envío.',
+            ], 422);
+        }
+
+        $address = $validated['delivery_type'] === 'shipping'
+            ? trim((string) $validated['delivery_address'])
+            : 'Tienda';
+
+        $preference = $validated['delivery_type'] === 'shipping'
+            ? 'Envío'
+            : 'Retiro en tienda';
+
+        $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference) {
+            $salesOrder = SalesOrder::create([
+                'user_id' => $validated['customer_id'],
+                'date' => now()->toDateString(),
+                'status' => 0,
+                'address' => $address,
+                'preference' => $preference,
+                'tenant_id' => $tenant->id,
+            ]);
+
+            $orderTotal = 0;
+
+            foreach ($validated['items'] as $item) {
+                $variant = ProductVariant::with('product')->findOrFail($item['variant_id']);
+
+                if ((int) $variant->product->tenant_id !== (int) $tenant->id) {
+                    throw new \RuntimeException('Uno de los productos no pertenece a esta tienda.');
+                }
+
+                if ((int) $variant->stock < (int) $item['quantity']) {
+                    throw new \RuntimeException('Stock insuficiente para una de las variantes seleccionadas.');
+                }
+
+                $variantEffectivePrice = $this->getVariantDiscountedUnitPrice($variant);
+                $providedUnitPrice = isset($item['unit_price']) ? (float) $item['unit_price'] : $variantEffectivePrice;
+                $unitPrice = min($variantEffectivePrice, max(0, $providedUnitPrice));
+
+                $lineAmount = $unitPrice * (int) $item['quantity'];
+                $orderTotal += $lineAmount;
+
+                SalesOrderDetail::create([
+                    'sales_order_id' => $salesOrder->id,
+                    'product_variant_id' => $variant->id,
+                    'quantity' => (int) $item['quantity'],
+                    'price' => $unitPrice,
+                    'amount' => $lineAmount,
+                ]);
+
+                $variant->stock -= (int) $item['quantity'];
+                $variant->save();
+            }
+
+            $totalPaid = 0;
+
+            foreach ($validated['payments'] as $paymentData) {
+                $method = PaymentMethod::with('currency')->findOrFail($paymentData['method_id']);
+
+                if ((int) $method->tenant_id !== (int) $tenant->id) {
+                    throw new \RuntimeException('Uno de los métodos de pago no pertenece a esta tienda.');
+                }
+
+                $amount = (float) $paymentData['amount'];
+                $totalPaid += $amount;
+
+                Payment::create([
+                    'sales_order_id' => $salesOrder->id,
+                    'payment_method' => $method->id,
+                    'amount' => $amount,
+                    'currency' => $method->currency->code ?? $method->currency->name ?? 'USD',
+                    'reference' => $paymentData['reference'] ?? null,
+                    'status' => 0,
+                ]);
+            }
+
+            if ($totalPaid + 0.0001 < $orderTotal) {
+                throw new \RuntimeException('El total pagado es menor al total del pedido.');
+            }
+
+            return $salesOrder;
+        });
+
+        WorkflowNotifier::notifyTenantRoles((int) $tenant->id, ['administrador', 'admin', 'vendedor'], [
+            'title' => 'Nueva compra de cliente',
+            'message' => 'Se creó el pedido #' . $salesOrder->id . '. Revisa venta y métodos de pago.',
+            'type' => 'new-order',
+            'tenant_id' => $tenant->id,
+            'order_id' => $salesOrder->id,
+            'action' => 'review_order_and_payments',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pedido creado correctamente. Tu pedido fue enviado para validación.',
+            'order_id' => $salesOrder->id,
+        ], 201);
+    }
+
+    private function getVariantDiscountedUnitPrice(ProductVariant $variant): float
+    {
+        $basePrice = (float) ($variant->price ?? 0);
+        $productDiscount = max(0, min(100, (float) ($variant->product->discount_percentage ?? 0)));
+        $variantDiscount = max(0, min(100, (float) ($variant->discount_percentage ?? 0)));
+
+        $afterProductDiscount = $basePrice * ((100 - $productDiscount) / 100);
+
+        return round($afterProductDiscount * ((100 - $variantDiscount) / 100), 2);
     }
 
     private function getTenantCurrentPlanName(Tenant $tenant): ?string

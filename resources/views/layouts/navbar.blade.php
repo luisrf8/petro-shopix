@@ -7,6 +7,24 @@
   transform: translateX(-100%);
 }
 
+.mobile-sidenav-close {
+  z-index: 1055;
+  opacity: 1 !important;
+  font-size: 1.1rem;
+}
+
+#sidenav-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1040;
+  display: none;
+}
+
+#sidenav-backdrop.show {
+  display: block;
+}
+
 #g-sidenav-show {
   transition: margin-left 0.3s ease-in-out;
 }
@@ -47,6 +65,7 @@
       use App\Models\Tenant;
 
       $user = auth()->user();
+      $roleName = strtolower((string) optional($user->role)->name);
       $tenantLogo = null;
       $tenant = null;
       if ($user && $user->tenant_id) {
@@ -57,11 +76,11 @@
               $tenantLogo = asset('storage/' . $tenant->logo);
           }
       }
+
+      $unreadNotificationsCount = $user ? $user->unreadNotifications()->count() : 0;
     @endphp
-    <div class="sidenav-header m-0 p-0 h-15">
-      <i class="fas fa-times p-3 cursor-pointer text-dark opacity-5 position-absolute end-0 top-0 d-none d-xl-none"
-        aria-hidden="true" id="iconSidenav"></i>
-      <a class="navbar-brand d-flex justify-content-center align-items-center" href="/dashboard">
+    <div class="sidenav-header m-0 p-0 h-15 d-flex align-items-center justify-content-between px-2">
+      <a class="navbar-brand d-flex justify-content-center align-items-center m-0" href="/dashboard">
         <img src="{{ $tenantLogo ?? asset('assets/img/shopix5.png') }}"
             class="navbar-brand-img"
             width="100"
@@ -69,6 +88,9 @@
             alt="main_logo"
             style="object-fit: contain;">
       </a>
+      <button type="button" class="btn d-xl-none m-0" id="iconSidenav" aria-label="Cerrar menú">
+        <i class="fas fa-times"></i>X
+      </button>
     </div>
     <hr class="horizontal dark mt-0 mb-2">
     <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main">
@@ -120,18 +142,49 @@
           </a>
         </li>
       @endif
-        @if($user->role_id === 2 || $user->role_id === 5)
+        @if($user->role_id === 1 || $user->role_id === 2 || $user->role_id === 5)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
-              <!-- <i class="bi bi-bag"></i> -->
-              <span class="nav-link-text ms-1">Realizar Compra</span>
+              <span class="nav-link-text ms-1">Entrada de Inventario</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/warehouses">
+              <i class="material-symbols-rounded opacity-5">warehouse</i>
+              <span class="nav-link-text ms-1">Almacenes</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/materials">
+              <i class="material-symbols-rounded opacity-5">inventory_2</i>
+              <span class="nav-link-text ms-1">Lista de Materiales</span>
             </a>
           </li>
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase-orders">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
-              <span class="nav-link-text ms-1">Compras Realizadas</span>
+              <span class="nav-link-text ms-1">Historial de Entradas</span>
+            </a>
+          </li>
+        @endif
+        @if($roleName === 'almacen')
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/sales-orders">
+              <i class="material-symbols-rounded opacity-5">local_shipping</i>
+              <span class="nav-link-text ms-1">Entregas de Pedidos</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/purchase">
+              <i class="material-symbols-rounded opacity-5">inventory</i>
+              <span class="nav-link-text ms-1">Entrada de Inventario</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/purchase-orders">
+              <i class="material-symbols-rounded opacity-5">inventory_2</i>
+              <span class="nav-link-text ms-1">Historial de Entradas</span>
             </a>
           </li>
         @endif
@@ -176,6 +229,19 @@
             <span class="nav-link-text ms-1">Cerrar Sesión</span>
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link text-dark d-flex justify-content-between align-items-center" href="{{ route('notifications.index') }}">
+            <span>
+              <i class="material-symbols-rounded opacity-5">notifications</i>
+              <span class="nav-link-text ms-1">Notificaciones</span>
+            </span>
+            @if($unreadNotificationsCount > 0)
+              <span class="badge bg-danger" id="backoffice-notifications-count">{{ $unreadNotificationsCount }}</span>
+            @else
+              <span class="badge bg-danger d-none" id="backoffice-notifications-count">0</span>
+            @endif
+          </a>
+        </li>
       </ul>
     </div>
     <div class="sidenav-footer position-absolute w-100 bottom-0 ">
@@ -185,8 +251,10 @@
 <!-- Core JS Files -->
 <script src="{{ asset('assets/js/core/popper.min.js') }}"></script>
 <script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
+<script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
 <!-- Github buttons -->
 <script async defer src="https://buttons.github.io/buttons.js"></script>
+<div class="toast-container position-fixed top-0 end-0 p-3" id="backoffice-toast-container" style="z-index: 3000;"></div>
 
 <!-- Control Center for Material Dashboard: parallax effects, scripts for the example pages etc -->
 <script src="{{ asset('assets/js/material-dashboard.min.js?v=3.2.0') }}"></script>
@@ -203,9 +271,131 @@
     }
   </script>
   <script>
+    (() => {
+      const userId = @json(optional(auth()->user())->id);
+      if (!userId) return;
+
+      const badge = document.getElementById('backoffice-notifications-count');
+      const toastContainer = document.getElementById('backoffice-toast-container');
+      function updateBadge(unread) {
+        if (!badge) return;
+        const current = Number(badge.textContent || 0);
+        const count = typeof unread === 'number' ? unread : current + 1;
+        badge.textContent = String(count);
+        badge.classList.toggle('d-none', count <= 0);
+      }
+
+      function showToast(title, message) {
+        if (!toastContainer) return;
+        const toastEl = document.createElement('div');
+        toastEl.className = 'toast';
+        toastEl.setAttribute('role', 'alert');
+        toastEl.setAttribute('aria-live', 'assertive');
+        toastEl.setAttribute('aria-atomic', 'true');
+        toastEl.innerHTML = `
+          <div class="toast-header">
+            <strong class="me-auto">${title || 'Notificación'}</strong>
+            <small>ahora</small>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+          <div class="toast-body">${message || ''}</div>
+        `;
+
+        toastContainer.appendChild(toastEl);
+        const toast = new bootstrap.Toast(toastEl, { delay: 5000 });
+        toast.show();
+        toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+      }
+
+      function bindNotificationChannel() {
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const pusherKey = @json(env('PUSHER_APP_KEY'));
+        if (!pusherKey) return;
+
+        const pusher = new Pusher(pusherKey, {
+          cluster: @json(env('PUSHER_APP_CLUSTER')),
+          wsHost: @json(env('PUSHER_HOST', '127.0.0.1')),
+          wsPort: Number(@json(env('PUSHER_PORT', 6001))),
+          wssPort: Number(@json(env('PUSHER_PORT', 6001))),
+          forceTLS: @json(env('PUSHER_SCHEME', 'http')) === 'https',
+          enabledTransports: ['ws', 'wss'],
+          authEndpoint: '/broadcasting/auth',
+          auth: {
+            headers: {
+              'X-CSRF-TOKEN': csrf,
+            },
+          },
+        });
+
+        const channel = pusher.subscribe(`private-App.Models.User.${userId}`);
+        const handleIncoming = (notification) => {
+          const title = notification.title || 'Notificación';
+          const message = notification.message || '';
+          updateBadge();
+          showToast(title, message);
+        };
+
+        channel.bind('Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
+        channel.bind('.Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
+      }
+
+      async function loadInitialUnreadCount() {
+        try {
+          const response = await fetch('/notifications/feed', { headers: { 'Accept': 'application/json' } });
+          if (!response.ok) return;
+
+          const payload = await response.json();
+          if (!payload.success) return;
+
+          updateBadge(payload.unread_count || 0);
+        } catch (error) {
+        }
+      }
+
+      loadInitialUnreadCount();
+      bindNotificationChannel();
+    })();
+
     document.addEventListener("DOMContentLoaded", function () {
         const currentUrl = window.location.pathname; // Obtén la ruta actual sin el dominio
         const navLinks = document.querySelectorAll('.navbar-nav .nav-link'); // Selecciona los enlaces
+      const sidenav = document.getElementById('sidenav-main');
+      const iconSidenav = document.getElementById('iconSidenav');
+      const btnOpenNav = document.getElementById('btnOpenNav');
+      const btnCloseNav = document.getElementById('btnCloseNav');
+
+        let backdrop = document.getElementById('sidenav-backdrop');
+        if (!backdrop) {
+          backdrop = document.createElement('div');
+          backdrop.id = 'sidenav-backdrop';
+          document.body.appendChild(backdrop);
+        }
+
+        function closeMobileSidenav() {
+          if (!sidenav) return;
+          sidenav.classList.add('closed');
+          backdrop.classList.remove('show');
+
+          if (btnOpenNav) {
+            btnOpenNav.style.display = 'inline-block';
+          }
+          if (btnCloseNav) {
+            btnCloseNav.style.display = 'none';
+          }
+        }
+
+        function openMobileSidenav() {
+          if (!sidenav) return;
+          sidenav.classList.remove('closed');
+          backdrop.classList.add('show');
+
+          if (btnOpenNav) {
+            btnOpenNav.style.display = 'none';
+          }
+          if (btnCloseNav) {
+            btnCloseNav.style.display = 'inline-block';
+          }
+        }
 
         navLinks.forEach(link => {
             const linkHref = link.getAttribute('href');
@@ -215,9 +405,39 @@
                 link.classList.remove("bg-gray-900", "text-white");
             }
         });
-        const toggleNavbarButton = document.getElementById('toggleNavbar');
-        const sidenav = document.getElementById('sidenav-main');
-        const body = document.getElementById('d-body');
+        if (iconSidenav && sidenav) {
+          iconSidenav.addEventListener('click', function () {
+            closeMobileSidenav();
+          });
+        }
+
+        if (btnOpenNav) {
+          btnOpenNav.addEventListener('click', function () {
+            if (window.innerWidth < 992) {
+              openMobileSidenav();
+            }
+          });
+        }
+
+        if (btnCloseNav) {
+          btnCloseNav.addEventListener('click', function () {
+            closeMobileSidenav();
+          });
+        }
+
+        if (backdrop) {
+          backdrop.addEventListener('click', function () {
+            closeMobileSidenav();
+          });
+        }
+
+        window.addEventListener('resize', function () {
+          if (window.innerWidth >= 992) {
+            backdrop.classList.remove('show');
+          } else if (!sidenav.classList.contains('closed')) {
+            backdrop.classList.add('show');
+          }
+        });
 
     });
 

@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{{ $tenant->name }} - Detalle de Producto</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
@@ -244,16 +245,25 @@
             <h5 class="fw-semibold mt-4">Variantes:</h5>
             <div id="variants-container" class="d-flex flex-wrap gap-2 mb-4">
                 @forelse ($product->variants as $variant)
+                @php
+                  $productDiscount = (float) ($product->discount_percentage ?? 0);
+                  $variantDiscount = (float) ($variant->discount_percentage ?? 0);
+                  $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+                @endphp
                     <div 
                         class="variant-button"
+                      data-variant-id="{{ $variant->id }}"
                         data-size="{{ $variant->size }}"
-                        data-price="{{ number_format($variant->price, 2) }}"
+                  data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}"
                         data-stock="{{ $variant->stock }}"
                         data-product-name="{{ $product->name }}"
                         {{ $variant->stock <= 0 ? 'disabled' : '' }}
                     >
                         <span class="fw-semibold">{{ $variant->size }}</span>
-                        <span class="text-muted small">/ {{ number_format($variant->price, 2) }} $</span>
+                  <span class="text-muted small">/ {{ number_format($effectiveVariantPrice, 2) }} $</span>
+                  @if($productDiscount > 0 || $variantDiscount > 0)
+                    <small class="text-success d-block">Desc: {{ number_format($productDiscount + $variantDiscount, 2) }}%</small>
+                  @endif
                         @if ($variant->stock <= 0)
                             <span class="badge bg-danger ms-1">Agotado</span>
                         @endif
@@ -355,6 +365,7 @@
                 
                 // 3. Almacenar la variante seleccionada
                 selectedVariant = {
+                    variantId: button.dataset.variantId,
                     size: button.dataset.size,
                     price: button.dataset.price,
                   productName: button.dataset.productName,
@@ -384,6 +395,7 @@
               }
 
               window.ShopixCart.addItem({
+                variantId: selectedVariant.variantId,
                 productId: selectedVariant.productId,
                 productName: selectedVariant.productName,
                 variantSize: selectedVariant.size,

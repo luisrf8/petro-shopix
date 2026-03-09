@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{{ $tenant->name }} - Tienda Virtual</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
@@ -289,6 +290,19 @@
                     </a>
                 </div>
             @endforeach
+
+              @if(isset($materialPackages) && $materialPackages->count() > 0)
+                <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+                  <a href="#"
+                     class="category-card category-link"
+                     data-id="packages"
+                     style="background-image: linear-gradient(135deg, rgba(0,0,0,.75), rgba(0,0,0,.35));">
+                    <div class="category-overlay">
+                      <h5 class="category-title text-center">Paquetes</h5>
+                    </div>
+                  </a>
+                </div>
+              @endif
         </div>
     </div>
 </section>
@@ -321,6 +335,68 @@
       </div>
     </div>
   </section>
+
+  @if(isset($materialPackages) && $materialPackages->count() > 0)
+  <section id="paquetes" class="py-5 bg-white border-top" data-category="packages">
+    <div class="container">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="section-title text-start mb-0">Paquetes y Combos</h2>
+      </div>
+      <div class="row" id="packages-container">
+        @foreach($materialPackages as $package)
+          @php
+            $firstItem = $package->items->first();
+            $firstImage = $firstItem && $firstItem->variant && $firstItem->variant->product && isset($firstItem->variant->product->images[0])
+              ? asset('storage/' . $firstItem->variant->product->images[0]->path)
+              : null;
+            $packageTotalBeforeDiscount = $package->items->sum(function($it) {
+              $basePrice = (float) ($it->variant->price ?? 0);
+              $productDiscount = (float) ($it->variant->product->discount_percentage ?? 0);
+              $variantDiscount = (float) ($it->variant->discount_percentage ?? 0);
+              $price = $basePrice
+                * ((100 - $productDiscount) / 100)
+                * ((100 - $variantDiscount) / 100);
+              $qty = (float) ($it->quantity ?? 0);
+              return $price * $qty;
+            });
+            $packageDiscount = (float) ($package->discount_percentage ?? 0);
+            $packageTotalCalculated = $packageTotalBeforeDiscount * ((100 - $packageDiscount) / 100);
+            $packageTotal = !is_null($package->package_price)
+              ? (float) $package->package_price
+              : $packageTotalCalculated;
+          @endphp
+          <div class="col-12 col-sm-6 col-lg-4 mb-4 package-item" data-name="{{ strtolower($package->name) }}">
+            <div class="card card-product h-100">
+              @if($firstImage)
+                <img src="{{ $firstImage }}" class="card-img-top" style="height: 260px; object-fit: cover;">
+              @else
+                <div class="d-flex align-items-center justify-content-center" style="height: 260px; background-color: #eee;">
+                  <i class="bi bi-box-seam text-muted fs-1"></i>
+                </div>
+              @endif
+              <div class="card-body text-start">
+                <h5 class="fw-bold text-dark">{{ $package->name }}</h5>
+                <p class="text-muted mb-2">{{ $package->description ?: 'Paquete personalizado de productos.' }}</p>
+                <p class="small mb-2">Incluye {{ $package->items->count() }} material(es)</p>
+                <p class="fw-semibold mb-2">{{ number_format($packageTotal, 2) }} $</p>
+                @if(!is_null($package->package_price))
+                  <p class="text-dark small mb-2">Precio fijo combo</p>
+                @endif
+                @if($packageDiscount > 0)
+                  <p class="text-success small mb-2">Descuento del paquete: {{ number_format($packageDiscount, 2) }}%</p>
+                @endif
+                <div class="d-flex gap-2 align-items-center">
+                  <input type="number" min="1" value="1" class="form-control form-control-sm" id="tenant-pack-qty-{{ $package->id }}" style="max-width: 90px;">
+                  <button type="button" class="btn btn-dark btn-sm" onclick="addTenantPackageToCart({{ $package->id }})">Agregar paquete</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        @endforeach
+      </div>
+    </div>
+  </section>
+  @endif
   <!-- CONTACTO / UBICACIÓN -->
   <section id="contacto" class="py-5 bg-white">
     <div class="container">
@@ -430,6 +506,77 @@
     // Filtrado de productos por categoría
     const categoryLinks = document.querySelectorAll('.category-link');
     const products = document.querySelectorAll('.product-item');
+    const tenantPackages = @json(($materialPackages ?? collect())->map(function($package) {
+      return [
+        'id' => $package->id,
+        'name' => $package->name,
+        'discount_percentage' => (float) ($package->discount_percentage ?? 0),
+        'package_price' => !is_null($package->package_price) ? (float) $package->package_price : null,
+        'items' => $package->items->map(function($item) {
+          $basePrice = (float) ($item->variant->price ?? 0);
+          $productDiscount = (float) ($item->variant->product->discount_percentage ?? 0);
+          $variantDiscount = (float) ($item->variant->discount_percentage ?? 0);
+          $effectivePrice = $basePrice * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+          return [
+            'variant_id' => $item->product_variant_id,
+            'variant_size' => $item->variant->size ?? '',
+            'variant_price' => (float) $effectivePrice,
+            'product_name' => $item->variant->product->name ?? 'Producto',
+            'quantity' => (float) ($item->quantity ?? 0),
+          ];
+        })->values()->toArray(),
+      ];
+    })->values());
+
+    window.addTenantPackageToCart = function (packageId) {
+      const pkg = tenantPackages.find(p => Number(p.id) === Number(packageId));
+      if (!pkg) {
+        alert('No se encontró el paquete.');
+        return;
+      }
+
+      const qtyInput = document.getElementById(`tenant-pack-qty-${packageId}`);
+      const packQty = Math.max(1, parseInt(qtyInput?.value || '1', 10));
+
+      if (!window.ShopixCart || typeof window.ShopixCart.addItem !== 'function') {
+        alert('No se pudo abrir el carrito.');
+        return;
+      }
+
+      pkg.items.forEach(component => {
+        const quantity = (Number(component.quantity || 0) * packQty);
+        if (quantity <= 0) return;
+        const packageDiscount = Math.max(0, Math.min(100, Number(pkg.discount_percentage || 0)));
+        const packageBaseTotal = pkg.items.reduce((sum, row) => {
+          const rowQty = Number(row.quantity || 0);
+          const rowBasePrice = Number(row.variant_price || 0);
+          return sum + (rowBasePrice * ((100 - packageDiscount) / 100) * rowQty);
+        }, 0);
+
+        const targetPackageTotal = (pkg.package_price !== null && pkg.package_price !== undefined)
+          ? (Number(pkg.package_price) || 0)
+          : packageBaseTotal;
+
+        const priceScale = packageBaseTotal > 0 ? (targetPackageTotal / packageBaseTotal) : 1;
+
+        const componentPrice = Number(component.variant_price || 0)
+          * ((100 - packageDiscount) / 100)
+          * priceScale;
+
+        window.ShopixCart.addItem({
+          variantId: Number(component.variant_id),
+          productId: Number(component.variant_id),
+          productName: `${component.product_name} [${pkg.name}]`,
+          variantSize: component.variant_size,
+          price: componentPrice,
+          qty: quantity,
+        });
+      });
+
+      alert(`Paquete "${pkg.name}" agregado al carrito.`);
+    }
+
+    const packagesSection = document.getElementById('paquetes');
 
     categoryLinks.forEach(link => {
       link.addEventListener('click', e => {
@@ -440,12 +587,17 @@
 
         const categoryId = link.dataset.id;
         products.forEach(product => {
-          if(categoryId === 'all' || product.dataset.category === categoryId){
+          if(categoryId === 'all' || (categoryId !== 'packages' && product.dataset.category === categoryId)){
             product.style.display = 'block';
           } else {
             product.style.display = 'none';
           }
         });
+
+        if (packagesSection) {
+          const showPackages = categoryId === 'all' || categoryId === 'packages';
+          packagesSection.style.display = showPackages ? 'block' : 'none';
+        }
       });
     });
   </script>

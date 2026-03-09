@@ -24,7 +24,8 @@ class PurchaseOrderDetail extends Model
         'product_variant_id',
         'quantity',
         'amount',
-        'price'
+        'price',
+        'tenant_id'
     ];
 
     // Relaciones

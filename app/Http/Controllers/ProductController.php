@@ -155,7 +155,6 @@ class ProductController extends Controller
             'tenant_id' => 'required'
         ]);
 
-        // Crear el producto
         Product::create($validatedData);
         return response()->json(['success' => true, 'message' => 'Product created successfully'], 200);
 
@@ -172,6 +171,7 @@ class ProductController extends Controller
             'category_id' => $request->category_id,
             'name' => $request->productName,
             'description' => $request->productDescription,
+            'discount_percentage' => max(0, min(100, (float) $request->input('productDiscount', 0))),
             'tenant_id' => $request->tenant_id
         ]);
 
@@ -199,12 +199,14 @@ class ProductController extends Controller
 
         if (!empty($variants) && is_array($variants)) {
             foreach ($variants as $variant) {
-                ProductVariant::create([
+                $productVariant = ProductVariant::create([
                     'product_id' => $product->id,
                     'size' => $variant['name'],
                     'price' => $variant['price'],
+                    'discount_percentage' => max(0, min(100, (float) ($variant['discount_percentage'] ?? 0))),
                     'stock' => $variant['stock'],
                 ]);
+                $this->ensureVariantCodes($productVariant);
             }
         }
 
@@ -225,6 +227,74 @@ class ProductController extends Controller
         $product->taxes()->sync($request->taxes);
 
         return response()->json(['success' => true]);
+    }
+
+    public function generateCodes(Product $product)
+    {
+        if ((int) ($product->tenant_id ?? 0) !== (int) (auth()->user()->tenant_id ?? 0)) {
+            return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
+        }
+
+        $product->loadMissing('variants');
+
+        $generated = 0;
+        $variants = [];
+
+        foreach ($product->variants as $variant) {
+            $beforeQr = (string) ($variant->qr_code ?? '');
+            $beforeBarcode = (string) ($variant->barcode ?? '');
+
+            $this->ensureVariantCodes($variant);
+
+            $afterQr = (string) ($variant->qr_code ?? '');
+            $afterBarcode = (string) ($variant->barcode ?? '');
+
+            if ($beforeQr !== $afterQr || $beforeBarcode !== $afterBarcode) {
+                $generated++;
+            }
+
+            $variants[] = [
+                'id' => $variant->id,
+                'size' => $variant->size,
+                'qr_code' => $afterQr,
+                'barcode' => $afterBarcode,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'generated' => $generated,
+            'total_variants' => count($variants),
+            'variants' => $variants,
+        ]);
+    }
+
+    private function generateUniqueVariantCode(string $prefix): string
+    {
+        do {
+            $value = $prefix . '-' . strtoupper(Str::random(10));
+        } while (ProductVariant::where('qr_code', $value)->orWhere('barcode', $value)->exists());
+
+        return $value;
+    }
+
+    private function ensureVariantCodes(ProductVariant $variant): void
+    {
+        $dirty = false;
+
+        if (empty($variant->qr_code)) {
+            $variant->qr_code = $this->generateUniqueVariantCode('QRV');
+            $dirty = true;
+        }
+
+        if (empty($variant->barcode)) {
+            $variant->barcode = $this->generateUniqueVariantCode('BCV');
+            $dirty = true;
+        }
+
+        if ($dirty) {
+            $variant->save();
+        }
     }
 
     // Función para agregar una imagen
@@ -420,7 +490,8 @@ class ProductController extends Controller
                         $variantValues['unit_type'] = $unitType;
                     }
 
-                    ProductVariant::updateOrCreate($variantLookup, $variantValues);
+                    $productVariant = ProductVariant::updateOrCreate($variantLookup, $variantValues);
+                    $this->ensureVariantCodes($productVariant);
 
                     $createdVariants++;
                 }
@@ -998,6 +1069,7 @@ class ProductController extends Controller
             'description' => 'required|string|max:500',
             'category' => 'required|exists:categories,id',
             'is_active' => 'required|boolean',
+            'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
 
         $product->update([
@@ -1005,6 +1077,7 @@ class ProductController extends Controller
             'description' => $validated['description'],
             'category_id' => $validated['category'],
             'is_active' => $validated['is_active'],
+            'discount_percentage' => (float) ($validated['discount_percentage'] ?? 0),
         ]);
 
         return response()->json([

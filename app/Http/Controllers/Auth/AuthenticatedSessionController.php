@@ -125,7 +125,13 @@ class AuthenticatedSessionController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
+            'dni' => 'nullable|string|max:100',
         ]);
+
+        $dni = trim((string) $request->input('dni', ''));
+        if ($dni === '') {
+            $dni = 'CLI-' . now()->format('YmdHis') . '-' . random_int(100, 999);
+        }
     
         // Crear el usuario
         $user = User::create([
@@ -133,6 +139,7 @@ class AuthenticatedSessionController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),  // Hashear la contraseña
             'role_id' => 3,  // Puedes asignar un rol por defecto o según tus necesidades
+            'dni' => $dni,
         ]);
     
         // Generar el token JWT para el usuario recién creado

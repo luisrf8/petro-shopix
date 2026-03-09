@@ -12,10 +12,22 @@ class Product extends Model
     protected $fillable = [
         'name',
         'description',
+        'discount_percentage',
         'category_id',
         'is_active',
         'tenant_id'
     ];
+
+    public function getDiscountPercentageAttribute($value)
+    {
+        return (float) ($value ?? 0);
+    }
+
+    public function getDiscountMultiplierAttribute(): float
+    {
+        $discount = max(0, min(100, (float) $this->discount_percentage));
+        return (100 - $discount) / 100;
+    }
 
     public function images()
     {
