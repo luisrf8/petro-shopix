@@ -488,6 +488,31 @@
 
   @include('partials.tenant-cart-offcanvas')
 
+  @php
+    $tenantPackagesPayload = ($materialPackages ?? collect())->map(function ($package) {
+      return [
+        'id' => $package->id,
+        'name' => $package->name,
+        'discount_percentage' => (float) ($package->discount_percentage ?? 0),
+        'package_price' => !is_null($package->package_price) ? (float) $package->package_price : null,
+        'items' => $package->items->map(function ($item) {
+          $basePrice = (float) ($item->variant->price ?? 0);
+          $productDiscount = (float) ($item->variant->product->discount_percentage ?? 0);
+          $variantDiscount = (float) ($item->variant->discount_percentage ?? 0);
+          $effectivePrice = $basePrice * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+
+          return [
+            'variant_id' => $item->product_variant_id,
+            'variant_size' => $item->variant->size ?? '',
+            'variant_price' => (float) $effectivePrice,
+            'product_name' => $item->variant->product->name ?? 'Producto',
+            'quantity' => (float) ($item->quantity ?? 0),
+          ];
+        })->values()->toArray(),
+      ];
+    })->values()->toArray();
+  @endphp
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
@@ -506,27 +531,7 @@
     // Filtrado de productos por categoría
     const categoryLinks = document.querySelectorAll('.category-link');
     const products = document.querySelectorAll('.product-item');
-    const tenantPackages = @json(($materialPackages ?? collect())->map(function($package) {
-      return [
-        'id' => $package->id,
-        'name' => $package->name,
-        'discount_percentage' => (float) ($package->discount_percentage ?? 0),
-        'package_price' => !is_null($package->package_price) ? (float) $package->package_price : null,
-        'items' => $package->items->map(function($item) {
-          $basePrice = (float) ($item->variant->price ?? 0);
-          $productDiscount = (float) ($item->variant->product->discount_percentage ?? 0);
-          $variantDiscount = (float) ($item->variant->discount_percentage ?? 0);
-          $effectivePrice = $basePrice * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
-          return [
-            'variant_id' => $item->product_variant_id,
-            'variant_size' => $item->variant->size ?? '',
-            'variant_price' => (float) $effectivePrice,
-            'product_name' => $item->variant->product->name ?? 'Producto',
-            'quantity' => (float) ($item->quantity ?? 0),
-          ];
-        })->values()->toArray(),
-      ];
-    })->values());
+    const tenantPackages = @json($tenantPackagesPayload);
 
     window.addTenantPackageToCart = function (packageId) {
       const pkg = tenantPackages.find(p => Number(p.id) === Number(packageId));

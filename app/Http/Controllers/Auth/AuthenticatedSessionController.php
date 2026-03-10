@@ -44,7 +44,7 @@ class AuthenticatedSessionController extends Controller
         // Obtener el usuario autenticado
         $user = Auth::user();
         // Generar el token usando el usuario autenticado
-        $token = JWTAuth::fromUser($user, ['custom_claim' => 'value']);
+        $token = JWTAuth::fromUser($user);
     
         // Retornar el token y la información del usuario
         return response()->json([
