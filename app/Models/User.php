@@ -27,6 +27,8 @@ class User extends Authenticatable implements JWTSubject
         'phone_number',
         'dni',
         'is_active',
+        'help_disable_global',
+        'help_disabled_routes',
     ];
 
 
@@ -47,6 +49,8 @@ class User extends Authenticatable implements JWTSubject
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'help_disable_global' => 'boolean',
+        'help_disabled_routes' => 'array',
     ];
 
     /**

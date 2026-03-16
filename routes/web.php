@@ -19,7 +19,8 @@ use App\Http\Controllers\{
     LocationController,
     MaterialPackageController,
     WarehouseController,
-    NotificationController
+    NotificationController,
+    HelpPreferenceController
 };
 
 // RUTAS DE INVITADOS
@@ -47,6 +48,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/notifications/feed', [NotificationController::class, 'webFeed'])->name('notifications.feed');
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+    Route::get('/help-preferences', [HelpPreferenceController::class, 'show'])->name('help.preferences.show');
+    Route::post('/help-preferences/global', [HelpPreferenceController::class, 'updateGlobal'])->name('help.preferences.global');
+    Route::post('/help-preferences/route', [HelpPreferenceController::class, 'updateRoute'])->name('help.preferences.route');
 
     Route::get('/categories', [ProductController::class, 'categoriesIndex'])->middleware('role.name:1,2,5')->name('categories.index');
 
