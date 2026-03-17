@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\User;
 use App\Notifications\WorkflowStatusNotification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 class WorkflowNotifier
 {
@@ -37,7 +38,7 @@ class WorkflowNotifier
             return;
         }
 
-        $user->notify(new WorkflowStatusNotification($payload));
+        self::dispatchNotification($user, $payload);
     }
 
     public static function notifyUsers(iterable $users, array $payload): void
@@ -46,8 +47,24 @@ class WorkflowNotifier
             ->filter(fn ($user) => $user instanceof User)
             ->each(function (User $user) use ($payload) {
                 if ((bool) $user->is_active) {
-                    $user->notify(new WorkflowStatusNotification($payload));
+                    self::dispatchNotification($user, $payload);
                 }
             });
+    }
+
+    private static function dispatchNotification(User $user, array $payload): void
+    {
+        try {
+            $user->notify(new WorkflowStatusNotification($payload));
+        } catch (\Throwable $exception) {
+            Log::warning('No se pudo despachar notificación de workflow.', [
+                'user_id' => $user->id,
+                'tenant_id' => $payload['tenant_id'] ?? null,
+                'order_id' => $payload['order_id'] ?? null,
+                'payment_id' => $payload['payment_id'] ?? null,
+                'action' => $payload['action'] ?? null,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 }

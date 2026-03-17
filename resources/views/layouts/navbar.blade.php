@@ -63,17 +63,33 @@
 <body class="bg-gray-100">
     @php
       use App\Models\Tenant;
+      use App\Models\User as UserModel;
+      use App\Support\ImageStorage;
 
       $user = auth()->user();
-      $roleName = strtolower((string) optional($user->role)->name);
+      $roleName = strtolower((string) optional($user?->role)->name);
+      $canonicalRole = UserModel::canonicalRoleName(optional($user?->role)->name);
+
+      $isSuperAdmin = ((int) ($user->role_id ?? 0) === 4) || $canonicalRole === 'super_user';
+      $isOwner = (bool) ($user?->isOwner() ?? false);
+      $isAdmin = (bool) ($user?->isAdmin() ?? false);
+      $isSeller = (bool) ($user?->hasStoreRole('seller') ?? false);
+      $isWarehouse = (bool) ($user?->hasStoreRole('warehouse') ?? false);
+
+      $canManageCatalog = $isOwner || $isAdmin;
+      $canSell = $isOwner || $isAdmin || $isSeller;
+      $canSeeSalesOrders = $canSell || $isWarehouse;
+      $canInventoryEntries = $isOwner || $isAdmin || $isWarehouse;
+      $canManageWarehousesAndMaterials = $isOwner || $isAdmin;
+      $canManageStore = $isOwner || $isAdmin;
+
       $tenantLogo = null;
       $tenant = null;
       if ($user && $user->tenant_id) {
           $tenant = Tenant::find($user->tenant_id);
 
           if ($tenant && $tenant->logo) {
-              // Si el logo está almacenado en storage
-              $tenantLogo = asset('storage/' . $tenant->logo);
+          $tenantLogo = ImageStorage::url($tenant->logo);
           }
       }
 
@@ -95,7 +111,7 @@
     <hr class="horizontal dark mt-0 mb-2">
     <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main">
       <ul class="navbar-nav">
-      @if($user->role_id === 1 || $user->role_id === 5)
+      @if($canManageCatalog)
         <li class="nav-item">
           <a class="nav-link text-dark" href="/dashboard">
             <i class="material-symbols-rounded opacity-5">dashboard</i>
@@ -127,7 +143,7 @@
           </a>
         </li>
       @endif
-        @if($user->role_id === 2 || $user->role_id === 1)
+        @if($canSell)
 
         <li class="nav-item">
           <a class="nav-link text-dark" href="/sales">
@@ -135,20 +151,17 @@
             <span class="nav-link-text ms-1">Realizar Venta</span>
           </a>
         </li>
-        <li class="nav-item">
-          <a class="nav-link text-dark" href="/sales-orders">
-            <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
-            <span class="nav-link-text ms-1">Ventas Realizadas</span>
-          </a>
-        </li>
       @endif
-        @if($user->role_id === 1 || $user->role_id === 2 || $user->role_id === 5)
+        @if($canInventoryEntries)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
               <span class="nav-link-text ms-1">Entrada de Inventario</span>
             </a>
           </li>
+        @endif
+
+        @if($canManageWarehousesAndMaterials)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/warehouses">
               <i class="material-symbols-rounded opacity-5">warehouse</i>
@@ -161,6 +174,9 @@
               <span class="nav-link-text ms-1">Lista de Materiales</span>
             </a>
           </li>
+        @endif
+
+        @if($canInventoryEntries)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase-orders">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
@@ -168,27 +184,35 @@
             </a>
           </li>
         @endif
-        @if($roleName === 'almacen')
+
+        @if($isWarehouse)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/sales-orders">
               <i class="material-symbols-rounded opacity-5">local_shipping</i>
               <span class="nav-link-text ms-1">Entregas de Pedidos</span>
             </a>
           </li>
+        @endif
+
+        @if($canSeeSalesOrders && !$isWarehouse)
           <li class="nav-item">
-            <a class="nav-link text-dark" href="/purchase">
-              <i class="material-symbols-rounded opacity-5">inventory</i>
-              <span class="nav-link-text ms-1">Entrada de Inventario</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link text-dark" href="/purchase-orders">
-              <i class="material-symbols-rounded opacity-5">inventory_2</i>
-              <span class="nav-link-text ms-1">Historial de Entradas</span>
+            <a class="nav-link text-dark" href="/sales-orders">
+              <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
+              <span class="nav-link-text ms-1">Ventas Realizadas</span>
             </a>
           </li>
         @endif
-        @if($user->role_id === 4)
+
+        @if($canSeeSalesOrders || $canInventoryEntries)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/reports">
+              <i class="material-symbols-rounded opacity-5">summarize</i>
+              <span class="nav-link-text ms-1">Reportes PDF</span>
+            </a>
+          </li>
+        @endif
+
+        @if($isSuperAdmin)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/plans">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
@@ -442,8 +466,12 @@
     });
 
   function logOut() {
-    fetch("/logout", { 
+    fetch("/api/logout", {
         method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
     })
     .then(response => {
         if (response.ok) {

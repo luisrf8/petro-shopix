@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'enabled' => env('MODULE_HELP_ENABLED', false),
+
     'fallback' => [
         'title' => 'Ayuda del modulo',
         'intro' => 'En esta pantalla puedes revisar informacion y ejecutar acciones segun tus permisos.',

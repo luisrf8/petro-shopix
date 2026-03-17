@@ -204,6 +204,10 @@
                   <label for="paymentMethodBank" class="form-label">Banco</label>
                   <input type="text" class="form-control border border-1 p-2" id="paymentMethodBank" name="bank">
                 </div>
+                <div class="mb-3">
+                  <label for="paymentMethodDescription" class="form-label">Descripción</label>
+                  <input type="text" class="form-control border border-1 p-2" id="paymentMethodDescription" name="description">
+                </div>
                 <div class="mb-3 d-flex flex-column">
                   <label for="paymentMethodQr" class="form-label">QR</label>
                     <input type="file" class="form-control border border-1 p-2 " id="image" name="image" accept="image/*">
@@ -253,9 +257,15 @@
                   <label for="editPaymentMethodBank" class="form-label">Banco</label>
                   <input type="text" class="form-control border border-1 p-2" id="editPaymentMethodBank" name="bank">
                 </div>
+                <div class="mb-3">
+                  <label for="editPaymentMethodDescription" class="form-label">Descripción</label>
+                  <input type="text" class="form-control border border-1 p-2" id="editPaymentMethodDescription" name="description">
+                </div>
                 <div class="mb-3 d-flex flex-column">
                   <label for="editPaymentMethodQr" class="form-label">QR</label>
                   <img id="editPaymentMethodQrImage" src="" alt="Imagen del producto" class="d-none d-flex justify-content-center" style="width: 20%; height: 20%; object-fit: cover; border-radius: inherit;">
+                  <span id="editPaymentMethodQrIcon" class="text-muted">Sin QR cargado</span>
+                  <button type="button" class="btn btn-outline-danger btn-sm mt-2 d-none" id="btnRemoveQrImage">Eliminar QR</button>
                   <label for="img" class="form-label">Cambiar QR</label>
                     <input type="file" class="form-control border border-1 p-2 " id="image" name="image" accept="image/*">
                 </div>
@@ -395,6 +405,7 @@
           const methodCurrency = this.getAttribute('data-currency') || '';
           const methodBank = this.getAttribute('data-bank') || '';
           const methodDni = this.getAttribute('data-dni') || '';
+          const methodDescription = this.getAttribute('data-description') || '';
           const methodQr = this.getAttribute('data-qr') || null;
 
           // Asigna valores al formulario del modal
@@ -403,6 +414,7 @@
           document.getElementById('editPaymentMethodDni').value = methodDni;
           document.getElementById('editPaymentMethodBenefit').value = methodAdmin;
           document.getElementById('editPaymentMethodBank').value = methodBank;
+          document.getElementById('editPaymentMethodDescription').value = methodDescription;
 
           // Selecciona la moneda si está disponible
           const currencySelect = document.getElementById('editPaymentMethodCurrency');
@@ -420,12 +432,12 @@
           if (methodQr) {
             qrImage.src = methodQr; // Actualiza la URL de la imagen
             qrImage.classList.remove('d-none');
-            qrDelete.classList.remove('d-none');
-            qrIcon.classList.add('d-none'); // Esconde el ícono
+            qrDelete?.classList.remove('d-none');
+            qrIcon?.classList.add('d-none');
           } else {
-            qrDelete.classList.add('d-none');
+            qrDelete?.classList.add('d-none');
             qrImage.classList.add('d-none'); // Esconde la imagen
-            qrIcon.classList.remove('d-none'); // Muestra el ícono
+            qrIcon?.classList.remove('d-none');
           }
         });
       });
@@ -525,7 +537,7 @@
         });
         })
       });
-      document.getElementById('btnRemoveQrImage').addEventListener('click', function () {
+      document.getElementById('btnRemoveQrImage')?.addEventListener('click', function () {
         const methodId = document.getElementById('editMethodId').value;
 
         if (confirm('¿Estás seguro de que deseas eliminar este QR?')) {
@@ -543,8 +555,8 @@
               // Actualizar la interfaz
               document.getElementById('editPaymentMethodQrImage').classList.add('d-none');
               document.getElementById('editPaymentMethodQrImage').src = '';
-              document.getElementById('editPaymentMethodQrIcon').classList.remove('d-none');
-              document.getElementById('btnRemoveQrImage').classList.add('d-none');
+              document.getElementById('editPaymentMethodQrIcon')?.classList.remove('d-none');
+              document.getElementById('btnRemoveQrImage')?.classList.add('d-none');
             } else {
               alert('Hubo un problema al eliminar el QR.');
             }
@@ -563,26 +575,27 @@
         fetch(`/api/payment-methods/${id}/edit`, {
           method: 'POST',
           headers: {
-            'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+            'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+            'Accept': 'application/json'
           },
           body: formData,
         })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              alert(data.message);
-              window.location.reload();
-              // Actualizar la interfaz con el nuevo QR
-              document.getElementById('editPaymentMethodQrImage').src = data.qr_image;
-              document.getElementById('editPaymentMethodQrImage').classList.remove('d-none');
-              document.getElementById('editPaymentMethodQrIcon').classList.add('d-none');
-              document.getElementById('btnRemoveQrImage').classList.remove('d-none');
-            } else {
-              alert('Hubo un problema al actualizar el QR.');
+          .then(async response => {
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok || !data.success) {
+              throw new Error(data.message || 'Hubo un problema al actualizar el método de pago.');
             }
+
+            return data;
+          })
+          .then(data => {
+            alert(data.message);
+            window.location.reload();
           })
           .catch(error => {
             console.error('Error:', error);
+            alert(error.message || 'Hubo un problema al actualizar el método de pago.');
           });
       });
 

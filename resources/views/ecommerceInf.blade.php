@@ -387,7 +387,7 @@
                 @endif
                 <div class="d-flex gap-2 align-items-center">
                   <input type="number" min="1" value="1" class="form-control form-control-sm" id="tenant-pack-qty-{{ $package->id }}" style="max-width: 90px;">
-                  <button type="button" class="btn btn-dark btn-sm" onclick="addTenantPackageToCart({{ $package->id }})">Agregar paquete</button>
+                  <button type="button" class="btn btn-dark btn-sm js-add-tenant-package" data-package-id="{{ $package->id }}">Agregar paquete</button>
                 </div>
               </div>
             </div>
@@ -532,8 +532,15 @@
     const categoryLinks = document.querySelectorAll('.category-link');
     const products = document.querySelectorAll('.product-item');
     const tenantPackages = @json($tenantPackagesPayload);
+    const tenantSlug = @json($tenant->slug);
 
-    window.addTenantPackageToCart = function (packageId) {
+    function sendCartCommand(type, detail = {}) {
+      document.dispatchEvent(new CustomEvent('shopix-cart-command', {
+        detail: { type, ...detail }
+      }));
+    }
+
+    function addTenantPackageToCart(packageId) {
       const pkg = tenantPackages.find(p => Number(p.id) === Number(packageId));
       if (!pkg) {
         alert('No se encontró el paquete.');
@@ -542,11 +549,6 @@
 
       const qtyInput = document.getElementById(`tenant-pack-qty-${packageId}`);
       const packQty = Math.max(1, parseInt(qtyInput?.value || '1', 10));
-
-      if (!window.ShopixCart || typeof window.ShopixCart.addItem !== 'function') {
-        alert('No se pudo abrir el carrito.');
-        return;
-      }
 
       pkg.items.forEach(component => {
         const quantity = (Number(component.quantity || 0) * packQty);
@@ -568,18 +570,28 @@
           * ((100 - packageDiscount) / 100)
           * priceScale;
 
-        window.ShopixCart.addItem({
+          sendCartCommand('add-item', {
+            item: {
           variantId: Number(component.variant_id),
           productId: Number(component.variant_id),
           productName: `${component.product_name} [${pkg.name}]`,
           variantSize: component.variant_size,
           price: componentPrice,
           qty: quantity,
-        });
+            }
+          });
       });
+
+        sendCartCommand('open-cart');
 
       alert(`Paquete "${pkg.name}" agregado al carrito.`);
     }
+
+      document.querySelectorAll('.js-add-tenant-package').forEach(button => {
+        button.addEventListener('click', () => {
+          addTenantPackageToCart(button.dataset.packageId);
+        });
+      });
 
     const packagesSection = document.getElementById('paquetes');
 

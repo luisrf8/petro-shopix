@@ -83,17 +83,27 @@ class AuthenticatedSessionController extends Controller
     {
         Auth::guard('web')->logout();
 
-        // $request->session()->invalidate();
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
-        // $request->session()->regenerateToken();
+        if ($request->expectsJson() || $request->is('api/*')) {
+            return response()->json(['message' => 'Logged out successfully'], 200);
+        }
 
-        // return redirect('/');
-        return response()->json(['message' => 'Logged out successfully'], 200);
+        return redirect('/login');
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
-        Auth::logout();
+        Auth::guard('web')->logout();
+
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
         return redirect('/login');
     }
 

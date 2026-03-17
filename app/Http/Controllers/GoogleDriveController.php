@@ -5,23 +5,46 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Google\Client;
 use Google\Service\Drive;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
+use App\Support\ImageStorage;
 
 class GoogleDriveController extends Controller
 {
     private $client;
+    private $isConfigured = false;
 
     public function __construct()
     {
         $this->client = new Client();
-        $this->client->setAuthConfig(storage_path('app/credentials.json'));
+
+        $credentialsPath = storage_path('app/credentials.json');
+        if (File::exists($credentialsPath)) {
+            $this->client->setAuthConfig($credentialsPath);
+            $this->isConfigured = true;
+        }
+
         $this->client->addScope(Drive::DRIVE_FILE);
         $this->client->setAccessType('offline');
         $this->client->setPrompt('select_account consent');
     }
 
+    private function ensureConfigured()
+    {
+        if ($this->isConfigured) {
+            return null;
+        }
+
+        return response()->json([
+            'message' => 'Google Drive no está configurado. Falta el archivo storage/app/credentials.json.',
+        ], 503);
+    }
+
     public function uploadFile(Request $request)
     {
+        if ($response = $this->ensureConfigured()) {
+            return $response;
+        }
+
         $request->validate([
             'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
@@ -71,15 +94,37 @@ class GoogleDriveController extends Controller
 
     public function redirectToGoogle()
     {
+        if (!$this->isConfigured) {
+            return redirect()->back()->with('error', 'Google Drive no está configurado.');
+        }
+
         return redirect()->away($this->client->createAuthUrl());
     }
 
     public function handleGoogleCallback(Request $request)
     {
+        if (!$this->isConfigured) {
+            return redirect()->back()->with('error', 'Google Drive no está configurado.');
+        }
+
         $this->client->authenticate($request->get('code'));
         $request->session()->put('google_drive_token', $this->client->getAccessToken());
 
         return redirect('/'); // Redirige a la página principal o donde desees
+    }
+
+    public function streamImage(string $fileId)
+    {
+        try {
+            $file = ImageStorage::downloadGoogleFileById(trim($fileId));
+
+            return response($file['content'], 200, [
+                'Content-Type' => $file['mime_type'],
+                'Cache-Control' => 'public, max-age=2592000',
+            ]);
+        } catch (\Throwable $exception) {
+            abort(404);
+        }
     }
 
 }

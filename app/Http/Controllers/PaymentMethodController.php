@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use App\Support\ImageStorage;
 
 class PaymentMethodController extends Controller
 {
@@ -18,7 +18,9 @@ class PaymentMethodController extends Controller
         $user = auth()->user();
 
         $currencies = Currency::all();
-        $paymentMethods = PaymentMethod::with('currency')->where('tenant_id', $user->tenant_id)->get();
+        $paymentMethods = PaymentMethod::with('currency')
+            ->where('tenant_id', $user->tenant_id)
+            ->get();
 
         // Obtener el último valor de la tasa del dólar
         $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
@@ -54,14 +56,13 @@ class PaymentMethodController extends Controller
             'name' => $request->name,
             'currency_id' => $request->currency,
             'admin_name' => $request->admin_name,
+            'description' => $request->description,
             'dni' => $request->dni,
             'bank' => $request->bank,
-            'image' => $request->image,
             'tenant_id' => $request->tenant_id
         ]);
         if ($request->hasFile('image')) {
-            // Guardar la imagen en la carpeta `qr_images/` en el almacenamiento público
-            $path = $request->file('image')->store('qr_images', 'public');
+            $path = ImageStorage::storeUploadedFile($request->file('image'), 'qr_images');
 
             // Convertir la ruta al formato requerido
             $formattedPath = json_encode([$path]);
@@ -112,12 +113,17 @@ class PaymentMethodController extends Controller
 
         // Buscar el método de pago
         $paymentMethod = PaymentMethod::findOrFail($id);
-        $paymentMethod->update($validated);
+        $paymentMethod->update([
+            'name' => $validated['name'],
+            'currency_id' => $validated['currency'],
+            'admin_name' => $validated['admin_name'] ?? null,
+            'dni' => $validated['dni'] ?? null,
+            'bank' => $validated['bank'] ?? null,
+        ]);
 
         // Procesar la imagen QR si se envía
         if ($request->hasFile('image')) {
-            // Guardar la imagen en la carpeta `qr_images/` en el almacenamiento público
-            $path = $request->file('image')->store('qr_images', 'public');
+            $path = ImageStorage::storeUploadedFile($request->file('image'), 'qr_images');
 
             // Convertir la ruta al formato requerido
             $formattedPath = json_encode([$path]);
@@ -131,7 +137,8 @@ class PaymentMethodController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Método de pago actualizado correctamente.',
-            'qr_image' => $paymentMethod->qr_image, // Aquí se devuelve en el formato correcto
+            'method' => $paymentMethod->fresh('currency'),
+            'qr_image' => $paymentMethod->qr_image,
         ]);
     }
 
@@ -246,8 +253,18 @@ class PaymentMethodController extends Controller
         $paymentMethod = PaymentMethod::findOrFail($methodId);
     
         // Verificar si existe una imagen QR en el almacenamiento y eliminarla
-        if ($paymentMethod->qr_image && Storage::disk('public')->exists($paymentMethod->qr_image)) {
-            Storage::disk('public')->delete($paymentMethod->qr_image);
+        $qrImages = [];
+        if (!empty($paymentMethod->qr_image) && is_string($paymentMethod->qr_image)) {
+            $decoded = json_decode($paymentMethod->qr_image, true);
+            if (is_array($decoded)) {
+                $qrImages = $decoded;
+            } else {
+                $qrImages = [$paymentMethod->qr_image];
+            }
+        }
+
+        foreach ($qrImages as $imagePath) {
+            ImageStorage::delete($imagePath);
         }
     
         // Actualizar el campo `qr_image` a null

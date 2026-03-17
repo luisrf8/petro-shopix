@@ -93,7 +93,19 @@
     0%, 100% { opacity: 0.3; transform: translateY(0); }
     50% { opacity: 1; transform: translateY(-3px); }
 }
+
+.store-role-card {
+    border: 1px solid #dee2e6;
+    border-radius: .75rem;
+    background: #fff;
+}
 </style>
+
+@php
+    $authUser = auth()->user();
+    $canAssignStoreRoles = $authUser?->canAssignStoreRoles() ?? false;
+    $isOwnerRole = $authUser?->isOwner() ?? false;
+@endphp
 
 <div class="p-4 ">
     <h1 class="">Gestión de Tienda</h1>
@@ -328,6 +340,42 @@
                             {{-- TAB 4: Usuarios --}}
                             <div class="tab-pane fade" id="users" role="tabpanel">
                                 <h5 class="mt-2">Usuarios de la tienda</h5>
+                                <div class="accordion mb-4" id="rolesAccordion">
+                                    @foreach(($roleDefinitions ?? []) as $roleKey => $roleDefinition)
+                                        <div class="accordion-item border rounded-3 mb-2 overflow-hidden">
+                                            <h2 class="accordion-header" id="heading-{{ $roleKey }}">
+                                                <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ $roleKey }}" aria-expanded="false" aria-controls="collapse-{{ $roleKey }}">
+                                                    <span>{{ $roleDefinition['name'] }}</span>
+                                                    <span class="badge bg-dark text-white ms-2">{{ strtoupper($roleKey) }}</span>
+                                                </button>
+                                            </h2>
+                                            <div id="collapse-{{ $roleKey }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ $roleKey }}" data-bs-parent="#rolesAccordion">
+                                                <div class="accordion-body">
+                                                    <p class="text-sm text-muted mb-2">{{ $roleDefinition['description'] }}</p>
+                                                    <ul class="text-sm mb-0 ps-3">
+                                                        @foreach(($roleDefinition['permissions'] ?? []) as $permission)
+                                                            <li>{{ $permission }}</li>
+                                                        @endforeach
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+
+                                @if($canAssignStoreRoles)
+                                    <div class="alert alert-info border mb-4">
+                                        @if($isOwnerRole)
+                                            Como owner puedes crear usuarios y asignar roles de admin, vendedor y almacenista.
+                                        @else
+                                            Como admin puedes crear usuarios operativos y asignar roles de vendedor y almacenista. La asignacion de admin queda reservada al owner.
+                                        @endif
+                                    </div>
+                                @else
+                                    <div class="alert alert-warning border mb-4">
+                                        Tu rol no tiene permisos para crear usuarios ni asignar roles desde esta pantalla.
+                                    </div>
+                                @endif
 
                                 <ul class="list-group mb-4">
                                     @forelse($tenant->users as $user)
@@ -335,46 +383,49 @@
                                             <div>
                                                 <strong>{{ $user->name }}</strong>
                                                 <small class="d-block text-muted">{{ $user->email }}</small>
+                                                <small class="d-block text-muted">{{ ($roleDefinitions[\App\Models\User::canonicalRoleName(optional($user->role)->name)]['description'] ?? 'Usuario operativo de la tienda.') }}</small>
                                             </div>
-                                            <span class="badge bg-dark text-white">{{ optional($user->role)->name ?? 'sin rol' }}</span>
+                                            <span class="badge bg-dark text-white">{{ \App\Models\User::displayRoleName(optional($user->role)->name) }}</span>
                                         </li>
                                     @empty
                                         <li class="list-group-item text-center text-muted">No hay usuarios registrados.</li>
                                     @endforelse
                                 </ul>
 
-                                <h6 class="mb-3">Agregar nuevo usuario</h6>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Nombre</label>
-                                        <input type="text" name="new_user[name]" class="form-control p-2 border border-radius-lg">
+                                @if($canAssignStoreRoles)
+                                    <h6 class="mb-3">Agregar nuevo usuario</h6>
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Nombre</label>
+                                            <input type="text" name="new_user[name]" class="form-control p-2 border border-radius-lg">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Correo</label>
+                                            <input type="email" name="new_user[email]" class="form-control p-2 border border-radius-lg">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Teléfono</label>
+                                            <input type="text" name="new_user[phone_number]" class="form-control p-2 border border-radius-lg">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">DNI</label>
+                                            <input type="text" name="new_user[dni]" class="form-control p-2 border border-radius-lg">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Contraseña</label>
+                                            <input type="password" name="new_user[password]" class="form-control p-2 border border-radius-lg" autocomplete="new-password">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Rol</label>
+                                            <select name="new_user[role_id]" class="form-control form-control-lg border border-radius-lg p-2">
+                                                <option value="">Selecciona un rol</option>
+                                                @foreach($roles as $role)
+                                                    <option value="{{ $role->id }}">{{ \App\Models\User::displayRoleName($role->name) }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
                                     </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Correo</label>
-                                        <input type="email" name="new_user[email]" class="form-control p-2 border border-radius-lg">
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Teléfono</label>
-                                        <input type="text" name="new_user[phone_number]" class="form-control p-2 border border-radius-lg">
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">DNI</label>
-                                        <input type="text" name="new_user[dni]" class="form-control p-2 border border-radius-lg">
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Contraseña</label>
-                                        <input type="password" name="new_user[password]" class="form-control p-2 border border-radius-lg" autocomplete="new-password">
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Rol</label>
-                                        <select name="new_user[role_id]" class="form-control form-control-lg border border-radius-lg p-2">
-                                            <option value="">Selecciona un rol</option>
-                                            @foreach($roles as $role)
-                                                <option value="{{ $role->id }}">{{ $role->name }}</option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-                                </div>
+                                @endif
                             </div>
                         </div>
 
@@ -453,7 +504,7 @@
                         <select name="role" id="edit_user_role" class="form-select" required>
                             <option value="">Seleccione un rol</option>
                             @foreach($roles as $role)
-                                <option value="{{ $role->name }}">{{ $role->name }}</option>
+                                <option value="{{ $role->name }}">{{ \App\Models\User::displayRoleName($role->name) }}</option>
                             @endforeach
                         </select>
                     </div>

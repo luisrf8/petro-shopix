@@ -15,20 +15,25 @@
       @else
         <div class="list-group" id="notifications-list-group">
           @foreach($notifications as $notification)
-            <div class="list-group-item d-flex justify-content-between align-items-start {{ is_null($notification->read_at) ? 'bg-light' : '' }}" data-notification-id="{{ $notification->id }}">
+            <div class="list-group-item d-flex justify-content-between align-items-start {{ is_null($notification['read_at']) ? 'bg-light' : '' }}" data-notification-id="{{ $notification['id'] }}">
               <div class="me-3">
-                <h6 class="mb-1">{{ $notification->data['title'] ?? 'Notificación' }}</h6>
-                <p class="mb-1 text-sm">{{ $notification->data['message'] ?? '' }}</p>
-                <small class="text-muted">{{ optional($notification->created_at)->format('d/m/Y H:i') }}</small>
+                <h6 class="mb-1">{{ $notification['title'] ?? 'Notificación' }}</h6>
+                <p class="mb-1 text-sm">{{ $notification['message'] ?? '' }}</p>
+                <small class="text-muted">{{ \Carbon\Carbon::parse($notification['created_at'])->format('d/m/Y H:i') }}</small>
               </div>
-              @if(is_null($notification->read_at))
-                <form method="POST" action="{{ route('notifications.read', $notification->id) }}">
-                  @csrf
-                  <button type="submit" class="btn btn-sm btn-outline-dark mb-0">Marcar leída</button>
-                </form>
-              @else
-                <span class="badge bg-success">Leída</span>
-              @endif
+              <div class="d-flex flex-column gap-2 align-items-end">
+                @if(!empty($notification['target_url']))
+                  <a href="{{ $notification['target_url'] }}" class="btn btn-sm btn-dark mb-0">Abrir</a>
+                @endif
+                @if(is_null($notification['read_at']))
+                  <form method="POST" action="{{ route('notifications.read', $notification['id']) }}">
+                    @csrf
+                    <button type="submit" class="btn btn-sm btn-outline-dark mb-0">Marcar leída</button>
+                  </form>
+                @else
+                  <span class="badge bg-success">Leída</span>
+                @endif
+              </div>
             </div>
           @endforeach
         </div>
@@ -56,6 +61,9 @@
     function buildNotificationHtml(notification) {
       const isUnread = !notification.is_read;
       const rowClass = isUnread ? 'bg-light' : '';
+      const openButton = notification.target_url
+        ? `<a href="${notification.target_url}" class="btn btn-sm btn-dark mb-0">Abrir</a>`
+        : '';
       const action = isUnread
         ? `<form method="POST" action="/notifications/${notification.id}/read">
             <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''}">
@@ -70,7 +78,7 @@
             <p class="mb-1 text-sm">${notification.message || ''}</p>
             <small class="text-muted">${notification.created_at || ''}</small>
           </div>
-          ${action}
+          <div class="d-flex flex-column gap-2 align-items-end">${openButton}${action}</div>
         </div>
       `;
     }
@@ -87,6 +95,7 @@
         message: notification.message || '',
         created_at: notification.created_at || new Date().toLocaleString(),
         is_read: false,
+        target_url: notification.target_url || null,
       };
 
       list.insertAdjacentHTML('afterbegin', buildNotificationHtml(normalized));

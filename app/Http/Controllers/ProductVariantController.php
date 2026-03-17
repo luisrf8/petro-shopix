@@ -32,15 +32,20 @@ class ProductVariantController extends Controller
             'variants.*.price' => 'required|numeric',
             'variants.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'variants.*.stock' => 'required|integer',
+            'variants.*.barcode' => 'nullable|string|max:100',
         ]);
     
         foreach ($request->variants as $variant) {
+            $barcode = $this->sanitizeVariantCode($variant['barcode'] ?? null);
+            $this->assertVariantCodeAvailable($barcode);
+
             $createdVariant = ProductVariant::create([
                 'product_id' => $request->product_id,
                 'size' => $variant['size'],
                 'price' => $variant['price'],
                 'discount_percentage' => (float) ($variant['discount_percentage'] ?? 0),
                 'stock' => $variant['stock'],
+                'barcode' => $barcode,
             ]);
 
             if (empty($createdVariant->qr_code)) {
@@ -71,16 +76,56 @@ class ProductVariantController extends Controller
             'price' => 'required|numeric',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'stock' => 'required|integer',
+            'barcode' => 'nullable|string|max:100',
         ]);
+
+        $barcode = $this->sanitizeVariantCode($request->input('barcode'));
+        $this->assertVariantCodeAvailable($barcode, (int) $productVariant->id);
     
         // Actualizar la variante con los datos proporcionados
-        $productVariant->update($request->only(['size', 'price', 'discount_percentage', 'stock']));
+        $productVariant->update([
+            'size' => $request->input('size'),
+            'price' => $request->input('price'),
+            'discount_percentage' => $request->input('discount_percentage', 0),
+            'stock' => $request->input('stock'),
+            'barcode' => $barcode,
+        ]);
+
+        if (empty($productVariant->barcode)) {
+            $productVariant->barcode = $this->generateUniqueVariantCode('BCV');
+            $productVariant->save();
+        }
     
         // Responder con JSON para las solicitudes AJAX
         return response()->json([
             'success' => true,
             'message' => 'Variante actualizada exitosamente.',
             'variant' => $productVariant
+        ]);
+    }
+
+    public function updateBarcode(Request $request, ProductVariant $productVariant)
+    {
+        DB::raw("SET @user_id = " . auth()->id());
+
+        $request->validate([
+            'barcode' => 'nullable|string|max:100',
+        ]);
+
+        $barcode = $this->sanitizeVariantCode($request->input('barcode'));
+        $this->assertVariantCodeAvailable($barcode, (int) $productVariant->id);
+
+        $productVariant->barcode = $barcode;
+        if (empty($productVariant->barcode)) {
+            $productVariant->barcode = $this->generateUniqueVariantCode('BCV');
+        }
+
+        $productVariant->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Código de barras actualizado.',
+            'barcode' => $productVariant->barcode,
         ]);
     }
 
@@ -155,6 +200,43 @@ class ProductVariantController extends Controller
         } while (ProductVariant::where('qr_code', $value)->orWhere('barcode', $value)->exists());
 
         return $value;
+    }
+
+    private function sanitizeVariantCode(?string $value): ?string
+    {
+        $clean = trim((string) $value);
+
+        return $clean === '' ? null : $clean;
+    }
+
+    private function assertVariantCodeAvailable(?string $barcode, ?int $ignoreVariantId = null): void
+    {
+        if (empty($barcode)) {
+            return;
+        }
+
+        $query = ProductVariant::query()
+            ->where(function ($innerQuery) use ($barcode) {
+                $innerQuery->where('barcode', $barcode)
+                    ->orWhere('qr_code', $barcode);
+            });
+
+        if ($ignoreVariantId) {
+            $query->where('id', '!=', $ignoreVariantId);
+        }
+
+        if ($query->exists()) {
+            throw new \Illuminate\Validation\ValidationException(
+                validator([], []),
+                response()->json([
+                    'success' => false,
+                    'message' => 'El código de barras ya está en uso por otra variante.',
+                    'errors' => [
+                        'barcode' => ['El código de barras ya está en uso por otra variante.'],
+                    ],
+                ], 422)
+            );
+        }
     }
 }
 

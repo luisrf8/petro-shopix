@@ -93,10 +93,13 @@
 </head>
 <body class="bg-gray-100" id="d-body">
     @php
+      $moduleHelpEnabled = (bool) config('module_help.enabled', false);
         $currentRouteName = optional(request()->route())->getName();
         $moduleHelpConfig = config('module_help', []);
         $moduleHelpFallback = $moduleHelpConfig['fallback'] ?? [];
-        $moduleHelp = $moduleHelpConfig['routes'][$currentRouteName] ?? $moduleHelpFallback;
+      $moduleHelp = $moduleHelpEnabled
+        ? ($moduleHelpConfig['routes'][$currentRouteName] ?? $moduleHelpFallback)
+        : [];
         $moduleWizard = $moduleHelp['wizard'] ?? [];
         $moduleTour = $moduleHelp['tour'] ?? [];
         $helpPreferenceUrls = [

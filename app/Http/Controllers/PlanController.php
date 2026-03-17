@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Plan;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use App\Support\ImageStorage;
 
 class PlanController extends Controller
 {
@@ -52,8 +52,8 @@ class PlanController extends Controller
 
         // ✅ Manejo de imagen
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('plans', 'public');
-            $validated['image'] = '/storage/' . $path;
+            $path = ImageStorage::storeUploadedFile($request->file('image'), 'plans');
+            $validated['image'] = $path;
         }
 
         $validated['status'] = $request->input('status', 0);
@@ -81,12 +81,13 @@ class PlanController extends Controller
         $validated['features'] = $this->normalizeFeatures($request->input('features'));
         // ✅ Manejo de imagen (reemplazar si llega nueva)
         if ($request->hasFile('image')) {
-            if ($plan->image && file_exists(public_path($plan->image))) {
-                @unlink(public_path($plan->image));
+            $storedImage = $plan->getRawOriginal('image');
+            if (!empty($storedImage)) {
+                ImageStorage::delete($storedImage);
             }
 
-            $path = $request->file('image')->store('plans', 'public');
-            $validated['image'] = '/storage/' . $path;
+            $path = ImageStorage::storeUploadedFile($request->file('image'), 'plans');
+            $validated['image'] = $path;
         }
 
         $validated['status'] = $request->input('status', $plan->status ?? 0);
@@ -102,8 +103,9 @@ class PlanController extends Controller
 
         $plan = Plan::findOrFail($id);
 
-        if ($plan->image && file_exists(public_path($plan->image))) {
-            @unlink(public_path($plan->image));
+        $storedImage = $plan->getRawOriginal('image');
+        if (!empty($storedImage)) {
+            ImageStorage::delete($storedImage);
         }
 
         $plan->delete();

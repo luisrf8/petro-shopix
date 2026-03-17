@@ -78,7 +78,7 @@
                     <!-- Product Variants -->
                     <div class="mb-3">
                         <label class="form-label">Variantes</label>
-                        <small class="text-muted d-block mb-2">Al guardar, se generan automáticamente QR y código de barras para las variantes.</small>
+                        <small class="text-muted d-block mb-2">Puedes escribir el código de barras manualmente. Si lo dejas vacío, se genera automáticamente.</small>
                         <div id="variantContainer"></div>
                         <button type="button" id="addVariantBtn" class="btn btn-secondary mt-2">Agregar Variante +</button>
                     </div>
@@ -142,6 +142,7 @@
                     <input type="number" name="variantPrice[]" class="form-control border border-radius-lg p-2 h-100" placeholder="Variant price" required>
                     <input type="number" name="variantDiscount[]" class="form-control border border-radius-lg p-2 h-100" placeholder="Discount %" min="0" max="100" step="0.01" value="0" required>
                     <input type="number" name="variantStock[]" class="form-control border border-radius-lg p-2 h-100" placeholder="Variant stock" required>
+                    <input type="text" name="variantBarcode[]" class="form-control border border-radius-lg p-2 h-100" placeholder="Código de barras (opcional)">
                     <button type="button" class="btn btn-danger remove-variant-btn">Remove</button>
                 </div>
             `;
@@ -168,8 +169,9 @@
                 const price = row.querySelector('input[name="variantPrice[]"]').value;
                 const discount = row.querySelector('input[name="variantDiscount[]"]').value;
                 const stock = row.querySelector('input[name="variantStock[]"]').value;
+                const barcode = row.querySelector('input[name="variantBarcode[]"]').value;
                 if (name && price && stock) {
-                    variants.push({ name, price, discount_percentage: discount || 0, stock });
+                    variants.push({ name, price, discount_percentage: discount || 0, stock, barcode });
                 }
             });
 
@@ -178,27 +180,27 @@
             fetch('api/create-product', {
                 method: 'POST',
                 headers: {
-                    'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+                    'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+                    'Accept': 'application/json'
                 },
                 body: formData,
             })
-                .then((response) => {
-                    console.log("response", response)
-                    window.history.back();
+                .then(async (response) => {
+                    const payload = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !payload.success) {
+                        const validationMessage = payload?.errors
+                            ? Object.values(payload.errors).flat().join('\n')
+                            : null;
+
+                        throw new Error(validationMessage || payload.message || 'Error creating product.');
+                    }
+
+                    window.location.href = "{{ route('products.index') }}";
                 })
-                // .then((data) => {
-                //     if (data.success) {
-                //         alert('Product created successfully!');
-                //         // this.reset();
-                //         document.getElementById('imagePreview').innerHTML = '';
-                //         document.getElementById('variantContainer').innerHTML = '';
-                //     } else {
-                //         alert('Error creating product. Please try again.');
-                //     }
-                // })
                 .catch((error) => {
                     console.error('Error:', error);
-                    alert('Error creating product. Please check console for details.');
+                    alert(error.message || 'Error creating product. Please check console for details.');
                 });
         });
 

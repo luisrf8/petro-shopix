@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use App\Models\Product;
+use App\Support\ImageStorage;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class CategoryController extends Controller
 {
@@ -64,8 +64,7 @@ class CategoryController extends Controller
         $imagePath = null;
 
         if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')
-                ->store('categories/images', 'public');
+            $imagePath = ImageStorage::storeUploadedFile($request->file('image'), 'categories/images');
         }
 
         $category = Category::create([
@@ -105,13 +104,12 @@ class CategoryController extends Controller
         if ($request->hasFile('image')) {
 
             // Eliminar imagen anterior
-            if ($category->image && Storage::disk('public')->exists($category->image)) {
-                Storage::disk('public')->delete($category->image);
+            if ($category->image && ImageStorage::exists($category->image)) {
+                ImageStorage::delete($category->image);
             }
 
             // Guardar nueva imagen
-            $category->image = $request->file('image')
-                ->store('categories/images', 'public');
+            $category->image = ImageStorage::storeUploadedFile($request->file('image'), 'categories/images');
         }
 
         $category->update([
@@ -155,8 +153,8 @@ class CategoryController extends Controller
         DB::raw("SET @user_id = " . auth()->id());
 
         // Eliminar imagen si existe
-        if ($category->image && Storage::disk('public')->exists($category->image)) {
-            Storage::disk('public')->delete($category->image);
+        if ($category->image && ImageStorage::exists($category->image)) {
+            ImageStorage::delete($category->image);
         }
 
         $category->delete();

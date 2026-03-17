@@ -150,9 +150,10 @@
                     <div class="card border mb-3">
                         <div class="card-body">
                             <h6 class="mb-2">Agregar por QR / Código de barras</h6>
-                            <div class="d-flex gap-2">
+                            <div class="d-flex gap-2 flex-wrap">
                                 <input type="text" id="scanCodeInput" class="form-control border border-1 p-2 bg-white" placeholder="Escanea o pega el código">
                                 <button type="button" class="btn btn-dark mb-0" id="scanCodeBtn">Agregar</button>
+                                <button type="button" class="btn btn-outline-dark mb-0" id="openQrScannerBtn" data-bs-toggle="modal" data-bs-target="#scanQrModal">Escanear con cámara</button>
                             </div>
                         </div>
                     </div>
@@ -412,6 +413,28 @@
                         </div>
                     </div>
 
+                    <div class="card p-3 mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">Estado inicial de la venta</h6>
+                            <div class="form-check m-0">
+                                <input class="form-check-input" type="checkbox" id="saleStatusSelectAll">
+                                <label class="form-check-label" for="saleStatusSelectAll">Seleccionar todo</label>
+                            </div>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input sale-status-check" type="checkbox" id="markSaleCompleted" checked>
+                            <label class="form-check-label" for="markSaleCompleted">Marcar venta como completa</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input sale-status-check" type="checkbox" id="markPaymentsPaid" checked>
+                            <label class="form-check-label" for="markPaymentsPaid">Marcar pagos como pagados</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input sale-status-check" type="checkbox" id="markDelivered">
+                            <label class="form-check-label" for="markDelivered">Marcar orden como entregada</label>
+                        </div>
+                    </div>
+
                     <div id="summaryContainer" class="mt-3 card p-4"></div> <!-- Aquí se insertará el resumen -->
                     <span class="text-danger paymentMessage"></span>
 
@@ -500,18 +523,42 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="scanQrModal" tabindex="-1" aria-labelledby="scanQrModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="scanQrModalLabel">Escanear QR del producto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="qrScannerReader" style="width:100%; min-height: 280px;"></div>
+                <small class="text-muted d-block mt-2">Apunta la cámara al QR o código de barras del producto para agregarlo automáticamente.</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
     @endsection
 
 @push('scripts')
 <!-- Core JS Files -->
 <script src="{{ asset('assets/js/core/popper.min.js') }}"></script>
 <script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
+<script src="https://unpkg.com/html5-qrcode" defer></script>
     <script>
         var selectedItems = [];
         var totalAmount = 0;
         var subTotalAmount = 0;
         let payments = []; 
         let totalPaid = 0; 
+        let scanCodeDebounceTimer = null;
+        let scanCodeRequestInFlight = false;
+        let qrScannerInstance = null;
+        let qrScannerRunning = false;
+        let qrScannerLock = false;
         const igtfTax = @json($taxes->firstWhere('name', 'IGTF'));
 
         const dollar = @json($dollarRate);
@@ -966,83 +1013,162 @@ function updateQuantity(id, newQty) {
             qrModal.show(); // Mostrar el modal
         }
 
+        async function stopQrScanner() {
+            if (!qrScannerInstance || !qrScannerRunning) {
+                return;
+            }
+
+            try {
+                await qrScannerInstance.stop();
+            } catch (error) {
+            }
+
+            try {
+                await qrScannerInstance.clear();
+            } catch (error) {
+            }
+
+            qrScannerRunning = false;
+        }
+
+        async function startQrScanner() {
+            const readerElement = document.getElementById('qrScannerReader');
+            if (!readerElement) {
+                return;
+            }
+
+            if (typeof Html5Qrcode === 'undefined') {
+                alert('No se pudo cargar el escáner QR. Intenta recargar la página.');
+                return;
+            }
+
+            if (!qrScannerInstance) {
+                qrScannerInstance = new Html5Qrcode('qrScannerReader');
+            }
+
+            if (qrScannerRunning) {
+                return;
+            }
+
+            qrScannerLock = false;
+
+            try {
+                await qrScannerInstance.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: { width: 240, height: 240 } },
+                    async (decodedText) => {
+                        if (qrScannerLock) {
+                            return;
+                        }
+
+                        qrScannerLock = true;
+                        const input = document.getElementById('scanCodeInput');
+                        if (input) {
+                            input.value = String(decodedText || '').trim();
+                        }
+
+                        await addByScanCode();
+                        const modalEl = document.getElementById('scanQrModal');
+                        const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                        modalInstance?.hide();
+                    },
+                    () => {
+                    }
+                );
+
+                qrScannerRunning = true;
+            } catch (error) {
+                alert('No se pudo iniciar la cámara para escanear. Verifica permisos del navegador.');
+            }
+        }
+
         async function addByScanCode() {
+            if (scanCodeRequestInFlight) {
+                return;
+            }
+
             const input = document.getElementById('scanCodeInput');
             const code = String(input?.value || '').trim();
             if (!code) {
                 return;
             }
 
+            scanCodeRequestInFlight = true;
+
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-            const response = await fetch('/sales/scan-code', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ code }),
-            });
+            try {
+                const response = await fetch('/sales/scan-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({ code }),
+                });
 
-            const payload = await response.json();
-            if (!response.ok || !payload.success) {
-                alert(payload.message || 'Código no encontrado.');
-                return;
-            }
+                const payload = await response.json();
+                if (!response.ok || !payload.success) {
+                    alert(payload.message || 'Código no encontrado.');
+                    return;
+                }
 
-            if (payload.type === 'package') {
-                addMaterialPackageToSale(payload.package_id);
-                input.value = '';
-                return;
-            }
-
-            if (payload.type === 'variant' && payload.variant) {
-                const variant = payload.variant;
-                const checkbox = document.getElementById(`variant_${variant.id}`);
-                if (checkbox) {
-                    if (!checkbox.checked) {
-                        checkbox.checked = true;
-                        checkbox.dispatchEvent(new Event('change'));
-                    } else {
-                        const existing = selectedItems.find(item => String(item.id) === String(variant.id));
-                        if (existing) {
-                            existing.quantity = Number(existing.quantity || 0) + 1;
-                            recalcSubtotals();
-                            renderCart();
-                        }
-                    }
+                if (payload.type === 'package') {
+                    addMaterialPackageToSale(payload.package_id);
                     input.value = '';
                     return;
                 }
 
-                const taxes = variant.taxes || [];
-                const totalTaxRate = taxes.reduce((sum, tax) => sum + parseFloat(tax.rate || 0), 0);
-                const price = parseFloat(variant.price || 0);
-                const taxAmount = price * (totalTaxRate / 100);
-                const totalPrice = price + taxAmount;
+                if (payload.type === 'variant' && payload.variant) {
+                    const variant = payload.variant;
+                    const checkbox = document.getElementById(`variant_${variant.id}`);
+                    if (checkbox) {
+                        if (!checkbox.checked) {
+                            checkbox.checked = true;
+                            checkbox.dispatchEvent(new Event('change'));
+                        } else {
+                            const existing = selectedItems.find(item => String(item.id) === String(variant.id));
+                            if (existing) {
+                                existing.quantity = Number(existing.quantity || 0) + 1;
+                                recalcSubtotals();
+                                renderCart();
+                            }
+                        }
+                        input.value = '';
+                        return;
+                    }
 
-                const existing = selectedItems.find(item => String(item.id) === String(variant.id));
-                if (existing) {
-                    existing.quantity = Number(existing.quantity || 0) + 1;
-                } else {
-                    selectedItems.push({
-                        id: String(variant.id),
-                        productName: variant.product_name,
-                        productSize: variant.size,
-                        price,
-                        stock: parseFloat(variant.stock || 0),
-                        quantity: 1,
-                        line_discount_percentage: 0,
-                        taxes,
-                        taxRate: totalTaxRate,
-                        taxAmount,
-                        totalPrice,
-                    });
+                    const taxes = variant.taxes || [];
+                    const totalTaxRate = taxes.reduce((sum, tax) => sum + parseFloat(tax.rate || 0), 0);
+                    const price = parseFloat(variant.price || 0);
+                    const taxAmount = price * (totalTaxRate / 100);
+                    const totalPrice = price + taxAmount;
+
+                    const existing = selectedItems.find(item => String(item.id) === String(variant.id));
+                    if (existing) {
+                        existing.quantity = Number(existing.quantity || 0) + 1;
+                    } else {
+                        selectedItems.push({
+                            id: String(variant.id),
+                            productName: variant.product_name,
+                            productSize: variant.size,
+                            price,
+                            stock: parseFloat(variant.stock || 0),
+                            quantity: 1,
+                            line_discount_percentage: 0,
+                            taxes,
+                            taxRate: totalTaxRate,
+                            taxAmount,
+                            totalPrice,
+                        });
+                    }
+
+                    recalcSubtotals();
+                    renderCart();
+                    input.value = '';
                 }
-
-                recalcSubtotals();
-                renderCart();
-                input.value = '';
+            } finally {
+                scanCodeRequestInFlight = false;
             }
         }
         function filterCategories() {
@@ -1060,12 +1186,67 @@ function updateQuantity(id, newQty) {
         }
 
         document.getElementById('scanCodeBtn')?.addEventListener('click', addByScanCode);
+        document.getElementById('scanQrModal')?.addEventListener('shown.bs.modal', startQrScanner);
+        document.getElementById('scanQrModal')?.addEventListener('hidden.bs.modal', stopQrScanner);
         document.getElementById('scanCodeInput')?.addEventListener('keydown', function (event) {
             if (event.key === 'Enter') {
                 event.preventDefault();
+                if (scanCodeDebounceTimer) {
+                    clearTimeout(scanCodeDebounceTimer);
+                    scanCodeDebounceTimer = null;
+                }
                 addByScanCode();
             }
         });
+        document.getElementById('scanCodeInput')?.addEventListener('input', function () {
+            if (scanCodeDebounceTimer) {
+                clearTimeout(scanCodeDebounceTimer);
+            }
+
+            const currentValue = String(this.value || '').trim();
+            if (currentValue.length < 3) {
+                return;
+            }
+
+            scanCodeDebounceTimer = setTimeout(() => {
+                addByScanCode();
+            }, 160);
+        });
+        document.getElementById('scanCodeInput')?.addEventListener('paste', function () {
+            if (scanCodeDebounceTimer) {
+                clearTimeout(scanCodeDebounceTimer);
+            }
+
+            scanCodeDebounceTimer = setTimeout(() => {
+                addByScanCode();
+            }, 30);
+        });
+
+        function syncSaleStatusSelectAll() {
+            const checks = Array.from(document.querySelectorAll('.sale-status-check'));
+            const selectAll = document.getElementById('saleStatusSelectAll');
+            if (!selectAll || checks.length === 0) {
+                return;
+            }
+
+            selectAll.checked = checks.every(check => check.checked);
+        }
+
+        document.getElementById('saleStatusSelectAll')?.addEventListener('change', function () {
+            document.querySelectorAll('.sale-status-check').forEach(check => {
+                check.checked = this.checked;
+            });
+            renderSummary();
+        });
+
+        document.querySelectorAll('.sale-status-check').forEach(check => {
+            check.addEventListener('change', function () {
+                syncSaleStatusSelectAll();
+                renderSummary();
+            });
+        });
+
+        syncSaleStatusSelectAll();
         document.getElementById('toStep2').addEventListener('click', function() {
             document.getElementById('step1').classList.add('d-none');
             document.getElementById('step2').classList.remove('d-none');
@@ -1305,6 +1486,20 @@ function updateQuantity(id, newQty) {
             addressDiv.innerHTML = `<strong>Dirección:</strong> ${deliveryType === 'shipping' ? (deliveryAddress || 'No indicada') : 'Tienda'}`;
             container.appendChild(addressDiv);
 
+            const statusDiv = document.createElement('div');
+            const markSaleCompleted = document.getElementById('markSaleCompleted')?.checked;
+            const markPaymentsPaid = document.getElementById('markPaymentsPaid')?.checked;
+            const markDelivered = document.getElementById('markDelivered')?.checked;
+            statusDiv.innerHTML = `
+                <strong>Estado inicial:</strong>
+                <ul class="mb-3 mt-2">
+                    <li>Venta completa: ${markSaleCompleted ? 'Sí' : 'No'}</li>
+                    <li>Pagos pagados: ${markPaymentsPaid ? 'Sí' : 'No'}</li>
+                    <li>Entregada: ${markDelivered ? 'Sí' : 'No'}</li>
+                </ul>
+            `;
+            container.appendChild(statusDiv);
+
             // Resumen de métodos de pago
             const paymentsTitle = document.createElement('h5');
             paymentsTitle.innerText = 'Métodos de pago';
@@ -1498,7 +1693,10 @@ function updateQuantity(id, newQty) {
         tenant_id: tenantId,
         dollarRate: dollarRate,
         delivery_type: deliveryType,
-        delivery_address: deliveryType === 'shipping' ? deliveryAddress : 'Tienda'
+        delivery_address: deliveryType === 'shipping' ? deliveryAddress : 'Tienda',
+        mark_delivered: document.getElementById('markDelivered')?.checked || false,
+        mark_payments_paid: document.getElementById('markPaymentsPaid')?.checked || false,
+        mark_sale_completed: document.getElementById('markSaleCompleted')?.checked || false,
     };
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -1520,23 +1718,27 @@ function updateQuantity(id, newQty) {
             }
         })
         .then(data => {
-            alert('Compra confirmada con éxito.');
+            alert(data.message || 'Compra confirmada con éxito.');
 
-            const link = document.createElement('a');
-            link.href = data.pdf_url;
-            link.download = '';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            if (data.pdf_url) {
+                const link = document.createElement('a');
+                link.href = data.pdf_url;
+                link.download = '';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
 
-            const linkNota = document.createElement('a');
-            linkNota.href = data.nota_entrega_pdf_url;
-            linkNota.download = '';
-            document.body.appendChild(linkNota);
-            linkNota.click();
-            document.body.removeChild(linkNota);
+            if (data.nota_entrega_pdf_url) {
+                const linkNota = document.createElement('a');
+                linkNota.href = data.nota_entrega_pdf_url;
+                linkNota.download = '';
+                document.body.appendChild(linkNota);
+                linkNota.click();
+                document.body.removeChild(linkNota);
+            }
 
-            // window.location.href = '/sales-orders';
+            window.location.href = '/sales-orders';
         })
         .catch(error => {
             console.error('Error:', error);

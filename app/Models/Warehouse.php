@@ -30,4 +30,14 @@ class Warehouse extends Model
     {
         return $this->hasMany(ProductVariantWarehouseStock::class);
     }
+
+    public function outgoingMovements()
+    {
+        return $this->hasMany(WarehouseMovement::class, 'source_warehouse_id');
+    }
+
+    public function incomingMovements()
+    {
+        return $this->hasMany(WarehouseMovement::class, 'destination_warehouse_id');
+    }
 }

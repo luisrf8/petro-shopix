@@ -214,6 +214,9 @@
             <li class="nav-item">
               <a class="btn btn-light text-dark landing-nav-link" href="#contacto">Contacto</a>
             </li>
+            <li class="nav-item">
+              <a class="btn btn-outline-light text-dark landing-nav-link" href="/login">Iniciar sesión</a>
+            </li>
           </ul>
         </div>
       </nav>
@@ -229,6 +232,13 @@
     <div class="container text-center">
       <h1 class="hero-title">SHOPIX</h1>
       <h2 class="hero-slogan">GESTIONA TU TIENDA O SERVICIO VIRTUAL FÁCILMENTE</h2>
+      <div class="mt-4 mx-auto" style="max-width: 560px;">
+        <label for="publicOrderIdInput" class="form-label text-white fw-semibold">Consultar estatus de compra</label>
+        <div class="d-flex gap-2 flex-wrap justify-content-center">
+          <input type="number" min="1" id="publicOrderIdInput" class="form-control bg-white" placeholder="Ingresa tu número de pedido">
+          <button type="button" id="publicOrderCheckBtn" class="btn btn-light text-dark fw-semibold">Ver estatus</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -437,6 +447,25 @@
           bsCollapse.hide();
         }
       });
+    });
+
+    document.getElementById('publicOrderCheckBtn')?.addEventListener('click', function () {
+      const input = document.getElementById('publicOrderIdInput');
+      const orderId = String(input?.value || '').trim();
+
+      if (!orderId || Number(orderId) <= 0) {
+        alert('Debes ingresar un número de pedido válido.');
+        return;
+      }
+
+      window.location.href = `/publicOrder/${orderId}`;
+    });
+
+    document.getElementById('publicOrderIdInput')?.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        document.getElementById('publicOrderCheckBtn')?.click();
+      }
     });
     
 </script>

@@ -8,8 +8,7 @@ use App\Models\Category;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\Tax;
-use Google\Client;
-use Google\Service\Drive;
+use App\Support\ImageStorage;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\DB;
@@ -183,7 +182,7 @@ class ProductController extends Controller
         // Guardar imágenes
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
-                $path = $image->store('products', 'public');
+                $path = ImageStorage::storeUploadedFile($image, 'products');
                 ProductImage::create([
                     'product_id' => $product->id,
                     'path' => $path,
@@ -205,7 +204,10 @@ class ProductController extends Controller
                     'price' => $variant['price'],
                     'discount_percentage' => max(0, min(100, (float) ($variant['discount_percentage'] ?? 0))),
                     'stock' => $variant['stock'],
+                    'barcode' => $this->sanitizeVariantCode($variant['barcode'] ?? null),
                 ]);
+
+                $this->assertVariantCodeAvailable($productVariant->barcode);
                 $this->ensureVariantCodes($productVariant);
             }
         }
@@ -297,6 +299,43 @@ class ProductController extends Controller
         }
     }
 
+    private function sanitizeVariantCode(?string $value): ?string
+    {
+        $clean = trim((string) $value);
+
+        return $clean === '' ? null : $clean;
+    }
+
+    private function assertVariantCodeAvailable(?string $barcode, ?int $ignoreVariantId = null): void
+    {
+        if (empty($barcode)) {
+            return;
+        }
+
+        $query = ProductVariant::query()
+            ->where(function ($innerQuery) use ($barcode) {
+                $innerQuery->where('barcode', $barcode)
+                    ->orWhere('qr_code', $barcode);
+            });
+
+        if ($ignoreVariantId) {
+            $query->where('id', '!=', $ignoreVariantId);
+        }
+
+        if ($query->exists()) {
+            throw new \Illuminate\Validation\ValidationException(
+                validator([], []),
+                response()->json([
+                    'success' => false,
+                    'message' => 'El código de barras ya está en uso por otra variante.',
+                    'errors' => [
+                        'barcode' => ['El código de barras ya está en uso por otra variante.'],
+                    ],
+                ], 422)
+            );
+        }
+    }
+
     // Función para agregar una imagen
     public function addImage(Request $request, $productId)
     {
@@ -307,7 +346,7 @@ class ProductController extends Controller
         ]);
     
             // Guardar la imagen en el almacenamiento
-            $path = $request->file('image')->store('products', 'public');
+            $path = ImageStorage::storeUploadedFile($request->file('image'), 'products');
     
             // Asociar la imagen al producto
             ProductImage::create([
@@ -324,9 +363,7 @@ class ProductController extends Controller
             $image = ProductImage::findOrFail($imageId);
     
             // Eliminar la imagen del almacenamiento
-            if (Storage::disk('public')->exists($image->path)) {
-                Storage::disk('public')->delete($image->path);
-            }
+            ImageStorage::delete($image->path);
     
             // Eliminar el registro de la base de datos
             $image->delete();
@@ -702,6 +739,7 @@ class ProductController extends Controller
     private function extractRowsFromSqlWithGemini(string $sql): array
     {
         $apiKey = config('services.gemini.api_key');
+        $textModel = config('services.gemini.text_model', 'gemini-2.5-flash');
         if (empty($apiKey)) {
             return [];
         }
@@ -717,7 +755,7 @@ class ProductController extends Controller
             . mb_substr($trimmedSql, 0, 14000);
 
         $response = Http::timeout(40)->post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={$apiKey}",
+            "https://generativelanguage.googleapis.com/v1beta/models/{$textModel}:generateContent?key={$apiKey}",
             [
                 'contents' => [
                     ['parts' => [['text' => $prompt]]],
@@ -877,6 +915,7 @@ class ProductController extends Controller
     private function guessMappingWithGemini(array $headers, array $rows = []): array
     {
         $apiKey = config('services.gemini.api_key');
+        $textModel = config('services.gemini.text_model', 'gemini-2.5-flash');
         if (empty($apiKey) || empty($headers)) {
             return [];
         }
@@ -905,7 +944,7 @@ class ProductController extends Controller
             . ". Campos permitidos: " . json_encode($targetFields, JSON_UNESCAPED_UNICODE);
 
         $response = Http::timeout(25)->post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={$apiKey}",
+            "https://generativelanguage.googleapis.com/v1beta/models/{$textModel}:generateContent?key={$apiKey}",
             [
                 'contents' => [
                     ['parts' => [['text' => $prompt]]],

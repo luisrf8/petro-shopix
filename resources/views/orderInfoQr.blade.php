@@ -14,11 +14,9 @@
 <body class="g-sidenav-show bg-gray-100 p-4">
     <div class="container-fluid">
         <div class="d-block d-md-none text-center">
-            <img src="../../assets/img/inf.png" class="navbar-brand-img" width="150" height="150" alt="main_logo">
         </div>
         <div class="d-flex flex-wrap justify-content-between align-items-center">
             <h1 class="text-center">Orden Nro {{ $order->id }}</h1>
-            <img src="../../assets/img/inf.png" class="navbar-brand-img d-none d-md-block" width="150" height="150" alt="main_logo">
         </div>
         
         <p><strong>Cliente:</strong> {{ $order->user->name }} | <strong>Teléfono:</strong> {{ $order->user->phone_number ?? 'No registrado' }}</p>
@@ -39,6 +37,12 @@
                     {{ $order->status == 0 ? 'En Proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado') }}
                 </span>
             </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mt-3">
+            <button type="button" id="public-order-back" class="btn btn-outline-secondary mb-0">Volver</button>
+            <a href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
+            <a href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" class="btn btn-outline-dark mb-0">Descargar nota de entrega</a>
         </div>
         
         <!-- Tabla de Detalles de la Orden -->
@@ -91,6 +95,7 @@
                                 <th>Beneficiario</th>
                                 <th>Banco</th>
                                 <th>Referencia</th>
+                                <th>Comprobante</th>
                                 <th>Estado</th>
                             </tr>
                         </thead>
@@ -103,6 +108,13 @@
                                 <td>{{ $payment->payment->admin_name }}</td>
                                 <td>{{ $payment->payment->bank }}</td>
                                 <td>{{ $payment->reference ?? 'N/A' }}</td>
+                                                                <td>
+                                                                        @if($payment->images->isNotEmpty())
+                                                                            <a href="{{ asset('storage/' . $payment->images->first()->image_path) }}" target="_blank" class="btn btn-sm btn-outline-dark mb-0">Ver imagen</a>
+                                                                        @else
+                                                                            <span class="text-muted">Sin imagen</span>
+                                                                        @endif
+                                                                </td>
                                 <td>
                                     <span class="btn btn-sm {{ $payment->status == 0 ? 'btn-outline-warning' : ($payment->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}">
                                         {{ $payment->status == 0 ? 'En Proceso' : ($payment->status == 1 ? 'Pagado' : 'Cancelado') }}
@@ -122,6 +134,16 @@
     <script src="{{ asset('assets/js/core/popper.min.js') }}"></script>
     <script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
     <script async defer src="https://buttons.github.io/buttons.js"></script>
+        <script>
+            document.getElementById('public-order-back')?.addEventListener('click', function () {
+                if (window.history.length > 1) {
+                    window.history.back();
+                    return;
+                }
+
+                window.location.href = '/';
+            });
+        </script>
 </body>
 
 </html>

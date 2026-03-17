@@ -151,6 +151,23 @@
                                   QR: <span id="variantQrCode-{{ $variant->id }}">{{ $variant->qr_code ?: '—' }}</span>
                                   | Barras: <span id="variantBarcode-{{ $variant->id }}">{{ $variant->barcode ?: '—' }}</span>
                                 </div>
+                                <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                                  <input
+                                    type="text"
+                                    class="form-control form-control-sm"
+                                    style="max-width: 220px;"
+                                    value="{{ $variant->barcode ?: '' }}"
+                                    placeholder="Código de barras"
+                                    data-variant-barcode-input="{{ $variant->id }}"
+                                  >
+                                  <button
+                                    type="button"
+                                    class="btn btn-dark btn-sm mb-0 save-variant-barcode-btn"
+                                    data-variant-id="{{ $variant->id }}"
+                                  >
+                                    Guardar código
+                                  </button>
+                                </div>
                                 <button
                                   type="button"
                                   class="btn btn-outline-secondary btn-sm mt-1 generate-variant-codes-btn"
@@ -621,6 +638,12 @@
     stockInput.classList.add('form-control', 'border', 'border-1', 'p-2');
     stockInput.name = 'stock';
 
+    const barcodeInput = document.createElement('input');
+    barcodeInput.type = 'text';
+    barcodeInput.placeholder = 'Código de barras';
+    barcodeInput.classList.add('form-control', 'border', 'border-1', 'p-2');
+    barcodeInput.name = 'barcode';
+
     // Botón para eliminar la variante
     const deleteBtn = document.createElement('button');
     deleteBtn.innerText = 'Eliminar';
@@ -636,6 +659,7 @@
     inputContainer.appendChild(priceInput);
     inputContainer.appendChild(discountInput);
     inputContainer.appendChild(stockInput);
+    inputContainer.appendChild(barcodeInput);
 
     // Agregar los elementos al div de variante
     variantDiv.appendChild(inputContainer);
@@ -658,10 +682,11 @@ document.getElementById('saveVariantsBtn').addEventListener('click', function ()
         const price = inputGroup.querySelector('input[name="price"]').value;
         const discount_percentage = inputGroup.querySelector('input[name="discount_percentage"]').value;
         const stock = inputGroup.querySelector('input[name="stock"]').value;
+        const barcode = inputGroup.querySelector('input[name="barcode"]').value;
 
         // Validar que los campos no estén vacíos
         if (size && price && stock) {
-          variants.push({ size, price, discount_percentage: discount_percentage || 0, stock });
+          variants.push({ size, price, discount_percentage: discount_percentage || 0, stock, barcode });
         }
     });
 
@@ -778,12 +803,13 @@ function editProduct() {
         },
         body: JSON.stringify({ size, price, discount_percentage, stock })
       })
-        .then(response => {
+        .then(async response => {
+          const payload = await response.json().catch(() => ({}));
           if (response.ok) {
-            alert('Variante actualizada exitosamente.');
+            alert(payload.message || 'Variante actualizada exitosamente.');
             window.location.reload()
           } else {
-            throw new Error('Error al actualizar la variante.');
+            throw new Error(payload.message || 'Error al actualizar la variante.');
           }
         })
         .catch(error => {
@@ -827,20 +853,29 @@ document.getElementById('editProductForm').addEventListener('submit', function(e
     fetch(`/api/products/${productId}`, {
         method: 'POST',
         headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').value,
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            'Accept': 'application/json',
         },
         body: formData, // Convertir el objeto a JSON
     })
-    .then(response => {
-        if (response.status === 201) { // Valida el código de estado HTTP
-          alert('Producto actualizado correctamente');
+    .then(async response => {
+        const payload = await response.json().catch(() => ({}));
+
+        if (response.ok && payload.success) {
+          alert(payload.message || 'Producto actualizado correctamente');
           window.location.reload();
-        } else {
-          throw new Error('Error al crear la categoría');
+          return;
         }
+
+        const validationMessage = payload?.errors
+          ? Object.values(payload.errors).flat().join('\n')
+          : null;
+
+        throw new Error(validationMessage || payload.message || 'Error al actualizar el producto');
       })
     .catch(error => {
         console.error('Error:', error);
+        alert(error.message || 'Error al actualizar el producto');
     });
 });
 
@@ -976,6 +1011,53 @@ document.addEventListener('DOMContentLoaded', () => {
       this.disabled = false;
       this.textContent = originalText;
     }
+  });
+
+  document.querySelectorAll('.save-variant-barcode-btn').forEach((button) => {
+    button.addEventListener('click', async function () {
+      const variantId = this.getAttribute('data-variant-id');
+      const input = document.querySelector(`[data-variant-barcode-input="${variantId}"]`);
+      if (!variantId || !input) {
+        return;
+      }
+
+      const barcode = String(input.value || '').trim();
+      const originalText = this.textContent;
+      this.disabled = true;
+      this.textContent = 'Guardando...';
+
+      try {
+        const response = await fetch(`/api/variants/${variantId}/barcode`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+          },
+          body: JSON.stringify({ barcode }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+          const validationMessage = payload?.errors
+            ? Object.values(payload.errors).flat().join('\n')
+            : null;
+          throw new Error(validationMessage || payload.message || 'No se pudo actualizar el código de barras.');
+        }
+
+        const resolvedBarcode = payload.barcode || '—';
+        const display = document.getElementById(`variantBarcode-${variantId}`);
+        if (display) {
+          display.textContent = resolvedBarcode;
+        }
+        input.value = payload.barcode || '';
+      } catch (error) {
+        alert(error.message || 'No se pudo actualizar el código de barras.');
+      } finally {
+        this.disabled = false;
+        this.textContent = originalText;
+      }
+    });
   });
 
   document.querySelectorAll('.generate-variant-codes-btn').forEach((button) => {

@@ -44,6 +44,7 @@ Route::get('/payment-methods/ecomm', [SaleController::class, 'getPaymentMethodsE
 
 Route::middleware('auth.jwt')->group(function () {
     Route::get('/user', [AuthenticatedSessionController::class, 'getUserFromToken']);
+    Route::get('/user/orders', [SaleController::class, 'viewMyOrders']);
     Route::post('/create-sale/ecomm', [SaleController::class, 'storeEcommerceSale']);
     Route::get('/notifications', [NotificationController::class, 'apiIndex']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'apiMarkAsRead']);
@@ -71,6 +72,7 @@ Route::get('/products/report', [ProductController::class, 'generateReport']);
 
 Route::post('/variants/store', [ProductVariantController::class, 'store'])->name('variants.store');
 Route::put('/variants/{productVariant}', [ProductVariantController::class, 'update'])->name('variants.update');
+Route::put('/variants/{productVariant}/barcode', [ProductVariantController::class, 'updateBarcode'])->name('variants.updateBarcode');
 Route::post('/variants/{productVariant}/generate-codes', [ProductVariantController::class, 'generateCodes'])->name('variants.generateCodes');
 
 // ------------------------ MÉTODOS DE PAGO ------------------------

@@ -20,7 +20,9 @@ use App\Http\Controllers\{
     MaterialPackageController,
     WarehouseController,
     NotificationController,
-    HelpPreferenceController
+    HelpPreferenceController,
+    GoogleDriveController,
+    ReportController
 };
 
 // RUTAS DE INVITADOS
@@ -35,7 +37,9 @@ Route::middleware('guest')->group(function () {
 // PÁGINAS PÚBLICAS
 Route::get('/', [IndexController::class, 'landing'])->name('landing');
 Route::get('/index', fn() => view('index'));
+Route::get('/storage/gdrive/{fileId}', [GoogleDriveController::class, 'streamImage'])->where('fileId', '.*')->name('storage.gdrive.proxy');
 Route::get('/publicOrder/{id}', [SaleController::class, 'showPublicOrder']);
+Route::get('/publicOrder/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->name('public.order.pdf');
 Route::get('/create-tenant-user', [TenantController::class, 'createIndexUser'])->name('createTenantUser');
 Route::get('/get-states/{country}', [LocationController::class, 'getStates']);
 Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
@@ -76,6 +80,20 @@ Route::middleware('auth')->group(function () {
     Route::post('/create-sale', [SaleController::class, 'store'])->middleware('role.name:1,2,5');
     Route::post('/sales/scan-code', [SaleController::class, 'resolveScanCode'])->middleware('role.name:1,2,5')->name('sales.resolveScanCode');
     Route::get('/sales-orders/{id}/pdf', [SaleController::class, 'downloadPdf']);
+    Route::get('/sales-orders/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->name('sales.orders.pdfs');
+
+    // Reportes PDF
+    Route::get('/reports', [ReportController::class, 'index'])->middleware('role.name:1,2,5,almacen')->name('reports.index');
+    Route::get('/reports/products/top-selling/pdf', [ReportController::class, 'topSellingProductsPdf'])->middleware('role.name:1,2,5,almacen')->name('reports.products.topSelling.pdf');
+    Route::get('/reports/products/top-selling/excel', [ReportController::class, 'topSellingProductsExcel'])->middleware('role.name:1,2,5,almacen')->name('reports.products.topSelling.excel');
+    Route::get('/reports/inventory/entries/pdf', [ReportController::class, 'inventoryEntriesPdf'])->middleware('role.name:1,2,5,almacen')->name('reports.inventory.entries.pdf');
+    Route::get('/reports/inventory/entries/excel', [ReportController::class, 'inventoryEntriesExcel'])->middleware('role.name:1,2,5,almacen')->name('reports.inventory.entries.excel');
+    Route::get('/reports/sales/management/pdf', [ReportController::class, 'salesManagementPdf'])->middleware('role.name:1,2,5,almacen')->name('reports.sales.management.pdf');
+    Route::get('/reports/sales/management/excel', [ReportController::class, 'salesManagementExcel'])->middleware('role.name:1,2,5,almacen')->name('reports.sales.management.excel');
+    Route::get('/reports/inventory/total/pdf', [ReportController::class, 'inventoryTotalPdf'])->middleware('role.name:1,2,5,almacen')->name('reports.inventory.total.pdf');
+    Route::get('/reports/inventory/total/excel', [ReportController::class, 'inventoryTotalExcel'])->middleware('role.name:1,2,5,almacen')->name('reports.inventory.total.excel');
+    Route::get('/reports/system/modules/pdf', [ReportController::class, 'systemModulesPdf'])->middleware('role.name:1,2,5,almacen')->name('reports.system.modules.pdf');
+    Route::get('/reports/system/modules/excel', [ReportController::class, 'systemModulesExcel'])->middleware('role.name:1,2,5,almacen')->name('reports.system.modules.excel');
 
     // Compras
     Route::get('/purchase', [PurchaseOrderController::class, 'index'])->middleware('role.name:1,2,5,almacen')->name('purchase');
@@ -85,6 +103,9 @@ Route::middleware('auth')->group(function () {
     // Almacenes
     Route::get('/warehouses', [WarehouseController::class, 'index'])->middleware('role.name:1,2,5')->name('warehouses.index');
     Route::post('/warehouses', [WarehouseController::class, 'store'])->middleware('role.name:1,2,5')->name('warehouses.store');
+    Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'update'])->middleware('role.name:1,2,5')->name('warehouses.update');
+    Route::post('/warehouses/movements', [WarehouseController::class, 'storeMovement'])->middleware('role.name:1,2,5')->name('warehouses.movements.store');
+    Route::put('/warehouses/movements/{movement}', [WarehouseController::class, 'updateMovement'])->middleware('role.name:1,2,5')->name('warehouses.movements.update');
 
     // Lista de materiales / paquetes
     Route::get('/materials', [MaterialPackageController::class, 'index'])->middleware('role.name:1,2,5')->name('materials.index');

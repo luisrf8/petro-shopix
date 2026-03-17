@@ -8,6 +8,7 @@ use App\Models\SalesOrderDetail;
 use App\Models\ProductVariant;
 use App\Models\PaymentMethod;
 use App\Models\Payment;
+use App\Models\PaymentImage;
 use App\Models\Currency;
 use App\Models\Category;
 use App\Models\Product;
@@ -37,6 +38,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use App\Support\WorkflowNotifier;
+use App\Support\ImageStorage;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class SaleController extends Controller
 {
@@ -54,7 +57,10 @@ class SaleController extends Controller
             ->where('is_active', true)
             ->orderBy('created_at', 'desc')
             ->get();
-        $paymentMethods = PaymentMethod::with('currency')->where('tenant_id', $user->tenant_id)->get();
+        $paymentMethods = PaymentMethod::with('currency')
+            ->where('tenant_id', $user->tenant_id)
+            ->active()
+            ->get();
         $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
         $taxes = Tax::all();
 
@@ -71,6 +77,9 @@ class SaleController extends Controller
         $validated = $request->validate([
             'delivery_type' => 'nullable|in:pickup,shipping',
             'delivery_address' => 'nullable|string|max:500',
+            'mark_delivered' => 'nullable|boolean',
+            'mark_payments_paid' => 'nullable|boolean',
+            'mark_sale_completed' => 'nullable|boolean',
         ]);
 
         // dd($request->all());
@@ -83,6 +92,9 @@ class SaleController extends Controller
         $dollarRate = $request->dollarRate;
         $deliveryType = $validated['delivery_type'] ?? 'pickup';
         $deliveryAddress = trim((string) ($validated['delivery_address'] ?? ''));
+        $markDelivered = (bool) ($validated['mark_delivered'] ?? false);
+        $markPaymentsPaid = (bool) ($validated['mark_payments_paid'] ?? false);
+        $markSaleCompleted = (bool) ($validated['mark_sale_completed'] ?? false);
 
         if ($deliveryType === 'shipping' && $deliveryAddress === '') {
             return response()->json(['error' => 'La dirección es obligatoria para entregas por envío.'], 422);
@@ -103,9 +115,10 @@ class SaleController extends Controller
         $salesOrder = SalesOrder::create([
             'user_id' => $customerId,
             'date' => now()->toDateString(),
-            'status' => 1,
+            'status' => $markSaleCompleted ? 1 : 0,
             'address' => $address,
             'preference' => $preference,
+            'deliver_status' => $markDelivered ? 1 : 0,
             'tenant_id' => $tenantId,
         ]);
 
@@ -158,13 +171,22 @@ class SaleController extends Controller
         $approvedPayments = collect();
         if (!empty($paymentDetails) && is_array($paymentDetails)) {
             foreach ($paymentDetails as $paymentDetail) {
+                $paymentMethod = PaymentMethod::with('currency')
+                    ->where('tenant_id', $tenantId)
+                    ->active()
+                    ->find($paymentDetail['methodId']);
+
+                if (!$paymentMethod) {
+                    return response()->json(['error' => 'Uno de los métodos de pago seleccionados está inactivo o no pertenece a esta tienda.'], 422);
+                }
+
                 $payment = Payment::create([
                     'sales_order_id' => $salesOrder->id,
-                    'payment_method' => $paymentDetail['methodId'],
+                    'payment_method' => $paymentMethod->id,
                     'amount' => $paymentDetail['amount'],
-                    'currency' => $paymentDetail['currency'],
+                    'currency' => $paymentMethod->currency->code ?? $paymentDetail['currency'],
                     'reference' => $paymentDetail['reference'] ?? null,
-                    'status' => $paymentDetail['status'] ?? 1,
+                    'status' => $markPaymentsPaid ? 1 : 0,
                 ]);
 
                 if ($payment->status == 1) {
@@ -397,7 +419,7 @@ class SaleController extends Controller
                     // Comprobar si existe un archivo 'img'
                     if ($request->hasFile("paymentDetails.$key.img")) {
                         $image = $request->file("paymentDetails.$key.img");
-                        $path = $image->store('payment_images', 'public');
+                        $path = ImageStorage::storeUploadedFile($image, 'payment_images');
                         
                         // Guardar la ruta de la imagen asociada al pago
                         PaymentImage::create([
@@ -516,10 +538,47 @@ class SaleController extends Controller
         return response()->json($salesOrders);
     }
 
+    public function viewMyOrders(Request $request)
+    {
+        $user = JWTAuth::parseToken()->authenticate();
+
+        if (!$user) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        $salesOrders = SalesOrder::with(['details', 'payments.payment', 'tenant'])
+            ->where('user_id', $user->id)
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function ($order) {
+                $total = (float) $order->details->sum('amount');
+
+                return [
+                    'id' => $order->id,
+                    'date' => $order->date,
+                    'status' => (int) $order->status,
+                    'deliver_status' => (int) ($order->deliver_status ?? 0),
+                    'preference' => $order->preference,
+                    'address' => $order->address,
+                    'tenant_name' => $order->tenant->name ?? 'Tienda',
+                    'items_count' => (int) $order->details->sum('quantity'),
+                    'total' => round($total, 2),
+                    'public_url' => url('/publicOrder/' . $order->id),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'orders' => $salesOrders,
+        ]);
+    }
+
 
     public function showByOrder($id)
     {
-        $order = SalesOrder::with(['user', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment'])->find($id);
+        $order = SalesOrder::with(['user', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment', 'payments.images'])->find($id);
         // Calcular el total de la orden
         $totalOrden = $order->details->sum(function ($detalle) {
             return $detalle->amount;
@@ -544,7 +603,7 @@ class SaleController extends Controller
     }
     public function showPublicOrder($id)
     {
-        $order = SalesOrder::with(['user', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment'])->find($id);
+        $order = SalesOrder::with(['user', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment', 'payments.images'])->find($id);
         // Calcular el total de la orden
         $totalOrden = $order->details->sum(function ($detalle) {
             return $detalle->amount;
@@ -557,9 +616,123 @@ class SaleController extends Controller
         return view('orderInfoQr', compact('order', 'totalOrden', 'totalPagado'));
     }
 
+    public function downloadStoredPdf(int $id, string $type)
+    {
+        $order = SalesOrder::with(['user', 'details', 'details.variant.product', 'details.taxes', 'payments.payment'])->findOrFail($id);
+
+        $assets = $this->ensureAssociatedPdfAssets($order);
+        $filePath = $type === 'delivery' ? $assets['delivery_path'] : $assets['invoice_path'];
+        $fileName = basename($filePath);
+
+        return response()->download($filePath, $fileName, ['Content-Type' => 'application/pdf']);
+    }
+
+    private function ensureAssociatedPdfAssets(SalesOrder $order): array
+    {
+        $invoiceRelative = 'orders/factura-' . $order->id . '.pdf';
+        $deliveryRelative = 'orders/NotaEntrega-' . $order->id . '.pdf';
+
+        if (!Storage::disk('public')->exists($invoiceRelative) || !Storage::disk('public')->exists($deliveryRelative)) {
+            $this->generateAssociatedPdfAssets($order);
+        }
+
+        return [
+            'invoice_path' => storage_path('app/public/' . $invoiceRelative),
+            'delivery_path' => storage_path('app/public/' . $deliveryRelative),
+            'invoice_url' => asset('storage/' . $invoiceRelative),
+            'delivery_url' => asset('storage/' . $deliveryRelative),
+        ];
+    }
+
+    private function generateAssociatedPdfAssets(SalesOrder $order): array
+    {
+        $order->loadMissing(['details.taxes', 'details.variant.product', 'payments.payment', 'tenant']);
+
+        $serverIp = request()->getHost();
+        $imagePath = storage_path('app/public/products/infblack.png');
+        $imageData = file_exists($imagePath) ? base64_encode(file_get_contents($imagePath)) : '';
+        $imageBase64 = $imageData !== '' ? 'data:image/png;base64,' . $imageData : null;
+
+        $totalOrden = (float) $order->details->sum('amount');
+        $totalTaxes = (float) $order->details->flatMap->taxes->sum('tax_amount');
+        $totalPagado = (float) $order->payments->sum('amount');
+        $totalGeneral = $totalOrden + $totalTaxes;
+        $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $order->tenant_id)->first();
+        $tienda = $order->tenant;
+
+        $qrUrl = "http://{$serverIp}:8000/publicOrder/{$order->id}";
+        $qrCode = QrCode::create($qrUrl)
+            ->setEncoding(new Encoding('UTF-8'))
+            ->setSize(250)
+            ->setMargin(10);
+
+        $writer = new PngWriter();
+        $qrCodeImage = $writer->write($qrCode);
+        $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
+
+        $invoiceHtml = view('fiscalOrderPdf', compact(
+            'order',
+            'totalOrden',
+            'totalTaxes',
+            'totalGeneral',
+            'totalPagado',
+            'imageBase64',
+            'qrCodeBase64',
+            'dollarRate'
+        ))->render();
+
+        $deliveryHtml = view('orderPdf', compact(
+            'order',
+            'totalOrden',
+            'totalTaxes',
+            'totalGeneral',
+            'totalPagado',
+            'imageBase64',
+            'qrCodeBase64',
+            'dollarRate',
+            'tienda'
+        ))->render();
+
+        $invoiceOutput = $this->renderPdfOutput($invoiceHtml);
+        $deliveryOutput = $this->renderPdfOutput($deliveryHtml);
+
+        $invoiceRelative = 'orders/factura-' . $order->id . '.pdf';
+        $deliveryRelative = 'orders/NotaEntrega-' . $order->id . '.pdf';
+
+        Storage::disk('public')->put($invoiceRelative, $invoiceOutput);
+        Storage::disk('public')->put($deliveryRelative, $deliveryOutput);
+
+        return [
+            'invoice_path' => storage_path('app/public/' . $invoiceRelative),
+            'delivery_path' => storage_path('app/public/' . $deliveryRelative),
+            'invoice_url' => asset('storage/' . $invoiceRelative),
+            'delivery_url' => asset('storage/' . $deliveryRelative),
+        ];
+    }
+
+    private function renderPdfOutput(string $html): string
+    {
+        $options = new Options();
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', true);
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        return $dompdf->output();
+    }
+
     public function getPaymentMethods()
     {
-        $paymentMethods = PaymentMethod::with('currency')->get();
+        $user = auth()->user();
+        $paymentMethods = PaymentMethod::with('currency')
+            ->when($user?->tenant_id, function ($query) use ($user) {
+                $query->where('tenant_id', $user->tenant_id);
+            })
+            ->active()
+            ->get();
         // Agrupar métodos de pago por moneda
         $groupedPaymentMethods = $paymentMethods->groupBy(function ($paymentMethod) {
             return $paymentMethod->currency->name; // Agrupar por el nombre de la moneda
@@ -571,7 +744,7 @@ class SaleController extends Controller
     {
         // Obtener los métodos de pago que están activos (por ejemplo, con status = 1)
         $paymentMethods = PaymentMethod::with('currency')
-            ->where('status', 1) // Filtrar por métodos de pago activos
+            ->active()
             ->get();
     
         // Filtrar los métodos de pago para excluir "Efectivo" y "Punto de Venta"

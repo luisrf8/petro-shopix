@@ -36,11 +36,7 @@
       </div>
 
       <div id="tenant-checkout-form">
-        <div class="mb-3">
-          <label for="tenant-customer-name" class="form-label">Nombre del cliente</label>
-          <input type="text" class="form-control" id="tenant-customer-name" placeholder="Ej: María Pérez">
-        </div>
-
+        @if(!$cartEnabled)
         <div class="mb-3">
           <label class="form-label d-block">Tipo de entrega</label>
           <div class="form-check form-check-inline">
@@ -57,6 +53,7 @@
           <label for="tenant-shipping-address" class="form-label">Dirección de envío</label>
           <textarea id="tenant-shipping-address" class="form-control" rows="2" placeholder="Escribe tu dirección completa"></textarea>
         </div>
+        @endif
 
         <button id="tenant-cart-checkout" type="button" class="btn btn-success w-100">
           @if($cartEnabled)
@@ -70,7 +67,6 @@
   </div>
 </div>
 
-@if($cartEnabled)
 <div class="modal fade" id="tenantProCheckoutModal" tabindex="-1" aria-labelledby="tenantProCheckoutModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -188,7 +184,6 @@
     </div>
   </div>
 </div>
-@endif
 
 <script>
   (() => {
@@ -197,6 +192,12 @@
     const tenantName = @json($tenant->name);
     const tenantPhoneCode = @json($tenant->phone_code ?? '');
     const tenantPhoneNumber = @json($tenant->phone_number ?? '');
+    const shopixDebug = true;
+
+    function cartDebug(...args) {
+      if (!shopixDebug) return;
+      console.log('[ShopixCart Debug][Offcanvas]', ...args);
+    }
 
     const storageKey = `shopix_cart_${tenantSlug}`;
     const cartCountElement = document.getElementById('tenant-cart-count');
@@ -209,7 +210,16 @@
     const shippingAddressContainer = document.getElementById('tenant-shipping-address-container');
     const shippingAddressInput = document.getElementById('tenant-shipping-address');
     const deliveryTypeInputs = document.querySelectorAll('input[name="tenant-delivery-type"]');
-    const customerNameInput = document.getElementById('tenant-customer-name');
+
+    function openTenantCartOffcanvas() {
+      const canvasElement = document.getElementById('tenantCartOffcanvas');
+      if (!canvasElement || typeof bootstrap === 'undefined' || !bootstrap?.Offcanvas) {
+        return;
+      }
+
+      const offcanvas = bootstrap.Offcanvas.getOrCreateInstance(canvasElement);
+      offcanvas.show();
+    }
 
     function closeTenantCartOffcanvas() {
       const canvasElement = document.getElementById('tenantCartOffcanvas');
@@ -223,18 +233,57 @@
       }
     }
 
+    document.addEventListener('shopix-cart-command', (event) => {
+      const type = event?.detail?.type;
+
+      if (type === 'add-item') {
+        addItem(event.detail?.item || {});
+        return;
+      }
+
+      if (type === 'open-cart') {
+        openTenantCartOffcanvas();
+        return;
+      }
+
+      if (type === 'open-auth') {
+        openProCheckout({ authOnly: true });
+      }
+    });
+
     function getCart() {
       try {
         const parsed = JSON.parse(localStorage.getItem(storageKey));
-        return Array.isArray(parsed) ? parsed : [];
+        const cart = Array.isArray(parsed) ? parsed : [];
+        cartDebug('getCart:ok', cart);
+        return cart;
       } catch (error) {
+        console.error('[ShopixCart Debug][Offcanvas] getCart:parse-error', error);
         return [];
       }
     }
 
     function saveCart(cart) {
       localStorage.setItem(storageKey, JSON.stringify(cart));
+      cartDebug('saveCart:stored', cart);
       renderCart();
+    }
+
+    function dumpCartDebugState(source = 'manual') {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        const parsed = JSON.parse(raw || '[]');
+        console.log('[ShopixCart Debug][Dump]', {
+          source,
+          storageKey,
+          raw,
+          parsed,
+          isArray: Array.isArray(parsed),
+          count: Array.isArray(parsed) ? parsed.length : 0,
+        });
+      } catch (error) {
+        console.error('[ShopixCart Debug][Dump] parse-error', error);
+      }
     }
 
     function getSubtotal(cart) {
@@ -248,7 +297,9 @@
     function updateDeliveryAddressVisibility() {
       const selectedDeliveryType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value;
       const isShipping = selectedDeliveryType === 'shipping';
-      shippingAddressContainer.classList.toggle('d-none', !isShipping);
+      if (shippingAddressContainer) {
+        shippingAddressContainer.classList.toggle('d-none', !isShipping);
+      }
     }
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -257,6 +308,12 @@
       const cart = getCart();
       const totalQty = getTotalQty(cart);
       const subtotal = getSubtotal(cart);
+
+      cartDebug('renderCart', {
+        totalItems: cart.length,
+        totalQty,
+        subtotal,
+      });
 
       cartCountElement.textContent = totalQty;
       cartSubtotalElement.textContent = `${subtotal.toFixed(2)} $`;
@@ -293,6 +350,7 @@
     }
 
     function addItem(item) {
+      cartDebug('addItem:input', item);
       const cart = getCart();
       const existingIndex = cart.findIndex(cartItem => (
         Number(cartItem.variantId) === Number(item.variantId)
@@ -312,6 +370,7 @@
         });
       }
 
+      cartDebug('addItem:next-cart', cart);
       saveCart(cart);
     }
 
@@ -350,7 +409,8 @@
       const deliveryType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup';
       const isShipping = deliveryType === 'shipping';
       const shippingAddress = (shippingAddressInput.value || '').trim();
-      const customerName = (customerNameInput.value || '').trim();
+      const authUser = getAuthUser();
+      const customerName = (authUser?.name || '').trim();
 
       if (isShipping && !shippingAddress) {
         alert('Indica la dirección de envío para completar el pedido.');
@@ -407,6 +467,22 @@
     function setAuthData(token, user) {
       localStorage.setItem(authTokenKey, token || '');
       localStorage.setItem(authUserKey, JSON.stringify(user || null));
+
+      window.dispatchEvent(new CustomEvent('shopix-auth-changed', {
+        detail: {
+          token: token || '',
+          user: user || null,
+        },
+      }));
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     }
 
     function createPaymentRowHtml(methods, rowId) {
@@ -432,6 +508,16 @@
             <div class="col-2 col-md-1 d-flex align-items-end">
               <button type="button" class="btn btn-outline-danger btn-sm w-100 pro-remove-payment-row">X</button>
             </div>
+            <div class="col-12">
+              <div class="small border rounded p-2 bg-light pro-payment-method-details"></div>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label small mb-1">Imagen de referencia</label>
+              <input type="file" class="form-control pro-payment-reference-image" accept="image/png,image/jpeg,image/jpg,image/webp">
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="small text-muted pro-payment-reference-image-name pt-md-4">Sin imagen cargada</div>
+            </div>
           </div>
         </div>
       `;
@@ -455,6 +541,106 @@
         return amount / proDollarRate;
       }
       return amount;
+    }
+
+    function renderMethodDetailsHtml(method) {
+      if (!method) {
+        return 'Selecciona un método de pago para ver sus datos.';
+      }
+
+      const details = [
+        method.admin_name ? { label: 'Beneficiario', value: String(method.admin_name) } : null,
+        method.bank ? { label: 'Banco', value: String(method.bank) } : null,
+        method.dni ? { label: 'DNI', value: String(method.dni) } : null,
+        method.description ? { label: 'Descripción', value: String(method.description) } : null,
+      ].filter(Boolean);
+
+      const copyAllText = details
+        .map(detail => `${detail.label}: ${detail.value}`)
+        .join('\n');
+
+      const qr = method.qr_image_url
+        ? `<div class="mt-2"><img src="${method.qr_image_url}" alt="QR ${escapeHtml(method.name || 'método')}" style="max-width:120px; max-height:120px; object-fit:contain; border:1px solid #ddd; border-radius:8px;"></div>`
+        : '';
+
+      const detailsHtml = details.map(detail => {
+        const label = escapeHtml(detail.label || 'Dato');
+        const value = String(detail.value || '');
+        const safeValue = escapeHtml(value);
+        const encodedValue = encodeURIComponent(value);
+
+        return `
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+            <div><strong>${label}:</strong> ${safeValue}</div>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2 pro-copy-field" data-copy-value="${encodedValue}">Copiar</button>
+          </div>
+        `;
+      }).join('');
+
+      const copyAllButton = copyAllText
+        ? `<div class="d-flex justify-content-end mb-2"><button type="button" class="btn btn-dark btn-sm pro-copy-all" data-copy-all-value="${encodeURIComponent(copyAllText)}">Copiar todo</button></div>`
+        : '';
+
+      return `${copyAllButton}${detailsHtml}${qr}`;
+    }
+
+    async function copyToClipboard(value) {
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(value);
+          return true;
+        }
+      } catch (error) {
+      }
+
+      const tempInput = document.createElement('textarea');
+      tempInput.value = value;
+      tempInput.setAttribute('readonly', 'readonly');
+      tempInput.style.position = 'fixed';
+      tempInput.style.left = '-9999px';
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(tempInput);
+      return copied;
+    }
+
+    function setProSubmitLoading(isLoading) {
+      const submitButton = document.getElementById('tenant-pro-submit-order');
+      if (!submitButton) {
+        return;
+      }
+
+      if (!submitButton.dataset.defaultLabel) {
+        submitButton.dataset.defaultLabel = submitButton.innerHTML;
+      }
+
+      if (isLoading) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Confirmando...';
+      } else {
+        submitButton.innerHTML = submitButton.dataset.defaultLabel;
+        const cart = getCart();
+        submitButton.disabled = cart.length === 0;
+      }
+    }
+
+    function populatePaymentRowDetails(row) {
+      const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
+      const method = getMethodById(methodId);
+      const detailsBox = row.querySelector('.pro-payment-method-details');
+      if (detailsBox) {
+        detailsBox.innerHTML = renderMethodDetailsHtml(method);
+      }
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen de referencia.'));
+        reader.readAsDataURL(file);
+      });
     }
 
     function updateProPaymentSummary() {
@@ -482,9 +668,20 @@
       document.getElementById('tenant-pro-dollar-rate').textContent = `${(proDollarRate || 0).toFixed(2)}`;
     }
 
-    async function openProCheckout() {
+    function syncTenantProStatusAll() {
+      const checks = Array.from(document.querySelectorAll('.tenant-pro-status-check'));
+      const selectAll = document.getElementById('tenant-pro-status-all');
+      if (!selectAll || checks.length === 0) {
+        return;
+      }
+
+      selectAll.checked = checks.every(check => check.checked);
+    }
+
+    async function openProCheckout(options = {}) {
       const cart = getCart();
-      if (cart.length === 0) {
+      const authOnly = !!options.authOnly;
+      if (!authOnly && cart.length === 0) {
         alert('Tu carrito está vacío.');
         return;
       }
@@ -495,13 +692,47 @@
         return;
       }
 
-      const loggedUserAlert = document.getElementById('tenant-pro-logged-user');
       const authSection = document.getElementById('tenant-pro-auth-section');
       const checkoutSection = document.getElementById('tenant-pro-checkout-section');
       const submitOrderButton = document.getElementById('tenant-pro-submit-order');
       const totalAmountElement = document.getElementById('tenant-pro-total-amount');
       const paymentRowsContainer = document.getElementById('tenant-pro-payment-rows');
       const addPaymentRowButton = document.getElementById('tenant-pro-add-payment-row');
+      const modalTitle = document.getElementById('tenantProCheckoutModalLabel');
+
+      const token = getAuthToken();
+      const user = getAuthUser();
+      const isLogged = !!token && !!user?.id;
+
+      if (authOnly && cart.length === 0) {
+        if (modalTitle) {
+          modalTitle.textContent = isLogged ? 'Mi cuenta' : 'Iniciar sesión';
+        }
+
+        if (isLogged) {
+          authSection.classList.add('d-none');
+          checkoutSection.classList.add('d-none');
+        } else {
+          authSection.classList.remove('d-none');
+          checkoutSection.classList.add('d-none');
+          const loginTab = document.getElementById('tenant-login-tab');
+          if (loginTab) {
+            bootstrap.Tab.getOrCreateInstance(loginTab).show();
+          }
+        }
+
+        paymentRowsContainer.innerHTML = '<p class="text-muted mb-0">Inicia sesión para consultar tu cuenta o agrega productos al carrito para continuar con el checkout.</p>';
+        totalAmountElement.textContent = '0.00 $';
+        submitOrderButton.disabled = true;
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+        modal.show();
+        return;
+      }
+
+      if (modalTitle) {
+        modalTitle.textContent = 'Checkout Pro';
+      }
 
       let methodsResponse;
       try {
@@ -538,6 +769,10 @@
       const addPaymentRow = () => {
         rowCounter += 1;
         paymentRowsContainer.insertAdjacentHTML('beforeend', createPaymentRowHtml(methods, `row_${rowCounter}`));
+        const row = paymentRowsContainer.lastElementChild;
+        if (row) {
+          populatePaymentRowDetails(row);
+        }
         updateProPaymentSummary();
       };
 
@@ -554,32 +789,45 @@
         }
       };
 
-      paymentRowsContainer.oninput = () => {
+      paymentRowsContainer.oninput = (event) => {
+        const imageInput = event.target.closest('.pro-payment-reference-image');
+        if (imageInput) {
+          const row = imageInput.closest('[data-pro-payment-row]');
+          const file = imageInput.files?.[0] || null;
+          const nameElement = row ? row.querySelector('.pro-payment-reference-image-name') : null;
+          if (nameElement) {
+            nameElement.textContent = file ? file.name : 'Sin imagen cargada';
+          }
+        }
         updateProPaymentSummary();
       };
 
-      paymentRowsContainer.onchange = () => {
+      paymentRowsContainer.onchange = (event) => {
+        const row = event.target.closest('[data-pro-payment-row]');
+        if (row) {
+          populatePaymentRowDetails(row);
+        }
         updateProPaymentSummary();
       };
 
       totalAmountElement.textContent = `${getSubtotal(cart).toFixed(2)} $`;
       updateProPaymentSummary();
 
-      const token = getAuthToken();
-      const user = getAuthUser();
-      const isLogged = !!token && !!user?.id;
-
       if (isLogged) {
-        loggedUserAlert.classList.remove('d-none');
-        loggedUserAlert.textContent = `Sesión activa: ${user.name} (${user.email})`;
         authSection.classList.add('d-none');
         checkoutSection.classList.remove('d-none');
-        submitOrderButton.disabled = false;
+        submitOrderButton.disabled = cart.length === 0;
       } else {
-        loggedUserAlert.classList.add('d-none');
         authSection.classList.remove('d-none');
         checkoutSection.classList.add('d-none');
         submitOrderButton.disabled = true;
+      }
+
+      if (authOnly && !isLogged) {
+        const loginTab = document.getElementById('tenant-login-tab');
+        if (loginTab) {
+          bootstrap.Tab.getOrCreateInstance(loginTab).show();
+        }
       }
 
       const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
@@ -609,7 +857,7 @@
 
       setAuthData(data.token, data.user);
       alert('Sesión iniciada correctamente.');
-      openProCheckout();
+      openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
     }
 
     async function registerProCustomer(event) {
@@ -638,7 +886,7 @@
 
       setAuthData(data.token, data.user);
       alert('Cuenta creada correctamente.');
-      openProCheckout();
+      openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
     }
 
     async function submitProOrder() {
@@ -670,15 +918,23 @@
       }
 
       const paymentRows = Array.from(document.querySelectorAll('[data-pro-payment-row]'));
-      const payments = paymentRows.map(row => {
+      const payments = (await Promise.all(paymentRows.map(async row => {
         const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
         const amountRaw = Number(row.querySelector('.pro-payment-amount')?.value || 0);
         const method = getMethodById(methodId);
         const amount = toUsdFromMethodAmount(method, amountRaw);
         const reference = (row.querySelector('.pro-payment-reference')?.value || '').trim();
+        const imageFile = row.querySelector('.pro-payment-reference-image')?.files?.[0] || null;
+        const referenceImageData = imageFile ? await fileToDataUrl(imageFile) : null;
 
-        return { method_id: methodId, amount, reference };
-      }).filter(payment => payment.method_id > 0 && payment.amount > 0);
+        return {
+          method_id: methodId,
+          amount,
+          reference,
+          reference_image_data: referenceImageData,
+          reference_image_mime: imageFile?.type || null,
+        };
+      }))).filter(payment => payment.method_id > 0 && payment.amount > 0);
 
       if (payments.length === 0) {
         alert('Debes agregar al menos un pago válido.');
@@ -699,26 +955,43 @@
         unit_price: Number(item.price),
       }));
 
-      const response = await fetch(`/${tenantSlug}/checkout/pro`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-CSRF-TOKEN': csrfToken,
-        },
-        body: JSON.stringify({
-          customer_id: Number(user.id),
-          delivery_type: deliveryType,
-          delivery_address: deliveryType === 'shipping' ? deliveryAddress : 'Tienda',
-          items,
-          payments,
-        })
-      });
+      let response;
+      setProSubmitLoading(true);
+      try {
+        response = await fetch(`/${tenantSlug}/checkout/pro`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-CSRF-TOKEN': csrfToken,
+          },
+          body: JSON.stringify({
+            customer_id: Number(user.id),
+            delivery_type: deliveryType,
+            delivery_address: deliveryType === 'shipping' ? deliveryAddress : 'Tienda',
+            items,
+            payments,
+            mark_delivered: false,
+            mark_payments_paid: false,
+            mark_sale_completed: false,
+          })
+        });
+      } catch (error) {
+        alert('No se pudo conectar con la tienda para registrar el pedido.');
+        setProSubmitLoading(false);
+        return;
+      }
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (error) {
+      }
+
       if (!response.ok) {
         alert(data.message || data.error || 'No se pudo completar el pedido.');
+        setProSubmitLoading(false);
         return;
       }
 
@@ -728,9 +1001,40 @@
       const modalElement = document.getElementById('tenantProCheckoutModal');
       const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
       modal.hide();
+
+      if (data.order_id) {
+        window.location.href = `/publicOrder/${data.order_id}`;
+      }
+
+      setProSubmitLoading(false);
     }
 
     document.addEventListener('click', event => {
+      const copyAllButton = event.target.closest('.pro-copy-all');
+      if (copyAllButton) {
+        const copyAllValue = decodeURIComponent(copyAllButton.dataset.copyAllValue || '');
+        copyToClipboard(copyAllValue).then((copied) => {
+          const originalText = copyAllButton.textContent;
+          copyAllButton.textContent = copied ? 'Copiado' : 'Error';
+          setTimeout(() => {
+            copyAllButton.textContent = originalText;
+          }, 900);
+        });
+        return;
+      }
+
+      const copyButton = event.target.closest('.pro-copy-field');
+      if (copyButton) {
+        const copyValue = decodeURIComponent(copyButton.dataset.copyValue || '');
+        copyToClipboard(copyValue).then((copied) => {
+          const originalText = copyButton.textContent;
+          copyButton.textContent = copied ? 'Copiado' : 'Error';
+          setTimeout(() => {
+            copyButton.textContent = originalText;
+          }, 900);
+        });
+      }
+
       const removeButton = event.target.closest('[data-remove-index]');
       if (removeButton) {
         removeItem(Number(removeButton.dataset.removeIndex));
@@ -769,10 +1073,10 @@
       }
     });
 
-    if (cartEnabled) {
-      document.getElementById('tenant-pro-login-form')?.addEventListener('submit', loginProCustomer);
-      document.getElementById('tenant-pro-register-form')?.addEventListener('submit', registerProCustomer);
+    document.getElementById('tenant-pro-login-form')?.addEventListener('submit', loginProCustomer);
+    document.getElementById('tenant-pro-register-form')?.addEventListener('submit', registerProCustomer);
 
+    if (cartEnabled) {
       document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach(input => {
         input.addEventListener('change', () => {
           const isShipping = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value === 'shipping';
@@ -783,20 +1087,29 @@
       document.getElementById('tenant-pro-submit-order')?.addEventListener('click', submitProOrder);
     }
 
-    window.ShopixCart = {
-      addItem,
-      open: () => {
-        const canvasElement = document.getElementById('tenantCartOffcanvas');
-        if (!canvasElement) {
-          return;
-        }
-
-        const offcanvas = bootstrap.Offcanvas.getOrCreateInstance(canvasElement);
-        offcanvas.show();
-      }
-    };
-
     updateDeliveryAddressVisibility();
+    setProSubmitLoading(false);
     renderCart();
+
+    const tenantCartOffcanvasElement = document.getElementById('tenantCartOffcanvas');
+    if (tenantCartOffcanvasElement) {
+      tenantCartOffcanvasElement.addEventListener('show.bs.offcanvas', () => {
+        cartDebug('offcanvas:show-event');
+        renderCart();
+        dumpCartDebugState('offcanvas-show');
+      });
+    }
+
+    window.addEventListener('shopix-cart-updated', () => {
+      cartDebug('event:shopix-cart-updated');
+      renderCart();
+      dumpCartDebugState('cart-updated-event');
+    });
+
+    document.addEventListener('shopix-cart-debug-dump', (event) => {
+      dumpCartDebugState(event?.detail?.source || 'document-event');
+    });
+
+    window.dispatchEvent(new CustomEvent('shopix-cart-ready'));
   })();
 </script>

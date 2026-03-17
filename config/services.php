@@ -34,7 +34,15 @@ return [
         'api_key' => env('GEMINI_API_KEY'),
         'project' => env('GEMINI_PROJECT'),
         'project_number' => env('GEMINI_PROJECT_NUMBER'),
-        'model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.0-flash-exp-image-generation'),
+        'model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image-preview'),
+        'text_model' => env('GEMINI_TEXT_MODEL', 'gemini-2.5-flash'),
+    ],
+
+    'image_storage' => [
+        'provider' => env('IMAGE_STORAGE_PROVIDER', 'local'), // local | google_drive
+        'local_disk' => env('IMAGE_STORAGE_LOCAL_DISK', 'public'),
+        'google_drive_credentials' => env('GOOGLE_DRIVE_CREDENTIALS_PATH', storage_path('app/credentials.json')),
+        'google_drive_folder_id' => env('GOOGLE_DRIVE_FOLDER_ID', ''),
     ],
 
 ];

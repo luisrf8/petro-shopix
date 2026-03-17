@@ -81,15 +81,16 @@
                         placeholder="Buscar producto..." 
                         onkeyup="filterProducts()">
                 </div>
-                                <div id="itemSelector" class="row row-cols-1 row-cols-md-2 g-3">
+                <button type="button" class="btn btn-info mt-3 toStep2" disabled>Siguiente</button>
+                <div id="itemSelector" class="row row-cols-1 row-cols-md-2 g-3">
                     @foreach ($productItems as $item)
-                                                @php
-                                                    $itemImage = isset($item->images) && count($item->images) > 0
-                                                            ? asset('storage/' . $item->images[0]->path)
-                                                            : asset('assets/img/shopix5.png');
-                                                @endphp
-                                                <div class="col product-item" data-name="{{ strtolower($item->name) }}">
-                                                        <div class="card h-100">
+                        @php
+                            $itemImage = isset($item->images) && count($item->images) > 0
+                                ? asset('storage/' . $item->images[0]->path)
+                                : asset('assets/img/shopix5.png');
+                        @endphp
+                        <div class="col product-item" data-name="{{ strtolower($item->name) }}">
+                            <div class="card h-100">
                                 <div class="card-body">
                                                                     <div class="d-flex gap-3 align-items-center mb-2">
                                                                         <div class="purchase-product-thumb">
@@ -122,10 +123,10 @@
 
                                                                             <div class="row g-2">
                                                                                 <div class="col-6">
-                                                                                    <input type="number" min="1" class="form-control purchase-qty" data-variant-id="{{ $variant->id }}" placeholder="Cantidad" disabled>
+                                                                                    <input type="number" min="1" class="form-control purchase-qty border p-2" data-variant-id="{{ $variant->id }}" placeholder="Cantidad" disabled>
                                                                                 </div>
                                                                                 <div class="col-6">
-                                                                                    <input type="number" min="0.01" step="0.01" class="form-control purchase-price" data-variant-id="{{ $variant->id }}" placeholder="Costo USD" value="{{ number_format($variant->price, 2, '.', '') }}" disabled>
+                                                                                    <input type="number" min="0.01" step="0.01" class="form-control purchase-price border p-2" data-variant-id="{{ $variant->id }}" placeholder="Costo USD" value="{{ number_format($variant->price, 2, '.', '') }}" disabled>
                                                                                 </div>
                                                                             </div>
                                                                             <div class="small text-end text-muted mt-1" data-line-total="{{ $variant->id }}">Subtotal: 0.00 USD</div>
@@ -136,10 +137,10 @@
                         </div>
                     @endforeach
                 </div>
-                <button type="button" class="btn btn-info mt-3" id="toStep2" disabled>Siguiente</button>
+                <button type="button" class="btn btn-info mt-3 toStep2" disabled>Siguiente</button>
             </div>
 
-                        <div id="step2" class="d-none">
+                        <div id="step2" class="d-none card card-body">
                                 <h4>Paso 2: Proveedor y fecha de entrada</h4>
                             <div class="mb-3">
                                 <label for="warehouseId" class="form-label">Almacén destino</label>
@@ -161,14 +162,16 @@
                     <label for="purchaseDate" class="form-label">Fecha de compra</label>
                     <input type="date" id="purchaseDate" class="form-control border border-1 p-2">
                 </div>
-                <button type="button" class="btn btn-secondary mt-3" id="backToStep1">Atrás</button>
-                <button type="button" class="btn btn-info mt-3" id="toStep3" disabled>Siguiente</button>
+                <div class="d-flex justify-content-between gap-2">
+                    <button type="button" class="btn btn-secondary mt-3" id="backToStep1">Atrás</button>
+                    <button type="button" class="btn btn-info mt-3" id="toStep3" disabled>Siguiente</button>
+                </div>
             </div>
 
             <div id="step3" class="d-none">
                 <h4>Paso 3: Confirmación</h4>
                 <div id="providerContainer"></div>
-                <div class="alert alert-info mt-3 mb-0" id="finalSummaryText"></div>
+                <div class="bg-white mt-3 mb-0" id="finalSummaryText"></div>
                 <button type="button" class="btn btn-secondary mt-3" id="backToStep2">Atrás</button>
                 <button type="button" class="btn btn-info mt-3" id="createOrder">Registrar entrada</button>
             </div>
@@ -185,7 +188,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             let itemsSelected = [];
-            const toStep2 = document.getElementById('toStep2');
+            const toStep2 = document.querySelector('.toStep2');
             const step1 = document.getElementById('step1');
             const step2 = document.getElementById('step2');
             const toStep3 = document.getElementById('toStep3');
@@ -373,7 +376,7 @@
                 providerContainer.innerHTML = '';
 
                 const table = document.createElement('table');
-                table.className = 'table table-bordered table-sm';
+                table.className = 'table table-bordered table-sm bg-white';
                 table.innerHTML = `
                   <thead>
                     <tr>

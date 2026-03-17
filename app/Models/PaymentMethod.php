@@ -9,7 +9,12 @@ class PaymentMethod extends Model
 {
     use HasFactory;
     
-    protected $fillable = ['name', 'currency_id', 'admin_name', 'dni', 'bank', 'status', 'tenant_id'];
+    protected $fillable = ['name', 'currency_id', 'admin_name', 'dni', 'description', 'bank', 'status', 'tenant_id', 'qr_image'];
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', 1);
+    }
     
     public function currency()
         {

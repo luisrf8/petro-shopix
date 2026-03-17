@@ -350,9 +350,27 @@
         const openCartButton = document.getElementById('open-cart-button');
         const whatsappButton = document.getElementById('whatsapp-button');
         let selectedVariant = null;
+        const tenantSlug = @json($tenant->slug);
 
         const tenantPhoneCode = @json($tenant->phone_code ?? '');
         const tenantPhoneNumber = @json($tenant->phone_number ?? '');
+        const shopixDebug = true;
+
+        function cartDebug(...args) {
+          if (!shopixDebug) return;
+          console.log('[ShopixCart Debug][Product]', ...args);
+        }
+
+        function sendCartCommand(type, detail = {}) {
+          cartDebug('sendCartCommand', { type, detail });
+          document.dispatchEvent(new CustomEvent('shopix-cart-command', {
+            detail: { type, ...detail }
+          }));
+        }
+
+        function openCartSimple() {
+          sendCartCommand('open-cart');
+        }
 
         // --- Lógica de selección de variantes ---
         variantButtons.forEach(button => {
@@ -372,6 +390,8 @@
                   productId: @json($product->id)
                 };
 
+                cartDebug('variant:selected', selectedVariant);
+
                 if (cartEnabled && addToCartButton) {
                   addToCartButton.disabled = false;
                 }
@@ -384,34 +404,44 @@
 
         if (cartEnabled && addToCartButton) {
           addToCartButton.addEventListener('click', () => {
+              cartDebug('add-click:triggered', {
+                selectedVariant,
+                buttonDisabled: addToCartButton.disabled,
+              });
+
               if (!selectedVariant) {
+                  cartDebug('add-click:aborted-no-variant');
                   alert('Por favor, selecciona una variante primero.');
                   return;
               }
 
-              if (!window.ShopixCart || typeof window.ShopixCart.addItem !== 'function') {
-                alert('No se pudo inicializar el carrito.');
-                return;
-              }
-
-              window.ShopixCart.addItem({
+              const payload = {
                 variantId: selectedVariant.variantId,
                 productId: selectedVariant.productId,
                 productName: selectedVariant.productName,
                 variantSize: selectedVariant.size,
                 price: Number(selectedVariant.price),
                 qty: 1
-              });
+              };
 
-              window.ShopixCart.open();
+              cartDebug('add-click:payload', payload);
+              sendCartCommand('add-item', { item: payload });
+
+              const storageKey = `shopix_cart_${tenantSlug}`;
+              try {
+                const persisted = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                cartDebug('add-click:post-persist-cart', persisted);
+              } catch (error) {
+                console.error('[ShopixCart Debug][Product] add-click:post-persist-parse-error', error);
+              }
+
+              openCartSimple();
           });
         }
 
         if (cartEnabled && openCartButton) {
           openCartButton.addEventListener('click', () => {
-              if (window.ShopixCart && typeof window.ShopixCart.open === 'function') {
-                window.ShopixCart.open();
-              }
+              openCartSimple();
           });
         }
 

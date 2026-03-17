@@ -19,15 +19,17 @@ use App\Models\State;
 use App\Models\City;
 use App\Models\PaymentMethod;
 use App\Models\Currency;
+use App\Models\PaymentImage;
 use App\Models\ProductVariant;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderDetail;
 use App\Models\Payment;
 use App\Models\DollarRate;
-use Illuminate\Support\Facades\Storage;
+use App\Support\ImageStorage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 
 
@@ -53,7 +55,9 @@ class TenantController extends Controller
         ]);
 
         $apiKey = config('services.gemini.api_key');
-        $preferredModel = config('services.gemini.model', 'gemini-2.0-flash-exp-image-generation');
+        $preferredModel = $this->normalizeGeminiImageModel(
+            config('services.gemini.model', 'gemini-2.5-flash-image-preview')
+        );
 
         if (empty($apiKey)) {
             return response()->json([
@@ -159,13 +163,10 @@ class TenantController extends Controller
 
         $candidateModels = array_values(array_unique(array_filter([
             $preferredModel,
-            'gemini-2.0-flash-exp-image-generation',
-            'gemini-2.0-flash-preview-image-generation',
             'gemini-2.5-flash-image-preview',
-            'gemini-2.0-flash',
         ])));
 
-        $apiVersions = ['v1beta', 'v1'];
+        $apiVersions = ['v1beta'];
         $lastError = null;
 
         $basePartsCamel = [['text' => $fullPrompt]];
@@ -194,6 +195,16 @@ class TenantController extends Controller
         ];
 
         $payloadVariants = [
+            array_merge($basePayloadCamel, [
+                'generationConfig' => [
+                    'responseModalities' => ['IMAGE'],
+                ],
+            ]),
+            array_merge($basePayloadSnake, [
+                'generation_config' => [
+                    'response_modalities' => ['IMAGE'],
+                ],
+            ]),
             array_merge($basePayloadCamel, [
                 'generationConfig' => [
                     'responseModalities' => ['TEXT', 'IMAGE'],
@@ -242,10 +253,14 @@ class TenantController extends Controller
                         continue;
                     }
 
-                    $parts = data_get($response->json(), 'candidates.0.content.parts', []);
-                    $inlinePart = collect($parts)->first(function ($part) {
-                        return isset($part['inlineData']['data']) || isset($part['inline_data']['data']);
-                    });
+                    $candidates = collect(data_get($response->json(), 'candidates', []));
+                    $inlinePart = $candidates
+                        ->flatMap(function ($candidate) {
+                            return collect(data_get($candidate, 'content.parts', []));
+                        })
+                        ->first(function ($part) {
+                            return !empty(data_get($part, 'inlineData.data')) || !empty(data_get($part, 'inline_data.data'));
+                        });
 
                     $base64 = data_get($inlinePart, 'inlineData.data') ?? data_get($inlinePart, 'inline_data.data');
                     $mimeType = data_get($inlinePart, 'inlineData.mimeType') ?? data_get($inlinePart, 'inline_data.mime_type') ?? 'image/png';
@@ -258,8 +273,15 @@ class TenantController extends Controller
                         ]);
                     }
 
-                    $textReply = data_get($response->json(), 'candidates.0.content.parts.0.text');
-                    if (!empty($textReply)) {
+                    $textReply = $candidates
+                        ->flatMap(function ($candidate) {
+                            return collect(data_get($candidate, 'content.parts', []));
+                        })
+                        ->pluck('text')
+                        ->filter()
+                        ->implode("\n");
+
+                    if ($textReply !== '') {
                         $lastError = 'El modelo respondió solo texto y no imagen.';
                     } else {
                         $lastError = 'El modelo respondió, pero no devolvió imagen inline.';
@@ -274,6 +296,21 @@ class TenantController extends Controller
             'error' => $lastError ?: 'No se encontró un modelo compatible para generación de imagen.',
             'tried_models' => $candidateModels,
         ], 422);
+    }
+
+    private function normalizeGeminiImageModel(?string $model): string
+    {
+        $value = Str::lower(trim((string) $model));
+
+        // Remapea modelos antiguos o descontinuados a la versión vigente.
+        if (in_array($value, [
+            'gemini-2.0-flash-preview-image-generation',
+            'gemini-2.0-flash-exp-image-generation',
+        ], true)) {
+            return 'gemini-2.5-flash-image-preview';
+        }
+
+        return $value !== '' ? $value : 'gemini-2.5-flash-image-preview';
     }
 
     public function index()
@@ -294,11 +331,18 @@ class TenantController extends Controller
     {
         $user = auth()->user();
         $tenant = Tenant::with(['users.role'])->where('id', $user->tenant_id)->first();
-        $roles = Role::whereNotIn('name', ['owner', 'user', 'super_user'])->get();
+        $assignableRoleKeys = $user?->assignableStoreRoleKeys() ?? [];
+        $roles = Role::whereNotIn('name', ['owner', 'user', 'super_user'])
+            ->get()
+            ->filter(function (Role $role) use ($assignableRoleKeys) {
+                return in_array(User::canonicalRoleName($role->name), $assignableRoleKeys, true);
+            })
+            ->values();
+        $roleDefinitions = User::storeRoleDefinitions();
         $countries = Country::all();
         $states = State::all();
         $cities = City::all();
-        return view('tenantStore', compact('tenant', 'roles', 'countries', 'states', 'cities'));
+        return view('tenantStore', compact('tenant', 'roles', 'countries', 'states', 'cities', 'roleDefinitions', 'assignableRoleKeys'));
     }
 
     public function createIndex()
@@ -324,7 +368,9 @@ class TenantController extends Controller
     public function publicTenantindex(Tenant $tenant)
     {
         // Cargar categorías y productos del tenant
-        $categories = Category::where('tenant_id', $tenant->id)->get();
+        $categories = Category::where('tenant_id', $tenant->id)
+            ->where('is_active', true)
+            ->get();
         $productItems = Product::where('tenant_id', $tenant->id)
             ->with('images')
             ->limit(9)
@@ -367,7 +413,7 @@ class TenantController extends Controller
         // 📂 Subir logo si existe
         $logoPath = null;
         if ($request->hasFile('logo')) {
-            $logoPath = $request->file('logo')->store('tenants/logos', 'public');
+            $logoPath = ImageStorage::storeUploadedFile($request->file('logo'), 'tenants/logos');
         }
 
         $tenant = Tenant::create([
@@ -466,12 +512,12 @@ class TenantController extends Controller
         try {
             $logoPath = null;
             if ($request->hasFile('logo')) {
-                $logoPath = $request->file('logo')->store('tenants/logos', 'public');
+                $logoPath = ImageStorage::storeUploadedFile($request->file('logo'), 'tenants/logos');
             }
 
             $backgroundPath = null;
             if ($request->hasFile('background_image')) {
-                $backgroundPath = $request->file('background_image')->store('tenants/backgrounds', 'public');
+                $backgroundPath = ImageStorage::storeUploadedFile($request->file('background_image'), 'tenants/backgrounds');
             }
 
             $tenant = Tenant::create([
@@ -755,6 +801,17 @@ class TenantController extends Controller
         $tenant = Tenant::findOrFail($user->tenant_id);
 
         try {
+            $assignableRoleKeys = $user?->assignableStoreRoleKeys() ?? [];
+            $assignableRoleIds = Role::query()
+                ->get()
+                ->filter(function (Role $role) use ($assignableRoleKeys) {
+                    return in_array(User::canonicalRoleName($role->name), $assignableRoleKeys, true);
+                })
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+
             $validated = $request->validate([
                 'name'            => 'nullable|string|max:255',
                 'slug'            => 'nullable|string|max:255|unique:tenants,slug,' . $tenant->id,
@@ -790,11 +847,18 @@ class TenantController extends Controller
             }
 
             if ($shouldCreateNewUser) {
+                if (!$user || !$user->canAssignStoreRoles() || empty($assignableRoleIds)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No tienes permisos para asignar roles a nuevos usuarios.',
+                    ], 403);
+                }
+
                 $newUserValidated = $request->validate([
                     'new_user.name'         => 'required|string|max:255',
                     'new_user.email'        => 'required|email|unique:users,email',
                     'new_user.password'     => 'required|string|min:8',
-                    'new_user.role_id'      => 'required|exists:roles,id',
+                    'new_user.role_id'      => ['required', 'integer', Rule::in($assignableRoleIds)],
                     'new_user.phone_number' => 'nullable|string|max:20',
                     'new_user.dni'          => 'nullable|string|max:50',
                 ]);
@@ -802,20 +866,19 @@ class TenantController extends Controller
 
             // Manejar subida de logo
             if ($request->hasFile('logo')) {
-                $logoPath = $request->file('logo')->store('tenants/logos', 'public');
+                $logoPath = ImageStorage::storeUploadedFile($request->file('logo'), 'tenants/logos');
                 $tenant->logo = $logoPath;
             }
             // Manejar imagen de fondo
             if ($request->hasFile('background_image')) {
 
                 // Eliminar imagen anterior si existe
-                if ($tenant->background_image && Storage::disk('public')->exists($tenant->background_image)) {
-                    Storage::disk('public')->delete($tenant->background_image);
+                if ($tenant->background_image && ImageStorage::exists($tenant->background_image)) {
+                    ImageStorage::delete($tenant->background_image);
                 }
 
                 // Guardar nueva imagen
-                $backgroundPath = $request->file('background_image')
-                    ->store('tenants/backgrounds', 'public');
+                $backgroundPath = ImageStorage::storeUploadedFile($request->file('background_image'), 'tenants/backgrounds');
 
                 $tenant->background_image = $backgroundPath;
             }
@@ -885,7 +948,7 @@ class TenantController extends Controller
         // }
 
         $categories = Category::where('tenant_id', $tenant->id)
-            // ->where('status', 1)
+            ->where('is_active', true)
             ->get();
 
         $products = Product::where('tenant_id', $tenant->id)
@@ -937,6 +1000,21 @@ class TenantController extends Controller
             ->get()
             ->filter(function ($paymentMethod) {
                 return !in_array(Str::lower((string) $paymentMethod->name), ['efectivo', 'punto de venta']);
+            })
+            ->map(function ($paymentMethod) {
+                $qrPath = null;
+
+                if (!empty($paymentMethod->qr_image)) {
+                    $decodedQr = json_decode((string) $paymentMethod->qr_image, true);
+                    if (is_array($decodedQr) && !empty($decodedQr[0])) {
+                        $qrPath = $decodedQr[0];
+                    } elseif (is_string($paymentMethod->qr_image)) {
+                        $qrPath = $paymentMethod->qr_image;
+                    }
+                }
+
+                $paymentMethod->qr_image_url = ImageStorage::url($qrPath);
+                return $paymentMethod;
             })
             ->values();
 
@@ -1014,49 +1092,60 @@ class TenantController extends Controller
             ], 403);
         }
 
-        $validated = $request->validate([
-            'customer_id' => 'required|exists:users,id',
-            'delivery_type' => 'required|in:pickup,shipping',
-            'delivery_address' => 'nullable|string|max:500',
-            'items' => 'required|array|min:1',
-            'items.*.variant_id' => 'required|integer|exists:product_variants,id',
-            'items.*.quantity' => 'required|integer|min:1',
-            'items.*.unit_price' => 'nullable|numeric|min:0',
-            'payments' => 'required|array|min:1',
-            'payments.*.method_id' => 'required|integer|exists:payment_methods,id',
-            'payments.*.amount' => 'required|numeric|min:0.01',
-            'payments.*.reference' => 'nullable|string|max:255',
-        ]);
-
-        if ($validated['delivery_type'] === 'shipping' && empty(trim((string) ($validated['delivery_address'] ?? '')))) {
-            return response()->json([
-                'success' => false,
-                'message' => 'La dirección es obligatoria para envío.',
-            ], 422);
-        }
-
-        $address = $validated['delivery_type'] === 'shipping'
-            ? trim((string) $validated['delivery_address'])
-            : 'Tienda';
-
-        $preference = $validated['delivery_type'] === 'shipping'
-            ? 'Envío'
-            : 'Retiro en tienda';
-
-        $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference) {
-            $salesOrder = SalesOrder::create([
-                'user_id' => $validated['customer_id'],
-                'date' => now()->toDateString(),
-                'status' => 0,
-                'address' => $address,
-                'preference' => $preference,
-                'tenant_id' => $tenant->id,
+        try {
+            $validated = $request->validate([
+                'customer_id' => 'required|exists:users,id',
+                'delivery_type' => 'required|in:pickup,shipping',
+                'delivery_address' => 'nullable|string|max:500',
+                'mark_delivered' => 'nullable|boolean',
+                'mark_payments_paid' => 'nullable|boolean',
+                'mark_sale_completed' => 'nullable|boolean',
+                'items' => 'required|array|min:1',
+                'items.*.variant_id' => 'required|integer|exists:product_variants,id',
+                'items.*.quantity' => 'required|integer|min:1',
+                'items.*.unit_price' => 'nullable|numeric|min:0',
+                'payments' => 'required|array|min:1',
+                'payments.*.method_id' => 'required|integer|exists:payment_methods,id',
+                'payments.*.amount' => 'required|numeric|min:0.01',
+                'payments.*.reference' => 'nullable|string|max:255',
+                'payments.*.reference_image_data' => 'nullable|string',
+                'payments.*.reference_image_mime' => 'nullable|string|max:100',
             ]);
 
-            $orderTotal = 0;
+            if ($validated['delivery_type'] === 'shipping' && empty(trim((string) ($validated['delivery_address'] ?? '')))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'La dirección es obligatoria para envío.',
+                ], 422);
+            }
 
-            foreach ($validated['items'] as $item) {
-                $variant = ProductVariant::with('product')->findOrFail($item['variant_id']);
+            $address = $validated['delivery_type'] === 'shipping'
+                ? trim((string) $validated['delivery_address'])
+                : 'Tienda';
+
+            $markDelivered = (bool) ($validated['mark_delivered'] ?? false);
+            $markPaymentsPaid = (bool) ($validated['mark_payments_paid'] ?? false);
+            $markSaleCompleted = (bool) ($validated['mark_sale_completed'] ?? false);
+
+            $preference = $validated['delivery_type'] === 'shipping'
+                ? 'Envío'
+                : 'Retiro en tienda';
+
+            $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted) {
+                $salesOrder = SalesOrder::create([
+                    'user_id' => $validated['customer_id'],
+                    'date' => now()->toDateString(),
+                    'status' => $markSaleCompleted ? 1 : 0,
+                    'address' => $address,
+                    'preference' => $preference,
+                    'deliver_status' => $markDelivered ? 1 : 0,
+                    'tenant_id' => $tenant->id,
+                ]);
+
+                $orderTotal = 0;
+
+                foreach ($validated['items'] as $item) {
+                    $variant = ProductVariant::with('product')->findOrFail($item['variant_id']);
 
                 if ((int) $variant->product->tenant_id !== (int) $tenant->id) {
                     throw new \RuntimeException('Uno de los productos no pertenece a esta tienda.');
@@ -1073,61 +1162,109 @@ class TenantController extends Controller
                 $lineAmount = $unitPrice * (int) $item['quantity'];
                 $orderTotal += $lineAmount;
 
-                SalesOrderDetail::create([
-                    'sales_order_id' => $salesOrder->id,
-                    'product_variant_id' => $variant->id,
-                    'quantity' => (int) $item['quantity'],
-                    'price' => $unitPrice,
-                    'amount' => $lineAmount,
-                ]);
+                    SalesOrderDetail::create([
+                        'sales_order_id' => $salesOrder->id,
+                        'product_variant_id' => $variant->id,
+                        'quantity' => (int) $item['quantity'],
+                        'price' => $unitPrice,
+                        'amount' => $lineAmount,
+                    ]);
 
-                $variant->stock -= (int) $item['quantity'];
-                $variant->save();
-            }
+                    $variant->stock -= (int) $item['quantity'];
+                    $variant->save();
+                }
 
-            $totalPaid = 0;
+                $totalPaid = 0;
 
-            foreach ($validated['payments'] as $paymentData) {
-                $method = PaymentMethod::with('currency')->findOrFail($paymentData['method_id']);
+                foreach ($validated['payments'] as $paymentData) {
+                    $method = PaymentMethod::with('currency')
+                        ->active()
+                        ->findOrFail($paymentData['method_id']);
 
                 if ((int) $method->tenant_id !== (int) $tenant->id) {
                     throw new \RuntimeException('Uno de los métodos de pago no pertenece a esta tienda.');
                 }
 
-                $amount = (float) $paymentData['amount'];
-                $totalPaid += $amount;
+                    $amount = (float) $paymentData['amount'];
+                    $totalPaid += $amount;
 
-                Payment::create([
-                    'sales_order_id' => $salesOrder->id,
-                    'payment_method' => $method->id,
-                    'amount' => $amount,
-                    'currency' => $method->currency->code ?? $method->currency->name ?? 'USD',
-                    'reference' => $paymentData['reference'] ?? null,
-                    'status' => 0,
-                ]);
-            }
+                    $payment = Payment::create([
+                        'sales_order_id' => $salesOrder->id,
+                        'payment_method' => $method->id,
+                        'amount' => $amount,
+                        'currency' => $method->currency->code ?? $method->currency->name ?? 'USD',
+                        'reference' => $paymentData['reference'] ?? null,
+                        'status' => $markPaymentsPaid ? 1 : 0,
+                    ]);
 
-            if ($totalPaid + 0.0001 < $orderTotal) {
-                throw new \RuntimeException('El total pagado es menor al total del pedido.');
-            }
+                    $this->storePaymentReferenceImageFromPayload($payment, $paymentData['reference_image_data'] ?? null, $paymentData['reference_image_mime'] ?? null);
+                }
 
-            return $salesOrder;
-        });
+                if ($totalPaid + 0.0001 < $orderTotal) {
+                    throw new \RuntimeException('El total pagado es menor al total del pedido.');
+                }
 
-        WorkflowNotifier::notifyTenantRoles((int) $tenant->id, ['administrador', 'admin', 'vendedor'], [
-            'title' => 'Nueva compra de cliente',
-            'message' => 'Se creó el pedido #' . $salesOrder->id . '. Revisa venta y métodos de pago.',
-            'type' => 'new-order',
-            'tenant_id' => $tenant->id,
-            'order_id' => $salesOrder->id,
-            'action' => 'review_order_and_payments',
+                return $salesOrder;
+            });
+
+            WorkflowNotifier::notifyTenantRoles((int) $tenant->id, ['administrador', 'admin', 'vendedor'], [
+                'title' => 'Nueva compra de cliente',
+                'message' => 'Se creó el pedido #' . $salesOrder->id . '. Revisa venta y métodos de pago.',
+                'type' => 'new-order',
+                'tenant_id' => $tenant->id,
+                'order_id' => $salesOrder->id,
+                'action' => 'review_order_and_payments',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pedido creado correctamente. Tu pedido fue enviado para validación.',
+                'order_id' => $salesOrder->id,
+            ], 201);
+        } catch (\RuntimeException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+            ], 422);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo completar el pedido en este momento.',
+            ], 500);
+        }
+    }
+
+    private function storePaymentReferenceImageFromPayload(Payment $payment, ?string $base64Image, ?string $mimeType = null): void
+    {
+        $payload = trim((string) $base64Image);
+        if ($payload === '') {
+            return;
+        }
+
+        if (preg_match('/^data:(image\/[a-zA-Z0-9.+-]+);base64,/', $payload, $matches) === 1) {
+            $mimeType = $matches[1];
+            $payload = preg_replace('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', '', $payload) ?? $payload;
+        }
+
+        $binary = base64_decode($payload, true);
+        if ($binary === false) {
+            return;
+        }
+
+        $extension = match (Str::lower((string) $mimeType)) {
+            'image/jpeg', 'image/jpg' => 'jpg',
+            'image/webp' => 'webp',
+            default => 'png',
+        };
+
+        $path = ImageStorage::storeBinary($binary, 'payment_images', $extension, $mimeType);
+
+        PaymentImage::create([
+            'payment_id' => $payment->id,
+            'image_path' => $path,
         ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Pedido creado correctamente. Tu pedido fue enviado para validación.',
-            'order_id' => $salesOrder->id,
-        ], 201);
     }
 
     private function getVariantDiscountedUnitPrice(ProductVariant $variant): float

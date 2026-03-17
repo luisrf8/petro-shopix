@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Support\ImageStorage;
 
 class Plan extends Model
 {
@@ -23,4 +24,9 @@ class Plan extends Model
         'features' => 'array',
         'status' => 'integer',
     ];
+
+    public function getImageAttribute($value)
+    {
+        return ImageStorage::url($value);
+    }
 }

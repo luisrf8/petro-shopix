@@ -318,22 +318,37 @@
       fetch('api/create-product', {
         method: 'POST',
         headers: {
-          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+          'Accept': 'application/json'
         },
         body: formData
       })
-      .then(response => response.json())
+      .then(async response => {
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          const validationMessage = data?.errors
+            ? Object.values(data.errors).flat().join('\n')
+            : null;
+          throw new Error(validationMessage || data.message || data.error || 'No se pudo crear el producto.');
+        }
+
+        return data;
+      })
       .then(data => {
-        if (data.message === 'Product created successfully') {
+        if (data.success || data.message === 'Product created successfully') {
           alert('Producto creado correctamente');
           // Cierra el modal y refresca o actualiza el contenido
           $('#createProductModal').modal('hide');
-          // Aquí puedes añadir lógica para actualizar la lista de productos si existe
+          window.location.reload();
         } else {
-          alert('Ocurrió un error al crear el producto');
+          throw new Error(data.message || 'No se pudo crear el producto.');
         }
       })
-      .catch(error => console.error('Error:', error));
+      .catch(error => {
+        console.error('Error:', error);
+        alert(error.message || 'No se pudo crear el producto.');
+      });
     });
 
     document.getElementById('createCategoryForm').addEventListener('submit', function(event) {
@@ -344,21 +359,27 @@
       fetch('api/create-category', {
         method: 'POST',
         headers: {
-          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+          'Accept': 'application/json'
         },
         body: formData
       })
-      .then(response => {
-        if (response.status === 201) { // Valida el código de estado HTTP
+      .then(async response => {
+        const payload = await response.json().catch(() => ({}));
+
+        if (response.status === 201 || payload?.category) {
           alert('Categoría creada correctamente');
           window.location.reload();
         } else {
-          throw new Error('Error al crear la categoría');
+          const validationMessage = payload?.errors
+            ? Object.values(payload.errors).flat().join('\n')
+            : null;
+          throw new Error(validationMessage || payload.message || payload.error || 'No se pudo crear la categoría.');
         }
       })
       .catch(error => {
         console.error('Error:', error);
-        alert('Ocurrió un error al crear la Categoría');
+        alert(error.message || 'No se pudo crear la categoría.');
       });
     });
 

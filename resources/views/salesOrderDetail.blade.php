@@ -54,13 +54,9 @@
       </div>
 
       <div class="w-100 d-flex justify-content-between mt-3 gap-4">
-        {{-- -- 
-        <a href="{{ url('/sales-orders/' . $order->id . '/pdf') }}" class="btn btn-dark">
-          Generar PDF
-        </a>
-        -- --}}
-        <div>
-          
+        <div class="d-flex flex-wrap gap-2">
+          <a href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
+          <a href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" class="btn btn-outline-dark mb-0">Descargar nota de entrega</a>
         </div>
         @if(!$isWarehouseRole)
           <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">
@@ -116,6 +112,7 @@
                 <th>Beneficiario</th>
                 <th>Banco</th>
                 <th>Referencia</th>
+                <th>Comprobante</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -128,6 +125,13 @@
                 <td>{{ $payment->payment->admin_name }}</td>
                 <td>{{ $payment->payment->bank }}</td>
                 <td>{{ $payment->reference ?? 'N/A' }}</td>
+                <td id="payment-{{ $payment->id }}">
+                    @if($payment->images->isNotEmpty())
+                      <a href="{{ asset('storage/' . $payment->images->first()->image_path) }}" target="_blank" class="btn btn-sm btn-outline-dark mb-0">Ver imagen</a>
+                    @else
+                      <span class="text-muted">Sin imagen</span>
+                    @endif
+                </td>
                 <td>
                     @if(!$isWarehouseRole)
                       <select class="btn btn-sm toggle-status-btn 

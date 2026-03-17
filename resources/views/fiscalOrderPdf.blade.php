@@ -103,9 +103,16 @@
     </table>
 
 
+    @php
+        $rateValue = is_object($dollarRate)
+            ? (float) ($dollarRate->rate ?? 0)
+            : (float) $dollarRate;
+        $totalBs = (float) $totalGeneral * $rateValue;
+    @endphp
+
     <p>
-        Equivalente a {{ number_format($totalGeneral, 2) * $dollarRate }},00 Bolívares calculados a tasa BCV 
-        ( {{ number_format($dollarRate, 2) }} ) del día 
+        Equivalente a {{ number_format($totalBs, 2, ',', '.') }} Bolívares calculados a tasa BCV 
+        ( {{ number_format($rateValue, 2, ',', '.') }} ) del día 
         {{ \Carbon\Carbon::parse($order->date)->format('d/m/Y') }}
     </p>
 
