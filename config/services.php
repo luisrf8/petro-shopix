@@ -34,7 +34,10 @@ return [
         'api_key' => env('GEMINI_API_KEY'),
         'project' => env('GEMINI_PROJECT'),
         'project_number' => env('GEMINI_PROJECT_NUMBER'),
-        'model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image-preview'),
+        'location' => env('GEMINI_LOCATION', 'us-central1'),
+        'credentials_path' => env('GEMINI_CREDENTIALS_PATH', env('GOOGLE_APPLICATION_CREDENTIALS')),
+        'model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash'),
+        'image_fallback_models' => env('GEMINI_IMAGE_FALLBACK_MODELS', 'gemini-2.0-flash-preview-image-generation,gemini-2.0-flash-exp-image-generation'),
         'text_model' => env('GEMINI_TEXT_MODEL', 'gemini-2.5-flash'),
     ],
 

@@ -26,8 +26,8 @@ use App\Models\SalesOrderDetail;
 use App\Models\Payment;
 use App\Models\DollarRate;
 use App\Support\ImageStorage;
+use App\Services\GeminiImageService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Carbon\Carbon;
@@ -35,7 +35,7 @@ use Carbon\Carbon;
 
 class TenantController extends Controller
 {
-    public function generateTenantImage(Request $request)
+    public function generateTenantImage(Request $request, GeminiImageService $imageService)
     {
         $validated = $request->validate([
             'type' => 'required|in:logo,background,category,product',
@@ -53,18 +53,6 @@ class TenantController extends Controller
             'background_ratio' => 'nullable|string|max:20',
             'image_operation' => 'nullable|in:generate,remove_background',
         ]);
-
-        $apiKey = config('services.gemini.api_key');
-        $preferredModel = $this->normalizeGeminiImageModel(
-            config('services.gemini.model', 'gemini-2.5-flash-image-preview')
-        );
-
-        if (empty($apiKey)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No está configurada la clave de Gemini API.',
-            ], 500);
-        }
 
         $operation = $validated['image_operation'] ?? 'generate';
 
@@ -122,195 +110,42 @@ class TenantController extends Controller
 
         $fullPrompt = trim($typePrompt . "\n\n" . $colorContext . $ratioContext . ($conversationText !== '' ? "Contexto del chat:\n{$conversationText}\n\n" : '') . ($prompt !== '' ? "Solicitud actual: {$prompt}\n\n" : '') . 'Devuelve únicamente la mejor versión de la imagen final.');
 
-        $referenceImagePartCamel = null;
-        $referenceImagePartSnake = null;
+        $referenceBase64 = null;
+        $referenceMime = 'image/png';
         if ($request->hasFile('reference_image')) {
             $referenceFile = $request->file('reference_image');
             $referenceBase64 = base64_encode(file_get_contents($referenceFile->getRealPath()));
             $referenceMime = $referenceFile->getMimeType() ?: 'image/png';
-
-            $referenceImagePartCamel = [
-                'inlineData' => [
-                    'mimeType' => $referenceMime,
-                    'data' => $referenceBase64,
-                ],
-            ];
-
-            $referenceImagePartSnake = [
-                'inline_data' => [
-                    'mime_type' => $referenceMime,
-                    'data' => $referenceBase64,
-                ],
-            ];
         } elseif (!empty($validated['reference_image_data'])) {
             $referenceBase64 = preg_replace('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', '', (string) $validated['reference_image_data']);
             $referenceMime = $validated['reference_image_mime'] ?? 'image/png';
-
-            $referenceImagePartCamel = [
-                'inlineData' => [
-                    'mimeType' => $referenceMime,
-                    'data' => $referenceBase64,
-                ],
-            ];
-
-            $referenceImagePartSnake = [
-                'inline_data' => [
-                    'mime_type' => $referenceMime,
-                    'data' => $referenceBase64,
-                ],
-            ];
         }
 
-        $candidateModels = array_values(array_unique(array_filter([
-            $preferredModel,
-            'gemini-2.5-flash-image-preview',
-        ])));
+        $result = $imageService->generateImage([
+            'prompt' => $fullPrompt,
+            'image_operation' => $operation,
+            'reference_image_data' => $referenceBase64,
+            'reference_image_mime' => $referenceMime,
+            'aspect_ratio' => (string) ($validated['background_ratio'] ?? '1:1'),
+            'sample_count' => 1,
+        ]);
 
-        $apiVersions = ['v1beta'];
-        $lastError = null;
-
-        $basePartsCamel = [['text' => $fullPrompt]];
-        $basePartsSnake = [['text' => $fullPrompt]];
-        if (!is_null($referenceImagePartCamel)) {
-            $basePartsCamel[] = $referenceImagePartCamel;
-        }
-        if (!is_null($referenceImagePartSnake)) {
-            $basePartsSnake[] = $referenceImagePartSnake;
-        }
-
-        $basePayloadCamel = [
-            'contents' => [
-                [
-                    'parts' => $basePartsCamel,
-                ],
-            ],
-        ];
-
-        $basePayloadSnake = [
-            'contents' => [
-                [
-                    'parts' => $basePartsSnake,
-                ],
-            ],
-        ];
-
-        $payloadVariants = [
-            array_merge($basePayloadCamel, [
-                'generationConfig' => [
-                    'responseModalities' => ['IMAGE'],
-                ],
-            ]),
-            array_merge($basePayloadSnake, [
-                'generation_config' => [
-                    'response_modalities' => ['IMAGE'],
-                ],
-            ]),
-            array_merge($basePayloadCamel, [
-                'generationConfig' => [
-                    'responseModalities' => ['TEXT', 'IMAGE'],
-                ],
-            ]),
-            array_merge($basePayloadSnake, [
-                'generation_config' => [
-                    'response_modalities' => ['TEXT', 'IMAGE'],
-                ],
-            ]),
-            $basePayloadCamel,
-            $basePayloadSnake,
-        ];
-
-        foreach ($candidateModels as $model) {
-            foreach ($apiVersions as $version) {
-                foreach ($payloadVariants as $payload) {
-                    $response = Http::timeout(90)->post(
-                        "https://generativelanguage.googleapis.com/{$version}/models/{$model}:generateContent?key={$apiKey}",
-                        $payload
-                    );
-
-                    if (!$response->successful()) {
-                        $errorMessage = $response->json('error.message') ?? $response->body();
-                        $lastError = $errorMessage;
-
-                        $normalizedError = Str::lower((string) $errorMessage);
-                        if (Str::contains($normalizedError, ['quota exceeded', 'rate limit', 'billing', 'limit: 0'])) {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'Tu clave de Gemini no tiene cuota disponible en este proyecto.',
-                                'error' => $errorMessage,
-                                'tried_models' => $candidateModels,
-                            ], 429);
-                        }
-
-                        if (Str::contains($normalizedError, ['api key not valid', 'permission denied', 'unauthenticated', 'forbidden'])) {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'La clave de Gemini no es válida o no tiene permisos para generar imágenes.',
-                                'error' => $errorMessage,
-                                'tried_models' => $candidateModels,
-                            ], 403);
-                        }
-
-                        continue;
-                    }
-
-                    $candidates = collect(data_get($response->json(), 'candidates', []));
-                    $inlinePart = $candidates
-                        ->flatMap(function ($candidate) {
-                            return collect(data_get($candidate, 'content.parts', []));
-                        })
-                        ->first(function ($part) {
-                            return !empty(data_get($part, 'inlineData.data')) || !empty(data_get($part, 'inline_data.data'));
-                        });
-
-                    $base64 = data_get($inlinePart, 'inlineData.data') ?? data_get($inlinePart, 'inline_data.data');
-                    $mimeType = data_get($inlinePart, 'inlineData.mimeType') ?? data_get($inlinePart, 'inline_data.mime_type') ?? 'image/png';
-
-                    if (!empty($base64)) {
-                        return response()->json([
-                            'success' => true,
-                            'data' => $base64,
-                            'mime_type' => $mimeType,
-                        ]);
-                    }
-
-                    $textReply = $candidates
-                        ->flatMap(function ($candidate) {
-                            return collect(data_get($candidate, 'content.parts', []));
-                        })
-                        ->pluck('text')
-                        ->filter()
-                        ->implode("\n");
-
-                    if ($textReply !== '') {
-                        $lastError = 'El modelo respondió solo texto y no imagen.';
-                    } else {
-                        $lastError = 'El modelo respondió, pero no devolvió imagen inline.';
-                    }
-                }
-            }
+        if (($result['success'] ?? false) === true) {
+            return response()->json([
+                'success' => true,
+                'data' => $result['data'],
+                'mime_type' => $result['mime_type'] ?? 'image/png',
+                'provider' => $result['provider'] ?? null,
+                'tried_models' => $result['tried_models'] ?? null,
+            ]);
         }
 
         return response()->json([
             'success' => false,
-            'message' => 'No se pudo generar la imagen con Gemini.',
-            'error' => $lastError ?: 'No se encontró un modelo compatible para generación de imagen.',
-            'tried_models' => $candidateModels,
-        ], 422);
-    }
-
-    private function normalizeGeminiImageModel(?string $model): string
-    {
-        $value = Str::lower(trim((string) $model));
-
-        // Remapea modelos antiguos o descontinuados a la versión vigente.
-        if (in_array($value, [
-            'gemini-2.0-flash-preview-image-generation',
-            'gemini-2.0-flash-exp-image-generation',
-        ], true)) {
-            return 'gemini-2.5-flash-image-preview';
-        }
-
-        return $value !== '' ? $value : 'gemini-2.5-flash-image-preview';
+            'message' => $result['message'] ?? 'No se pudo generar la imagen con Gemini.',
+            'error' => $result['error'] ?? null,
+            'tried_models' => $result['tried_models'] ?? null,
+        ], (int) ($result['status'] ?? 422));
     }
 
     public function index()
