@@ -50,8 +50,27 @@
         </div>
 
         <div class="mb-3 d-none" id="tenant-shipping-address-container">
-          <label for="tenant-shipping-address" class="form-label">Dirección de envío</label>
-          <textarea id="tenant-shipping-address" class="form-control" rows="2" placeholder="Escribe tu dirección completa"></textarea>
+          <label class="form-label">Dirección de envío</label>
+          <div class="row g-2">
+            <div class="col-12 col-md-4">
+              <select id="tenant-shipping-country" class="form-select">
+                <option value="">País</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-4">
+              <select id="tenant-shipping-state" class="form-select" disabled>
+                <option value="">Estado</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-4">
+              <select id="tenant-shipping-city" class="form-select" disabled>
+                <option value="">Ciudad</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <input type="text" id="tenant-shipping-address-detail" class="form-control" placeholder="Dirección exacta (calle, referencia, etc.)">
+            </div>
+          </div>
         </div>
         @endif
 
@@ -141,12 +160,32 @@
           </div>
 
           <div class="mb-3 d-none" id="tenant-pro-shipping-address-container">
-            <label for="tenant-pro-shipping-address" class="form-label">Dirección de envío</label>
-            <textarea id="tenant-pro-shipping-address" class="form-control" rows="2" placeholder="Dirección completa"></textarea>
+            <label class="form-label">Dirección de envío</label>
+            <div class="row g-2">
+              <div class="col-12 col-md-4">
+                <select id="tenant-pro-shipping-country" class="form-select">
+                  <option value="">País</option>
+                </select>
+              </div>
+              <div class="col-12 col-md-4">
+                <select id="tenant-pro-shipping-state" class="form-select" disabled>
+                  <option value="">Estado</option>
+                </select>
+              </div>
+              <div class="col-12 col-md-4">
+                <select id="tenant-pro-shipping-city" class="form-select" disabled>
+                  <option value="">Ciudad</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <input type="text" id="tenant-pro-shipping-address-detail" class="form-control" placeholder="Dirección exacta (calle, referencia, etc.)">
+              </div>
+            </div>
           </div>
 
           <hr>
           <h6>Métodos de pago</h6>
+          <p class="small text-muted mb-2">Cada pago requiere referencia y comprobante de pago (imagen).</p>
           <div id="tenant-pro-payment-rows" class="d-flex flex-column gap-2"></div>
           <button type="button" id="tenant-pro-add-payment-row" class="btn btn-outline-dark btn-sm mt-2">+ Agregar pago</button>
 
@@ -192,6 +231,9 @@
     const tenantName = @json($tenant->name);
     const tenantPhoneCode = @json($tenant->phone_code ?? '');
     const tenantPhoneNumber = @json($tenant->phone_number ?? '');
+    const tenantCountryId = @json($tenant->country ?? null);
+    const tenantStateId = @json($tenant->state ?? null);
+    const tenantCityId = @json($tenant->city ?? null);
     const shopixDebug = true;
 
     function cartDebug(...args) {
@@ -208,8 +250,165 @@
     const checkoutForm = document.getElementById('tenant-checkout-form');
 
     const shippingAddressContainer = document.getElementById('tenant-shipping-address-container');
-    const shippingAddressInput = document.getElementById('tenant-shipping-address');
+    const shippingCountrySelect = document.getElementById('tenant-shipping-country');
+    const shippingStateSelect = document.getElementById('tenant-shipping-state');
+    const shippingCitySelect = document.getElementById('tenant-shipping-city');
+    const shippingAddressDetailInput = document.getElementById('tenant-shipping-address-detail');
     const deliveryTypeInputs = document.querySelectorAll('input[name="tenant-delivery-type"]');
+
+    const proShippingCountrySelect = document.getElementById('tenant-pro-shipping-country');
+    const proShippingStateSelect = document.getElementById('tenant-pro-shipping-state');
+    const proShippingCitySelect = document.getElementById('tenant-pro-shipping-city');
+    const proShippingAddressDetailInput = document.getElementById('tenant-pro-shipping-address-detail');
+
+    let countriesCache = null;
+
+    async function fetchJson(url) {
+      const response = await fetch(url, {
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('No se pudo cargar información de ubicación.');
+      }
+
+      return response.json();
+    }
+
+    function resetSelect(selectElement, placeholder, disabled = true) {
+      if (!selectElement) return;
+      selectElement.innerHTML = `<option value="">${placeholder}</option>`;
+      selectElement.disabled = disabled;
+    }
+
+    function fillSelect(selectElement, items, placeholder, selectedValue = null) {
+      if (!selectElement) return;
+
+      const selectedAsString = selectedValue !== null && selectedValue !== undefined
+        ? String(selectedValue)
+        : null;
+
+      selectElement.innerHTML = [
+        `<option value="">${placeholder}</option>`,
+        ...items.map(item => {
+          const id = String(item.id);
+          const selected = selectedAsString !== null && id === selectedAsString ? ' selected' : '';
+          return `<option value="${id}"${selected}>${escapeHtml(item.name)}</option>`;
+        })
+      ].join('');
+
+      selectElement.disabled = items.length === 0;
+    }
+
+    async function getCountries() {
+      if (Array.isArray(countriesCache)) {
+        return countriesCache;
+      }
+
+      const countries = await fetchJson('/get-countries');
+      countriesCache = Array.isArray(countries) ? countries : [];
+      return countriesCache;
+    }
+
+    function getSelectedText(selectElement) {
+      if (!selectElement) return '';
+      const selectedOption = selectElement.options[selectElement.selectedIndex];
+      return selectedOption ? selectedOption.text.trim() : '';
+    }
+
+    function buildShippingAddress(countrySelect, stateSelect, citySelect, detailInput) {
+      const countryId = countrySelect?.value || '';
+      const stateId = stateSelect?.value || '';
+      const cityId = citySelect?.value || '';
+      const detail = (detailInput?.value || '').trim();
+
+      if (!countryId || !stateId || !cityId) {
+        return { valid: false, message: 'Selecciona país, estado y ciudad para el envío.' };
+      }
+
+      const countryName = getSelectedText(countrySelect);
+      const stateName = getSelectedText(stateSelect);
+      const cityName = getSelectedText(citySelect);
+
+      const parts = [countryName, stateName, cityName].filter(Boolean);
+      if (detail) {
+        parts.push(detail);
+      }
+
+      return {
+        valid: true,
+        address: parts.join(', '),
+      };
+    }
+
+    async function initLocationSelectors(countrySelect, stateSelect, citySelect, defaults = {}) {
+      if (!countrySelect || !stateSelect || !citySelect) {
+        return;
+      }
+
+      const countries = await getCountries();
+      fillSelect(countrySelect, countries, 'País', defaults.countryId ?? null);
+
+      const selectedCountryId = countrySelect.value || '';
+      if (!selectedCountryId) {
+        resetSelect(stateSelect, 'Estado', true);
+        resetSelect(citySelect, 'Ciudad', true);
+        return;
+      }
+
+      const states = await fetchJson(`/get-states/${selectedCountryId}`);
+      fillSelect(stateSelect, Array.isArray(states) ? states : [], 'Estado', defaults.stateId ?? null);
+
+      const selectedStateId = stateSelect.value || '';
+      if (!selectedStateId) {
+        resetSelect(citySelect, 'Ciudad', true);
+        return;
+      }
+
+      const cities = await fetchJson(`/get-cities/${selectedStateId}`);
+      fillSelect(citySelect, Array.isArray(cities) ? cities : [], 'Ciudad', defaults.cityId ?? null);
+    }
+
+    function bindLocationSelectorEvents(countrySelect, stateSelect, citySelect) {
+      if (!countrySelect || !stateSelect || !citySelect) {
+        return;
+      }
+
+      countrySelect.addEventListener('change', async () => {
+        const countryId = countrySelect.value || '';
+        resetSelect(stateSelect, 'Estado', true);
+        resetSelect(citySelect, 'Ciudad', true);
+
+        if (!countryId) {
+          return;
+        }
+
+        try {
+          const states = await fetchJson(`/get-states/${countryId}`);
+          fillSelect(stateSelect, Array.isArray(states) ? states : [], 'Estado');
+        } catch (error) {
+          alert('No se pudieron cargar los estados del país seleccionado.');
+        }
+      });
+
+      stateSelect.addEventListener('change', async () => {
+        const stateId = stateSelect.value || '';
+        resetSelect(citySelect, 'Ciudad', true);
+
+        if (!stateId) {
+          return;
+        }
+
+        try {
+          const cities = await fetchJson(`/get-cities/${stateId}`);
+          fillSelect(citySelect, Array.isArray(cities) ? cities : [], 'Ciudad');
+        } catch (error) {
+          alert('No se pudieron cargar las ciudades del estado seleccionado.');
+        }
+      });
+    }
 
     function openTenantCartOffcanvas() {
       const canvasElement = document.getElementById('tenantCartOffcanvas');
@@ -299,6 +498,16 @@
       const isShipping = selectedDeliveryType === 'shipping';
       if (shippingAddressContainer) {
         shippingAddressContainer.classList.toggle('d-none', !isShipping);
+      }
+
+      if (isShipping && shippingCountrySelect && !shippingCountrySelect.options.length) {
+        initLocationSelectors(shippingCountrySelect, shippingStateSelect, shippingCitySelect, {
+          countryId: tenantCountryId,
+          stateId: tenantStateId,
+          cityId: tenantCityId,
+        }).catch(() => {
+          alert('No se pudieron cargar los selectores de ubicación de envío.');
+        });
       }
     }
 
@@ -408,12 +617,17 @@
 
       const deliveryType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup';
       const isShipping = deliveryType === 'shipping';
-      const shippingAddress = (shippingAddressInput.value || '').trim();
+      const shippingAddressResult = buildShippingAddress(
+        shippingCountrySelect,
+        shippingStateSelect,
+        shippingCitySelect,
+        shippingAddressDetailInput
+      );
       const authUser = getAuthUser();
       const customerName = (authUser?.name || '').trim();
 
-      if (isShipping && !shippingAddress) {
-        alert('Indica la dirección de envío para completar el pedido.');
+      if (isShipping && !shippingAddressResult.valid) {
+        alert(shippingAddressResult.message);
         return;
       }
 
@@ -439,7 +653,7 @@
       lines.push(`Subtotal: ${getSubtotal(cart).toFixed(2)} $`);
       lines.push(`Entrega: ${isShipping ? 'Envío' : 'Retiro en tienda'}`);
       if (isShipping) {
-        lines.push(`Dirección de envío: ${shippingAddress}`);
+        lines.push(`Dirección de envío: ${shippingAddressResult.address}`);
       }
 
       const message = encodeURIComponent(lines.join('\n'));
@@ -502,8 +716,8 @@
               <input type="number" step="0.01" min="0" class="form-control pro-payment-amount" placeholder="0.00">
             </div>
             <div class="col-10 col-md-3">
-              <label class="form-label small mb-1">Referencia</label>
-              <input type="text" class="form-control pro-payment-reference" placeholder="Opcional">
+              <label class="form-label small mb-1">Referencia *</label>
+              <input type="text" class="form-control pro-payment-reference" placeholder="Obligatoria" required>
             </div>
             <div class="col-2 col-md-1 d-flex align-items-end">
               <button type="button" class="btn btn-outline-danger btn-sm w-100 pro-remove-payment-row">X</button>
@@ -512,8 +726,8 @@
               <div class="small border rounded p-2 bg-light pro-payment-method-details"></div>
             </div>
             <div class="col-12 col-md-6">
-              <label class="form-label small mb-1">Imagen de referencia</label>
-              <input type="file" class="form-control pro-payment-reference-image" accept="image/png,image/jpeg,image/jpg,image/webp">
+              <label class="form-label small mb-1">Imagen de comprobante *</label>
+              <input type="file" class="form-control pro-payment-reference-image" accept="image/png,image/jpeg,image/jpg,image/webp" required>
             </div>
             <div class="col-12 col-md-6">
               <div class="small text-muted pro-payment-reference-image-name pt-md-4">Sin imagen cargada</div>
@@ -910,10 +1124,15 @@
       }
 
       const deliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
-      const deliveryAddress = (document.getElementById('tenant-pro-shipping-address').value || '').trim();
+      const deliveryAddressResult = buildShippingAddress(
+        proShippingCountrySelect,
+        proShippingStateSelect,
+        proShippingCitySelect,
+        proShippingAddressDetailInput
+      );
 
-      if (deliveryType === 'shipping' && !deliveryAddress) {
-        alert('Indica la dirección de envío.');
+      if (deliveryType === 'shipping' && !deliveryAddressResult.valid) {
+        alert(deliveryAddressResult.message);
         return;
       }
 
@@ -938,6 +1157,18 @@
 
       if (payments.length === 0) {
         alert('Debes agregar al menos un pago válido.');
+        return;
+      }
+
+      const hasMissingReference = payments.some(payment => !String(payment.reference || '').trim());
+      if (hasMissingReference) {
+        alert('Cada pago debe incluir una referencia.');
+        return;
+      }
+
+      const hasMissingProofImage = payments.some(payment => !String(payment.reference_image_data || '').trim());
+      if (hasMissingProofImage) {
+        alert('Cada pago debe incluir una imagen de comprobante.');
         return;
       }
 
@@ -969,7 +1200,7 @@
           body: JSON.stringify({
             customer_id: Number(user.id),
             delivery_type: deliveryType,
-            delivery_address: deliveryType === 'shipping' ? deliveryAddress : 'Tienda',
+            delivery_address: deliveryType === 'shipping' ? deliveryAddressResult.address : 'Tienda',
             items,
             payments,
             mark_delivered: false,
@@ -1081,6 +1312,16 @@
         input.addEventListener('change', () => {
           const isShipping = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value === 'shipping';
           document.getElementById('tenant-pro-shipping-address-container').classList.toggle('d-none', !isShipping);
+
+          if (isShipping && proShippingCountrySelect && !proShippingCountrySelect.options.length) {
+            initLocationSelectors(proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, {
+              countryId: tenantCountryId,
+              stateId: tenantStateId,
+              cityId: tenantCityId,
+            }).catch(() => {
+              alert('No se pudieron cargar los selectores de ubicación de envío.');
+            });
+          }
         });
       });
 
@@ -1088,6 +1329,27 @@
     }
 
     updateDeliveryAddressVisibility();
+    bindLocationSelectorEvents(shippingCountrySelect, shippingStateSelect, shippingCitySelect);
+    bindLocationSelectorEvents(proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect);
+
+    if (shippingCountrySelect) {
+      initLocationSelectors(shippingCountrySelect, shippingStateSelect, shippingCitySelect, {
+        countryId: tenantCountryId,
+        stateId: tenantStateId,
+        cityId: tenantCityId,
+      }).catch(() => {
+      });
+    }
+
+    if (proShippingCountrySelect) {
+      initLocationSelectors(proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, {
+        countryId: tenantCountryId,
+        stateId: tenantStateId,
+        cityId: tenantCityId,
+      }).catch(() => {
+      });
+    }
+
     setProSubmitLoading(false);
     renderCart();
 

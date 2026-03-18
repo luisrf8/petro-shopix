@@ -37,6 +37,8 @@ class Tenant extends Model
         'phone_number',
         'slogan',
         'description',
+        'business_type',
+        'economic_activity',
         'address',
         'latitude',
         'longitude',

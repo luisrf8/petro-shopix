@@ -395,6 +395,39 @@
                     <p>Resumen de la compra y confirmación.</p>
 
                     <div class="card p-3 mb-3">
+                        <h6 class="mb-2">Cliente para esta venta</h6>
+                        <div class="d-flex gap-4 flex-wrap mb-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="create_new_customer" id="create_customer_no" value="no" checked>
+                                <label class="form-check-label" for="create_customer_no">No, usar cliente actual</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="create_new_customer" id="create_customer_yes" value="yes">
+                                <label class="form-check-label" for="create_customer_yes">Sí, crear nuevo cliente</label>
+                            </div>
+                        </div>
+
+                        <div id="newCustomerForm" class="row g-2 d-none">
+                            <div class="col-12 col-md-6">
+                                <label for="newCustomerName" class="form-label mb-1">Nombre</label>
+                                <input type="text" id="newCustomerName" class="form-control border border-1 p-2 bg-white" placeholder="Nombre del cliente">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="newCustomerEmail" class="form-label mb-1">Correo</label>
+                                <input type="email" id="newCustomerEmail" class="form-control border border-1 p-2 bg-white" placeholder="correo@ejemplo.com">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="newCustomerPhone" class="form-label mb-1">Teléfono</label>
+                                <input type="text" id="newCustomerPhone" class="form-control border border-1 p-2 bg-white" placeholder="Ej: +58 412 1234567">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="newCustomerDni" class="form-label mb-1">DNI</label>
+                                <input type="text" id="newCustomerDni" class="form-control border border-1 p-2 bg-white" placeholder="Documento de identidad">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card p-3 mb-3">
                         <h6 class="mb-3">Tipo de entrega</h6>
                         <div class="d-flex gap-4 flex-wrap">
                             <div class="form-check">
@@ -408,8 +441,27 @@
                         </div>
 
                         <div class="mt-3 d-none" id="deliveryAddressContainer">
-                            <label for="deliveryAddress" class="form-label">Dirección de envío</label>
-                            <input type="text" id="deliveryAddress" class="form-control border border-1 p-2 bg-white" placeholder="Ej: Av. Libertador, Local 22, Maturín">
+                            <label class="form-label">Ubicación de envío</label>
+                            <div class="row g-2">
+                                <div class="col-12 col-md-4">
+                                    <select id="deliveryCountry" class="form-control border border-1 p-2 bg-white">
+                                        <option value="">País</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <select id="deliveryState" class="form-control border border-1 p-2 bg-white" disabled>
+                                        <option value="">Estado (parte del país)</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-4">
+                                    <select id="deliveryCity" class="form-control border border-1 p-2 bg-white" disabled>
+                                        <option value="">Ciudad</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <input type="text" id="deliveryAddressDetail" class="form-control border border-1 p-2 bg-white" placeholder="Dirección exacta (calle, referencia, etc.)">
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -559,12 +611,16 @@
         let qrScannerInstance = null;
         let qrScannerRunning = false;
         let qrScannerLock = false;
+        let qrScannerStartInFlight = false;
+        let qrScannerPermissionGranted = false;
+        let qrScannerCameraId = null;
         const igtfTax = @json($taxes->firstWhere('name', 'IGTF'));
 
         const dollar = @json($dollarRate);
         const dollarRate = Number(dollar.rate);
         
-        const customerId = document.getElementById('customerId').dataset.rate; // Asegúrate de que esta variable esté definida correctamente
+        const authUser = @json($authUser);
+        const customerId = Number(authUser?.id || 0);
         @php
             $materialPackagesPayload = ($materialPackages ?? collect())->map(function ($package) {
                 return [
@@ -1023,15 +1079,75 @@ function updateQuantity(id, newQty) {
             } catch (error) {
             }
 
-            try {
-                await qrScannerInstance.clear();
-            } catch (error) {
-            }
-
             qrScannerRunning = false;
         }
 
+        function getPreferredRearCameraId(cameras) {
+            if (!Array.isArray(cameras) || cameras.length === 0) {
+                return null;
+            }
+
+            const rearCamera = cameras.find(camera => {
+                const label = String(camera.label || '').toLowerCase();
+                return label.includes('back') || label.includes('rear') || label.includes('trasera') || label.includes('posterior');
+            });
+
+            return rearCamera?.id || cameras[cameras.length - 1]?.id || null;
+        }
+
+        async function ensureCameraPermission() {
+            if (qrScannerPermissionGranted) {
+                return true;
+            }
+
+            if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+                alert('Tu navegador no soporta acceso a cámara en este contexto.');
+                return false;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                stream.getTracks().forEach(track => track.stop());
+                qrScannerPermissionGranted = true;
+                return true;
+            } catch (error) {
+                alert('No se pudo acceder a la cámara. Revisa permisos del navegador y vuelve a intentar.');
+                return false;
+            }
+        }
+
+        async function resolveQrCameraId() {
+            if (qrScannerCameraId) {
+                return qrScannerCameraId;
+            }
+
+            try {
+                const cameras = await Html5Qrcode.getCameras();
+                qrScannerCameraId = getPreferredRearCameraId(cameras);
+            } catch (error) {
+                qrScannerCameraId = null;
+            }
+
+            return qrScannerCameraId;
+        }
+
+        function cleanupModalVisualState() {
+            const hasVisibleModal = document.querySelectorAll('.modal.show').length > 0;
+            if (hasVisibleModal) {
+                return;
+            }
+
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        }
+
         async function startQrScanner() {
+            if (qrScannerStartInFlight) {
+                return;
+            }
+
             const readerElement = document.getElementById('qrScannerReader');
             if (!readerElement) {
                 return;
@@ -1050,11 +1166,20 @@ function updateQuantity(id, newQty) {
                 return;
             }
 
+            qrScannerStartInFlight = true;
             qrScannerLock = false;
 
             try {
+                const hasPermission = await ensureCameraPermission();
+                if (!hasPermission) {
+                    return;
+                }
+
+                const cameraId = await resolveQrCameraId();
+                const cameraConfig = cameraId || { facingMode: { ideal: 'environment' } };
+
                 await qrScannerInstance.start(
-                    { facingMode: 'environment' },
+                    cameraConfig,
                     { fps: 10, qrbox: { width: 240, height: 240 } },
                     async (decodedText) => {
                         if (qrScannerLock) {
@@ -1079,6 +1204,8 @@ function updateQuantity(id, newQty) {
                 qrScannerRunning = true;
             } catch (error) {
                 alert('No se pudo iniciar la cámara para escanear. Verifica permisos del navegador.');
+            } finally {
+                qrScannerStartInFlight = false;
             }
         }
 
@@ -1186,8 +1313,19 @@ function updateQuantity(id, newQty) {
         }
 
         document.getElementById('scanCodeBtn')?.addEventListener('click', addByScanCode);
+        document.getElementById('openQrScannerBtn')?.addEventListener('click', () => {
+            // Warm up permission on a direct user gesture to avoid flaky prompts on mobile.
+            ensureCameraPermission();
+        });
         document.getElementById('scanQrModal')?.addEventListener('shown.bs.modal', startQrScanner);
-        document.getElementById('scanQrModal')?.addEventListener('hidden.bs.modal', stopQrScanner);
+        document.getElementById('scanQrModal')?.addEventListener('hidden.bs.modal', async () => {
+            await stopQrScanner();
+
+            // On some mobile browsers the backdrop can remain mounted after quick close.
+            setTimeout(() => {
+                cleanupModalVisualState();
+            }, 60);
+        });
         document.getElementById('scanCodeInput')?.addEventListener('keydown', function (event) {
             if (event.key === 'Enter') {
                 event.preventDefault();
@@ -1442,11 +1580,96 @@ function updateQuantity(id, newQty) {
             };
         }
 
+        let deliveryCountriesLoaded = false;
+
+        function getSelectedOptionText(selectElement) {
+            const option = selectElement?.options?.[selectElement.selectedIndex];
+            return option ? String(option.text || '').trim() : '';
+        }
+
+        function resetLocationSelect(selectElement, placeholder, disabled = true) {
+            if (!selectElement) return;
+            selectElement.innerHTML = `<option value="">${placeholder}</option>`;
+            selectElement.disabled = disabled;
+        }
+
+        function fillLocationSelect(selectElement, items, placeholder) {
+            if (!selectElement) return;
+            selectElement.innerHTML = `<option value="">${placeholder}</option>`;
+            (Array.isArray(items) ? items : []).forEach(item => {
+                const option = document.createElement('option');
+                option.value = String(item.id);
+                option.textContent = item.name;
+                selectElement.appendChild(option);
+            });
+            selectElement.disabled = !items || items.length === 0;
+        }
+
+        async function fetchLocationJson(url) {
+            const response = await fetch(url, {
+                headers: { Accept: 'application/json' },
+            });
+
+            if (!response.ok) {
+                throw new Error('No se pudo cargar información de ubicación.');
+            }
+
+            return response.json();
+        }
+
+        async function ensureDeliveryCountriesLoaded() {
+            const countrySelect = document.getElementById('deliveryCountry');
+            if (!countrySelect || deliveryCountriesLoaded) {
+                return;
+            }
+
+            const countries = await fetchLocationJson('/get-countries');
+            fillLocationSelect(countrySelect, countries, 'País');
+            deliveryCountriesLoaded = true;
+        }
+
+        function buildDeliveryAddress() {
+            const countrySelect = document.getElementById('deliveryCountry');
+            const stateSelect = document.getElementById('deliveryState');
+            const citySelect = document.getElementById('deliveryCity');
+            const addressDetailInput = document.getElementById('deliveryAddressDetail');
+
+            const countryId = countrySelect?.value || '';
+            const stateId = stateSelect?.value || '';
+            const cityId = citySelect?.value || '';
+
+            if (!countryId || !stateId || !cityId) {
+                return {
+                    valid: false,
+                    message: 'Debes seleccionar país, estado y ciudad para el envío.',
+                    address: '',
+                };
+            }
+
+            const parts = [
+                getSelectedOptionText(countrySelect),
+                getSelectedOptionText(stateSelect),
+                getSelectedOptionText(citySelect),
+                (addressDetailInput?.value || '').trim(),
+            ].filter(Boolean);
+
+            return {
+                valid: true,
+                message: '',
+                address: parts.join(', '),
+            };
+        }
+
         function renderSummary() {
             const container = document.getElementById('summaryContainer');
             const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
-            const deliveryAddress = (document.getElementById('deliveryAddress')?.value || '').trim();
+            const deliveryAddressData = buildDeliveryAddress();
             const deliveryPreferenceLabel = deliveryType === 'shipping' ? 'Envío' : 'Retiro en tienda';
+            const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
+            const newCustomerName = (document.getElementById('newCustomerName')?.value || '').trim();
+            const newCustomerEmail = (document.getElementById('newCustomerEmail')?.value || '').trim();
+            const newCustomerPhone = (document.getElementById('newCustomerPhone')?.value || '').trim();
+            const newCustomerDni = (document.getElementById('newCustomerDni')?.value || '').trim();
             
             const dollar = @json($dollarRate);
             const dollarRate = Number(dollar.rate);
@@ -1483,8 +1706,24 @@ function updateQuantity(id, newQty) {
             container.appendChild(deliveryDiv);
 
             const addressDiv = document.createElement('p');
-            addressDiv.innerHTML = `<strong>Dirección:</strong> ${deliveryType === 'shipping' ? (deliveryAddress || 'No indicada') : 'Tienda'}`;
+            addressDiv.innerHTML = `<strong>Dirección:</strong> ${deliveryType === 'shipping' ? (deliveryAddressData.address || 'No indicada') : 'Tienda'}`;
             container.appendChild(addressDiv);
+
+            const customerDiv = document.createElement('p');
+            customerDiv.innerHTML = `<strong>Cliente:</strong> ${shouldCreateNewCustomer ? 'Nuevo cliente' : 'Cliente actual'}`;
+            container.appendChild(customerDiv);
+
+            if (shouldCreateNewCustomer) {
+                const customerDataDiv = document.createElement('p');
+                customerDataDiv.innerHTML = `
+                    <strong>Datos cliente nuevo:</strong><br>
+                    Nombre: ${newCustomerName || 'No indicado'}<br>
+                    Correo: ${newCustomerEmail || 'No indicado'}<br>
+                    Teléfono: ${newCustomerPhone || 'No indicado'}<br>
+                    DNI: ${newCustomerDni || 'No indicado'}
+                `;
+                container.appendChild(customerDataDiv);
+            }
 
             const statusDiv = document.createElement('div');
             const markSaleCompleted = document.getElementById('markSaleCompleted')?.checked;
@@ -1637,14 +1876,35 @@ function updateQuantity(id, newQty) {
         function updateDeliveryAddressVisibility() {
             const selectedType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
             const addressContainer = document.getElementById('deliveryAddressContainer');
-            const addressInput = document.getElementById('deliveryAddress');
+            const countrySelect = document.getElementById('deliveryCountry');
+            const stateSelect = document.getElementById('deliveryState');
+            const citySelect = document.getElementById('deliveryCity');
+            const addressDetailInput = document.getElementById('deliveryAddressDetail');
 
             if (selectedType === 'shipping') {
                 addressContainer.classList.remove('d-none');
+                ensureDeliveryCountriesLoaded().catch(() => {
+                    alert('No se pudieron cargar los países para el envío.');
+                });
             } else {
                 addressContainer.classList.add('d-none');
-                addressInput.value = '';
+                if (countrySelect) countrySelect.value = '';
+                if (stateSelect) resetLocationSelect(stateSelect, 'Estado (parte del país)', true);
+                if (citySelect) resetLocationSelect(citySelect, 'Ciudad', true);
+                if (addressDetailInput) addressDetailInput.value = '';
             }
+
+            if (!document.getElementById('step3').classList.contains('d-none')) {
+                renderSummary();
+            }
+        }
+
+        function updateCreateCustomerVisibility() {
+            const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
+            const form = document.getElementById('newCustomerForm');
+            if (!form) return;
+
+            form.classList.toggle('d-none', !shouldCreateNewCustomer);
 
             if (!document.getElementById('step3').classList.contains('d-none')) {
                 renderSummary();
@@ -1655,11 +1915,73 @@ function updateQuantity(id, newQty) {
             input.addEventListener('change', updateDeliveryAddressVisibility);
         });
 
-        document.getElementById('deliveryAddress').addEventListener('input', function () {
+        document.getElementById('deliveryAddressDetail').addEventListener('input', function () {
             if (!document.getElementById('step3').classList.contains('d-none')) {
                 renderSummary();
             }
         });
+
+        document.getElementById('deliveryCountry')?.addEventListener('change', async function () {
+            const stateSelect = document.getElementById('deliveryState');
+            const citySelect = document.getElementById('deliveryCity');
+            const countryId = this.value;
+
+            resetLocationSelect(stateSelect, 'Estado (parte del país)', true);
+            resetLocationSelect(citySelect, 'Ciudad', true);
+
+            if (!countryId) {
+                renderSummary();
+                return;
+            }
+
+            try {
+                const states = await fetchLocationJson(`/get-states/${countryId}`);
+                fillLocationSelect(stateSelect, states, 'Estado (parte del país)');
+            } catch (error) {
+                alert('No se pudieron cargar los estados del país seleccionado.');
+            }
+
+            renderSummary();
+        });
+
+        document.getElementById('deliveryState')?.addEventListener('change', async function () {
+            const citySelect = document.getElementById('deliveryCity');
+            const stateId = this.value;
+
+            resetLocationSelect(citySelect, 'Ciudad', true);
+
+            if (!stateId) {
+                renderSummary();
+                return;
+            }
+
+            try {
+                const cities = await fetchLocationJson(`/get-cities/${stateId}`);
+                fillLocationSelect(citySelect, cities, 'Ciudad');
+            } catch (error) {
+                alert('No se pudieron cargar las ciudades del estado seleccionado.');
+            }
+
+            renderSummary();
+        });
+
+        document.getElementById('deliveryCity')?.addEventListener('change', function () {
+            renderSummary();
+        });
+
+        document.querySelectorAll('input[name="create_new_customer"]').forEach(input => {
+            input.addEventListener('change', updateCreateCustomerVisibility);
+        });
+
+        ['newCustomerName', 'newCustomerEmail', 'newCustomerPhone', 'newCustomerDni'].forEach(fieldId => {
+            document.getElementById(fieldId)?.addEventListener('input', function () {
+                if (!document.getElementById('step3').classList.contains('d-none')) {
+                    renderSummary();
+                }
+            });
+        });
+
+        updateCreateCustomerVisibility();
         
         document.getElementById('confirmPurchase').addEventListener('click', function () {
     const button = this;
@@ -1672,28 +1994,58 @@ function updateQuantity(id, newQty) {
         Procesando...
     `;
 
-    const authUser = @json($authUser);
     const tenantId = Number(authUser.tenant_id);
     const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
-    const deliveryAddress = (document.getElementById('deliveryAddress')?.value || '').trim();
+    const deliveryAddressData = buildDeliveryAddress();
+    const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
+    const newCustomerName = (document.getElementById('newCustomerName')?.value || '').trim();
+    const newCustomerEmail = (document.getElementById('newCustomerEmail')?.value || '').trim();
+    const newCustomerPhone = (document.getElementById('newCustomerPhone')?.value || '').trim();
+    const newCustomerDni = (document.getElementById('newCustomerDni')?.value || '').trim();
 
-    if (deliveryType === 'shipping' && !deliveryAddress) {
-        alert('Debes indicar la dirección cuando la entrega es por envío.');
+    if (deliveryType === 'shipping' && !deliveryAddressData.valid) {
+        alert(deliveryAddressData.message || 'Debes indicar la dirección cuando la entrega es por envío.');
         button.disabled = false;
         button.innerHTML = originalText;
         return;
     }
 
+    if (shouldCreateNewCustomer) {
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!newCustomerName || !newCustomerEmail || !newCustomerPhone || !newCustomerDni) {
+            alert('Para crear un cliente nuevo debes completar nombre, correo, teléfono y DNI.');
+            button.disabled = false;
+            button.innerHTML = originalText;
+            return;
+        }
+
+        if (!emailPattern.test(newCustomerEmail)) {
+            alert('El correo del nuevo cliente no es válido.');
+            button.disabled = false;
+            button.innerHTML = originalText;
+            return;
+        }
+    }
+
     const validPayments = payments.filter(payment => Number(payment.amount || 0) > 0);
 
     const summary = {
-        customerId: customerId,
+        customerId: shouldCreateNewCustomer ? null : customerId,
         items: selectedItems,
         payments: validPayments,
         tenant_id: tenantId,
         dollarRate: dollarRate,
         delivery_type: deliveryType,
-        delivery_address: deliveryType === 'shipping' ? deliveryAddress : 'Tienda',
+        delivery_address: deliveryType === 'shipping' ? deliveryAddressData.address : 'Tienda',
+        create_new_customer: shouldCreateNewCustomer,
+        customer_new: shouldCreateNewCustomer
+            ? {
+                name: newCustomerName,
+                email: newCustomerEmail,
+                phone_number: newCustomerPhone,
+                dni: newCustomerDni,
+            }
+            : null,
         mark_delivered: document.getElementById('markDelivered')?.checked || false,
         mark_payments_paid: document.getElementById('markPaymentsPaid')?.checked || false,
         mark_sale_completed: document.getElementById('markSaleCompleted')?.checked || false,

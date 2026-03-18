@@ -12,6 +12,16 @@
 </head>
 
 <body class="g-sidenav-show bg-gray-100 p-4">
+    @php
+        $storePhone = preg_replace('/\D+/', '', (string) (($order->tenant->phone_code ?? '') . ($order->tenant->phone_number ?? '')));
+        $customerPhone = preg_replace('/\D+/', '', (string) ($order->user->phone_number ?? ''));
+        $storeWhatsappUrl = $storePhone !== ''
+            ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'tienda') . ', sobre la orden #' . $order->id . '.')
+            : null;
+        $customerWhatsappUrl = $customerPhone !== ''
+            ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', sobre la orden #' . $order->id . '.')
+            : null;
+    @endphp
     <div class="container-fluid">
         <div class="d-block d-md-none text-center">
         </div>
@@ -43,6 +53,12 @@
             <button type="button" id="public-order-back" class="btn btn-outline-secondary mb-0">Volver</button>
             <a href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
             <a href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" class="btn btn-outline-dark mb-0">Descargar nota de entrega</a>
+            @if($storeWhatsappUrl)
+                <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
+            @endif
+            @if($customerWhatsappUrl)
+                <a href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0">WhatsApp cliente</a>
+            @endif
         </div>
         
         <!-- Tabla de Detalles de la Orden -->

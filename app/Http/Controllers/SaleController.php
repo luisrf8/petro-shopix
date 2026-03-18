@@ -33,10 +33,13 @@ use Endroid\QrCode\RoundBlockSizeMode;
 use App\Models\DollarRate;
 use App\Models\Tax;
 use App\Models\Tenant;
+use App\Models\Role;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
+use Illuminate\Support\Str;
 use App\Support\WorkflowNotifier;
 use App\Support\ImageStorage;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -77,6 +80,12 @@ class SaleController extends Controller
         $validated = $request->validate([
             'delivery_type' => 'nullable|in:pickup,shipping',
             'delivery_address' => 'nullable|string|max:500',
+            'create_new_customer' => 'nullable|boolean',
+            'customer_new' => 'nullable|array',
+            'customer_new.name' => 'required_if:create_new_customer,1|string|max:255',
+            'customer_new.email' => 'required_if:create_new_customer,1|email|unique:users,email',
+            'customer_new.phone_number' => 'required_if:create_new_customer,1|string|max:20',
+            'customer_new.dni' => 'required_if:create_new_customer,1|string|max:100',
             'mark_delivered' => 'nullable|boolean',
             'mark_payments_paid' => 'nullable|boolean',
             'mark_sale_completed' => 'nullable|boolean',
@@ -84,9 +93,36 @@ class SaleController extends Controller
 
         // dd($request->all());
         // Decodificar customerId si viene como JSON string
-        $customer = is_string($request->customerId) ? json_decode($request->customerId, true) : $request->customerId;
-        $customerId = is_array($customer) ? $customer['id'] : null;
         $tenantId = $request->tenant_id;
+        $createNewCustomer = (bool) ($validated['create_new_customer'] ?? false);
+        $customerId = null;
+
+        if ($createNewCustomer) {
+            $customerPayload = $validated['customer_new'] ?? [];
+            $customerRoleId = Role::query()
+                ->whereRaw('LOWER(name) = ?', ['user'])
+                ->value('id') ?? 3;
+
+            $createdCustomer = User::create([
+                'name' => trim((string) ($customerPayload['name'] ?? 'Cliente')),
+                'email' => trim((string) ($customerPayload['email'] ?? '')),
+                'phone_number' => trim((string) ($customerPayload['phone_number'] ?? '')),
+                'dni' => trim((string) ($customerPayload['dni'] ?? '')),
+                'password' => Hash::make(Str::random(24)),
+                'tenant_id' => $tenantId,
+                'role_id' => $customerRoleId,
+                'is_active' => 1,
+            ]);
+
+            $customerId = (int) $createdCustomer->id;
+        } else {
+            $customer = is_string($request->customerId) ? json_decode($request->customerId, true) : $request->customerId;
+            $customerId = is_array($customer) ? ($customer['id'] ?? null) : null;
+            if (is_null($customerId)) {
+                $customerId = optional(auth()->user())->id;
+            }
+        }
+
         $itemsSelected = $request->items;
         $paymentDetails = $request->payments ?? [];
         $dollarRate = $request->dollarRate;
@@ -578,7 +614,7 @@ class SaleController extends Controller
 
     public function showByOrder($id)
     {
-        $order = SalesOrder::with(['user', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment', 'payments.images'])->find($id);
+        $order = SalesOrder::with(['user', 'tenant', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment', 'payments.images'])->find($id);
         // Calcular el total de la orden
         $totalOrden = $order->details->sum(function ($detalle) {
             return $detalle->amount;
@@ -603,7 +639,7 @@ class SaleController extends Controller
     }
     public function showPublicOrder($id)
     {
-        $order = SalesOrder::with(['user', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment', 'payments.images'])->find($id);
+        $order = SalesOrder::with(['user', 'tenant', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment', 'payments.images'])->find($id);
         // Calcular el total de la orden
         $totalOrden = $order->details->sum(function ($detalle) {
             return $detalle->amount;

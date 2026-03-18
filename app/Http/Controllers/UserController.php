@@ -41,16 +41,12 @@ class UserController extends Controller
             'email' => 'required|email|unique:users',
             'password' => 'required|string|min:8',
             'role_id' => 'required|exists:roles,id',
-            'dni' => 'nullable|string|max:100',
+            'phone_number' => 'required|string|max:20',
+            'dni' => 'required|string|max:100',
         ]);
 
         if ($validator->fails()) {
             return redirect()->back()->withErrors($validator)->withInput();
-        }
-
-        $dni = trim((string) $request->input('dni', ''));
-        if ($dni === '') {
-            $dni = 'USR-' . now()->format('YmdHis') . '-' . random_int(100, 999);
         }
 
         User::create([
@@ -58,7 +54,8 @@ class UserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role_id' => $request->role_id,
-            'dni' => $dni,
+            'phone_number' => $request->phone_number,
+            'dni' => trim((string) $request->dni),
         ]);
 
         // return redirect()->route('users')->with('success', 'Usuario creado correctamente.');

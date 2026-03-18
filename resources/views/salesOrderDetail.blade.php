@@ -6,6 +6,15 @@
     @php
       $roleName = strtolower((string) optional(auth()->user()->role)->name);
       $isWarehouseRole = $roleName === 'almacen';
+
+      $storePhone = preg_replace('/\D+/', '', (string) (($order->tenant->phone_code ?? '') . ($order->tenant->phone_number ?? '')));
+      $customerPhone = preg_replace('/\D+/', '', (string) ($order->user->phone_number ?? ''));
+      $storeWhatsappUrl = $storePhone !== ''
+        ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'tienda') . ', sobre la orden #' . $order->id . '.')
+        : null;
+      $customerWhatsappUrl = $customerPhone !== ''
+        ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', te escribimos sobre la orden #' . $order->id . '.')
+        : null;
     @endphp
     <div class="container-fluid">
       <h1>Detalles de la Orden Nro {{ $order->id }}</h1>
@@ -57,6 +66,12 @@
         <div class="d-flex flex-wrap gap-2">
           <a href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
           <a href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" class="btn btn-outline-dark mb-0">Descargar nota de entrega</a>
+          @if($storeWhatsappUrl)
+            <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
+          @endif
+          @if($customerWhatsappUrl)
+            <a href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0">WhatsApp cliente</a>
+          @endif
         </div>
         @if(!$isWarehouseRole)
           <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">

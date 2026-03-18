@@ -215,7 +215,10 @@
               <a class="btn btn-light text-dark landing-nav-link" href="#contacto">Contacto</a>
             </li>
             <li class="nav-item">
-              <a class="btn btn-outline-light text-dark landing-nav-link" href="/login">Iniciar sesión</a>
+              <a class="btn btn-light text-dark landing-nav-link" href="/landings">Por tienda / servicio</a>
+            </li>
+            <li class="nav-item">
+              <a class="btn btn-light text-dark landing-nav-link" href="/login">Iniciar sesión</a>
             </li>
           </ul>
         </div>
@@ -467,6 +470,6 @@
         document.getElementById('publicOrderCheckBtn')?.click();
       }
     });
-    
+
 </script>
 </html>

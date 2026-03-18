@@ -401,6 +401,8 @@ class TenantController extends Controller
             'color_primary'   => 'required|string|max:7',
             'color_secondary' => 'required|string|max:7',
             'color_accent'    => 'required|string|max:7',
+            'business_type'   => 'nullable|string|max:120',
+            'economic_activity' => 'nullable|string|max:150',
             'country'         => 'required|string|max:255',
             'state'           => 'required|string|max:255',
             'city'            => 'required|string|max:255',
@@ -424,6 +426,8 @@ class TenantController extends Controller
             'color_primary'   => $request->color_primary,
             'color_secondary' => $request->color_secondary,
             'color_accent'    => $request->color_accent,
+            'business_type'   => $request->business_type,
+            'economic_activity' => $request->economic_activity,
             'country'         => $request->country,
             'state'           => $request->state,
             'city'            => $request->city,
@@ -489,6 +493,8 @@ class TenantController extends Controller
             'color_primary'         => 'required|string|max:7',
             'color_secondary'       => 'required|string|max:7',
             'color_accent'          => 'required|string|max:7',
+            'business_type'         => 'nullable|string|max:120',
+            'economic_activity'     => 'nullable|string|max:150',
             'country'               => 'required|exists:countries,id',
             'state'                 => 'required|exists:states,id',
             'city'                  => 'required|exists:cities,id',
@@ -528,6 +534,8 @@ class TenantController extends Controller
                 'color_primary'   => $validated['color_primary'],
                 'color_secondary' => $validated['color_secondary'],
                 'color_accent'    => $validated['color_accent'],
+                'business_type'   => $validated['business_type'] ?? null,
+                'economic_activity' => $validated['economic_activity'] ?? null,
                 'country'         => $validated['country'],
                 'state'           => $validated['state'],
                 'city'            => $validated['city'],
@@ -601,6 +609,8 @@ class TenantController extends Controller
             'color_primary'   => 'nullable|string|max:7',
             'color_secondary' => 'nullable|string|max:7',
             'color_accent'    => 'nullable|string|max:7',
+            'business_type'   => 'nullable|string|max:120',
+            'economic_activity' => 'nullable|string|max:150',
             'country'         => 'nullable|string|max:255',
             'state'           => 'nullable|string|max:255',
             'city'            => 'nullable|string|max:255',
@@ -713,6 +723,8 @@ class TenantController extends Controller
             'color_primary' => $validated['color_primary'] ?? $tenant->color_primary,
             'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
             'color_accent' => $validated['color_accent'] ?? $tenant->color_accent,
+            'business_type' => $validated['business_type'] ?? $tenant->business_type,
+            'economic_activity' => $validated['economic_activity'] ?? $tenant->economic_activity,
             'country' => $validated['country'] ?? $tenant->country,
             'state' => $validated['state'] ?? $tenant->state,
             'city' => $validated['city'] ?? $tenant->city,
@@ -817,6 +829,8 @@ class TenantController extends Controller
                 'slug'            => 'nullable|string|max:255|unique:tenants,slug,' . $tenant->id,
                 'slogan'          => 'nullable|string|max:255',
                 'description'     => 'nullable|string',
+                'business_type'   => 'nullable|string|max:120',
+                'economic_activity' => 'nullable|string|max:150',
                 'logo'            => 'nullable|image|mimes:png,svg|max:2048',
                 'color_primary'   => 'nullable|string|max:7',
                 'color_secondary' => 'nullable|string|max:7',
@@ -859,8 +873,8 @@ class TenantController extends Controller
                     'new_user.email'        => 'required|email|unique:users,email',
                     'new_user.password'     => 'required|string|min:8',
                     'new_user.role_id'      => ['required', 'integer', Rule::in($assignableRoleIds)],
-                    'new_user.phone_number' => 'nullable|string|max:20',
-                    'new_user.dni'          => 'nullable|string|max:50',
+                    'new_user.phone_number' => 'required|string|max:20',
+                    'new_user.dni'          => 'required|string|max:50',
                 ]);
             }
 
@@ -888,6 +902,8 @@ class TenantController extends Controller
                 'slug'            => isset($validated['slug']) ? Str::slug($validated['slug']) : $tenant->slug,
                 'slogan'          => $validated['slogan'] ?? $tenant->slogan,
                 'description'     => $validated['description'] ?? $tenant->description,
+                'business_type'   => $validated['business_type'] ?? $tenant->business_type,
+                'economic_activity'=> $validated['economic_activity'] ?? $tenant->economic_activity,
                 'color_primary'   => $validated['color_primary'] ?? $tenant->color_primary,
                 'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
                 'color_accent'    => $validated['color_accent'] ?? $tenant->color_accent,
@@ -912,8 +928,8 @@ class TenantController extends Controller
                     'password'    => Hash::make($newUserValidated['new_user']['password']),
                     'tenant_id'   => $tenant->id,
                     'role_id'     => $newUserValidated['new_user']['role_id'],
-                    'phone_number'=> $newUserValidated['new_user']['phone_number'] ?? null,
-                    'dni'         => $newUserValidated['new_user']['dni'] ?? null,
+                    'phone_number'=> $newUserValidated['new_user']['phone_number'],
+                    'dni'         => $newUserValidated['new_user']['dni'],
                     'is_active'   => 1,
                 ]);
             }
@@ -1107,8 +1123,8 @@ class TenantController extends Controller
                 'payments' => 'required|array|min:1',
                 'payments.*.method_id' => 'required|integer|exists:payment_methods,id',
                 'payments.*.amount' => 'required|numeric|min:0.01',
-                'payments.*.reference' => 'nullable|string|max:255',
-                'payments.*.reference_image_data' => 'nullable|string',
+                'payments.*.reference' => 'required|string|max:255',
+                'payments.*.reference_image_data' => 'required|string',
                 'payments.*.reference_image_mime' => 'nullable|string|max:100',
             ]);
 
@@ -1117,6 +1133,26 @@ class TenantController extends Controller
                     'success' => false,
                     'message' => 'La dirección es obligatoria para envío.',
                 ], 422);
+            }
+
+            foreach ($validated['payments'] as $paymentIndex => $paymentData) {
+                $reference = trim((string) ($paymentData['reference'] ?? ''));
+                $referenceImageData = trim((string) ($paymentData['reference_image_data'] ?? ''));
+
+                if ($reference === '') {
+                    throw new \RuntimeException('La referencia del pago #' . ($paymentIndex + 1) . ' es obligatoria.');
+                }
+
+                if ($referenceImageData === '') {
+                    throw new \RuntimeException('La imagen de comprobante del pago #' . ($paymentIndex + 1) . ' es obligatoria.');
+                }
+
+                if (preg_match('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', $referenceImageData) !== 1) {
+                    throw new \RuntimeException('El comprobante del pago #' . ($paymentIndex + 1) . ' debe ser una imagen valida.');
+                }
+
+                $validated['payments'][$paymentIndex]['reference'] = $reference;
+                $validated['payments'][$paymentIndex]['reference_image_data'] = $referenceImageData;
             }
 
             $address = $validated['delivery_type'] === 'shipping'

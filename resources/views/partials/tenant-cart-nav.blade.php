@@ -66,7 +66,7 @@
 <li class="nav-item d-none" id="tenant-session-logout-wrap">
   <button type="button"
           id="tenant-session-logout"
-          class="btn btn-outline-light text-dark landing-nav-link d-inline-flex align-items-center gap-2">
+          class="btn btn-light text-dark landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-box-arrow-right"></i>
     <span>Cerrar sesión</span>
   </button>

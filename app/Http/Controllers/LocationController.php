@@ -3,11 +3,18 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\Country;
 use App\Models\State;
 use App\Models\City;
 
 class LocationController extends Controller
 {
+    public function getCountries()
+    {
+        $countries = Country::orderBy('name')->get();
+        return response()->json($countries);
+    }
+
     public function getStates($country_id)
     {
         $states = State::where('country_id', $country_id)->orderBy('name')->get();

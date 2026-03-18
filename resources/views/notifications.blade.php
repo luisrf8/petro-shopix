@@ -102,23 +102,45 @@
     }
 
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    const pusherKey = @json(env('PUSHER_APP_KEY'));
+    const pusherKey = @json(env('REVERB_APP_KEY', env('PUSHER_APP_KEY')));
     if (!pusherKey) return;
 
-    const pusher = new Pusher(pusherKey, {
-      cluster: @json(env('PUSHER_APP_CLUSTER')),
-      wsHost: @json(env('PUSHER_HOST', '127.0.0.1')),
-      wsPort: Number(@json(env('PUSHER_PORT', 6001))),
-      wssPort: Number(@json(env('PUSHER_PORT', 6001))),
-      forceTLS: @json(env('PUSHER_SCHEME', 'http')) === 'https',
+    const configuredHost = @json(env('REVERB_HOST', env('PUSHER_HOST')));
+    const configuredPort = Number(@json(env('REVERB_PORT', env('PUSHER_PORT', 8080))));
+    const configuredScheme = @json(env('REVERB_SCHEME', env('PUSHER_SCHEME')));
+    const configuredCluster = @json(env('PUSHER_APP_CLUSTER'));
+
+    const browserHost = window.location.hostname;
+    const wsHost = !configuredHost || configuredHost === '127.0.0.1' || configuredHost === '0.0.0.0'
+      ? browserHost
+      : configuredHost;
+
+    const forceTLS = configuredScheme
+      ? configuredScheme === 'https'
+      : window.location.protocol === 'https:';
+
+    const wsPort = configuredPort || (forceTLS ? 443 : 80);
+
+    const pusherOptions = {
+      wsHost,
+      wsPort,
+      wssPort: wsPort,
+      forceTLS,
       enabledTransports: ['ws', 'wss'],
+      disableStats: true,
       authEndpoint: '/broadcasting/auth',
       auth: {
         headers: {
           'X-CSRF-TOKEN': csrf,
         },
       },
-    });
+    };
+
+    if (configuredCluster) {
+      pusherOptions.cluster = configuredCluster;
+    }
+
+    const pusher = new Pusher(pusherKey, pusherOptions);
 
     const channel = pusher.subscribe(`private-App.Models.User.${userId}`);
     const handleIncoming = (notification) => appendNotification(notification);

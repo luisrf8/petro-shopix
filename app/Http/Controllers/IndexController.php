@@ -13,10 +13,14 @@ use App\Models\PurchaseOrder;
 use App\Models\DollarRate;
 use App\Models\Tenant;
 use App\Models\Plan;
+use App\Models\Country;
+use App\Models\State;
+use App\Models\City;
 use Carbon\Carbon;
 use App\Models\Log;
 use App\Models\SalesOrderDetail;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class IndexController extends Controller
 {
@@ -45,6 +49,141 @@ class IndexController extends Controller
             ->get();
     
         return view('ecommerce', compact('categories', 'productItems', 'tenants', 'plans'));
+    }
+
+    public function landingDirectory()
+    {
+        $directoryData = $this->buildTenantDirectoryData();
+
+        return view('ecommerceDirectory', [
+            'tenantsDirectory' => $directoryData['tenantsDirectory'],
+            'tenantFilters' => $directoryData['tenantFilters'],
+        ]);
+    }
+
+    private function buildTenantDirectoryData(): array
+    {
+        $tenants = Tenant::with('categories:id,name,tenant_id')->get();
+        $countryMap = Country::pluck('name', 'id')->mapWithKeys(fn ($name, $id) => [(string) $id => (string) $name]);
+        $stateMap = State::pluck('name', 'id')->mapWithKeys(fn ($name, $id) => [(string) $id => (string) $name]);
+        $cityMap = City::pluck('name', 'id')->mapWithKeys(fn ($name, $id) => [(string) $id => (string) $name]);
+
+        $hasBusinessType = Schema::hasColumn('tenants', 'business_type');
+        $hasEconomicActivity = Schema::hasColumn('tenants', 'economic_activity');
+
+        $tenantsDirectory = $tenants->map(function (Tenant $tenant) use ($countryMap, $stateMap, $cityMap, $hasBusinessType, $hasEconomicActivity) {
+            $countryName = $this->resolveLocationName($tenant->country, $countryMap);
+            $stateName = $this->resolveLocationName($tenant->state, $stateMap);
+            $cityName = $this->resolveLocationName($tenant->city, $cityMap);
+
+            $businessType = $hasBusinessType ? trim((string) ($tenant->business_type ?? '')) : '';
+            $economicActivity = $hasEconomicActivity ? trim((string) ($tenant->economic_activity ?? '')) : '';
+
+            if ($businessType === '') {
+                $businessType = $this->inferTenantType($tenant);
+            }
+
+            if ($economicActivity === '') {
+                $economicActivity = $this->inferTenantActivity($tenant);
+            }
+
+            $tenant->directory_country = $countryName;
+            $tenant->directory_state = $stateName;
+            $tenant->directory_city = $cityName;
+            $tenant->directory_region = $this->resolveVenezuelaRegion($stateName, $countryName);
+            $tenant->directory_type = $businessType;
+            $tenant->directory_activity = $economicActivity;
+
+            return $tenant;
+        });
+
+        $tenantFilters = [
+            'types' => $tenantsDirectory->pluck('directory_type')->filter()->unique()->sort()->values(),
+            'activities' => $tenantsDirectory->pluck('directory_activity')->filter()->unique()->sort()->values(),
+            'regions' => $tenantsDirectory->pluck('directory_region')->filter()->unique()->sort()->values(),
+            'states' => $tenantsDirectory->pluck('directory_state')->filter()->unique()->sort()->values(),
+            'cities' => $tenantsDirectory->pluck('directory_city')->filter()->unique()->sort()->values(),
+        ];
+
+        return [
+            'tenantsDirectory' => $tenantsDirectory,
+            'tenantFilters' => $tenantFilters,
+        ];
+    }
+
+    private function resolveLocationName($value, $lookup)
+    {
+        if (is_null($value)) {
+            return '';
+        }
+
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return '';
+        }
+
+        if (preg_match('/^\d+$/', $raw) === 1 && isset($lookup[$raw])) {
+            return trim((string) $lookup[$raw]);
+        }
+
+        return $raw;
+    }
+
+    private function inferTenantType(Tenant $tenant): string
+    {
+        $name = strtolower((string) $tenant->name);
+        $description = strtolower((string) ($tenant->description ?? ''));
+        $categoryNames = strtolower((string) $tenant->categories->pluck('name')->implode(' '));
+        $haystack = trim($name . ' ' . $description . ' ' . $categoryNames);
+
+        if ($haystack === '') {
+            return 'Tienda';
+        }
+
+        if (preg_match('/servicio|consultor|agencia|taller|reparaci[oó]n|sal[oó]n|spa|barber|estudio/', $haystack) === 1) {
+            return 'Servicio';
+        }
+
+        return 'Tienda';
+    }
+
+    private function inferTenantActivity(Tenant $tenant): string
+    {
+        $firstCategory = trim((string) optional($tenant->categories->first())->name);
+        if ($firstCategory !== '') {
+            return $firstCategory;
+        }
+
+        return 'General';
+    }
+
+    private function resolveVenezuelaRegion(string $stateName, string $countryName): string
+    {
+        $country = strtolower(trim($countryName));
+        $state = strtolower(trim($stateName));
+
+        if ($state === '') {
+            return $country === 'venezuela' ? 'Sin región' : 'Internacional';
+        }
+
+        $regions = [
+            'Capital' => ['distrito capital', 'miranda', 'la guaira', 'vargas'],
+            'Central' => ['aragua', 'carabobo', 'cojedes'],
+            'Centro-Occidente' => ['lara', 'falcón', 'falcon', 'yaracuy'],
+            'Occidente' => ['zulia', 'trujillo', 'mérida', 'merida', 'táchira', 'tachira'],
+            'Los Llanos' => ['barinas', 'portuguesa', 'guárico', 'guarico', 'apure'],
+            'Oriente' => ['anzoátegui', 'anzoategui', 'monagas', 'sucre', 'nueva esparta'],
+            'Guayana' => ['bolívar', 'bolivar', 'amazonas', 'delta amacuro'],
+            'Insular' => ['nueva esparta'],
+        ];
+
+        foreach ($regions as $region => $states) {
+            if (in_array($state, $states, true)) {
+                return $region;
+            }
+        }
+
+        return $country === 'venezuela' ? 'Otras zonas' : 'Internacional';
     }
     public function indexLog()
     {

@@ -140,6 +140,14 @@
             <input type="email" class="form-control border border-1 p-2" id="userEmail" name="email" placeholder="Ingrese el correo electrónico" required>
           </div>
           <div class="mb-3">
+            <label for="userPhoneNumber" class="form-label">Teléfono</label>
+            <input type="text" class="form-control border border-1 p-2" id="userPhoneNumber" name="phone_number" placeholder="Ingrese el teléfono" required>
+          </div>
+          <div class="mb-3">
+            <label for="userDni" class="form-label">DNI</label>
+            <input type="text" class="form-control border border-1 p-2" id="userDni" name="dni" placeholder="Ingrese el DNI" required>
+          </div>
+          <div class="mb-3">
             <label for="userPassword" class="form-label">Contraseña</label>
             <input type="password" class="form-control border border-1 p-2" id="userPassword" name="password" placeholder="Ingrese la contraseña" required>
           </div>

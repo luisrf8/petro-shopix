@@ -36,11 +36,13 @@ Route::middleware('guest')->group(function () {
 
 // PÁGINAS PÚBLICAS
 Route::get('/', [IndexController::class, 'landing'])->name('landing');
+Route::get('/landings', [IndexController::class, 'landingDirectory'])->name('landing.directory');
 Route::get('/index', fn() => view('index'));
 Route::get('/storage/gdrive/{fileId}', [GoogleDriveController::class, 'streamImage'])->where('fileId', '.*')->name('storage.gdrive.proxy');
 Route::get('/publicOrder/{id}', [SaleController::class, 'showPublicOrder']);
 Route::get('/publicOrder/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->name('public.order.pdf');
 Route::get('/create-tenant-user', [TenantController::class, 'createIndexUser'])->name('createTenantUser');
+Route::get('/get-countries', [LocationController::class, 'getCountries']);
 Route::get('/get-states/{country}', [LocationController::class, 'getStates']);
 Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
 Route::post('/tenant-ai-image', [TenantController::class, 'generateTenantImage'])->name('tenant.ai-image');
