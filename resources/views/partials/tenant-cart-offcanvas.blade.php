@@ -1,38 +1,409 @@
+@php
+  $tenantThemeModel = $tenant ?? null;
+
+  $normalizeTenantHex = function ($value, $fallback) {
+    $candidate = strtoupper(trim((string) $value));
+    if (preg_match('/^#[0-9A-F]{6}$/', $candidate)) {
+      return $candidate;
+    }
+
+    return strtoupper($fallback);
+  };
+
+  $toRgb = function ($hex) {
+    $clean = ltrim($hex, '#');
+    return [
+      hexdec(substr($clean, 0, 2)),
+      hexdec(substr($clean, 2, 2)),
+      hexdec(substr($clean, 4, 2)),
+    ];
+  };
+
+  $tenantColorPrimary = $normalizeTenantHex($tenantThemeModel->color_primary ?? null, '#0F172A');
+  $tenantColorSecondary = $normalizeTenantHex($tenantThemeModel->color_secondary ?? null, '#334155');
+  $tenantColorAccent = $normalizeTenantHex($tenantThemeModel->color_accent ?? null, '#38BDF8');
+
+  [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
+  [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
+  [$tenantAccentR, $tenantAccentG, $tenantAccentB] = $toRgb($tenantColorAccent);
+@endphp
+
 <style>
+  :root {
+    --tenant-primary: {{ $tenantColorPrimary }};
+    --tenant-secondary: {{ $tenantColorSecondary }};
+    --tenant-accent: {{ $tenantColorAccent }};
+    --tenant-primary-rgb: {{ $tenantPrimaryR }}, {{ $tenantPrimaryG }}, {{ $tenantPrimaryB }};
+    --tenant-secondary-rgb: {{ $tenantSecondaryR }}, {{ $tenantSecondaryG }}, {{ $tenantSecondaryB }};
+    --tenant-accent-rgb: {{ $tenantAccentR }}, {{ $tenantAccentG }}, {{ $tenantAccentB }};
+  }
+
   #tenantCartOffcanvas {
     --bs-offcanvas-zindex: 2000;
     z-index: 2000;
+    width: min(470px, 100vw);
+    background: #f8fafc;
+    border-left: 1px solid rgba(var(--tenant-accent-rgb), 0.38);
   }
 
   .offcanvas-backdrop {
     --bs-backdrop-zindex: 1990;
     z-index: 1990;
   }
+
+  #tenantCartOffcanvas .offcanvas-header {
+    background: #ffffff;
+    border-bottom: 1px solid #e5e7eb !important;
+    padding: 0.9rem 1rem;
+  }
+
+  #tenantCartOffcanvas .offcanvas-title {
+    font-weight: 700;
+    color: var(--tenant-primary);
+    letter-spacing: 0.01em;
+  }
+
+  #tenantCartOffcanvas .offcanvas-body {
+    padding: 0.95rem;
+    gap: 0.75rem;
+  }
+
+  .tenant-cart-plan-alert {
+    border: 1px solid rgba(var(--tenant-accent-rgb), 0.45);
+    border-radius: 12px;
+    background: #ffffff;
+    color: var(--tenant-primary);
+    margin-bottom: 0;
+    font-size: 0.9rem;
+  }
+
+  #tenant-cart-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    margin-bottom: 0 !important;
+  }
+
+  .tenant-cart-empty {
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #64748b;
+    text-align: center;
+    padding: 0.9rem;
+    margin: 0;
+  }
+
+  .tenant-cart-item-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 0.75rem;
+    background: #ffffff;
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
+  }
+
+  .tenant-cart-item-name {
+    color: var(--tenant-primary);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .tenant-cart-item-variant {
+    color: #64748b;
+    font-size: 0.82rem;
+  }
+
+  .tenant-cart-item-price {
+    color: #334155;
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+
+  .tenant-cart-remove-btn {
+    border-radius: 10px;
+  }
+
+  .tenant-cart-qty-btn {
+    border-radius: 10px;
+    min-width: 34px;
+  }
+
+  .tenant-cart-qty {
+    min-width: 18px;
+    text-align: center;
+  }
+
+  .tenant-cart-section-footer {
+    border-top: none !important;
+    background: #ffffff;
+    border: 1px solid rgba(var(--tenant-accent-rgb), 0.38);
+    border-radius: 16px;
+    padding: 0.9rem;
+    margin-top: auto;
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.06);
+  }
+
+  .tenant-cart-subtotal-label {
+    color: #475569;
+    font-weight: 600;
+  }
+
+  .tenant-cart-subtotal-amount {
+    color: var(--tenant-primary);
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+
+  #tenant-checkout-form .form-label {
+    color: #475569;
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+
+  #tenant-checkout-form .form-control,
+  #tenant-checkout-form .form-select {
+    border-radius: 12px;
+    border-color: #cbd5e1;
+    font-size: 0.92rem;
+  }
+
+  #tenant-checkout-form .form-check-input {
+    border-color: #94a3b8;
+  }
+
+  .tenant-cart-checkout-btn {
+    border-radius: 12px;
+    font-weight: 600;
+    padding: 0.65rem 0.95rem;
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    border-color: var(--tenant-primary);
+    box-shadow: 0 10px 20px rgba(var(--tenant-primary-rgb), 0.25);
+  }
+
+  .tenant-cart-checkout-btn:hover,
+  .tenant-cart-checkout-btn:focus {
+    background: linear-gradient(135deg, var(--tenant-secondary), var(--tenant-primary));
+    border-color: var(--tenant-secondary);
+  }
+
+  #tenantProCheckoutModal .modal-dialog {
+    max-width: min(980px, 95vw);
+  }
+
+  #tenantProCheckoutModal .modal-content {
+    border: 1px solid #dbe3ee;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
+  }
+
+  #tenantProCheckoutModal .modal-header {
+    background: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  #tenantProCheckoutModal .modal-title {
+    font-weight: 700;
+    color: var(--tenant-primary);
+  }
+
+  #tenantProCheckoutModal .modal-body {
+    background: #f8fafc;
+    padding: 1rem;
+  }
+
+  #tenantProCheckoutModal .modal-footer {
+    background: #ffffff;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .tenant-pro-auth-wrap,
+  #tenant-pro-checkout-section {
+    border: 1px solid rgba(var(--tenant-accent-rgb), 0.38);
+    border-radius: 16px;
+    background: #ffffff;
+    padding: 0.85rem;
+  }
+
+  #tenantProCheckoutModal .nav-tabs {
+    border-bottom: 1px solid #dbe3ee;
+    gap: 0.35rem;
+  }
+
+  #tenantProCheckoutModal .nav-tabs .nav-link {
+    border: 1px solid transparent;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    color: #475569;
+    font-weight: 600;
+    padding: 0.45rem 0.8rem;
+  }
+
+  #tenantProCheckoutModal .nav-tabs .nav-link.active {
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    color: #ffffff;
+    border-color: var(--tenant-primary);
+  }
+
+  #tenantProCheckoutModal .btn-dark {
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    border-color: var(--tenant-primary);
+  }
+
+  #tenantProCheckoutModal .btn-dark:hover,
+  #tenantProCheckoutModal .btn-dark:focus {
+    background: linear-gradient(135deg, var(--tenant-secondary), var(--tenant-primary));
+    border-color: var(--tenant-secondary);
+  }
+
+  #tenantProCheckoutModal .btn-outline-dark {
+    color: var(--tenant-primary);
+    border-color: rgba(var(--tenant-primary-rgb), 0.45);
+  }
+
+  #tenantProCheckoutModal .btn-outline-dark:hover,
+  #tenantProCheckoutModal .btn-outline-dark:focus {
+    color: #fff;
+    background: var(--tenant-primary);
+    border-color: var(--tenant-primary);
+  }
+
+  #tenantAuthTabsContent,
+  #tenantPublicAuthTabsContent {
+    border-color: #dbe3ee !important;
+    border-radius: 0 0 12px 12px !important;
+    background: #f8fafc;
+  }
+
+  #tenantProCheckoutModal .form-control,
+  #tenantProCheckoutModal .form-select {
+    border-radius: 12px;
+    border-color: #cbd5e1;
+    font-size: 0.92rem;
+  }
+
+  #tenantProCheckoutModal .form-control:focus,
+  #tenantProCheckoutModal .form-select:focus,
+  #tenant-checkout-form .form-control:focus,
+  #tenant-checkout-form .form-select:focus {
+    border-color: rgba(var(--tenant-accent-rgb), 0.75);
+    box-shadow: 0 0 0 0.2rem rgba(var(--tenant-accent-rgb), 0.18);
+  }
+
+  #tenant-pro-logged-user {
+    border-radius: 12px;
+    border: 1px solid #bbf7d0;
+    background: #f0fdf4;
+    color: #166534;
+  }
+
+  .tenant-pro-payment-row {
+    border: 1px solid rgba(var(--tenant-accent-rgb), 0.35) !important;
+    border-radius: 14px !important;
+    background: #f8fafc;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+
+  .pro-payment-method-details {
+    border-color: #d1d5db !important;
+    border-radius: 12px !important;
+    background: #ffffff !important;
+    color: #334155;
+  }
+
+  .pro-remove-payment-row {
+    border-radius: 10px;
+  }
+
+  .tenant-pro-summary {
+    margin-top: 0.85rem;
+    border: 1px solid rgba(var(--tenant-accent-rgb), 0.35);
+    border-radius: 14px;
+    background: rgba(var(--tenant-accent-rgb), 0.08);
+    padding: 0.75rem;
+  }
+
+  .tenant-pro-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+    color: #334155;
+    font-size: 0.92rem;
+  }
+
+  .tenant-pro-summary-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .tenant-pro-summary .highlight {
+    color: var(--tenant-primary);
+    font-weight: 700;
+  }
+
+  .tenant-pro-note {
+    color: #64748b;
+    font-size: 0.82rem;
+    margin-top: 0.45rem;
+  }
+
+  #tenant-pro-submit-order {
+    border-radius: 12px;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    border-color: var(--tenant-primary);
+  }
+
+  #tenant-pro-submit-order:hover,
+  #tenant-pro-submit-order:focus {
+    background: linear-gradient(135deg, var(--tenant-secondary), var(--tenant-primary));
+    border-color: var(--tenant-secondary);
+  }
+
+  @media (max-width: 575.98px) {
+    #tenantCartOffcanvas .offcanvas-body {
+      padding: 0.75rem;
+    }
+
+    .tenant-cart-section-footer {
+      padding: 0.75rem;
+    }
+
+    #tenantProCheckoutModal .modal-body {
+      padding: 0.75rem;
+    }
+
+    .tenant-pro-auth-wrap,
+    #tenant-pro-checkout-section {
+      padding: 0.75rem;
+    }
+  }
 </style>
 
 <div class="offcanvas offcanvas-end" tabindex="-1" id="tenantCartOffcanvas" aria-labelledby="tenantCartOffcanvasLabel">
-  <div class="offcanvas-header border-bottom">
+  <div class="offcanvas-header border-bottom tenant-cart-header">
     <h5 class="offcanvas-title" id="tenantCartOffcanvasLabel">Tu carrito</h5>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
 
-  <div class="offcanvas-body d-flex flex-column">
+  <div class="offcanvas-body d-flex flex-column tenant-cart-body">
     @if(!$cartEnabled)
-      <div id="tenant-cart-disabled-alert" class="alert alert-warning" role="alert">
+      <div id="tenant-cart-disabled-alert" class="alert alert-warning tenant-cart-plan-alert" role="alert">
         Tu tienda está en plan básico. Puedes enviar tu pedido por WhatsApp.
       </div>
     @else
-      <div id="tenant-cart-disabled-alert" class="alert alert-info" role="alert">
+      <div id="tenant-cart-disabled-alert" class="alert alert-info tenant-cart-plan-alert" role="alert">
         Plan Pro activo: puedes completar el checkout con métodos de pago y tipo de entrega.
       </div>
     @endif
 
     <div id="tenant-cart-items" class="mb-3"></div>
 
-    <div class="border-top pt-3 mt-auto">
+    <div class="border-top pt-3 mt-auto tenant-cart-section-footer">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <span class="fw-semibold">Subtotal</span>
-        <span class="fw-bold" id="tenant-cart-subtotal">0.00 $</span>
+        <span class="fw-semibold tenant-cart-subtotal-label">Subtotal</span>
+        <span class="fw-bold tenant-cart-subtotal-amount" id="tenant-cart-subtotal">0.00 $</span>
       </div>
 
       <div id="tenant-checkout-form">
@@ -74,7 +445,7 @@
         </div>
         @endif
 
-        <button id="tenant-cart-checkout" type="button" class="btn btn-success w-100">
+        <button id="tenant-cart-checkout" type="button" class="btn btn-success w-100 tenant-cart-checkout-btn">
           @if($cartEnabled)
             <i class="bi bi-bag-check me-2"></i>Continuar checkout
           @else
@@ -88,13 +459,13 @@
 
 <div class="modal fade" id="tenantProCheckoutModal" tabindex="-1" aria-labelledby="tenantProCheckoutModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
+    <div class="modal-content tenant-pro-modal-content">
+      <div class="modal-header tenant-pro-modal-header">
         <h5 class="modal-title" id="tenantProCheckoutModalLabel">Checkout Pro</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body">
-        <div id="tenant-pro-auth-section" class="mb-4">
+      <div class="modal-body tenant-pro-modal-body">
+        <div id="tenant-pro-auth-section" class="mb-4 tenant-pro-auth-wrap">
           <ul class="nav nav-tabs" id="tenantAuthTabs" role="tablist">
             <li class="nav-item" role="presentation">
               <button class="nav-link active" id="tenant-login-tab" data-bs-toggle="tab" data-bs-target="#tenant-login-panel" type="button" role="tab">Iniciar sesión</button>
@@ -189,34 +560,36 @@
           <div id="tenant-pro-payment-rows" class="d-flex flex-column gap-2"></div>
           <button type="button" id="tenant-pro-add-payment-row" class="btn btn-outline-dark btn-sm mt-2">+ Agregar pago</button>
 
-          <div class="mt-3 d-flex justify-content-between">
-            <strong>Total carrito</strong>
-            <strong id="tenant-pro-total-amount">0.00 $</strong>
+          <div class="tenant-pro-summary mt-3">
+            <div class="tenant-pro-summary-row">
+              <strong>Total carrito</strong>
+              <strong class="highlight" id="tenant-pro-total-amount">0.00 $</strong>
+            </div>
+            <div class="tenant-pro-summary-row">
+              <span class="text-muted">Total carrito (Bs)</span>
+              <span id="tenant-pro-total-amount-bs" class="text-muted">0.00 Bs</span>
+            </div>
+            <div class="tenant-pro-summary-row mt-2">
+              <span class="fw-semibold">Pagado</span>
+              <span id="tenant-pro-paid-amount">0.00 $</span>
+            </div>
+            <div class="tenant-pro-summary-row">
+              <span class="text-muted">Pagado (Bs)</span>
+              <span id="tenant-pro-paid-amount-bs" class="text-muted">0.00 Bs</span>
+            </div>
+            <div class="tenant-pro-summary-row mt-2">
+              <strong>Restante</strong>
+              <strong class="highlight" id="tenant-pro-remaining-amount">0.00 $</strong>
+            </div>
+            <div class="tenant-pro-summary-row">
+              <span class="text-muted">Restante (Bs)</span>
+              <span id="tenant-pro-remaining-amount-bs" class="text-muted">0.00 Bs</span>
+            </div>
+            <div class="tenant-pro-note">Tasa referencial: <span id="tenant-pro-dollar-rate">0.00</span> Bs por USD</div>
           </div>
-          <div class="mt-1 d-flex justify-content-between">
-            <span class="text-muted">Total carrito (Bs)</span>
-            <span id="tenant-pro-total-amount-bs" class="text-muted">0.00 Bs</span>
-          </div>
-          <div class="mt-3 d-flex justify-content-between">
-            <span class="fw-semibold">Pagado</span>
-            <span id="tenant-pro-paid-amount">0.00 $</span>
-          </div>
-          <div class="mt-1 d-flex justify-content-between">
-            <span class="text-muted">Pagado (Bs)</span>
-            <span id="tenant-pro-paid-amount-bs" class="text-muted">0.00 Bs</span>
-          </div>
-          <div class="mt-3 d-flex justify-content-between">
-            <strong>Restante</strong>
-            <strong id="tenant-pro-remaining-amount">0.00 $</strong>
-          </div>
-          <div class="mt-1 d-flex justify-content-between">
-            <span class="text-muted">Restante (Bs)</span>
-            <span id="tenant-pro-remaining-amount-bs" class="text-muted">0.00 Bs</span>
-          </div>
-          <div class="small text-muted mt-1">Tasa referencial: <span id="tenant-pro-dollar-rate">0.00</span> Bs por USD</div>
         </div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer tenant-pro-modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
         <button type="button" class="btn btn-success" id="tenant-pro-submit-order" disabled>Confirmar pedido</button>
       </div>
@@ -530,28 +903,28 @@
       checkoutButton.disabled = cart.length === 0;
 
       if (cart.length === 0) {
-        cartItemsElement.innerHTML = '<p class="text-muted">No hay productos en el carrito.</p>';
+        cartItemsElement.innerHTML = '<p class="tenant-cart-empty">No hay productos en el carrito.</p>';
         checkoutButton.disabled = true;
         return;
       }
 
       cartItemsElement.innerHTML = cart.map((item, index) => {
         return `
-          <div class="border rounded-3 p-2 mb-2">
+          <div class="tenant-cart-item-card">
             <div class="d-flex justify-content-between gap-2 align-items-start">
               <div>
-                <div class="fw-semibold">${item.productName}</div>
-                <div class="small text-muted">Variante: ${item.variantSize}</div>
-                <div class="small">${Number(item.price).toFixed(2)} $ c/u</div>
+                <div class="tenant-cart-item-name">${item.productName}</div>
+                <div class="tenant-cart-item-variant">Variante: ${item.variantSize}</div>
+                <div class="tenant-cart-item-price">${Number(item.price).toFixed(2)} $ c/u</div>
               </div>
-              <button type="button" class="btn btn-sm btn-outline-danger" data-remove-index="${index}">
+              <button type="button" class="btn btn-sm btn-outline-danger tenant-cart-remove-btn" data-remove-index="${index}">
                 <i class="bi bi-trash"></i>
               </button>
             </div>
             <div class="d-flex align-items-center justify-content-end gap-2 mt-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary" data-decrease-index="${index}">-</button>
-              <span class="fw-semibold">${item.qty}</span>
-              <button type="button" class="btn btn-sm btn-outline-secondary" data-increase-index="${index}">+</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary tenant-cart-qty-btn" data-decrease-index="${index}">-</button>
+              <span class="fw-semibold tenant-cart-qty">${item.qty}</span>
+              <button type="button" class="btn btn-sm btn-outline-secondary tenant-cart-qty-btn" data-increase-index="${index}">+</button>
             </div>
           </div>
         `;
@@ -705,7 +1078,7 @@
       `).join('');
 
       return `
-        <div class="border rounded p-2" data-pro-payment-row="${rowId}">
+        <div class="border rounded p-2 tenant-pro-payment-row" data-pro-payment-row="${rowId}">
           <div class="row g-2">
             <div class="col-12 col-md-4">
               <label class="form-label small mb-1">Método</label>
@@ -720,7 +1093,7 @@
               <input type="text" class="form-control pro-payment-reference" placeholder="Obligatoria" required>
             </div>
             <div class="col-2 col-md-1 d-flex align-items-end">
-              <button type="button" class="btn btn-outline-danger btn-sm w-100 pro-remove-payment-row">X</button>
+              <button type="button" class="btn btn-outline-danger btn-sm w-100 pro-remove-payment-row" aria-label="Eliminar pago"><i class="bi bi-x-lg"></i></button>
             </div>
             <div class="col-12">
               <div class="small border rounded p-2 bg-light pro-payment-method-details"></div>
@@ -935,7 +1308,7 @@
           }
         }
 
-        paymentRowsContainer.innerHTML = '<p class="text-muted mb-0">Inicia sesión para consultar tu cuenta o agrega productos al carrito para continuar con el checkout.</p>';
+        paymentRowsContainer.innerHTML = '<p class="tenant-cart-empty">Inicia sesión para consultar tu cuenta o agrega productos al carrito para continuar con el checkout.</p>';
         totalAmountElement.textContent = '0.00 $';
         submitOrderButton.disabled = true;
 

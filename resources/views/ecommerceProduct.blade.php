@@ -9,38 +9,177 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 
+  @php
+    $normalizeTenantHex = function ($value, $fallback) {
+      $candidate = strtoupper(trim((string) $value));
+      if (preg_match('/^#[0-9A-F]{6}$/', $candidate)) {
+        return $candidate;
+      }
+
+      return strtoupper($fallback);
+    };
+
+    $toRgb = function ($hex) {
+      $clean = ltrim($hex, '#');
+      return [
+        hexdec(substr($clean, 0, 2)),
+        hexdec(substr($clean, 2, 2)),
+        hexdec(substr($clean, 4, 2)),
+      ];
+    };
+
+    $tenantColorPrimary = $normalizeTenantHex($tenant->color_primary ?? null, '#0F172A');
+    $tenantColorSecondary = $normalizeTenantHex($tenant->color_secondary ?? null, '#334155');
+    $tenantColorAccent = $normalizeTenantHex($tenant->color_accent ?? null, '#38BDF8');
+
+    [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
+    [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
+    [$tenantAccentR, $tenantAccentG, $tenantAccentB] = $toRgb($tenantColorAccent);
+  @endphp
+
   <style>
+    :root {
+      --tenant-primary: {{ $tenantColorPrimary }};
+      --tenant-secondary: {{ $tenantColorSecondary }};
+      --tenant-accent: {{ $tenantColorAccent }};
+      --tenant-primary-rgb: {{ $tenantPrimaryR }}, {{ $tenantPrimaryG }}, {{ $tenantPrimaryB }};
+      --tenant-secondary-rgb: {{ $tenantSecondaryR }}, {{ $tenantSecondaryG }}, {{ $tenantSecondaryB }};
+      --tenant-accent-rgb: {{ $tenantAccentR }}, {{ $tenantAccentG }}, {{ $tenantAccentB }};
+    }
+
     body {
       font-family: 'Inter', sans-serif;
-      background-color: #f8f9fa; /* Fondo más claro para la página de detalle */
-      color: #000;
+      background-color: #f3f4f6;
+      color: #111827;
     }
 
     .landing-header {
       transition: background 0.3s ease-in-out;
       z-index: 1050;
-      background: transparent;
+      background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.82), rgba(var(--tenant-secondary-rgb), 0.72));
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(var(--tenant-accent-rgb), 0.28);
       padding: 0.5rem 0;
     }
 
     .landing-header .navbar-toggler {
-      border: 1px solid rgba(0, 0, 0, 0.2);
-      background: #fff;
+      border: 1px solid rgba(var(--tenant-accent-rgb), 0.55);
+      background: rgba(var(--tenant-primary-rgb), 0.25);
       padding: 0.35rem 0.55rem;
     }
 
     .landing-nav-link {
       font-weight: 600;
       padding: 0.4rem 0.75rem;
+      border-radius: 999px;
+    }
+
+    .section-muted {
+      background: #eef2f7;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+      border-color: var(--tenant-primary);
+    }
+
+    .btn-primary:hover,
+    .btn-primary:focus {
+      background: linear-gradient(135deg, var(--tenant-secondary), var(--tenant-primary));
+      border-color: var(--tenant-secondary);
+    }
+
+    .btn-dark {
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+      border-color: var(--tenant-primary);
+    }
+
+    .btn-dark:hover,
+    .btn-dark:focus {
+      background: linear-gradient(135deg, var(--tenant-secondary), var(--tenant-primary));
+      border-color: var(--tenant-secondary);
+    }
+
+    .btn-outline-dark {
+      color: var(--tenant-primary);
+      border-color: rgba(var(--tenant-primary-rgb), 0.45);
+    }
+
+    .btn-outline-dark:hover,
+    .btn-outline-dark:focus {
+      color: #fff;
+      background: var(--tenant-primary);
+      border-color: var(--tenant-primary);
+    }
+
+    .form-check-input:checked {
+      background-color: var(--tenant-primary);
+      border-color: var(--tenant-primary);
+    }
+
+    footer.bg-dark {
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary)) !important;
+    }
+
+    .page-shell {
+      padding-top: 6.2rem;
+    }
+
+    .spotlight-card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 18px;
+      padding: 1.25rem;
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .spotlight-kicker {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 0.35rem;
+    }
+
+    .spotlight-title {
+      font-size: clamp(1.5rem, 4vw, 2.25rem);
+      line-height: 1.12;
+      margin-bottom: 0.35rem;
+      color: var(--tenant-primary);
+      font-weight: 700;
+    }
+
+    .spotlight-desc {
+      color: #475569;
+      margin-bottom: 0.75rem;
+      font-size: 0.96rem;
+    }
+
+    .trust-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .trust-pill {
+      border: 1px solid rgba(var(--tenant-accent-rgb), 0.45);
+      background: rgba(var(--tenant-accent-rgb), 0.12);
+      color: var(--tenant-primary);
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.35rem 0.75rem;
     }
 
     .product-detail-card {
-      max-width: 90vw;
-      min-height: 70vh;
-      margin: 50px auto;
+      max-width: 1120px;
+      min-height: 66vh;
+      margin: 16px auto 28px;
       padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 4px 25px rgba(0, 0, 0, 0.1);
+      border-radius: 16px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
       background-color: #fff;
     }
 
@@ -48,22 +187,66 @@
       max-height: 500px;
       width: 100%;
       object-fit: cover;
-      border-radius: 8px;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .product-gallery-main .d-flex.align-items-center.justify-content-center.rounded-3 {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      background-color: #f8fafc !important;
+    }
+
+    .product-meta-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      background: #f8fafc;
+      padding: 0.95rem;
+      margin-bottom: 1rem;
+    }
+
+    .variant-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .secure-box {
+      border: 1px solid #dbe3ee;
+      border-radius: 12px;
+      background: #f8fafc;
+      padding: 0.8rem;
+      margin-top: 0.85rem;
+      color: #334155;
+      font-size: 0.9rem;
+    }
+
+    .secure-box .item {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      margin-bottom: 0.45rem;
+    }
+
+    .secure-box .item:last-child {
+      margin-bottom: 0;
     }
 
     .thumbnail-image {
       width: 80px;
       height: 80px;
       object-fit: cover;
-      border: 2px solid transparent;
-      border-radius: 4px;
+      border: 2px solid #d1d5db;
+      border-radius: 8px;
       cursor: pointer;
       transition: border-color 0.2s;
     }
 
     .thumbnail-image:hover,
     .thumbnail-image.active {
-      border-color: #007bff; /* Color de realce para la miniatura activa */
+      border-color: var(--tenant-primary);
     }
 
     .variant-item {
@@ -78,27 +261,29 @@
         color: #1a1a1a;
     }
 
-    /* Estilos para simular los botones de la imagen (Edit/Add Image/Delete) */
-    .btn-action {
-        margin-right: 10px;
-    }
     .variant-button {
         cursor: pointer;
         transition: background-color 0.2s, border-color 0.2s, color 0.2s;
-        padding: 8px 15px;
-        margin-right: 10px;
-        margin-bottom: 10px;
-        border: 1px solid #ccc;
-        border-radius: 6px;
+        padding: 8px 12px;
+        margin-right: 8px;
+        margin-bottom: 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
         background-color: #fff;
-        color: #333;
+      color: #111827;
         font-weight: 500;
         display: inline-block;
+        min-width: 120px;
     }
 
     .variant-button.selected {
-        background-color: #d4d4d4ff; /* Color primario de Bootstrap para selección */
-        border-color: #aaaaaaff;
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+      border-color: var(--tenant-primary);
+      color: #fff;
+    }
+
+    .variant-button.selected .text-muted {
+      color: rgba(255, 255, 255, 0.85) !important;
     }
 
     .variant-button:disabled {
@@ -119,7 +304,7 @@
 
     @media (max-width: 991.98px) {
       .landing-header {
-        background: rgba(255, 255, 255, 0.96);
+        background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.92), rgba(var(--tenant-secondary-rgb), 0.84));
       }
 
       .navbar-nav {
@@ -138,8 +323,16 @@
 
       .product-detail-card {
         max-width: 95vw;
-        margin: 35px auto;
+        margin: 25px auto;
         padding: 20px;
+      }
+
+      .spotlight-card {
+        padding: 1rem;
+      }
+
+      .spotlight-title {
+        font-size: clamp(1.25rem, 6vw, 1.8rem);
       }
 
       .product-gallery-main {
@@ -172,14 +365,14 @@
 <body>
   <header class="landing-header position-fixed top-0 start-0 w-100">
     <div class="container">
-      <nav class="navbar navbar-expand-lg navbar-light p-0">
+      <nav class="navbar navbar-expand-lg navbar-dark p-0">
         <a class="navbar-brand d-flex align-items-center" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}">
           @if($tenant->logo)
             <span class="btn btn-light p-1 px-3 m-0">
               <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
             </span>
           @else
-            <span class="btn btn-light text-dark fw-bold">{{ $tenant->name }}</span>
+            <span class="fw-bold text-white">{{ $tenant->name }}</span>
           @endif
         </a>
 
@@ -191,15 +384,35 @@
           <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
             @include('partials.tenant-cart-nav')
             <li class="nav-item">
-              <a class="btn btn-light text-dark landing-nav-link" href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}">Volver</a>
+              <a class="btn btn-outline-light landing-nav-link" href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}">Volver</a>
             </li>
           </ul>
         </div>
       </nav>
     </div>
   </header>
-  <section class="py-5">
-    <div class="">
+  <section class="py-10 section-muted page-shell">
+    <div class="container">
+      <div class="spotlight-card">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+          <div>
+            <div class="spotlight-kicker">Producto seleccionado</div>
+            <h1 class="spotlight-title">{{ $product->name }}</h1>
+            <p class="spotlight-desc">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta tienda.', 170) }}</p>
+            <div class="trust-pills">
+              <span class="trust-pill"><i class="bi bi-shield-check me-1"></i> Compra segura</span>
+              <span class="trust-pill"><i class="bi bi-lock me-1"></i> Datos protegidos</span>
+              <span class="trust-pill"><i class="bi bi-headset me-1"></i> Soporte directo</span>
+            </div>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-dark" href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}">
+              <i class="bi bi-arrow-left me-1"></i> Volver al catálogo
+            </a>
+          </div>
+        </div>
+      </div>
+
       <div class="product-detail-card">
         <div class="row">
           <div class="col-md-5 d-flex flex-column flex-md-row mb-4 mb-md-0 gap-3 align-items-start">
@@ -239,11 +452,19 @@
           </div>
 
           <div class="col-md-7 ps-md-5">
-            <h1 class="fw-bold mb-3">{{ $product->name }}</h1>
-            <p><strong>Descripción:</strong> {{ $product->description }}</p>
+            <div class="product-meta-card">
+              <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                <h2 class="h4 fw-bold mb-0">{{ $product->name }}</h2>
+                <span class="badge text-bg-light border">{{ $product->variants->count() }} variante{{ $product->variants->count() == 1 ? '' : 's' }}</span>
+              </div>
+              <p class="text-muted mb-0">{{ $product->description }}</p>
+            </div>
 
-            <h5 class="fw-semibold mt-4">Variantes:</h5>
-            <div id="variants-container" class="d-flex flex-wrap gap-2 mb-4">
+            <div class="variant-header">
+              <h5 class="fw-semibold mb-0">Selecciona una variante</h5>
+              <small class="text-muted">Elige talla o presentación</small>
+            </div>
+            <div id="variants-container" class="d-flex flex-wrap gap-2 mb-2">
                 @forelse ($product->variants as $variant)
                 @php
                   $productDiscount = (float) ($product->discount_percentage ?? 0);
@@ -273,8 +494,14 @@
                 @endforelse
             </div>
 
+            <div class="secure-box">
+              <div class="item"><i class="bi bi-shield-lock"></i><span>Proceso de compra protegido para el usuario.</span></div>
+              <div class="item"><i class="bi bi-credit-card"></i><span>Información clara de precio por variante seleccionada.</span></div>
+              <div class="item"><i class="bi bi-chat-dots"></i><span>Soporte directo por carrito o WhatsApp según configuración.</span></div>
+            </div>
+
             @if($cartEnabled)
-              <div class="mt-4 pt-2 border-top d-flex flex-column flex-sm-row justify-content-center gap-2">
+              <div class="mt-4 pt-3 border-top d-flex flex-column flex-sm-row justify-content-center gap-2">
                 <button
                   id="add-to-cart-button"
                   class="btn btn-primary btn-lg"
@@ -291,7 +518,7 @@
                 </button>
               </div>
             @else
-              <div class="mt-4 pt-2 border-top d-flex justify-content-center">
+              <div class="mt-4 pt-3 border-top d-flex justify-content-center">
                 <button
                   id="whatsapp-button"
                   class="btn btn-success btn-lg"
@@ -301,10 +528,10 @@
                 </button>
               </div>
             @endif
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <footer class="py-4 text-center bg-dark text-white">

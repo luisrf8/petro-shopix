@@ -52,7 +52,12 @@ return [
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
         ],
-
+        'google' => [
+                'driver' => 'google',
+                'folder_id' => env('GOOGLE_DRIVE_FOLDER_ID'),
+                'service_account_json' => base_path(env('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_PATH')),
+                'project_id' => env('GOOGLE_DRIVE_PROJECT_ID'),
+            ],
     ],
 
     /*

@@ -6,7 +6,9 @@ use Google\Client;
 use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
 use Google\Service\Drive\Permission;
+use Google\Service\Exception as GoogleServiceException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -21,7 +23,11 @@ class ImageStorage
         $provider = Str::lower(trim((string) config('services.image_storage.provider', 'local')));
 
         if (in_array($provider, ['google', 'google-drive', 'gdrive'], true)) {
-            return 'google_drive';
+            $provider = 'google_drive';
+        }
+
+        if ($provider === 'google_drive' && !self::hasGoogleDriveConfiguration()) {
+            return 'local';
         }
 
         if (($provider === '' || $provider === 'local') && self::hasGoogleDriveConfiguration()) {
@@ -33,7 +39,7 @@ class ImageStorage
 
     public static function usesGoogleDrive(): bool
     {
-        return self::provider() === 'google_drive';
+        return self::provider() === 'google_drive' && self::hasGoogleDriveConfiguration();
     }
 
     public static function disk(): string
@@ -50,7 +56,18 @@ class ImageStorage
             }
 
             $mimeType = (string) ($file->getClientMimeType() ?: $file->getMimeType() ?: 'application/octet-stream');
-            return self::uploadToGoogleDrive($binary, $mimeType, $directory, $file->getClientOriginalName());
+
+            try {
+                return self::uploadToGoogleDrive($binary, $mimeType, $directory, $file->getClientOriginalName());
+            } catch (\Throwable $exception) {
+                if (!self::shouldFallbackToLocalOnDriveError($exception)) {
+                    throw $exception;
+                }
+
+                self::logGoogleDriveFallback($exception, $directory, $file->getClientOriginalName());
+
+                return $file->store(trim($directory, '/'), self::disk());
+            }
         }
 
         return $file->store(trim($directory, '/'), self::disk());
@@ -63,7 +80,16 @@ class ImageStorage
 
         if (self::usesGoogleDrive()) {
             $resolvedMimeType = $mimeType ?: self::mimeFromExtension($safeExtension);
-            return self::uploadToGoogleDrive($binary, $resolvedMimeType, $directory, $fileName);
+
+            try {
+                return self::uploadToGoogleDrive($binary, $resolvedMimeType, $directory, $fileName);
+            } catch (\Throwable $exception) {
+                if (!self::shouldFallbackToLocalOnDriveError($exception)) {
+                    throw $exception;
+                }
+
+                self::logGoogleDriveFallback($exception, $directory, $fileName);
+            }
         }
 
         $path = trim($directory, '/') . '/' . $fileName;
@@ -86,7 +112,10 @@ class ImageStorage
 
             try {
                 $service = self::buildDriveService();
-                $service->files->get($fileId, ['fields' => 'id']);
+                $service->files->get($fileId, [
+                    'fields' => 'id',
+                    'supportsAllDrives' => true,
+                ]);
                 return true;
             } catch (\Throwable $exception) {
                 return false;
@@ -110,7 +139,9 @@ class ImageStorage
 
             try {
                 $service = self::buildDriveService();
-                $service->files->delete($fileId);
+                $service->files->delete($fileId, [
+                    'supportsAllDrives' => true,
+                ]);
             } catch (\Throwable $exception) {
                 // Ignore delete failures to avoid blocking functional flows.
             }
@@ -186,9 +217,36 @@ class ImageStorage
 
     private static function hasGoogleDriveConfiguration(): bool
     {
+        return self::hasGoogleDriveOAuthConfiguration() || self::hasGoogleDriveServiceAccountConfiguration();
+    }
+
+    private static function hasGoogleDriveServiceAccountConfiguration(): bool
+    {
         $credentialsPath = self::resolveCredentialsPath((string) config('services.image_storage.google_drive_credentials', ''));
 
         return $credentialsPath !== '' && is_file($credentialsPath);
+    }
+
+    private static function hasGoogleDriveOAuthConfiguration(): bool
+    {
+        return self::googleDriveOAuthClientId() !== ''
+            && self::googleDriveOAuthClientSecret() !== ''
+            && self::googleDriveOAuthRefreshToken() !== '';
+    }
+
+    private static function googleDriveOAuthClientId(): string
+    {
+        return trim((string) config('services.image_storage.google_drive_oauth_client_id', ''));
+    }
+
+    private static function googleDriveOAuthClientSecret(): string
+    {
+        return trim((string) config('services.image_storage.google_drive_oauth_client_secret', ''));
+    }
+
+    private static function googleDriveOAuthRefreshToken(): string
+    {
+        return trim((string) config('services.image_storage.google_drive_oauth_refresh_token', ''));
     }
 
     private static function resolveCredentialsPath(string $credentialsPath): string
@@ -259,8 +317,14 @@ class ImageStorage
         }
 
         $service = self::buildDriveService();
-        $metadata = $service->files->get($fileId, ['fields' => 'id,name,mimeType']);
-        $stream = $service->files->get($fileId, ['alt' => 'media']);
+        $metadata = $service->files->get($fileId, [
+            'fields' => 'id,name,mimeType',
+            'supportsAllDrives' => true,
+        ]);
+        $stream = $service->files->get($fileId, [
+            'alt' => 'media',
+            'supportsAllDrives' => true,
+        ]);
         $content = method_exists($stream, 'getBody') ? (string) $stream->getBody() : (string) $stream;
 
         return [
@@ -294,6 +358,7 @@ class ImageStorage
                 'mimeType' => $mimeType,
                 'uploadType' => 'multipart',
                 'fields' => 'id',
+                'supportsAllDrives' => true,
             ]
         );
 
@@ -307,7 +372,9 @@ class ImageStorage
                 'type' => 'anyone',
                 'role' => 'reader',
             ]);
-            $service->permissions->create($fileId, $permission);
+            $service->permissions->create($fileId, $permission, [
+                'supportsAllDrives' => true,
+            ]);
         } catch (\Throwable $exception) {
             // If this fails, the file was created anyway. Keep reference and let admins set permissions.
         }
@@ -317,6 +384,22 @@ class ImageStorage
 
     private static function buildDriveService(): Drive
     {
+        if (self::hasGoogleDriveOAuthConfiguration()) {
+            $client = new Client();
+            $client->setClientId(self::googleDriveOAuthClientId());
+            $client->setClientSecret(self::googleDriveOAuthClientSecret());
+            $client->addScope(Drive::DRIVE);
+            $client->setAccessType('offline');
+
+            $tokenData = $client->fetchAccessTokenWithRefreshToken(self::googleDriveOAuthRefreshToken());
+            if (is_array($tokenData) && isset($tokenData['error'])) {
+                $error = trim((string) ($tokenData['error_description'] ?? $tokenData['error'] ?? 'OAuth refresh token inválido.'));
+                throw new RuntimeException('No se pudo autenticar en Google Drive por OAuth: ' . $error);
+            }
+
+            return new Drive($client);
+        }
+
         $credentialsPath = self::resolveCredentialsPath((string) config('services.image_storage.google_drive_credentials', storage_path('app/credentials.json')));
 
         if (!is_file($credentialsPath)) {
@@ -341,5 +424,50 @@ class ImageStorage
             'svg' => 'image/svg+xml',
             default => 'image/png',
         };
+    }
+
+    private static function shouldFallbackToLocalOnDriveError(\Throwable $exception): bool
+    {
+        if ((bool) config('services.image_storage.google_drive_fallback_to_local_on_error', true) === false) {
+            return false;
+        }
+
+        if ($exception instanceof GoogleServiceException) {
+            return true;
+        }
+
+        return $exception instanceof RuntimeException
+            && Str::contains(Str::lower($exception->getMessage()), ['google drive', 'credential', 'quota']);
+    }
+
+    private static function logGoogleDriveFallback(\Throwable $exception, string $directory, string $fileName): void
+    {
+        Log::warning('Google Drive upload failed. Falling back to local storage.', [
+            'directory' => trim($directory, '/'),
+            'file_name' => $fileName,
+            'reason' => self::extractDriveErrorReason($exception),
+            'message' => $exception->getMessage(),
+        ]);
+    }
+
+    private static function extractDriveErrorReason(\Throwable $exception): ?string
+    {
+        if (!$exception instanceof GoogleServiceException) {
+            return null;
+        }
+
+        $errors = $exception->getErrors();
+        if (!is_array($errors)) {
+            return null;
+        }
+
+        foreach ($errors as $error) {
+            $reason = trim((string) ($error['reason'] ?? ''));
+            if ($reason !== '') {
+                return $reason;
+            }
+        }
+
+        return null;
     }
 }

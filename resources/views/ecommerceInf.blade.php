@@ -9,40 +9,81 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 
+  @php
+    $normalizeTenantHex = function ($value, $fallback) {
+      $candidate = strtoupper(trim((string) $value));
+      if (preg_match('/^#[0-9A-F]{6}$/', $candidate)) {
+        return $candidate;
+      }
+
+      return strtoupper($fallback);
+    };
+
+    $toRgb = function ($hex) {
+      $clean = ltrim($hex, '#');
+      return [
+        hexdec(substr($clean, 0, 2)),
+        hexdec(substr($clean, 2, 2)),
+        hexdec(substr($clean, 4, 2)),
+      ];
+    };
+
+    $tenantColorPrimary = $normalizeTenantHex($tenant->color_primary ?? null, '#0F172A');
+    $tenantColorSecondary = $normalizeTenantHex($tenant->color_secondary ?? null, '#334155');
+    $tenantColorAccent = $normalizeTenantHex($tenant->color_accent ?? null, '#38BDF8');
+
+    [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
+    [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
+    [$tenantAccentR, $tenantAccentG, $tenantAccentB] = $toRgb($tenantColorAccent);
+  @endphp
+
   <style>
+    :root {
+      --tenant-primary: {{ $tenantColorPrimary }};
+      --tenant-secondary: {{ $tenantColorSecondary }};
+      --tenant-accent: {{ $tenantColorAccent }};
+      --tenant-primary-rgb: {{ $tenantPrimaryR }}, {{ $tenantPrimaryG }}, {{ $tenantPrimaryB }};
+      --tenant-secondary-rgb: {{ $tenantSecondaryR }}, {{ $tenantSecondaryG }}, {{ $tenantSecondaryB }};
+      --tenant-accent-rgb: {{ $tenantAccentR }}, {{ $tenantAccentG }}, {{ $tenantAccentB }};
+    }
+
     body {
       font-family: 'Inter', sans-serif;
-      background-color: #fff;
-      color: #000;
+      background-color: #f3f4f6;
+      color: #111827;
     }
 
     .landing-header {
       transition: background 0.3s ease-in-out;
       z-index: 1050;
-      background: transparent;
+      background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.82), rgba(var(--tenant-secondary-rgb), 0.72));
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(var(--tenant-accent-rgb), 0.28);
       padding: 0.5rem 0;
     }
 
     .landing-nav-link {
       font-weight: 600;
       padding: 0.4rem 0.75rem;
+      border-radius: 999px;
     }
 
     .landing-header .navbar-toggler {
-      border: 1px solid rgba(0, 0, 0, 0.2);
-      background: #fff;
+      border: 1px solid rgba(var(--tenant-accent-rgb), 0.55);
+      background: rgba(var(--tenant-primary-rgb), 0.25);
       padding: 0.35rem 0.55rem;
     }
 
     .hero {
       position: relative;
-      min-height: 100vh;
+      min-height: 92vh;
       display: flex;
       align-items: center;
       justify-content: center;
       text-align: center;
       color: white;
       background-size: cover;
+      background-position: center;
       overflow: hidden;
     }
 
@@ -52,6 +93,7 @@
       left: 0;
       width: 100%;
       height: 100%;
+      background: linear-gradient(180deg, rgba(var(--tenant-primary-rgb), 0.68), rgba(var(--tenant-secondary-rgb), 0.86));
       z-index: 0;
     }
 
@@ -61,7 +103,7 @@
     }
 
     .hero-title {
-      font-size: 4rem;
+      font-size: clamp(2rem, 5vw, 4rem);
       font-weight: 700;
       line-height: 1.1;
       color: #fff;
@@ -69,7 +111,7 @@
     }
 
     .hero-slogan {
-      font-size: 4rem;
+      font-size: clamp(1.2rem, 3.8vw, 2.4rem);
       font-weight: 600;
       line-height: 1.25;
       color: #fff;
@@ -85,35 +127,225 @@
       margin: 0.75rem auto 0;
     }
 
+    .hero-badges {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    .hero-badge {
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      border-radius: 999px;
+      padding: 0.35rem 0.8rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+
+    .hero-actions {
+      margin-top: 1.2rem;
+      display: flex;
+      justify-content: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+
     .section-title {
       font-size: clamp(1.4rem, 4.5vw, 2rem);
       font-weight: 700;
       margin-bottom: 2rem;
       text-align: center;
+      color: #111827;
+    }
+
+    .section-shell {
+      background: #ffffff;
+    }
+
+    .section-muted {
+      background: #eef2f7;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+      border-color: var(--tenant-primary);
+    }
+
+    .btn-primary:hover,
+    .btn-primary:focus {
+      background: linear-gradient(135deg, var(--tenant-secondary), var(--tenant-primary));
+      border-color: var(--tenant-secondary);
+    }
+
+    .btn-outline-primary {
+      color: var(--tenant-primary);
+      border-color: rgba(var(--tenant-primary-rgb), 0.45);
+    }
+
+    .btn-outline-primary:hover,
+    .btn-outline-primary:focus {
+      color: #fff;
+      background: var(--tenant-primary);
+      border-color: var(--tenant-primary);
+    }
+
+    .btn-dark {
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+      border-color: var(--tenant-primary);
+    }
+
+    .btn-dark:hover,
+    .btn-dark:focus {
+      background: linear-gradient(135deg, var(--tenant-secondary), var(--tenant-primary));
+      border-color: var(--tenant-secondary);
+    }
+
+    .btn-outline-dark {
+      color: var(--tenant-primary);
+      border-color: rgba(var(--tenant-primary-rgb), 0.45);
+    }
+
+    .btn-outline-dark:hover,
+    .btn-outline-dark:focus {
+      color: #fff;
+      background: var(--tenant-primary);
+      border-color: var(--tenant-primary);
+    }
+
+    .form-check-input:checked {
+      background-color: var(--tenant-primary);
+      border-color: var(--tenant-primary);
+    }
+
+    .badge.text-bg-light.border {
+      background: rgba(var(--tenant-accent-rgb), 0.14) !important;
+      color: var(--tenant-primary);
+      border-color: rgba(var(--tenant-accent-rgb), 0.48) !important;
+    }
+
+    footer.bg-dark {
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary)) !important;
     }
 
     .card-product {
-      border: none;
-      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
-      transition: transform 0.2s ease;
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
       background-color: #fff;
     }
 
     .card-product:hover {
-      transform: scale(1.02);
+      transform: translateY(-3px);
+      box-shadow: 0 16px 28px rgba(15, 23, 42, 0.12);
     }
 
-    .nav-link.category-link {
-      font-weight: 500;
-      margin-left: 1rem;
-      cursor: pointer;
-      transition: color 0.2s;
+    .discovery-shell {
+      background: #ffffff;
+      border-top: 1px solid #e5e7eb;
+      border-bottom: 1px solid #e5e7eb;
     }
 
-    .nav-link.category-link.active {
+    .discovery-head p {
+      color: #6b7280;
+      margin-bottom: 0;
     }
+
+    .trust-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: flex-start;
+    }
+
+    .trust-pill {
+      border: 1px solid rgba(var(--tenant-accent-rgb), 0.45);
+      background: rgba(var(--tenant-accent-rgb), 0.12);
+      color: var(--tenant-primary);
+      border-radius: 999px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      padding: 0.35rem 0.75rem;
+    }
+
+    .catalog-filter-rail {
+      display: flex;
+      gap: 0.75rem;
+      overflow-x: auto;
+      padding-bottom: 0.25rem;
+      scroll-snap-type: x proximity;
+    }
+
+    .catalog-filter-rail::-webkit-scrollbar {
+      height: 7px;
+    }
+
+    .catalog-filter-rail::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+
+    .filter-chip-card {
+      min-width: 200px;
+      border: 1px solid #dbe3ee;
+      background: #f8fafc;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.7rem;
+      text-align: left;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      scroll-snap-align: start;
+      color: #111827;
+      text-decoration: none;
+    }
+
+    .filter-chip-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+      border-color: rgba(var(--tenant-accent-rgb), 0.75);
+    }
+
+    .filter-chip-thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #e5e7eb;
+      background-size: cover;
+      background-position: center;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--tenant-primary);
+      flex-shrink: 0;
+      border: 1px solid rgba(var(--tenant-accent-rgb), 0.35);
+    }
+
+    .filter-chip-meta {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+      min-width: 0;
+    }
+
+    .filter-chip-meta small {
+      color: #64748b;
+      font-size: 0.72rem;
+    }
+
+    .filter-chip-meta strong {
+      font-size: 0.92rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #111827;
+    }
+
     .category-card {
     position: relative;
     display: block;
@@ -122,6 +354,7 @@
     background-size: cover;
     background-position: center;
     border-radius: 14px;
+    border: 1px solid #d1d5db;
     overflow: hidden;
     text-decoration: none;
     transition: transform 0.3s ease;
@@ -153,9 +386,137 @@
     text-align: center;
 }
 
+    .category-link.active.category-card,
+    .category-card.active {
+      box-shadow: 0 0 0 3px rgba(var(--tenant-accent-rgb), 0.55);
+      transform: translateY(-3px);
+    }
+
+    .category-link.active.filter-chip-card {
+      border-color: var(--tenant-primary);
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    }
+
+    .category-link.active.filter-chip-card .filter-chip-meta small,
+    .category-link.active.filter-chip-card .filter-chip-meta strong,
+    .category-link.active.filter-chip-card .filter-chip-thumb {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+
+    .products-layout {
+      display: grid;
+      grid-template-columns: minmax(230px, 280px) 1fr;
+      gap: 1rem;
+    }
+
+    .filters-panel {
+      position: sticky;
+      top: 92px;
+      align-self: flex-start;
+    }
+
+    .filter-panel-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+      padding: 1rem;
+    }
+
+    .catalog-search {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      padding: 0.3rem 0.65rem;
+      background: #fff;
+    }
+
+    .catalog-search i {
+      color: #64748b;
+    }
+
+    .catalog-search .form-control {
+      font-size: 0.92rem;
+      padding: 0.35rem 0;
+      color: #111827;
+    }
+
+    .filter-card-btn {
+      border: 1px solid #d1d5db;
+      background: #f8fafc;
+      border-radius: 12px;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.45rem;
+      width: 100%;
+      padding: 0.55rem 0.7rem;
+      transition: all 0.2s ease;
+      font-size: 0.92rem;
+      text-align: left;
+    }
+
+    .filter-card-btn:hover {
+      border-color: rgba(var(--tenant-accent-rgb), 0.7);
+      background: #f1f5f9;
+    }
+
+    .filter-card-btn.active {
+      border-color: var(--tenant-primary);
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+      color: #fff;
+    }
+
+    .filter-card-btn.active small {
+      color: rgba(255, 255, 255, 0.85) !important;
+    }
+
+    .products-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      color: #334155;
+    }
+
+    .empty-state {
+      border: 1px dashed #cbd5e1;
+      border-radius: 14px;
+      background: #f8fafc;
+      color: #64748b;
+      padding: 0.9rem;
+      text-align: center;
+      font-size: 0.92rem;
+    }
+
+    .contact-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      padding: 1.25rem;
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+    }
+
     @media (max-width: 991.98px) {
       .landing-header {
-        background: rgba(255, 255, 255, 0.96);
+        background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.92), rgba(var(--tenant-secondary-rgb), 0.84));
+      }
+
+      .products-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .filters-panel {
+        position: static;
+      }
+
+      .filter-chip-card {
+        min-width: 170px;
       }
 
       .hero {
@@ -206,6 +567,15 @@
         height: 190px;
       }
 
+      .filter-chip-card {
+        min-width: 150px;
+      }
+
+      .filter-chip-thumb {
+        width: 38px;
+        height: 38px;
+      }
+
       .card-product img,
       .card-product .d-flex.align-items-center.justify-content-center {
         height: 220px !important;
@@ -219,14 +589,14 @@
   <!-- HEADER -->
   <header class="landing-header position-fixed top-0 start-0 w-100">
     <div class="container">
-      <nav class="navbar navbar-expand-lg navbar-light p-0">
+      <nav class="navbar navbar-expand-lg navbar-dark p-0">
         <a class="navbar-brand d-flex align-items-center" href="#top">
           @if($tenant->logo)
             <span class="btn btn-light p-1 px-3 m-0">
               <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
             </span>
           @else
-            <span class="fw-bold">{{ $tenant->name }}</span>
+            <span class="fw-bold text-white">{{ $tenant->name }}</span>
           @endif
         </a>
 
@@ -237,13 +607,13 @@
         <div class="collapse navbar-collapse" id="landingNavbar">
           <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
             <li class="nav-item">
-              <a class="btn btn-light text-dark landing-nav-link" href="#categorias">Categorías</a>
+              <a class="btn btn-outline-light landing-nav-link" href="#categorias">Categorías</a>
             </li>
             <li class="nav-item">
-              <a class="btn btn-light text-dark landing-nav-link" href="#productos">Productos</a>
+              <a class="btn btn-outline-light landing-nav-link" href="#productos">Productos</a>
             </li>
             <li class="nav-item">
-              <a class="btn btn-light text-dark landing-nav-link" href="#contacto">Contacto</a>
+              <a class="btn btn-outline-light landing-nav-link" href="#contacto">Contacto</a>
             </li>
             @include('partials.tenant-cart-nav')
           </ul>
@@ -257,7 +627,7 @@
       @if(isset($tenant->background_image) && $tenant->background_image)
         background-image: url('{{ \App\Support\ImageStorage::url($tenant->background_image) ?? asset('assets/img/shopix5.png') }}');
       @else
-        background-color: {{ $tenant->color_primary ?? '#fdfaf6' }};
+        background-image: linear-gradient(135deg, {{ $tenantColorPrimary }}, {{ $tenantColorSecondary }}, {{ $tenantColorAccent }});
       @endif
       background-position: center;
       background-repeat: no-repeat;
@@ -265,22 +635,78 @@
       overflow: hidden;
   ">
 
-    <div class="category-overlay"></div>
+    <div class="hero-overlay"></div>
     <div class="container text-center">
+      @php
+          $businessTypeLabel = !empty($tenant->business_type)
+            ? \Illuminate\Support\Str::title(str_replace('_', ' ', (string) $tenant->business_type))
+            : null;
+          $economicActivityLabel = !empty($tenant->economic_activity)
+            ? \Illuminate\Support\Str::title((string) $tenant->economic_activity)
+            : null;
+          $locationLabel = implode(' · ', array_filter([
+            $tenant->city ?? null,
+            $tenant->state ?? null,
+            $tenant->country ?? null,
+          ]));
+      @endphp
       <h1 class="hero-title">{{ strtoupper($tenant->name) }}</h1>
       <h2 class="hero-slogan">{{ $tenant->slogan ?? '' }}</h2>
       <p class="hero-description">{{ $tenant->description ?? '' }}</p>
+      <div class="hero-badges">
+        @if(!empty($businessTypeLabel))
+          <span class="hero-badge">{{ $businessTypeLabel }}</span>
+        @endif
+        @if(!empty($economicActivityLabel))
+          <span class="hero-badge">{{ $economicActivityLabel }}</span>
+        @endif
+        @if(!empty($locationLabel))
+          <span class="hero-badge">{{ $locationLabel }}</span>
+        @endif
+      </div>
+      <div class="hero-actions">
+        <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-light px-4">Explorar categorías</a>
+        <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-light px-4">Ver productos</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- DESCUBRIMIENTO -->
+  <section class="py-4 discovery-shell">
+    <div class="container">
+      <div class="discovery-head d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+        <div>
+          <h2 class="section-title text-start mb-2">Explora nuestro catálogo</h2>
+          <p>Navega por categorías en tarjetas, encuentra rápido lo que necesitas y compra con confianza.</p>
+        </div>
+        <div class="trust-pills">
+          <span class="trust-pill"><i class="bi bi-shield-check me-1"></i>Compra segura</span>
+          <span class="trust-pill"><i class="bi bi-lock me-1"></i>Privacidad protegida</span>
+          <span class="trust-pill"><i class="bi bi-stars me-1"></i>Experiencia moderna</span>
+        </div>
+      </div>
+
     </div>
   </section>
 
   <!-- CATEGORIAS -->
-<section id="categorias" class="py-5 bg-white">
+<section id="categorias" class="py-5 section-shell">
     <div class="container">
-        <h2 class="section-title mb-5 text-center">Categorías Principales</h2>
         <div class="row g-4 justify-content-center"> 
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+              <a href="#productos"
+                 class="category-card category-link active"
+                 data-id="all"
+               style="background-image: linear-gradient(135deg, {{ $tenantColorPrimary }}, {{ $tenantColorSecondary }}, {{ $tenantColorAccent }});">
+                  <div class="category-overlay">
+                      <h5 class="category-title text-center">Todo el Catálogo</h5>
+                  </div>
+              </a>
+            </div>
+
             @foreach($categories as $category)
                 <div class="col-12 col-sm-6 col-md-4 col-lg-3">
-                    <a href="#"
+                    <a href="#productos"
                        class="category-card category-link"
                        data-id="{{ $category->id }}"
                        style="background-image: url('{{ \App\Support\ImageStorage::url($category->image) ?? asset('assets/img/shopix5.png') }}')">
@@ -293,7 +719,7 @@
 
               @if(isset($materialPackages) && $materialPackages->count() > 0)
                 <div class="col-12 col-sm-6 col-md-4 col-lg-3">
-                  <a href="#"
+                  <a href="#productos"
                      class="category-card category-link"
                      data-id="packages"
                      style="background-image: linear-gradient(135deg, rgba(0,0,0,.75), rgba(0,0,0,.35));">
@@ -307,40 +733,100 @@
     </div>
 </section>
   <!-- PRODUCTOS -->
-  <section id="productos" class="py-5 bg-light">
+  <section id="productos" class="py-5 section-muted">
     <div class="container">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="section-title text-start mb-0">Productos Destacados</h2>
-        <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-primary btn-sm">Ver más</a>
+      <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
+        <div>
+          <h2 class="section-title text-start mb-0">Productos Destacados</h2>
+          <p class="text-muted mb-0">Diseño limpio, filtros simples y navegación rápida por categorías.</p>
+        </div>
       </div>
-      <div class="row" id="products-container">
-        @foreach($productItems as $product)
-          <div class="col-12 col-sm-6 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}">
-            <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="text-decoration-none d-block h-100">
-              <div class="card card-product h-100">
-                @if(isset($product->images[0]))
-                  <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top" style="height: 300px; object-fit: cover;">
-                @else
-                  <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
-                    <i class="bi bi-image text-muted fs-1"></i>
-                  </div>
-                @endif
-                <div class="card-body text-center">
-                  <h5 class="fw-bold text-dark">{{ $product->name }}</h5>
-                </div>
-              </div>
-            </a>
+
+      <div class="products-layout">
+        <aside class="filters-panel">
+          <div class="filter-panel-card">
+            <h3 class="h6 fw-bold mb-3">Filtrar catálogo</h3>
+
+            <label for="product-search" class="small text-muted mb-1">Buscar por nombre</label>
+            <div class="catalog-search mb-3">
+              <i class="bi bi-search"></i>
+              <input type="text" id="product-search" class="form-control border-0 shadow-none" placeholder="Ej. termo, camiseta, paquete...">
+            </div>
+
+            <div class="d-grid gap-2">
+              <button type="button" class="filter-card-btn category-link active" data-id="all" aria-pressed="true">
+                <span class="fw-semibold">Todos</span>
+                <small class="text-muted">Mostrar todo</small>
+              </button>
+
+              @foreach($categories as $category)
+                <button type="button" class="filter-card-btn category-link" data-id="{{ $category->id }}" aria-pressed="false">
+                  <span class="fw-semibold">{{ $category->name }}</span>
+                  <small class="text-muted">Filtrar</small>
+                </button>
+              @endforeach
+
+              @if(isset($materialPackages) && $materialPackages->count() > 0)
+                <button type="button" class="filter-card-btn category-link" data-id="packages" aria-pressed="false">
+                  <span class="fw-semibold">Paquetes</span>
+                  <small class="text-muted">Combos</small>
+                </button>
+              @endif
+            </div>
+
+            <hr class="my-3">
+            <div class="small text-muted d-grid gap-2">
+              <div><i class="bi bi-shield-lock me-1"></i> Compra protegida</div>
+              <div><i class="bi bi-lock me-1"></i> Datos protegidos</div>
+              <div><i class="bi bi-whatsapp me-1"></i> Soporte directo</div>
+            </div>
           </div>
-        @endforeach
+        </aside>
+
+        <div>
+          <div class="products-summary">
+            <span id="products-counter">Mostrando {{ $productItems->count() }} resultado{{ $productItems->count() == 1 ? '' : 's' }}</span>
+            <span class="badge text-bg-light border">Filtrado por categorías</span>
+          </div>
+
+          <div class="row" id="products-container">
+            @foreach($productItems as $product)
+              <div class="col-12 col-sm-6 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
+                <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="text-decoration-none d-block h-100">
+                  <div class="card card-product h-100">
+                    @if(isset($product->images[0]))
+                      <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top" style="height: 300px; object-fit: cover;">
+                    @else
+                      <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
+                        <i class="bi bi-image text-muted fs-1"></i>
+                      </div>
+                    @endif
+                    <div class="card-body text-start">
+                      <h5 class="fw-bold text-dark mb-1">{{ $product->name }}</h5>
+                      <p class="text-muted small mb-0">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta tienda.', 72) }}</p>
+                    </div>
+                  </div>
+                </a>
+              </div>
+            @endforeach
+          </div>
+
+          <div id="products-empty" class="empty-state" style="display: none;">
+            No encontramos productos con los filtros seleccionados.
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
   @if(isset($materialPackages) && $materialPackages->count() > 0)
-  <section id="paquetes" class="py-5 bg-white border-top" data-category="packages">
+  <section id="paquetes" class="py-5 section-shell border-top" data-category="packages">
     <div class="container">
-      <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="section-title text-start mb-0">Paquetes y Combos</h2>
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+          <h2 class="section-title text-start mb-0">Paquetes y Combos</h2>
+          <p class="text-muted mb-0">Ahorra con combinaciones listas para comprar.</p>
+        </div>
       </div>
       <div class="row" id="packages-container">
         @foreach($materialPackages as $package)
@@ -394,14 +880,18 @@
           </div>
         @endforeach
       </div>
+      <div id="packages-empty" class="empty-state" style="display: none;">
+        No encontramos paquetes con los filtros seleccionados.
+      </div>
     </div>
   </section>
   @endif
   <!-- CONTACTO / UBICACIÓN -->
-  <section id="contacto" class="py-5 bg-white">
+  <section id="contacto" class="py-5 section-muted">
     <div class="container">
       <div class="row align-items-center">
         <div class="col-12 col-md-6 mb-4 mb-md-0">
+          <div class="contact-card">
           <h2 class="section-title text-start mb-3">Contáctanos</h2>
           <p class="mb-3">{{ $tenant->name ?? '' }} - {{ $tenant->description ?? '' }}.</p>
           <p class="">Somos una empresa de {{ $tenant->country ?? '' }} - {{ $tenant->state ?? '' }} - {{ $tenant->city ?? '' }}.</p>
@@ -459,6 +949,7 @@
                   </a>
               @endif
 
+          </div>
           </div>
         </div>
         <div class="col-12 col-md-6">
@@ -529,10 +1020,16 @@
     });
 
     // Filtrado de productos por categoría
-    const categoryLinks = document.querySelectorAll('.category-link');
+    const categoryLinks = document.querySelectorAll('.category-link[data-id]');
     const products = document.querySelectorAll('.product-item');
+    const packageItems = document.querySelectorAll('.package-item');
+    const searchInput = document.getElementById('product-search');
+    const productsCounter = document.getElementById('products-counter');
+    const productsEmpty = document.getElementById('products-empty');
+    const packagesEmpty = document.getElementById('packages-empty');
     const tenantPackages = @json($tenantPackagesPayload);
     const tenantSlug = @json($tenant->slug);
+    let activeCategory = 'all';
 
     function sendCartCommand(type, detail = {}) {
       document.dispatchEvent(new CustomEvent('shopix-cart-command', {
@@ -595,28 +1092,84 @@
 
     const packagesSection = document.getElementById('paquetes');
 
+    function setActiveCategory(categoryId) {
+      activeCategory = categoryId;
+
+      categoryLinks.forEach(link => {
+        const isActive = link.dataset.id === categoryId;
+        link.classList.toggle('active', isActive);
+
+        if (link.tagName === 'BUTTON') {
+          link.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        }
+      });
+    }
+
+    function applyCatalogFilters() {
+      const searchText = (searchInput?.value || '').trim().toLowerCase();
+      let visibleProducts = 0;
+      let visiblePackages = 0;
+
+      products.forEach(product => {
+        const productName = (product.dataset.name || '').toLowerCase();
+        const matchesCategory = activeCategory === 'all' || (activeCategory !== 'packages' && product.dataset.category === activeCategory);
+        const matchesSearch = !searchText || productName.includes(searchText);
+        const isVisible = matchesCategory && matchesSearch;
+
+        product.style.display = isVisible ? 'block' : 'none';
+        if (isVisible) {
+          visibleProducts += 1;
+        }
+      });
+
+      packageItems.forEach(item => {
+        const packageName = (item.dataset.name || '').toLowerCase();
+        const matchesSearch = !searchText || packageName.includes(searchText);
+        const isVisible = (activeCategory === 'all' || activeCategory === 'packages') && matchesSearch;
+
+        item.style.display = isVisible ? 'block' : 'none';
+        if (isVisible) {
+          visiblePackages += 1;
+        }
+      });
+
+      if (packagesSection) {
+        packagesSection.style.display = visiblePackages > 0 ? 'block' : 'none';
+      }
+
+      if (productsCounter) {
+        const totalVisible = visibleProducts + visiblePackages;
+        productsCounter.textContent = `Mostrando ${totalVisible} resultado${totalVisible === 1 ? '' : 's'}`;
+      }
+
+      if (productsEmpty) {
+        productsEmpty.style.display = visibleProducts > 0 ? 'none' : 'block';
+      }
+
+      if (packagesEmpty) {
+        packagesEmpty.style.display = visiblePackages > 0 ? 'none' : 'block';
+      }
+    }
+
     categoryLinks.forEach(link => {
       link.addEventListener('click', e => {
         e.preventDefault();
 
-        categoryLinks.forEach(l => l.classList.remove('active'));
-        link.classList.add('active');
+        setActiveCategory(link.dataset.id);
+        applyCatalogFilters();
 
-        const categoryId = link.dataset.id;
-        products.forEach(product => {
-          if(categoryId === 'all' || (categoryId !== 'packages' && product.dataset.category === categoryId)){
-            product.style.display = 'block';
-          } else {
-            product.style.display = 'none';
-          }
-        });
-
-        if (packagesSection) {
-          const showPackages = categoryId === 'all' || categoryId === 'packages';
-          packagesSection.style.display = showPackages ? 'block' : 'none';
+        if (link.classList.contains('category-card') || link.classList.contains('filter-chip-card')) {
+          document.getElementById('productos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       });
     });
+
+    if (searchInput) {
+      searchInput.addEventListener('input', applyCatalogFilters);
+    }
+
+    setActiveCategory('all');
+    applyCatalogFilters();
   </script>
 </body>
 </html>

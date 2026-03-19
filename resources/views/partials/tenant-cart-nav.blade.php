@@ -1,4 +1,62 @@
+@php
+  $tenantThemeModel = $tenant ?? null;
+
+  $normalizeTenantHex = function ($value, $fallback) {
+    $candidate = strtoupper(trim((string) $value));
+    if (preg_match('/^#[0-9A-F]{6}$/', $candidate)) {
+      return $candidate;
+    }
+
+    return strtoupper($fallback);
+  };
+
+  $toRgb = function ($hex) {
+    $clean = ltrim($hex, '#');
+    return [
+      hexdec(substr($clean, 0, 2)),
+      hexdec(substr($clean, 2, 2)),
+      hexdec(substr($clean, 4, 2)),
+    ];
+  };
+
+  $tenantColorPrimary = $normalizeTenantHex($tenantThemeModel->color_primary ?? null, '#0F172A');
+  $tenantColorSecondary = $normalizeTenantHex($tenantThemeModel->color_secondary ?? null, '#334155');
+  $tenantColorAccent = $normalizeTenantHex($tenantThemeModel->color_accent ?? null, '#38BDF8');
+
+  [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
+  [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
+  [$tenantAccentR, $tenantAccentG, $tenantAccentB] = $toRgb($tenantColorAccent);
+@endphp
+
 <style>
+  :root {
+    --tenant-primary: {{ $tenantColorPrimary }};
+    --tenant-secondary: {{ $tenantColorSecondary }};
+    --tenant-accent: {{ $tenantColorAccent }};
+    --tenant-primary-rgb: {{ $tenantPrimaryR }}, {{ $tenantPrimaryG }}, {{ $tenantPrimaryB }};
+    --tenant-secondary-rgb: {{ $tenantSecondaryR }}, {{ $tenantSecondaryG }}, {{ $tenantSecondaryB }};
+    --tenant-accent-rgb: {{ $tenantAccentR }}, {{ $tenantAccentG }}, {{ $tenantAccentB }};
+  }
+
+  .tenant-nav-action-btn {
+    border: 1px solid rgba(var(--tenant-accent-rgb), 0.55);
+    background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.42), rgba(var(--tenant-secondary-rgb), 0.35));
+    color: #fff !important;
+    backdrop-filter: blur(8px);
+  }
+
+  .tenant-nav-action-btn:hover,
+  .tenant-nav-action-btn:focus {
+    border-color: rgba(var(--tenant-accent-rgb), 0.88);
+    background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.6), rgba(var(--tenant-secondary-rgb), 0.5));
+    color: #fff !important;
+  }
+
+  .tenant-nav-action-btn .badge {
+    border: 1px solid rgba(var(--tenant-accent-rgb), 0.55);
+    background: var(--tenant-primary) !important;
+  }
+
   .tenant-order-card {
     border: 1px solid #e8eaed;
     border-radius: 12px;
@@ -23,12 +81,89 @@
     padding: 0.35rem 0.55rem;
     border-radius: 999px;
   }
+
+  .tenant-modern-modal .modal-content {
+    border: 1px solid #dbe3ee;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
+  }
+
+  .tenant-modern-modal .modal-header {
+    background: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .tenant-modern-modal .modal-title {
+    color: var(--tenant-primary);
+    font-weight: 700;
+  }
+
+  .tenant-modern-modal .modal-body {
+    background: #f8fafc;
+  }
+
+  .tenant-auth-shell {
+    border: 1px solid #dbe3ee;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 0.75rem;
+  }
+
+  #tenantPublicAuthTabs {
+    border-bottom: 1px solid #dbe3ee;
+    gap: 0.35rem;
+  }
+
+  #tenantPublicAuthTabs .nav-link {
+    border: 1px solid transparent;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    color: #475569;
+    font-weight: 600;
+    padding: 0.45rem 0.8rem;
+  }
+
+  #tenantPublicAuthTabs .nav-link.active {
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    color: #ffffff;
+    border-color: var(--tenant-primary);
+  }
+
+  #tenantPublicAuthTabsContent {
+    border-color: #dbe3ee !important;
+    border-radius: 0 0 12px 12px !important;
+    background: #f8fafc;
+  }
+
+  #tenantAuthModal .form-control {
+    border-radius: 12px;
+    border-color: #cbd5e1;
+  }
+
+  #tenantAuthModal .form-control:focus {
+    border-color: rgba(var(--tenant-accent-rgb), 0.75);
+    box-shadow: 0 0 0 0.2rem rgba(var(--tenant-accent-rgb), 0.18);
+  }
+
+  .tenant-auth-primary-btn {
+    border-radius: 12px;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    border-color: var(--tenant-primary);
+  }
+
+  .tenant-auth-primary-btn:hover,
+  .tenant-auth-primary-btn:focus {
+    background: linear-gradient(135deg, var(--tenant-secondary), var(--tenant-primary));
+    border-color: var(--tenant-secondary);
+  }
 </style>
 
 <li class="nav-item">
   <button type="button"
           id="cart-toggle-button"
-          class="btn btn-light text-dark landing-nav-link d-inline-flex align-items-center gap-2"
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2"
           data-bs-toggle="offcanvas"
           data-bs-target="#tenantCartOffcanvas"
           aria-controls="tenantCartOffcanvas">
@@ -41,14 +176,14 @@
 <li class="nav-item" id="tenant-session-login-wrap">
   <button type="button"
           id="tenant-session-login"
-          class="btn btn-light text-dark landing-nav-link d-inline-flex align-items-center gap-2">
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-box-arrow-in-right"></i>
     <span>Iniciar sesión</span>
   </button>
 </li>
 
 <li class="nav-item d-none" id="tenant-session-indicator-wrap">
-  <span class="btn btn-light text-dark landing-nav-link d-inline-flex align-items-center gap-2">
+  <span class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-person-circle"></i>
     <span id="tenant-session-indicator">Sesión iniciada</span>
   </span>
@@ -57,7 +192,7 @@
 <li class="nav-item d-none" id="tenant-orders-wrap">
   <button type="button"
           id="tenant-orders-btn"
-          class="btn btn-light text-dark landing-nav-link d-inline-flex align-items-center gap-2">
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-bag-check"></i>
     <span>Estado de compras</span>
   </button>
@@ -66,7 +201,7 @@
 <li class="nav-item d-none" id="tenant-session-logout-wrap">
   <button type="button"
           id="tenant-session-logout"
-          class="btn btn-light text-dark landing-nav-link d-inline-flex align-items-center gap-2">
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-box-arrow-right"></i>
     <span>Cerrar sesión</span>
   </button>
@@ -75,7 +210,7 @@
 <li class="nav-item d-none" id="tenant-notifications-wrap">
   <button type="button"
           id="tenant-notifications-btn"
-          class="btn btn-light text-dark landing-nav-link d-inline-flex align-items-center gap-2"
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2"
           data-bs-toggle="modal"
           data-bs-target="#tenantNotificationsModal">
     <i class="bi bi-bell"></i>
@@ -84,7 +219,7 @@
   </button>
 </li>
 
-<div class="modal fade" id="tenantNotificationsModal" tabindex="-1" aria-labelledby="tenantNotificationsModalLabel" aria-hidden="true">
+<div class="modal fade tenant-modern-modal" id="tenantNotificationsModal" tabindex="-1" aria-labelledby="tenantNotificationsModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
@@ -98,7 +233,7 @@
   </div>
 </div>
 
-<div class="modal fade" id="tenantOrdersModal" tabindex="-1" aria-labelledby="tenantOrdersModalLabel" aria-hidden="true">
+<div class="modal fade tenant-modern-modal" id="tenantOrdersModal" tabindex="-1" aria-labelledby="tenantOrdersModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
@@ -112,7 +247,7 @@
   </div>
 </div>
 
-<div class="modal fade" id="tenantAuthModal" tabindex="-1" aria-labelledby="tenantAuthModalLabel" aria-hidden="true">
+<div class="modal fade tenant-modern-modal" id="tenantAuthModal" tabindex="-1" aria-labelledby="tenantAuthModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
@@ -120,6 +255,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+        <div class="tenant-auth-shell">
         <ul class="nav nav-tabs" id="tenantPublicAuthTabs" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="tenant-public-login-tab" data-bs-toggle="tab" data-bs-target="#tenant-public-login-panel" type="button" role="tab">Iniciar sesión</button>
@@ -138,7 +274,7 @@
                 <input type="password" class="form-control" id="tenant-public-login-password" placeholder="Contraseña" required>
               </div>
               <div class="col-12">
-                <button type="submit" class="btn btn-dark w-100">Entrar</button>
+                <button type="submit" class="btn btn-dark w-100 tenant-auth-primary-btn">Entrar</button>
               </div>
             </form>
           </div>
@@ -160,10 +296,11 @@
                 <input type="text" class="form-control" id="tenant-public-register-dni" placeholder="DNI (opcional)">
               </div>
               <div class="col-12">
-                <button type="submit" class="btn btn-dark w-100">Crear cuenta</button>
+                <button type="submit" class="btn btn-dark w-100 tenant-auth-primary-btn">Crear cuenta</button>
               </div>
             </form>
           </div>
+        </div>
         </div>
       </div>
     </div>

@@ -45,7 +45,12 @@ return [
         'provider' => env('IMAGE_STORAGE_PROVIDER', env('GOOGLE_DRIVE_FOLDER_ID') ? 'google_drive' : 'local'), // local | google_drive
         'local_disk' => env('IMAGE_STORAGE_LOCAL_DISK', 'public'),
         'google_drive_credentials' => env('GOOGLE_DRIVE_CREDENTIALS_PATH', env('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_PATH', storage_path('app/credentials.json'))),
+        'service_account_json' => base_path(env('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_PATH')),
+        'google_drive_oauth_client_id' => env('GOOGLE_DRIVE_OAUTH_CLIENT_ID', env('GOOGLE_DRIVE_CLIENT_ID', '')),
+        'google_drive_oauth_client_secret' => env('GOOGLE_DRIVE_OAUTH_CLIENT_SECRET', ''),
+        'google_drive_oauth_refresh_token' => env('GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN', ''),
         'google_drive_folder_id' => env('GOOGLE_DRIVE_FOLDER_ID', ''),
+        'google_drive_fallback_to_local_on_error' => env('GOOGLE_DRIVE_FALLBACK_TO_LOCAL_ON_ERROR', true),
     ],
 
 ];

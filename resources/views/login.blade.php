@@ -3,89 +3,236 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Página de Login</title>
-    <!-- Bootstrap CSS -->
-    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<style>
-        body {
-            /* background: black; */
-            background-size: cover;
-        }
-        .login-container {
-            background: rgba(255, 255, 255, 0.8); /* Fondo semitransparente */
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-        }
-</style>
-<body>
-    <div class="container d-flex justify-content-center flex-column align-items-center vh-100">
-        <a class="d-flex justify-content-center align-items-center mb-5" href="/">
-            <img src="../../assets/img/shopix5.png" class="w-50" alt="main_logo">
-        </a>
-        <!-- <img src="../../assets/img/fondo.jpg" class="navbar-brand-img" width="150" height="150" alt="main_logo"> -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Shopix | Iniciar sesión</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
-        <div class="col-md-5 d-flex justify-content-center flex-column login-container py-0 my-0">
-            <h3 class="text-center">Iniciar sesion</h3>
-            <form class="d-flex flex-column py-0 my-0">
-                @csrf
-                <div class="form-group">
-                    <label for="email">Correo Electrónico</label>
-                    <input type="email" class="form-control" id="email" name="email" placeholder="Ingresa tu correo" required>
+    <style>
+        body {
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top right, #1f2937, #0f172a 45%, #020617 85%);
+            color: #0f172a;
+        }
+
+        .login-shell {
+            max-width: 980px;
+        }
+
+        .login-brand {
+            width: 180px;
+            height: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 8px 22px rgba(2, 6, 23, 0.35));
+        }
+
+        .login-card {
+            border: 1px solid rgba(203, 213, 225, 0.7);
+            border-radius: 22px;
+            overflow: hidden;
+            background: #ffffff;
+            box-shadow: 0 24px 54px rgba(2, 6, 23, 0.35);
+        }
+
+        .login-aside {
+            background: linear-gradient(160deg, #0f172a, #1e293b);
+            color: #fff;
+            padding: 2rem 1.4rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        .login-aside h2 {
+            font-size: clamp(1.2rem, 3.5vw, 1.8rem);
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+        }
+
+        .login-aside p {
+            color: rgba(255, 255, 255, 0.82);
+            margin-bottom: 0;
+            font-size: 0.92rem;
+            line-height: 1.35;
+        }
+
+        .login-point {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.86rem;
+            color: rgba(255, 255, 255, 0.86);
+        }
+
+        .login-form-wrap {
+            padding: 2rem 1.5rem;
+            background: #ffffff;
+        }
+
+        .login-title {
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 0.35rem;
+        }
+
+        .login-subtitle {
+            color: #64748b;
+            font-size: 0.92rem;
+            margin-bottom: 1rem;
+        }
+
+        .login-field-label {
+            font-weight: 600;
+            color: #334155;
+            font-size: 0.9rem;
+        }
+
+        .login-input {
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            padding: 0.62rem 0.82rem;
+            font-size: 0.95rem;
+        }
+
+        .login-input:focus {
+            border-color: #94a3b8;
+            box-shadow: 0 0 0 0.2rem rgba(15, 23, 42, 0.12);
+        }
+
+        .login-submit-btn {
+            border-radius: 12px;
+            padding: 0.7rem;
+            font-weight: 600;
+        }
+
+        .login-submit-btn[disabled] {
+            opacity: 0.75;
+        }
+
+        .login-error {
+            border-radius: 12px;
+            border-color: #fecaca;
+            background: #fef2f2;
+            color: #991b1b;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 991.98px) {
+            .login-aside {
+                padding: 1.25rem;
+            }
+
+            .login-form-wrap {
+                padding: 1.35rem 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4 min-vh-100 d-flex align-items-center justify-content-center">
+        <div class="login-shell w-100">
+            <div class="text-center mb-4">
+                <a href="/" class="text-decoration-none">
+                    <img src="{{ asset('assets/img/shopix5.png') }}" class="login-brand" alt="Shopix">
+                </a>
+            </div>
+
+            <div class="login-card">
+                <div class="row g-0">
+                    <div class="col-lg-5 login-aside">
+                        <h2>Bienvenido a Shopix</h2>
+                        <p>Accede a tu panel para gestionar ventas, productos y pedidos de forma más organizada.</p>
+                        <div class="mt-2 d-grid gap-2">
+                            <div class="login-point"><i class="bi bi-shield-check"></i><span>Acceso seguro y protegido</span></div>
+                            <div class="login-point"><i class="bi bi-bag-check"></i><span>Control centralizado de tus ventas</span></div>
+                            <div class="login-point"><i class="bi bi-stars"></i><span>Experiencia moderna y rápida</span></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-7 login-form-wrap">
+                        <h1 class="h3 login-title">Iniciar sesión</h1>
+                        <p class="login-subtitle">Ingresa tus credenciales para continuar.</p>
+
+                        <div id="login-alert" class="alert login-error d-none" role="alert"></div>
+
+                        <form id="shopix-login-form" class="row g-3" novalidate>
+                            @csrf
+                            <div class="col-12">
+                                <label for="email" class="form-label login-field-label">Correo electrónico</label>
+                                <input type="email" class="form-control login-input" id="email" name="email" placeholder="Ingresa tu correo" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="password" class="form-label login-field-label">Contraseña</label>
+                                <input type="password" class="form-control login-input" id="password" name="password" placeholder="Ingresa tu contraseña" required>
+                            </div>
+                            <div class="col-12 d-grid">
+                                <button id="shopix-login-submit" type="submit" class="btn btn-dark login-submit-btn">
+                                    <i class="bi bi-box-arrow-in-right me-2"></i>Ingresar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="password">Contraseña</label>
-                    <input type="password" class="form-control" id="password" name="password" placeholder="Ingresa tu contraseña" required>
-                </div>
-                <button type="submit" class="btn btn-dark">Ingresar</button>
-            </form>
-            <!-- <div class="text-center mt-3">
-                <a>¿Olvidaste tu contraseña?</a>
-            </div> -->
-            <!-- <div class="text-center mt-2">
-                <small>¿No tienes una cuenta? <a href="/register">Regístrate aquí</a></small>
-            </div> -->
+            </div>
         </div>
     </div>
 
-    <!-- Bootstrap JS and dependencies -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.6.0/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const loginForm = document.getElementById('shopix-login-form');
+        const submitButton = document.getElementById('shopix-login-submit');
+        const loginAlert = document.getElementById('login-alert');
+
+        function showLoginError(message) {
+            if (!loginAlert) return;
+            loginAlert.textContent = message;
+            loginAlert.classList.remove('d-none');
+        }
+
+        function clearLoginError() {
+            if (!loginAlert) return;
+            loginAlert.textContent = '';
+            loginAlert.classList.add('d-none');
+        }
+
+        loginForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            clearLoginError();
+
+            const formData = new FormData(this);
+            const defaultLabel = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Ingresando...';
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showLoginError(data.message || 'Credenciales incorrectas.');
+                    return;
+                }
+
+                if (data?.token) {
+                    localStorage.setItem('shopix_ecomm_token', data.token);
+                }
+                if (data?.user) {
+                    localStorage.setItem('shopix_ecomm_user', JSON.stringify(data.user));
+                }
+
+                window.location.href = '/dashboard';
+            } catch (error) {
+                showLoginError('Ocurrió un error al intentar iniciar sesión. Intenta nuevamente.');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = defaultLabel;
+            }
+        });
+    </script>
 </body>
 </html>
-
-<script>
-    document.querySelector("form").addEventListener("submit", function(event) {
-        event.preventDefault();
-
-        let formData = new FormData(this);
-        let submitButton = this.querySelector("button[type='submit']");
-
-        submitButton.textContent = "Cargando...";
-        submitButton.disabled = true;
-        fetch("/login", {
-            method: "POST",
-            body: formData
-        })
-        .then(response => {
-            return response.json().then(data => {
-                if (response.ok) {
-                    console.log("response", data)
-                    window.location.href = '/dashboard'; // Descomenta si deseas redirigir
-                } else {
-                    alert(data.message || "Credenciales incorrectas");
-                }
-            });
-        })
-        .catch(error => {
-            console.error("Error:", error);
-            alert("Ocurrió un error al intentar iniciar sesión");
-        })
-        .finally(() => {
-            submitButton.textContent = "Ingresar";
-            submitButton.disabled = false;
-        });
-    });
-</script>
