@@ -19,6 +19,7 @@ use App\Models\City;
 use Carbon\Carbon;
 use App\Models\Log;
 use App\Models\SalesOrderDetail;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -76,15 +77,15 @@ class IndexController extends Controller
             $stateName = $this->resolveLocationName($tenant->state, $stateMap);
             $cityName = $this->resolveLocationName($tenant->city, $cityMap);
 
-            $businessType = $hasBusinessType ? trim((string) ($tenant->business_type ?? '')) : '';
-            $economicActivity = $hasEconomicActivity ? trim((string) ($tenant->economic_activity ?? '')) : '';
+            $businessType = $hasBusinessType ? $this->normalizeDirectoryBusinessType((string) ($tenant->business_type ?? '')) : '';
+            $economicActivity = $hasEconomicActivity ? $this->normalizeDirectoryEconomicActivity((string) ($tenant->economic_activity ?? '')) : '';
 
             if ($businessType === '') {
-                $businessType = $this->inferTenantType($tenant);
+                $businessType = $this->normalizeDirectoryBusinessType($this->inferTenantType($tenant));
             }
 
             if ($economicActivity === '') {
-                $economicActivity = $this->inferTenantActivity($tenant);
+                $economicActivity = $this->normalizeDirectoryEconomicActivity($this->inferTenantActivity($tenant));
             }
 
             $tenant->directory_country = $countryName;
@@ -109,6 +110,28 @@ class IndexController extends Controller
             'tenantsDirectory' => $tenantsDirectory,
             'tenantFilters' => $tenantFilters,
         ];
+    }
+
+    private function normalizeDirectoryBusinessType(?string $value): string
+    {
+        $normalized = Str::lower(trim((string) $value));
+        if ($normalized === '') {
+            return '';
+        }
+
+        return $normalized === 'servicio' ? 'Servicio' : 'Tienda';
+    }
+
+    private function normalizeDirectoryEconomicActivity(?string $value): string
+    {
+        $normalized = trim((string) $value);
+        if ($normalized === '') {
+            return '';
+        }
+
+        $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
+
+        return Str::title(Str::lower($normalized));
     }
 
     private function resolveLocationName($value, $lookup)

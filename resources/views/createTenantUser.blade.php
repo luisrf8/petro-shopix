@@ -139,6 +139,21 @@
                   <input type="email" name="email" id="email" class="form-control form-control-lg" placeholder="correo@empresa.com" required>
                 </div>
 
+                <div class="row mb-3">
+                  <div class="col-md-4">
+                    <label for="business_type" class="form-label fw-bold">Tipo de negocio</label>
+                    <select name="business_type" id="business_type" class="form-select form-select-lg" required>
+                      <option value="">Selecciona una opción</option>
+                      <option value="tienda" {{ old('business_type') === 'tienda' ? 'selected' : '' }}>Tienda</option>
+                      <option value="servicio" {{ old('business_type') === 'servicio' ? 'selected' : '' }}>Servicio</option>
+                    </select>
+                  </div>
+                  <div class="col-md-8">
+                    <label for="economic_activity" class="form-label fw-bold">Rubro económico</label>
+                    <input type="text" name="economic_activity" id="economic_activity" class="form-control form-control-lg" placeholder="Ej: Moda, Salud, Consultoría, Alimentos" value="{{ old('economic_activity') }}" required>
+                  </div>
+                </div>
+
                 <div class="mb-4">
                   <label for="logo" class="form-label fw-bold">Logo (PNG o SVG)</label>
                   <div class="d-flex align-items-center gap-3 flex-wrap">

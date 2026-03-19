@@ -238,8 +238,8 @@ class TenantController extends Controller
             'color_primary'   => 'required|string|max:7',
             'color_secondary' => 'required|string|max:7',
             'color_accent'    => 'required|string|max:7',
-            'business_type'   => 'nullable|string|max:120',
-            'economic_activity' => 'nullable|string|max:150',
+            'business_type'   => 'required|string|regex:/^(tienda|servicio)$/i',
+            'economic_activity' => 'required|string|max:150|regex:/.*\S.*/',
             'country'         => 'nullable|string|max:255',
             'state'           => 'nullable|string|max:255',
             'city'            => 'nullable|string|max:255',
@@ -283,8 +283,8 @@ class TenantController extends Controller
                 'color_primary'   => $validated['color_primary'],
                 'color_secondary' => $validated['color_secondary'],
                 'color_accent'    => $validated['color_accent'],
-                'business_type'   => $validated['business_type'] ?? null,
-                'economic_activity' => $validated['economic_activity'] ?? null,
+                'business_type'   => $this->normalizeBusinessType($validated['business_type']),
+                'economic_activity' => $this->normalizeEconomicActivity($validated['economic_activity']),
                 'country'         => $validated['country'] ?? null,
                 'state'           => $validated['state'] ?? null,
                 'city'            => $validated['city'] ?? null,
@@ -407,8 +407,8 @@ class TenantController extends Controller
             'color_primary'         => 'required|string|max:7',
             'color_secondary'       => 'required|string|max:7',
             'color_accent'          => 'required|string|max:7',
-            'business_type'         => 'nullable|string|max:120',
-            'economic_activity'     => 'nullable|string|max:150',
+            'business_type'         => 'required|string|regex:/^(tienda|servicio)$/i',
+            'economic_activity'     => 'required|string|max:150|regex:/.*\S.*/',
             'country'               => 'required|exists:countries,id',
             'state'                 => 'required|exists:states,id',
             'city'                  => 'required|exists:cities,id',
@@ -462,8 +462,8 @@ class TenantController extends Controller
                 'color_primary'   => $validated['color_primary'],
                 'color_secondary' => $validated['color_secondary'],
                 'color_accent'    => $validated['color_accent'],
-                'business_type'   => $validated['business_type'] ?? null,
-                'economic_activity' => $validated['economic_activity'] ?? null,
+                'business_type'   => $this->normalizeBusinessType($validated['business_type']),
+                'economic_activity' => $this->normalizeEconomicActivity($validated['economic_activity']),
                 'country'         => $validated['country'],
                 'state'           => $validated['state'],
                 'city'            => $validated['city'],
@@ -568,8 +568,8 @@ class TenantController extends Controller
             'color_primary'   => 'nullable|string|max:7',
             'color_secondary' => 'nullable|string|max:7',
             'color_accent'    => 'nullable|string|max:7',
-            'business_type'   => 'nullable|string|max:120',
-            'economic_activity' => 'nullable|string|max:150',
+            'business_type'   => 'sometimes|required|string|regex:/^(tienda|servicio)$/i',
+            'economic_activity' => 'sometimes|required|string|max:150|regex:/.*\S.*/',
             'country'         => 'nullable|string|max:255',
             'state'           => 'nullable|string|max:255',
             'city'            => 'nullable|string|max:255',
@@ -682,8 +682,12 @@ class TenantController extends Controller
             'color_primary' => $validated['color_primary'] ?? $tenant->color_primary,
             'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
             'color_accent' => $validated['color_accent'] ?? $tenant->color_accent,
-            'business_type' => $validated['business_type'] ?? $tenant->business_type,
-            'economic_activity' => $validated['economic_activity'] ?? $tenant->economic_activity,
+            'business_type' => array_key_exists('business_type', $validated)
+                ? $this->normalizeBusinessType($validated['business_type'])
+                : $tenant->business_type,
+            'economic_activity' => array_key_exists('economic_activity', $validated)
+                ? $this->normalizeEconomicActivity($validated['economic_activity'])
+                : $tenant->economic_activity,
             'country' => $validated['country'] ?? $tenant->country,
             'state' => $validated['state'] ?? $tenant->state,
             'city' => $validated['city'] ?? $tenant->city,
@@ -788,8 +792,8 @@ class TenantController extends Controller
                 'slug'            => 'nullable|string|max:255|unique:tenants,slug,' . $tenant->id,
                 'slogan'          => 'nullable|string|max:255',
                 'description'     => 'nullable|string',
-                'business_type'   => 'nullable|string|max:120',
-                'economic_activity' => 'nullable|string|max:150',
+                'business_type'   => 'required|string|regex:/^(tienda|servicio)$/i',
+                'economic_activity' => 'required|string|max:150|regex:/.*\S.*/',
                 'logo'            => 'nullable|image|mimes:png,svg|max:2048',
                 'color_primary'   => 'nullable|string|max:7',
                 'color_secondary' => 'nullable|string|max:7',
@@ -861,8 +865,8 @@ class TenantController extends Controller
                 'slug'            => isset($validated['slug']) ? Str::slug($validated['slug']) : $tenant->slug,
                 'slogan'          => $validated['slogan'] ?? $tenant->slogan,
                 'description'     => $validated['description'] ?? $tenant->description,
-                'business_type'   => $validated['business_type'] ?? $tenant->business_type,
-                'economic_activity'=> $validated['economic_activity'] ?? $tenant->economic_activity,
+                'business_type'   => $this->normalizeBusinessType($validated['business_type']),
+                'economic_activity'=> $this->normalizeEconomicActivity($validated['economic_activity']),
                 'color_primary'   => $validated['color_primary'] ?? $tenant->color_primary,
                 'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
                 'color_accent'    => $validated['color_accent'] ?? $tenant->color_accent,
@@ -1290,6 +1294,28 @@ class TenantController extends Controller
         $planName = Str::lower((string) $this->getTenantCurrentPlanName($tenant));
 
         return Str::contains($planName, 'pro');
+    }
+
+    private function normalizeBusinessType(?string $value): ?string
+    {
+        $normalized = Str::lower(trim((string) $value));
+        if ($normalized === '') {
+            return null;
+        }
+
+        return $normalized === 'servicio' ? 'Servicio' : 'Tienda';
+    }
+
+    private function normalizeEconomicActivity(?string $value): ?string
+    {
+        $normalized = trim((string) $value);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
+
+        return Str::title(Str::lower($normalized));
     }
 
     private function filterDataByExistingColumns(string $tableName, array $data): array

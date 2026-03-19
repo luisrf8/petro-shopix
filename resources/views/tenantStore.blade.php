@@ -106,6 +106,7 @@
     $canAssignStoreRoles = $authUser?->canAssignStoreRoles() ?? false;
     $isOwnerRole = $authUser?->isOwner() ?? false;
     $tenantStoreUrl = $tenant->full_url ?? (url('/').'/'.$tenant->slug);
+    $tenantBusinessType = \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'tienda'));
 @endphp
 
 <div class="p-4 ">
@@ -157,6 +158,22 @@
                                     <label class="form-label">Nombre de la Tienda</label>
                                     <input type="text" class="form-control p-2 border border-radius-lg" name="name" value="{{ $tenant->name ?? '' }}">
                                 </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-4">
+                                        <label for="business_type" class="form-label fw-bold">Tipo de negocio</label>
+                                        <select name="business_type" id="business_type" class="form-select form-select-lg" required>
+                                            <option value="">Selecciona una opción</option>
+                                            <option value="tienda" {{ $tenantBusinessType === 'tienda' ? 'selected' : '' }}>Tienda</option>
+                                            <option value="servicio" {{ $tenantBusinessType === 'servicio' ? 'selected' : '' }}>Servicio</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label for="economic_activity" class="form-label fw-bold">Rubro económico</label>
+                                        <input type="text" name="economic_activity" id="economic_activity" class="form-control form-control-lg border border-radius-lg" value="{{ $tenant->economic_activity ?? '' }}" placeholder="Ej: Salud, Hogar, Consultoría" required>
+                                    </div>
+                                </div>
+
                                 <div class="row mb-4">
                                     <div class="col-md-4">
                                         <label for="phone_code" class="form-label fw-bold">Código del país</label>

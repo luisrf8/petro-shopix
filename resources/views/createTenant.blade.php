@@ -48,6 +48,21 @@
                             <label for="email" class="form-label">Correo de contacto</label>
                             <input type="email" name="email" id="email" class="form-control border border-radius-lg p-2" placeholder="correo@empresa.com" value="{{ old('email') }}" required>
                         </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="business_type" class="form-label">Tipo de negocio</label>
+                                <select name="business_type" id="business_type" class="form-control border border-radius-lg p-2" required>
+                                    <option value="">Selecciona una opción</option>
+                                    <option value="tienda" {{ old('business_type') === 'tienda' ? 'selected' : '' }}>Tienda</option>
+                                    <option value="servicio" {{ old('business_type') === 'servicio' ? 'selected' : '' }}>Servicio</option>
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <label for="economic_activity" class="form-label">Rubro económico</label>
+                                <input type="text" name="economic_activity" id="economic_activity" class="form-control border border-radius-lg p-2" placeholder="Ej: Moda, Gastronomía, Tecnología" value="{{ old('economic_activity') }}" required>
+                            </div>
+                        </div>
                         
                         <div class="row mb-3">
                             {{-- Logo --}}

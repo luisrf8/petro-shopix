@@ -84,6 +84,8 @@
                         data-email="{{ $tenant->email }}"
                         data-logo="{{ $tenant->logo }}"
                         data-logo-url="{{ $tenant->logo ? (\App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png') }}"
+                        data-business-type="{{ \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'tienda')) }}"
+                        data-economic-activity="{{ $tenant->economic_activity ?? '' }}"
                         data-owner-name="{{ $owner?->name }}"
                         data-owner-email="{{ $owner?->email }}"
                         data-plan-id="{{ $latestPayment?->plan_id }}"
@@ -146,6 +148,20 @@
             </div>
 
             <div class="mb-3">
+              <label for="editTenantBusinessType" class="form-label">Tipo de negocio</label>
+              <select class="form-select border border-1 p-2" id="editTenantBusinessType" name="business_type" required>
+                <option value="">Selecciona una opción</option>
+                <option value="tienda">Tienda</option>
+                <option value="servicio">Servicio</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label for="editTenantEconomicActivity" class="form-label">Rubro económico</label>
+              <input type="text" class="form-control border border-1 p-2" id="editTenantEconomicActivity" name="economic_activity" placeholder="Ej: Gastronomía, Tecnología" required>
+            </div>
+
+            <div class="mb-3">
               <label for="editOwnerName" class="form-label">Nombre dueño</label>
               <input type="text" class="form-control border border-1 p-2" id="editOwnerName" name="owner_name">
             </div>
@@ -197,6 +213,8 @@
       document.getElementById('editTenantName').value = this.dataset.name;
       document.getElementById('editTenantSlug').value = this.dataset.slug;
       document.getElementById('editTenantEmail').value = this.dataset.email;
+      document.getElementById('editTenantBusinessType').value = this.dataset.businessType || 'tienda';
+      document.getElementById('editTenantEconomicActivity').value = this.dataset.economicActivity || '';
       document.getElementById('editTenantLogo').value = this.dataset.logo;
       document.getElementById('editOwnerName').value = this.dataset.ownerName || '';
       document.getElementById('editOwnerEmail').value = this.dataset.ownerEmail || '';
