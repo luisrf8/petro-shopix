@@ -167,7 +167,7 @@
                                                     @php
                                                         $firstItem = $package->items->first();
                                                         $firstImage = $firstItem && $firstItem->variant && $firstItem->variant->product && isset($firstItem->variant->product->images[0])
-                                                            ? asset('storage/' . $firstItem->variant->product->images[0]->path)
+                                                            ? (\App\Support\ImageStorage::url($firstItem->variant->product->images[0]->path) ?? asset('assets/img/shopix5.png'))
                                                             : null;
                                                         $packageTotalBeforeDiscount = $package->items->sum(function($it) {
                                                             $basePrice = (float) ($it->variant->price ?? 0);
@@ -234,7 +234,7 @@
                                             <!-- Contenedor de la imagen -->
                                             <a href="{{ route('productItem', $item->id) }}" class="icon icon-shape icon-xl shadow bg-transparent text-center border border-1 border-black text-info border-radius-lg flex-shrink-0" style="width: 70px; height: 70px;">
                                                 @if(isset($item->images) && count($item->images) > 0)
-                                                    <img src="{{ asset('storage/' . $item->images[0]->path) }}" alt="Imagen del producto" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
+                                                    <img src="{{ \App\Support\ImageStorage::url($item->images[0]->path) ?? asset('assets/img/shopix5.png') }}" alt="Imagen del producto" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
                                                 @else
                                                     <i class="material-symbols-rounded text-dark">photo_camera</i>
                                                 @endif
@@ -273,7 +273,7 @@
                                                     <i class="check-icon d-none ms-2 text-success fas fa-check"></i>
                                                 </label>
                                                 <i class="material-symbols-rounded text-info" style="cursor: pointer"
-                                                    onclick="showProductDetails('{{ $item->name }}', '{{ $item->description }}', '{{ isset($item->images) && count($item->images) > 0 ? asset('storage/' . $item->images[0]->path) : '' }}', '{{ number_format($effectiveVariantPrice, 2, '.', '') }}', '{{ $variant->stock }}', '{{ $variant->size }}')">
+                                                    onclick="showProductDetails('{{ $item->name }}', '{{ $item->description }}', '{{ isset($item->images) && count($item->images) > 0 ? (\App\Support\ImageStorage::url($item->images[0]->path) ?? asset('assets/img/shopix5.png')) : '' }}', '{{ number_format($effectiveVariantPrice, 2, '.', '') }}', '{{ $variant->stock }}', '{{ $variant->size }}')">
                                                     info
                                                 </i>
                                             </div>
@@ -339,8 +339,8 @@
                                             @if ($method->qr_image)
                                                 @php $qr = json_decode($method->qr_image)[0] ?? null; @endphp
                                                 @if ($qr)
-                                                    <img src="{{ asset('storage/' . $qr) }}" alt="QR" style="max-width: 70px; max-height: 70px; cursor: pointer;"
-                                                        onclick="showQrModal('{{ asset('storage/' . $qr) }}')">
+                                                    <img src="{{ \App\Support\ImageStorage::url($qr) ?? asset('assets/img/shopix5.png') }}" alt="QR" style="max-width: 70px; max-height: 70px; cursor: pointer;"
+                                                        onclick="showQrModal('{{ \App\Support\ImageStorage::url($qr) ?? asset('assets/img/shopix5.png') }}')">
                                                 @endif
                                             @endif
                                             <div>

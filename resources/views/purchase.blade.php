@@ -86,7 +86,7 @@
                     @foreach ($productItems as $item)
                         @php
                             $itemImage = isset($item->images) && count($item->images) > 0
-                                ? asset('storage/' . $item->images[0]->path)
+                                ? (\App\Support\ImageStorage::url($item->images[0]->path) ?? asset('assets/img/shopix5.png'))
                                 : asset('assets/img/shopix5.png');
                         @endphp
                         <div class="col product-item" data-name="{{ strtolower($item->name) }}">

@@ -126,7 +126,7 @@
                                 <td>{{ $payment->reference ?? 'N/A' }}</td>
                                                                 <td>
                                                                         @if($payment->images->isNotEmpty())
-                                                                            <a href="{{ asset('storage/' . $payment->images->first()->image_path) }}" target="_blank" class="btn btn-sm btn-outline-dark mb-0">Ver imagen</a>
+                                                                            <a href="{{ \App\Support\ImageStorage::url($payment->images->first()->image_path) ?? '#' }}" target="_blank" class="btn btn-sm btn-outline-dark mb-0">Ver imagen</a>
                                                                         @else
                                                                             <span class="text-muted">Sin imagen</span>
                                                                         @endif

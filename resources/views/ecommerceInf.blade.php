@@ -223,7 +223,7 @@
         <a class="navbar-brand d-flex align-items-center" href="#top">
           @if($tenant->logo)
             <span class="btn btn-light p-1 px-3 m-0">
-              <img src="{{ asset('storage/' . $tenant->logo) }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
+              <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
             </span>
           @else
             <span class="fw-bold">{{ $tenant->name }}</span>
@@ -255,7 +255,7 @@
   <!-- HERO -->
   <section id="top" class="hero" style="
       @if(isset($tenant->background_image) && $tenant->background_image)
-        background-image: url('{{ asset('storage/' . $tenant->background_image) }}');
+        background-image: url('{{ \App\Support\ImageStorage::url($tenant->background_image) ?? asset('assets/img/shopix5.png') }}');
       @else
         background-color: {{ $tenant->color_primary ?? '#fdfaf6' }};
       @endif
@@ -283,7 +283,7 @@
                     <a href="#"
                        class="category-card category-link"
                        data-id="{{ $category->id }}"
-                       style="background-image: url('{{ asset('storage/'.$category->image) }}')">
+                       style="background-image: url('{{ \App\Support\ImageStorage::url($category->image) ?? asset('assets/img/shopix5.png') }}')">
                         <div class="category-overlay">
                             <h5 class="category-title text-center">{{ $category->name }}</h5>
                         </div>
@@ -319,7 +319,7 @@
             <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="text-decoration-none d-block h-100">
               <div class="card card-product h-100">
                 @if(isset($product->images[0]))
-                  <img src="{{ asset('storage/' . $product->images[0]->path) }}" class="card-img-top" style="height: 300px; object-fit: cover;">
+                  <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top" style="height: 300px; object-fit: cover;">
                 @else
                   <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
                     <i class="bi bi-image text-muted fs-1"></i>
@@ -347,7 +347,7 @@
           @php
             $firstItem = $package->items->first();
             $firstImage = $firstItem && $firstItem->variant && $firstItem->variant->product && isset($firstItem->variant->product->images[0])
-              ? asset('storage/' . $firstItem->variant->product->images[0]->path)
+              ? (\App\Support\ImageStorage::url($firstItem->variant->product->images[0]->path) ?? asset('assets/img/shopix5.png'))
               : null;
             $packageTotalBeforeDiscount = $package->items->sum(function($it) {
               $basePrice = (float) ($it->variant->price ?? 0);

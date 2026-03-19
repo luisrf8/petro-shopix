@@ -11,25 +11,42 @@
                     </div>
                 </div>
                 <div class="card-body">
+                    @if (session('status'))
+                        <div class="alert alert-success text-white" role="alert">
+                            {{ session('status') }}
+                        </div>
+                    @endif
+
+                    @if ($errors->any())
+                        <div class="alert alert-danger text-white" role="alert">
+                            <strong>No se pudo crear la tienda.</strong>
+                            <ul class="mb-0 mt-2">
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
                     <form action="{{ route('tenants.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
 
                         {{-- Nombre --}}
                         <div class="mb-3">
                             <label for="name" class="form-label">Nombre del Tenant</label>
-                            <input type="text" name="name" id="name" class="form-control border border-radius-lg p-2" placeholder="Ej: Mi Empresa" required>
+                            <input type="text" name="name" id="name" class="form-control border border-radius-lg p-2" placeholder="Ej: Mi Empresa" value="{{ old('name') }}" required>
                         </div>
 
                         {{-- Slug --}}
                         <div class="mb-3">
                             <label for="slug" class="form-label">Slug / URL de Landing</label>
-                            <input type="text" name="slug" id="slug" class="form-control border border-radius-lg p-2" placeholder="/ejemplo-mi-empresa" required>
+                            <input type="text" name="slug" id="slug" class="form-control border border-radius-lg p-2" placeholder="/ejemplo-mi-empresa" value="{{ old('slug') }}" required>
                         </div>
 
                         {{-- Email --}}
                         <div class="mb-3">
                             <label for="email" class="form-label">Correo de contacto</label>
-                            <input type="email" name="email" id="email" class="form-control border border-radius-lg p-2" placeholder="correo@empresa.com" required>
+                            <input type="email" name="email" id="email" class="form-control border border-radius-lg p-2" placeholder="correo@empresa.com" value="{{ old('email') }}" required>
                         </div>
                         
                         <div class="row mb-3">
@@ -69,7 +86,7 @@
                             <label for="plan_id" class="form-label">Plan</label>
                             <select name="plan_id" id="plan_id" class="form-control border border-radius-lg p-2" required>
                                 @foreach($plans as $plan)
-                                    <option value="{{ $plan->id }}">{{ $plan->name }} - ${{ $plan->price }}</option>
+                                    <option value="{{ $plan->id }}" {{ (string) old('plan_id') === (string) $plan->id ? 'selected' : '' }}>{{ $plan->name }} - ${{ $plan->price }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -231,8 +248,26 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Vista previa del logo
+    const slugInput = document.getElementById("slug");
     const logoInput = document.getElementById("logo");
     const logoPreview = document.getElementById("logo-preview");
+
+    if (slugInput) {
+        const normalizeSlug = (value) => String(value ?? "")
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/-{2,}/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+        slugInput.addEventListener("input", () => {
+            const normalizedValue = normalizeSlug(slugInput.value);
+            if (slugInput.value !== normalizedValue) {
+                slugInput.value = normalizedValue;
+            }
+        });
+    }
 
     logoInput.addEventListener("change", (event) => {
         const file = event.target.files[0];

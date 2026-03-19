@@ -215,7 +215,7 @@
           <div class="card p-4 d-flex flex-row" style="min-height: 10rem;">
               <a href="{{ route('productItem', $product->id) }}" class="icon icon-shape icon-xl shadow bg-transparent text-center border border-1 border-black text-info border-radius-lg" style="width: 100px; height: 100px;">
                   @if(isset($product->images) && count($product->images) > 0)
-                      <img src="{{ asset('storage/' . $product->images[0]->path) }}" alt="Imagen del producto" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
+                    <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" alt="Imagen del producto" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
                   @else
                       <i class="material-symbols-rounded text-dark">photo_camera</i>
                   @endif

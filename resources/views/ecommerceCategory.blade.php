@@ -134,7 +134,7 @@
         <a class="navbar-brand d-flex align-items-center" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}">
           @if($tenant->logo)
             <span class="btn btn-light p-1 px-3 m-0">
-              <img src="{{ asset('storage/' . $tenant->logo) }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
+              <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
             </span>
           @else
             <span class="btn btn-light text-dark fw-bold">{{ $tenant->name }}</span>
@@ -200,7 +200,7 @@
 
                     <div class="card card-product h-100">
                         @if(isset($product->images[0]))
-                            <img src="{{ asset('storage/' . $product->images[0]->path) }}" class="card-img-top" style="height: 300px; object-fit: cover;">
+                        <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top" style="height: 300px; object-fit: cover;">
                         @else
                             <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
                                 <i class="bi bi-image text-muted fs-1"></i>
@@ -241,7 +241,7 @@
           @php
             $firstItem = $package->items->first();
             $firstImage = $firstItem && $firstItem->variant && $firstItem->variant->product && isset($firstItem->variant->product->images[0])
-              ? asset('storage/' . $firstItem->variant->product->images[0]->path)
+              ? (\App\Support\ImageStorage::url($firstItem->variant->product->images[0]->path) ?? asset('assets/img/shopix5.png'))
               : null;
             $packageTotalBeforeDiscount = $package->items->sum(function($it) {
               $basePrice = (float) ($it->variant->price ?? 0);

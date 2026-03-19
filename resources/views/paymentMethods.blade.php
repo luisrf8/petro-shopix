@@ -82,7 +82,7 @@
                     @php
                         $qrImages = isset($method->qr_image) && is_string($method->qr_image) ? json_decode($method->qr_image, true) : [];
                     @endphp
-                    <img src="{{ count($qrImages) > 0 ? asset('storage/' . $qrImages[0]) : '' }}" 
+                    <img src="{{ count($qrImages) > 0 ? (\App\Support\ImageStorage::url($qrImages[0]) ?? '') : '' }}" 
                         alt="Imagen del producto" 
                         class="d-none" 
                         style="width: 20%; height: 20%; object-fit: cover; border-radius: inherit;">
@@ -93,7 +93,7 @@
                         data-bs-toggle="modal" 
                         data-bs-target="#editPaymentMethod" 
                         data-method-id="{{ $method->id }}"
-                        data-qr="{{ count($qrImages) > 0 ? asset('storage/' . $qrImages[0]) : '' }}"
+                        data-qr="{{ count($qrImages) > 0 ? (\App\Support\ImageStorage::url($qrImages[0]) ?? '') : '' }}"
                         data-name="{{ $method->name }}"
                         data-admin_name="{{ $method->admin_name }}"
                         data-currency="{{ $method->currency_id }}"

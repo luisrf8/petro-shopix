@@ -14,10 +14,21 @@ use RuntimeException;
 class ImageStorage
 {
     public const GOOGLE_PREFIX = 'gdrive/';
+    private const GOOGLE_FILE_ID_PATTERN = '/^[a-zA-Z0-9_-]{10,}$/';
 
     public static function provider(): string
     {
-        return Str::lower((string) config('services.image_storage.provider', 'local'));
+        $provider = Str::lower(trim((string) config('services.image_storage.provider', 'local')));
+
+        if (in_array($provider, ['google', 'google-drive', 'gdrive'], true)) {
+            return 'google_drive';
+        }
+
+        if (($provider === '' || $provider === 'local') && self::hasGoogleDriveConfiguration()) {
+            return 'google_drive';
+        }
+
+        return $provider !== '' ? $provider : 'local';
     }
 
     public static function usesGoogleDrive(): bool
@@ -67,9 +78,9 @@ class ImageStorage
             return false;
         }
 
-        if (self::isGooglePath($storedPath)) {
-            $fileId = self::extractGoogleFileId($storedPath);
-            if ($fileId === '') {
+        $fileId = self::extractGoogleFileId($storedPath);
+        if ($fileId !== '') {
+            if (!self::hasGoogleDriveConfiguration()) {
                 return false;
             }
 
@@ -91,9 +102,9 @@ class ImageStorage
             return;
         }
 
-        if (self::isGooglePath($storedPath)) {
-            $fileId = self::extractGoogleFileId($storedPath);
-            if ($fileId === '') {
+        $fileId = self::extractGoogleFileId($storedPath);
+        if ($fileId !== '') {
+            if (!self::hasGoogleDriveConfiguration()) {
                 return;
             }
 
@@ -112,24 +123,95 @@ class ImageStorage
 
     public static function isGooglePath(?string $storedPath): bool
     {
-        if (empty($storedPath)) {
-            return false;
-        }
-
-        $cleanPath = ltrim((string) $storedPath, '/');
-
-        return Str::startsWith($cleanPath, self::GOOGLE_PREFIX);
+        return self::extractGoogleFileId($storedPath) !== '';
     }
 
     public static function extractGoogleFileId(?string $storedPath): string
     {
-        if (!self::isGooglePath($storedPath)) {
+        if (empty($storedPath)) {
             return '';
         }
 
-        $cleanPath = ltrim((string) $storedPath, '/');
+        $cleanPath = trim((string) $storedPath);
+        if ($cleanPath === '') {
+            return '';
+        }
 
-        return trim((string) Str::after($cleanPath, self::GOOGLE_PREFIX));
+        $cleanPath = ltrim($cleanPath, '/');
+
+        if (Str::startsWith($cleanPath, self::GOOGLE_PREFIX)) {
+            return trim((string) Str::after($cleanPath, self::GOOGLE_PREFIX));
+        }
+
+        if (Str::startsWith($cleanPath, 'storage/' . self::GOOGLE_PREFIX)) {
+            return trim((string) Str::after($cleanPath, 'storage/' . self::GOOGLE_PREFIX));
+        }
+
+        $googleIdFromUrl = self::extractGoogleFileIdFromUrl($cleanPath);
+        if ($googleIdFromUrl !== '') {
+            return $googleIdFromUrl;
+        }
+
+        return preg_match(self::GOOGLE_FILE_ID_PATTERN, $cleanPath) === 1
+            ? $cleanPath
+            : '';
+    }
+
+    private static function extractGoogleFileIdFromUrl(string $value): string
+    {
+        $decodedValue = urldecode(trim($value));
+        if ($decodedValue === '') {
+            return '';
+        }
+
+        if (preg_match('#(?:^|/)storage/gdrive/([^/?]+)#', $decodedValue, $matches) === 1) {
+            return trim((string) ($matches[1] ?? ''));
+        }
+
+        if (preg_match('#drive\.google\.com/file/d/([^/?]+)#', $decodedValue, $matches) === 1) {
+            return trim((string) ($matches[1] ?? ''));
+        }
+
+        $query = parse_url($decodedValue, PHP_URL_QUERY);
+        if (is_string($query) && $query !== '') {
+            parse_str($query, $queryParams);
+            $id = trim((string) ($queryParams['id'] ?? ''));
+            if ($id !== '') {
+                return $id;
+            }
+        }
+
+        return '';
+    }
+
+    private static function hasGoogleDriveConfiguration(): bool
+    {
+        $credentialsPath = self::resolveCredentialsPath((string) config('services.image_storage.google_drive_credentials', ''));
+
+        return $credentialsPath !== '' && is_file($credentialsPath);
+    }
+
+    private static function resolveCredentialsPath(string $credentialsPath): string
+    {
+        $credentialsPath = trim($credentialsPath);
+        if ($credentialsPath === '') {
+            return storage_path('app/credentials.json');
+        }
+
+        if (preg_match('#^(?:[A-Za-z]:[\\/]|\\\\|/)#', $credentialsPath) === 1) {
+            return $credentialsPath;
+        }
+
+        return base_path($credentialsPath);
+    }
+
+    private static function googleProxyUrl(string $fileId): string
+    {
+        try {
+            return route('storage.gdrive.proxy', ['fileId' => $fileId]);
+        } catch (\Throwable $exception) {
+            return asset('storage/' . self::GOOGLE_PREFIX . ltrim($fileId, '/'));
+        }
     }
 
     public static function url(?string $storedPath): ?string
@@ -141,11 +223,17 @@ class ImageStorage
         $storedPath = trim((string) $storedPath);
 
         if (Str::startsWith($storedPath, ['http://', 'https://'])) {
+            $googleIdFromUrl = self::extractGoogleFileIdFromUrl($storedPath);
+            if ($googleIdFromUrl !== '') {
+                return self::googleProxyUrl($googleIdFromUrl);
+            }
+
             return $storedPath;
         }
 
-        if (self::isGooglePath($storedPath)) {
-            return asset('storage/' . ltrim($storedPath, '/'));
+        $googleId = self::extractGoogleFileId($storedPath);
+        if ($googleId !== '') {
+            return self::googleProxyUrl($googleId);
         }
 
         if (Str::startsWith($storedPath, '/storage/')) {
@@ -165,7 +253,7 @@ class ImageStorage
 
     public static function downloadGoogleFileById(string $fileId): array
     {
-        $fileId = trim($fileId);
+        $fileId = self::extractGoogleFileId(trim($fileId));
         if ($fileId === '') {
             throw new RuntimeException('Archivo inválido de Google Drive.');
         }
@@ -229,7 +317,7 @@ class ImageStorage
 
     private static function buildDriveService(): Drive
     {
-        $credentialsPath = (string) config('services.image_storage.google_drive_credentials', storage_path('app/credentials.json'));
+        $credentialsPath = self::resolveCredentialsPath((string) config('services.image_storage.google_drive_credentials', storage_path('app/credentials.json')));
 
         if (!is_file($credentialsPath)) {
             throw new RuntimeException('No existe el archivo de credenciales de Google Drive: ' . $credentialsPath);

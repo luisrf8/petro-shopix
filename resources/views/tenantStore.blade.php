@@ -105,6 +105,7 @@
     $authUser = auth()->user();
     $canAssignStoreRoles = $authUser?->canAssignStoreRoles() ?? false;
     $isOwnerRole = $authUser?->isOwner() ?? false;
+    $tenantStoreUrl = $tenant->full_url ?? (url('/').'/'.$tenant->slug);
 @endphp
 
 <div class="p-4 ">
@@ -175,7 +176,29 @@
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">Url de la Tienda</label>
-                                    <input type="text" class="form-control p-2 border border-radius-lg" name="slug" value="{{ $tenant->slug ?? '' }}">
+                                    <input type="text" class="form-control p-2 border border-radius-lg" id="storeSlugInput" name="slug" value="{{ $tenant->slug ?? '' }}">
+                                    <div class="input-group mt-2">
+                                        <input
+                                            type="text"
+                                            class="form-control p-2 border border-radius-lg"
+                                            id="storePublicUrlInput"
+                                            value="{{ $tenantStoreUrl }}"
+                                            readonly>
+                                        <a
+                                            href="{{ $tenantStoreUrl }}"
+                                            target="_blank"
+                                            rel="noopener"
+                                            class="btn btn-outline-dark"
+                                            id="openStoreUrlBtn">
+                                            Abrir tienda
+                                        </a>
+                                        <button
+                                            type="button"
+                                            class="btn btn-outline-secondary"
+                                            id="copyStoreUrlBtn">
+                                            Copiar enlace
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="mb-3">
@@ -254,7 +277,7 @@
                             <div class="tab-pane fade" id="design" role="tabpanel">
                                 <div class="mb-4">
                                     <div class="d-flex align-items-center gap-3 flex-wrap">
-                                        <img id="logo-preview" src="{{ asset('storage/' . $tenant->logo) }}" class="logo-preview rounded p-2 bg-white shadow-sm">
+                                        <img id="logo-preview" src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" class="logo-preview rounded p-2 bg-white shadow-sm">
                                     </div>
                                 </div>
                                 <div class="mb-3">
@@ -268,7 +291,7 @@
                                 </div>
                                 <div class="mb-4">
                                     <div class="d-flex align-items-center gap-3 flex-wrap">
-                                        <img id="bg-preview" src="{{ asset('storage/' . $tenant->background_image) }}" class="logo-preview rounded p-2 bg-white shadow-sm">
+                                        <img id="bg-preview" src="{{ \App\Support\ImageStorage::url($tenant->background_image) ?? asset('assets/img/shopix5.png') }}" class="logo-preview rounded p-2 bg-white shadow-sm">
                                     </div>
                                 </div>
                                 <div class="mb-3">
@@ -865,14 +888,77 @@ function initMap() {
     const backgroundPreview = document.getElementById("bg-preview");
     const openLogoAiModalBtn = document.getElementById('openLogoAiModalBtn');
     const openBackgroundAiModalBtn = document.getElementById('openBackgroundAiModalBtn');
+    const storeSlugInput = document.getElementById('storeSlugInput');
+    const storePublicUrlInput = document.getElementById('storePublicUrlInput');
+    const openStoreUrlBtn = document.getElementById('openStoreUrlBtn');
+    const copyStoreUrlBtn = document.getElementById('copyStoreUrlBtn');
     const aiGenerateBtn = document.getElementById('aiGenerateBtn');
     const aiDownloadBtn = document.getElementById('aiDownloadBtn');
     const aiUseImageBtn = document.getElementById('aiUseImageBtn');
     const aiAttachBtn = document.getElementById('aiAttachBtn');
     const aiReferenceImage = document.getElementById('aiReferenceImage');
     const aiPromptInput = document.getElementById('aiPromptInput');
+    const baseStoreUrl = "{{ rtrim(url('/'), '/') }}";
+
+    const normalizeSlug = (value) => String(value ?? '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+    const updateStorePublicUrl = () => {
+        if (!storeSlugInput || !storePublicUrlInput || !openStoreUrlBtn) {
+            return;
+        }
+
+        const normalizedSlug = normalizeSlug(storeSlugInput.value);
+        if (storeSlugInput.value !== normalizedSlug) {
+            storeSlugInput.value = normalizedSlug;
+        }
+
+        const fullUrl = normalizedSlug ? `${baseStoreUrl}/${normalizedSlug}` : baseStoreUrl;
+        storePublicUrlInput.value = fullUrl;
+        openStoreUrlBtn.href = fullUrl;
+    };
+
+    const copyText = async (text) => {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textArea);
+
+        return copied;
+    };
 
     aiModalInstance = new bootstrap.Modal(document.getElementById('aiGenerateModal'));
+
+    if (storeSlugInput) {
+        storeSlugInput.addEventListener('input', updateStorePublicUrl);
+        updateStorePublicUrl();
+    }
+
+    if (copyStoreUrlBtn && storePublicUrlInput) {
+        copyStoreUrlBtn.addEventListener('click', async () => {
+            const originalText = copyStoreUrlBtn.textContent;
+            const copied = await copyText(storePublicUrlInput.value || '');
+            copyStoreUrlBtn.textContent = copied ? 'Copiado' : 'Error';
+            setTimeout(() => {
+                copyStoreUrlBtn.textContent = originalText;
+            }, 1400);
+        });
+    }
 
     // Vista previa del logo
     logoInput.addEventListener("change", (event) => {

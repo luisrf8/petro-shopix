@@ -169,7 +169,7 @@
             <div class="directory-tenant-card p-3 d-flex flex-column">
               <div class="d-flex align-items-center gap-3 mb-2">
                 @if(!empty($tenant->logo))
-                  <img src="{{ asset('storage/' . $tenant->logo) }}" alt="{{ $tenant->name }}" class="directory-tenant-logo">
+                  <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="{{ $tenant->name }}" class="directory-tenant-logo">
                 @else
                   <img src="{{ asset('assets/img/shopix5.png') }}" alt="{{ $tenant->name }}" class="directory-tenant-logo">
                 @endif

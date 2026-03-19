@@ -139,7 +139,7 @@
                             data-category-id="{{ $category->id }}"
                             data-name="{{ $category->name }}"
                             data-description="{{ $category->description }}"
-                            data-image="{{ $category->image ? asset('storage/'.$category->image) : '' }}">
+                            data-image="{{ $category->image ? (\App\Support\ImageStorage::url($category->image) ?? '') : '' }}">
                             Editar
                           </a>
                         </td>

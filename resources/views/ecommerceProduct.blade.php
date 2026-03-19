@@ -176,7 +176,7 @@
         <a class="navbar-brand d-flex align-items-center" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}">
           @if($tenant->logo)
             <span class="btn btn-light p-1 px-3 m-0">
-              <img src="{{ asset('storage/' . $tenant->logo) }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
+              <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
             </span>
           @else
             <span class="btn btn-light text-dark fw-bold">{{ $tenant->name }}</span>
@@ -208,10 +208,10 @@
                 @if(count($product->images) > 0)
                   @foreach($product->images as $index => $image)
                     <img 
-                      src="{{ asset('storage/' . $image->path) }}" 
+                      src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}" 
                       alt="Miniatura {{ $index + 1 }}" 
                       class="thumbnail-image {{ $index === 0 ? 'active' : '' }}" 
-                      data-main-src="{{ asset('storage/' . $image->path) }}"
+                      data-main-src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}"
                     >
                   @endforeach
                 @else
@@ -225,7 +225,7 @@
             <div class="product-gallery-main flex-grow-1">
               @if(isset($product->images[0]))
                 <img 
-                  src="{{ asset('storage/' . $product->images[0]->path) }}" 
+                  src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" 
                   alt="Imagen Principal de {{ $product->name }}" 
                   class="main-image" 
                   id="main-product-image"

@@ -36,7 +36,7 @@
                 @foreach($tenants as $tenant)
                   <tr>
                     <td>
-                      <img src="{{ $tenant->logo ? asset('storage/' . $tenant->logo) : asset('assets/img/shopix5.png') }}" alt="Logo"
+                      <img src="{{ $tenant->logo ? (\App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png') }}" alt="Logo"
                       class="navbar-brand-img"
                       width="100"
                       height="100"
@@ -83,6 +83,7 @@
                         data-slug="{{ $tenant->slug }}"
                         data-email="{{ $tenant->email }}"
                         data-logo="{{ $tenant->logo }}"
+                        data-logo-url="{{ $tenant->logo ? (\App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png') }}"
                         data-owner-name="{{ $owner?->name }}"
                         data-owner-email="{{ $owner?->email }}"
                         data-plan-id="{{ $latestPayment?->plan_id }}"
@@ -205,14 +206,14 @@
 
       // 👇 Aquí actualizamos la vista previa del logo dinámicamente
       const logoPreview = document.getElementById('editTenantLogoPreview');
-      const logoPath = this.dataset.logo ? `/storage/${this.dataset.logo}` : '/assets/img/shopix5.png';
+      const logoPath = this.dataset.logoUrl || '/assets/img/shopix5.png';
       logoPreview.src = logoPath;
     });
   });
   
   document.getElementById('editTenantLogo').addEventListener('input', function() {
     const logoPreview = document.getElementById('editTenantLogoPreview');
-    const logoPath = this.value ? `/storage/${this.value}` : '/assets/img/shopix5.png';
+    const logoPath = this.value ? this.value : '/assets/img/shopix5.png';
     logoPreview.src = logoPath;
   });
 

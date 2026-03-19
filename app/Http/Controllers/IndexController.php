@@ -199,6 +199,8 @@ class IndexController extends Controller
 
         $user = auth()->user();
         $tenantId = $user->tenant_id;
+        $tenant = Tenant::find($tenantId);
+        $tenantPublicUrl = $tenant?->slug ? url('/').'/'.$tenant->slug : null;
 
         // Cargas (filtradas por tenant)
         $users = User::with('role')->where('tenant_id', $tenantId)->get();
@@ -279,7 +281,8 @@ class IndexController extends Controller
             'topProductSales',
             'months',
             'lowStockProducts',
-            'user'
+            'user',
+            'tenantPublicUrl'
         ));
     }
     

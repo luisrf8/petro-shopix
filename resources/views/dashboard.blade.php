@@ -11,6 +11,22 @@
             Datos y Análisis.
           </p>
         </div>
+
+                @if(!empty($tenantPublicUrl))
+                <div class="col-12 mb-3">
+                    <div class="card">
+                        <div class="card-body py-3">
+                            <label class="form-label mb-2">URL pública de tu tienda</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control p-2 border border-radius-lg" id="dashboardStoreUrlInput" value="{{ $tenantPublicUrl }}" readonly>
+                                <a href="{{ $tenantPublicUrl }}" target="_blank" rel="noopener" class="btn btn-outline-dark">Abrir tienda</a>
+                                <button type="button" class="btn btn-outline-secondary" id="dashboardCopyStoreUrlBtn">Copiar enlace</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
         @foreach($stats as $stat)
         <a href="{{ $stat['link'] }}" class="text-decoration-none col-xl-3 col-sm-6">
             <div class="card">
@@ -228,6 +244,38 @@
         const months = @json($months); // Por ejemplo: [50, 20, 10, 22, 50, 10, 40]
         const topProductNames = @json($topProductNames); // ["Producto A", "Producto B", ...]
         const topProductSales = @json($topProductSales); // [120, 90, 70, 50, 30]
+        const dashboardStoreUrlInput = document.getElementById('dashboardStoreUrlInput');
+        const dashboardCopyStoreUrlBtn = document.getElementById('dashboardCopyStoreUrlBtn');
+
+        const copyText = async (text) => {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+                return true;
+            }
+
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const copied = document.execCommand('copy');
+            document.body.removeChild(textArea);
+
+            return copied;
+        };
+
+        if (dashboardCopyStoreUrlBtn && dashboardStoreUrlInput) {
+            dashboardCopyStoreUrlBtn.addEventListener('click', async () => {
+                const originalText = dashboardCopyStoreUrlBtn.textContent;
+                const copied = await copyText(dashboardStoreUrlInput.value || '');
+                dashboardCopyStoreUrlBtn.textContent = copied ? 'Copiado' : 'Error';
+                setTimeout(() => {
+                    dashboardCopyStoreUrlBtn.textContent = originalText;
+                }, 1400);
+            });
+        }
 
         var ctx2 = document.getElementById("chart-line").getContext("2d");
 

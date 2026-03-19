@@ -366,7 +366,7 @@
             @foreach($grupo as $tienda)
               <div class="col-6 col-md-3 mb-4 d-flex justify-content-center align-items-center">
                 @if($tienda->logo)
-                  <img src="{{ asset('storage/' . $tienda->logo) }}" 
+                  <img src="{{ \App\Support\ImageStorage::url($tienda->logo) ?? asset('assets/img/shopix5.png') }}" 
                        alt="{{ $tienda->name }}" 
                        class="img-fluid" 
                        style="max-height: 100px;">

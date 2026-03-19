@@ -87,7 +87,7 @@
                                     @php
                                         $product = $detalle->productVariant?->product;
                                         $image = $product && $product->images->first()
-                                                ? asset('storage/' . $product->images->first()->path)
+                                                ? (\App\Support\ImageStorage::url($product->images->first()->path) ?? asset('assets/img/shopix5.png'))
                                                 : asset('assets/img/shopix5.png');
                                     @endphp
                                     <tr>

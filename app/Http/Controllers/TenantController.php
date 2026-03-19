@@ -27,7 +27,9 @@ use App\Models\Payment;
 use App\Models\DollarRate;
 use App\Support\ImageStorage;
 use App\Services\GeminiImageService;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Carbon\Carbon;
@@ -228,9 +230,9 @@ class TenantController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
-        $request->validate([
+        $validated = $request->validate([
             'name'            => 'required|string|max:255',
-            'slug'            => 'required|string|max:255|unique:tenants,slug',
+            'slug'            => 'required|string|max:255',
             'email'           => 'required|email|unique:tenants,email',
             'logo'            => 'nullable|image|mimes:png,svg|max:2048',
             'color_primary'   => 'required|string|max:7',
@@ -238,90 +240,167 @@ class TenantController extends Controller
             'color_accent'    => 'required|string|max:7',
             'business_type'   => 'nullable|string|max:120',
             'economic_activity' => 'nullable|string|max:150',
-            'country'         => 'required|string|max:255',
-            'state'           => 'required|string|max:255',
-            'city'            => 'required|string|max:255',
-            'phone_code'      => 'required|string|max:5',
-            'phone_number'    => 'required|string|max:20',
-            'users'           => 'array',
+            'country'         => 'nullable|string|max:255',
+            'state'           => 'nullable|string|max:255',
+            'city'            => 'nullable|string|max:255',
+            'phone_code'      => 'nullable|string|max:5',
+            'phone_number'    => 'nullable|string|max:20',
+            'users'           => 'nullable|array',
+            'users.*.name'    => 'nullable|string|max:255',
+            'users.*.email'   => 'nullable|email|unique:users,email',
+            'users.*.password'=> 'nullable|string|min:8',
             'plan_id'         => 'required|exists:plans,id',
         ]);
 
-        // 📂 Subir logo si existe
-        $logoPath = null;
-        if ($request->hasFile('logo')) {
-            $logoPath = ImageStorage::storeUploadedFile($request->file('logo'), 'tenants/logos');
+        $normalizedSlug = Str::slug((string) $validated['slug']);
+
+        if ($normalizedSlug === '') {
+            return back()
+                ->withErrors(['slug' => 'El slug ingresado no es válido.'])
+                ->withInput();
         }
 
-        $tenant = Tenant::create([
-            'name'            => $request->name,
-            'slug'            => Str::slug($request->slug),
-            'email'           => $request->email,
-            'logo'            => $logoPath,
-            'color_primary'   => $request->color_primary,
-            'color_secondary' => $request->color_secondary,
-            'color_accent'    => $request->color_accent,
-            'business_type'   => $request->business_type,
-            'economic_activity' => $request->economic_activity,
-            'country'         => $request->country,
-            'state'           => $request->state,
-            'city'            => $request->city,
-            'phone_code'      => $request->phone_code,
-            'phone_number'    => $request->phone_number,
-        ]);
-
-        // 💳 Crear relación TenantPayment
-        $plan = Plan::findOrFail($request->plan_id);
-
-        $tenantPlanPaymentData = [
-            'tenant_id' => $tenant->id,
-            'plan_id'   => $plan->id,
-            'amount'    => $plan->price,
-            'status'    => 'paid', // o pending si quieres validar pago
-            'paid_at'   => now(),
-        ];
-
-        if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
-            $tenantPlanPaymentData['expires_at'] = now()->addDays((int) ($plan->duration_days ?? 0));
+        if (Tenant::where('slug', $normalizedSlug)->exists()) {
+            return back()
+                ->withErrors(['slug' => 'El slug ingresado ya está en uso.'])
+                ->withInput();
         }
 
-        TenantPlanPayment::create($tenantPlanPaymentData);
+        DB::beginTransaction();
 
-        // 🎭 Obtener roles existentes
-        $roles = Role::whereIn('name', ['owner', 'admin', 'vendor'])->get()->keyBy('name');
+        try {
+            // 📂 Subir logo si existe
+            $logoPath = null;
+            if ($request->hasFile('logo')) {
+                $logoPath = ImageStorage::storeUploadedFile($request->file('logo'), 'tenants/logos');
+            }
 
-        // 👥 Crear usuarios enviados en el formulario
-        if ($request->has('users')) {
-            foreach ($request->users as $roleName => $userData) {
-                if (!empty($userData['email'])) {
-                    $user = User::create([
-                        'name'      => $userData['name'] ?? ucfirst($roleName),
+            $tenantData = [
+                'name'            => $validated['name'],
+                'slug'            => $normalizedSlug,
+                'email'           => $validated['email'],
+                'logo'            => $logoPath,
+                'color_primary'   => $validated['color_primary'],
+                'color_secondary' => $validated['color_secondary'],
+                'color_accent'    => $validated['color_accent'],
+                'business_type'   => $validated['business_type'] ?? null,
+                'economic_activity' => $validated['economic_activity'] ?? null,
+                'country'         => $validated['country'] ?? null,
+                'state'           => $validated['state'] ?? null,
+                'city'            => $validated['city'] ?? null,
+                'phone_code'      => $validated['phone_code'] ?? null,
+                'phone_number'    => $validated['phone_number'] ?? null,
+            ];
+
+            $tenant = Tenant::create($this->filterDataByExistingColumns('tenants', $tenantData));
+
+            // 💳 Crear relación TenantPayment
+            $plan = Plan::findOrFail($validated['plan_id']);
+
+            $tenantPlanPaymentData = [
+                'tenant_id' => $tenant->id,
+                'plan_id'   => $plan->id,
+                'amount'    => $plan->price,
+                'status'    => 'paid',
+                'paid_at'   => now(),
+            ];
+
+            if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
+                $tenantPlanPaymentData['expires_at'] = now()->addDays((int) ($plan->duration_days ?? 0));
+            }
+
+            TenantPlanPayment::create($tenantPlanPaymentData);
+
+            $roles = Role::whereIn('name', ['owner', 'admin', 'vendor'])
+                ->get()
+                ->keyBy(fn (Role $role) => Str::lower((string) $role->name));
+
+            // 👥 Crear usuarios enviados en el formulario
+            if (!empty($validated['users']) && is_array($validated['users'])) {
+                foreach ($validated['users'] as $roleName => $userData) {
+                    if (empty($userData['email'])) {
+                        continue;
+                    }
+
+                    $normalizedRoleName = Str::lower((string) $roleName);
+                    $role = $roles->get($normalizedRoleName);
+
+                    if (!$role && $normalizedRoleName === 'owner') {
+                        $role = $roles->get('admin');
+                    }
+
+                    $userRecord = [
+                        'name'      => $userData['name'] ?? ucfirst($normalizedRoleName),
                         'email'     => $userData['email'],
                         'password'  => Hash::make($userData['password'] ?? 'password123'),
                         'tenant_id' => $tenant->id,
+                        'role_id'   => $role?->id,
                         'is_active' => 1,
-                    ]);
+                    ];
 
-                    // Asignar rol automáticamente según el nombre
-                    if (isset($roles[$roleName])) {
-                        $user->assignRole($roles[$roleName]->name);
-                    } elseif ($roleName === 'owner') {
-                        $user->assignRole('admin');
+                    $user = User::create($this->filterDataByExistingColumns('users', $userRecord));
+
+                    if ($normalizedRoleName === 'owner' && Schema::hasColumn('tenants', 'owner_id')) {
+                        $tenant->owner_id = $user->id;
                     }
                 }
             }
-        }
 
-        return response()->json([
-            'message' => 'Creado Exitosamente',
-            'tenant'  => $tenant,
-        ]);
+            if ($tenant->isDirty()) {
+                $tenant->save();
+            }
+
+            DB::commit();
+
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json([
+                    'message' => 'Creado Exitosamente',
+                    'tenant'  => $tenant,
+                ]);
+            }
+
+            return redirect()
+                ->route('tenant.index')
+                ->with('status', 'Tienda creada correctamente.');
+        } catch (QueryException $e) {
+            DB::rollBack();
+
+            Log::error('Error SQL al crear tienda desde admin', [
+                'slug_input' => $validated['slug'] ?? null,
+                'slug_normalized' => $normalizedSlug,
+                'email' => $validated['email'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
+            $message = $this->resolveTenantCreationDbErrorMessage($e);
+
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['message' => $message], 422);
+            }
+
+            return back()->withErrors(['create_tenant' => $message])->withInput();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            Log::error('Error al crear tienda desde admin', [
+                'slug_input' => $validated['slug'] ?? null,
+                'slug_normalized' => $normalizedSlug,
+                'email' => $validated['email'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json(['message' => 'No se pudo crear la tienda. Intenta nuevamente.'], 500);
+            }
+
+            return back()->withErrors(['create_tenant' => 'No se pudo crear la tienda. Intenta nuevamente.'])->withInput();
+        }
     }
     public function storePublic(Request $request)
     {
         $validated = $request->validate([
             'name'                  => 'required|string|max:255',
-            'slug'                  => 'required|string|max:255|unique:tenants,slug',
+            'slug'                  => 'required|string|max:255',
             'email'                 => 'required|email|unique:tenants,email',
             'logo'                  => 'nullable|image|mimes:png,svg|max:2048',
             'background_image'      => 'nullable|image|mimes:png,jpg,jpeg|max:4096',
@@ -348,6 +427,20 @@ class TenantController extends Controller
             'users.owner.dni'       => 'nullable|string|max:50',
         ]);
 
+        $normalizedSlug = Str::slug((string) $validated['slug']);
+
+        if ($normalizedSlug === '') {
+            return back()
+                ->withErrors(['slug' => 'El slug ingresado no es válido.'])
+                ->withInput();
+        }
+
+        if (Tenant::where('slug', $normalizedSlug)->exists()) {
+            return back()
+                ->withErrors(['slug' => 'El slug ingresado ya está en uso.'])
+                ->withInput();
+        }
+
         DB::beginTransaction();
 
         try {
@@ -361,9 +454,9 @@ class TenantController extends Controller
                 $backgroundPath = ImageStorage::storeUploadedFile($request->file('background_image'), 'tenants/backgrounds');
             }
 
-            $tenant = Tenant::create([
+            $tenantData = [
                 'name'            => $validated['name'],
-                'slug'            => Str::slug($validated['slug']),
+                'slug'            => $normalizedSlug,
                 'email'           => $validated['email'],
                 'logo'            => $logoPath,
                 'color_primary'   => $validated['color_primary'],
@@ -382,7 +475,9 @@ class TenantController extends Controller
                 'latitude'        => $validated['latitude'] ?? null,
                 'longitude'       => $validated['longitude'] ?? null,
                 'background_image'=> $backgroundPath,
-            ]);
+            ];
+
+            $tenant = Tenant::create($this->filterDataByExistingColumns('tenants', $tenantData));
 
             $plan = Plan::findOrFail($validated['plan_id']);
             $tenantPlanPaymentData = [
@@ -400,7 +495,8 @@ class TenantController extends Controller
             TenantPlanPayment::create($tenantPlanPaymentData);
 
             $ownerRole = Role::where('name', 'owner')->first();
-            User::create([
+
+            $ownerData = [
                 'name'        => $validated['users']['owner']['name'],
                 'email'       => $validated['users']['owner']['email'],
                 'phone_number'=> $validated['users']['owner']['phone_number'] ?? null,
@@ -409,7 +505,14 @@ class TenantController extends Controller
                 'tenant_id'   => $tenant->id,
                 'role_id'     => $ownerRole?->id,
                 'is_active'   => 1,
-            ]);
+            ];
+
+            $owner = User::create($this->filterDataByExistingColumns('users', $ownerData));
+
+            if (Schema::hasColumn('tenants', 'owner_id')) {
+                $tenant->owner_id = $owner->id;
+                $tenant->save();
+            }
 
             DB::commit();
 
@@ -419,8 +522,29 @@ class TenantController extends Controller
                 ->withInput([
                     'email' => $validated['users']['owner']['email'],
                 ]);
+        } catch (QueryException $e) {
+            DB::rollBack();
+
+            Log::error('Error SQL al crear tienda pública', [
+                'slug_input' => $validated['slug'] ?? null,
+                'slug_normalized' => $normalizedSlug,
+                'email' => $validated['email'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()
+                ->withErrors(['create_tenant' => $this->resolveTenantCreationDbErrorMessage($e)])
+                ->withInput();
         } catch (\Throwable $e) {
             DB::rollBack();
+
+            Log::error('Error al crear tienda pública', [
+                'slug_input' => $validated['slug'] ?? null,
+                'slug_normalized' => $normalizedSlug,
+                'email' => $validated['email'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
             return back()
                 ->withErrors(['create_tenant' => 'No se pudo crear la tienda. Intenta nuevamente.'])
                 ->withInput();
@@ -1166,6 +1290,36 @@ class TenantController extends Controller
         $planName = Str::lower((string) $this->getTenantCurrentPlanName($tenant));
 
         return Str::contains($planName, 'pro');
+    }
+
+    private function filterDataByExistingColumns(string $tableName, array $data): array
+    {
+        if (!Schema::hasTable($tableName)) {
+            return $data;
+        }
+
+        $existingColumns = array_flip(Schema::getColumnListing($tableName));
+
+        return array_filter(
+            $data,
+            fn ($value, $columnName) => array_key_exists($columnName, $existingColumns),
+            ARRAY_FILTER_USE_BOTH
+        );
+    }
+
+    private function resolveTenantCreationDbErrorMessage(QueryException $exception): string
+    {
+        $message = Str::lower((string) $exception->getMessage());
+
+        if (Str::contains($message, ['tenants_slug_unique', 'duplicate entry']) && Str::contains($message, 'slug')) {
+            return 'El slug ingresado ya está en uso. Prueba con otro.';
+        }
+
+        if (Str::contains($message, ['unknown column', 'column not found'])) {
+            return 'La plataforma requiere una actualización de base de datos. Contacta al administrador.';
+        }
+
+        return 'No se pudo crear la tienda. Intenta nuevamente.';
     }
 
     public function destroy(Tenant $tenant)

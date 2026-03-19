@@ -131,7 +131,7 @@
                 <div class="mb-3">
                   <label for="slug" class="form-label fw-bold">Slug / URL de acceso</label>
                   <input type="text" name="slug" id="slug" class="form-control form-control-lg" placeholder="mi-empresa" required>
-                  <small class="text-muted">Tu empresa estará disponible en: <strong>https://shopix.com/<span id="slug-preview">mi-empresa</span></strong></small>
+                  <small class="text-muted">Tu empresa estará disponible en: <strong>https://shopixv.com/<span id="slug-preview">mi-empresa</span></strong></small>
                 </div>
 
                 <div class="mb-3">
@@ -674,8 +674,22 @@
 
       aiModalInstance = new bootstrap.Modal(document.getElementById('aiGenerateModal'));
 
+      const normalizeSlug = (value) => String(value ?? '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-+|-+$/g, '');
+
       slugInput.addEventListener('input', () => {
-        slugPreview.textContent = slugInput.value || 'mi-empresa';
+        const normalizedValue = normalizeSlug(slugInput.value);
+
+        if (slugInput.value !== normalizedValue) {
+          slugInput.value = normalizedValue;
+        }
+
+        slugPreview.textContent = normalizedValue || 'mi-empresa';
       });
 
       logoInput.addEventListener('change', (event) => {

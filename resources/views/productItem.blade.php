@@ -59,11 +59,11 @@
                               <div class="d-flex flex-column me-3" style="gap: 0.5rem;">
                                 @foreach($product->images as $index => $image)
                                   <img 
-                                    src="{{ asset('storage/' . $image->path) }}" 
+                                    src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}" 
                                     alt="Miniatura"
                                     class="img-thumbnail cursor-pointer m-0 p-0 border border-1 border-dark text-dark border-radius-lg "
                                     style="width: 4rem; height: 4rem; object-fit: cover;"
-                                    onclick="changeMainImage('{{ asset('storage/' . $image->path) }}', {{ $image->id }})"
+                                    onclick="changeMainImage('{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}', {{ $image->id }})"
                                   >
                                 @endforeach
                               </div>
@@ -77,7 +77,7 @@
                           @if(isset($product->images) && count($product->images) > 0)
                             <img 
                               id="mainImage" 
-                              src="{{ asset('storage/' . $product->images[0]->path) }}" 
+                              src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" 
                               alt="Imagen del producto" 
                               style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;"
                             >

@@ -9,6 +9,7 @@ use App\Models\ProductVariantWarehouseStock;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderDetail;
 use App\Models\Warehouse;
+use App\Support\ImageStorage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -60,7 +61,7 @@ class PurchaseOrderController extends Controller
                 'product_id' => $productId,
                 'product_name' => $product?->name,
                 'product_image' => $product && $product->images->first()
-                    ? asset('storage/' . $product->images->first()->path)
+                    ? (ImageStorage::url($product->images->first()->path) ?? asset('assets/img/shopix5.png'))
                     : asset('assets/img/shopix5.png'),
                 'variants' => $group->map(function ($variant) {
                     return [
@@ -242,7 +243,7 @@ class PurchaseOrderController extends Controller
                 && $firstDetail->productVariant
                 && $firstDetail->productVariant->product
                 && $firstDetail->productVariant->product->images->first()
-                    ? asset('storage/' . $firstDetail->productVariant->product->images->first()->path)
+                    ? (ImageStorage::url($firstDetail->productVariant->product->images->first()->path) ?? asset('assets/img/shopix5.png'))
                     : asset('assets/img/shopix5.png');
         }
 
