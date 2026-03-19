@@ -448,7 +448,20 @@
                data-activity="{{ $tenant->directory_activity ?? '' }}"
                data-region="{{ $tenant->directory_region ?? '' }}"
                data-state="{{ $tenant->directory_state ?? '' }}"
-               data-city="{{ $tenant->directory_city ?? '' }}">
+              data-city="{{ $tenant->directory_city ?? '' }}"
+              data-search="{{ trim(implode(' ', array_filter([
+                $tenant->name ?? '',
+                $tenant->slug ?? '',
+                $tenant->directory_type ?? '',
+                $tenant->directory_activity ?? '',
+                $tenant->directory_region ?? '',
+                $tenant->directory_state ?? '',
+                $tenant->directory_city ?? '',
+                $tenant->directory_country ?? '',
+                $tenant->slogan ?? '',
+                $tenant->description ?? '',
+                $tenant->address ?? '',
+              ]))) }}">
             <div class="directory-tenant-card d-flex flex-column">
               <div class="directory-tenant-media">
                 @if(!empty($tenant->background_image))
@@ -539,6 +552,7 @@
 
       landingDirectoryItems.forEach(item => {
         const itemName = normalizeText(item.dataset.name);
+        const itemSearch = normalizeText(item.dataset.search || item.textContent || '');
         const itemType = normalizeText(item.dataset.type);
         const itemActivity = normalizeText(item.dataset.activity);
         const itemRegion = normalizeText(item.dataset.region);
@@ -546,7 +560,7 @@
         const itemCity = normalizeText(item.dataset.city);
 
         const matches =
-          (!selectedName || itemName.includes(selectedName)) &&
+          (!selectedName || itemSearch.includes(selectedName) || itemName.includes(selectedName)) &&
           (!selectedType || itemType === selectedType) &&
           (!selectedActivity || itemActivity === selectedActivity) &&
           (!selectedRegion || itemRegion === selectedRegion) &&
