@@ -54,24 +54,83 @@
     }
 
     .landing-header {
-      transition: background 0.3s ease-in-out;
+      transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
       z-index: 1050;
-      background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.82), rgba(var(--tenant-secondary-rgb), 0.72));
-      backdrop-filter: blur(8px);
-      border-bottom: 1px solid rgba(var(--tenant-accent-rgb), 0.28);
+      background: transparent;
+      backdrop-filter: none;
+      border-bottom: 1px solid transparent;
       padding: 0.5rem 0;
+    }
+
+    .landing-header.is-scrolled {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      border-bottom-color: rgba(var(--tenant-primary-rgb), 0.16);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
     }
 
     .landing-nav-link {
       font-weight: 600;
-      padding: 0.4rem 0.75rem;
+      padding: 0.46rem 0.88rem;
       border-radius: 999px;
+      font-size: 0.96rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.42rem;
+      border: 1px solid transparent;
+    }
+
+    .tenant-main-nav-btn {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.44);
+      color: #ffffff !important;
+    }
+
+    .tenant-main-nav-btn:hover,
+    .tenant-main-nav-btn:focus {
+      background: rgba(255, 255, 255, 0.22);
+      border-color: rgba(255, 255, 255, 0.66);
+      color: #ffffff !important;
+    }
+
+    .landing-header.is-scrolled .tenant-main-nav-btn {
+      background: #f8fafc;
+      border-color: #d6e0ef;
+      color: #1e293b !important;
+    }
+
+    .landing-header.is-scrolled .tenant-main-nav-btn:hover,
+    .landing-header.is-scrolled .tenant-main-nav-btn:focus {
+      background: #eef2ff;
+      border-color: rgba(var(--tenant-accent-rgb), 0.45);
+      color: #0f172a !important;
     }
 
     .landing-header .navbar-toggler {
-      border: 1px solid rgba(var(--tenant-accent-rgb), 0.55);
-      background: rgba(var(--tenant-primary-rgb), 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.16);
       padding: 0.35rem 0.55rem;
+    }
+
+    .landing-header.is-scrolled .navbar-toggler {
+      border-color: rgba(var(--tenant-primary-rgb), 0.35);
+      background: #ffffff;
+    }
+
+    .landing-header.is-scrolled .navbar-toggler-icon {
+      filter: invert(1) grayscale(1);
+    }
+
+    .tenant-logo-chip {
+      border: 1px solid rgba(255, 255, 255, 0.46) !important;
+      background: rgba(255, 255, 255, 0.14) !important;
+      border-radius: 12px !important;
+      transition: background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .landing-header.is-scrolled .tenant-logo-chip {
+      border-color: #d6e0ef !important;
+      background: #ffffff !important;
     }
 
     .hero {
@@ -163,6 +222,10 @@
 
     .section-shell {
       background: #ffffff;
+    }
+
+    .section-soft {
+      background: #f6f8fc;
     }
 
     .section-muted {
@@ -495,16 +558,65 @@
     }
 
     .contact-card {
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: 16px;
-      padding: 1.25rem;
-      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #dbe4f0;
+      border-radius: 20px;
+      padding: 1.5rem;
+      box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+    }
+
+    .contact-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+    }
+
+    .contact-btn {
+      border-radius: 999px;
+      padding: 0.62rem 1.1rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+      text-decoration: none;
+    }
+
+    .contact-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
+    }
+
+    .contact-btn-primary {
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      color: #ffffff;
+      border-color: rgba(37, 99, 235, 0.35);
+    }
+
+    .contact-btn-primary:hover {
+      color: #ffffff;
+      background: linear-gradient(135deg, #1e40af, #1d4ed8);
+    }
+
+    .contact-btn-secondary {
+      background: #ffffff;
+      color: #1f2937;
+      border-color: #cbd5e1;
+    }
+
+    .contact-btn-secondary:hover {
+      color: #111827;
+      background: #f8fafc;
     }
 
     @media (max-width: 991.98px) {
       .landing-header {
-        background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.92), rgba(var(--tenant-secondary-rgb), 0.84));
+        background: transparent;
+      }
+
+      .landing-header.is-scrolled {
+        background: rgba(255, 255, 255, 0.95);
       }
 
       .products-layout {
@@ -546,7 +658,27 @@
       .landing-nav-link {
         display: block;
         width: 100%;
-        text-align: center;
+        text-align: left;
+      }
+
+      #landingNavbar.show {
+        margin-top: 0.6rem;
+        padding: 0.75rem;
+        border: 1px solid #dbe4f0;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.97);
+        box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+      }
+
+      #landingNavbar.show .tenant-main-nav-btn,
+      #landingNavbar.show .tenant-nav-action-btn {
+        background: #f8fafc;
+        border-color: #d6e0ef;
+        color: #1e293b !important;
+      }
+
+      #landingNavbar.show .tenant-nav-action-btn i {
+        background: #e8eef9;
       }
     }
 
@@ -580,6 +712,11 @@
       .card-product .d-flex.align-items-center.justify-content-center {
         height: 220px !important;
       }
+
+      .contact-btn {
+        width: 100%;
+        justify-content: center;
+      }
     }
   </style>
 </head>
@@ -592,7 +729,7 @@
       <nav class="navbar navbar-expand-lg navbar-dark p-0">
         <a class="navbar-brand d-flex align-items-center" href="#top">
           @if($tenant->logo)
-            <span class="btn btn-light p-1 px-3 m-0">
+            <span class="btn p-1 px-3 m-0 tenant-logo-chip">
               <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
             </span>
           @else
@@ -600,20 +737,31 @@
           @endif
         </a>
 
+        <button type="button"
+                class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center tenant-icon-btn d-lg-none ms-auto me-2"
+                aria-label="Carrito"
+                title="Carrito"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#tenantCartOffcanvas"
+                aria-controls="tenantCartOffcanvas">
+          <i class="bi bi-cart3"></i>
+          <span class="badge rounded-pill bg-dark tenant-cart-count">0</span>
+        </button>
+
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#landingNavbar" aria-controls="landingNavbar" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
 
         <div class="collapse navbar-collapse" id="landingNavbar">
-          <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+          <ul class="navbar-nav w-100 align-items-lg-center gap-lg-2">
             <li class="nav-item">
-              <a class="btn btn-outline-light landing-nav-link" href="#categorias">Categorías</a>
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="#categorias"><i class="bi bi-grid"></i> Categorías</a>
             </li>
             <li class="nav-item">
-              <a class="btn btn-outline-light landing-nav-link" href="#productos">Productos</a>
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="#productos"><i class="bi bi-bag"></i> Productos</a>
             </li>
             <li class="nav-item">
-              <a class="btn btn-outline-light landing-nav-link" href="#contacto">Contacto</a>
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="#contacto"><i class="bi bi-chat-dots"></i> Contacto</a>
             </li>
             @include('partials.tenant-cart-nav')
           </ul>
@@ -645,9 +793,9 @@
             ? \Illuminate\Support\Str::title((string) $tenant->economic_activity)
             : null;
           $locationLabel = implode(' · ', array_filter([
-            $tenant->city ?? null,
-            $tenant->state ?? null,
-            $tenant->country ?? null,
+            $tenant->city_name ?? null,
+            $tenant->state_name ?? null,
+            $tenant->country_name ?? null,
           ]));
       @endphp
       <h1 class="hero-title">{{ strtoupper($tenant->name) }}</h1>
@@ -887,15 +1035,25 @@
   </section>
   @endif
   <!-- CONTACTO / UBICACIÓN -->
-  <section id="contacto" class="py-5 section-muted">
+  <section id="contacto" class="py-5 section-soft">
     <div class="container">
       <div class="row align-items-center">
         <div class="col-12 col-md-6 mb-4 mb-md-0">
           <div class="contact-card">
+          @php
+              $countryName = $tenant->country_name ?? '';
+              $stateName = $tenant->state_name ?? '';
+              $cityName = $tenant->city_name ?? '';
+              $locationSummary = implode(' - ', array_filter([$countryName, $stateName, $cityName]));
+          @endphp
           <h2 class="section-title text-start mb-3">Contáctanos</h2>
           <p class="mb-3">{{ $tenant->name ?? '' }} - {{ $tenant->description ?? '' }}.</p>
-          <p class="">Somos una empresa de {{ $tenant->country ?? '' }} - {{ $tenant->state ?? '' }} - {{ $tenant->city ?? '' }}.</p>
-          <p class="">Ubicada en {{ $tenant->address ?? '' }}.</p>
+          @if(!empty($locationSummary))
+            <p class="mb-2">Somos una empresa de {{ $locationSummary }}.</p>
+          @endif
+          @if(!empty($tenant->address))
+            <p class="mb-3">Ubicada en {{ $tenant->address }}.</p>
+          @endif
           @php
               $whatsapp = preg_replace('/\D/', '', $tenant->phone_code . $tenant->phone_number);
               $mapsUrl = null;
@@ -904,22 +1062,24 @@
               } else {
                   $addressParts = array_filter([
                       $tenant->address ?? '',
-                      $tenant->city ?? '',
-                      $tenant->state ?? '',
-                      $tenant->country ?? '',
+                      $cityName,
+                      $stateName,
+                      $countryName,
                   ]);
                   if (!empty($addressParts)) {
                       $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(implode(', ', $addressParts));
                   }
               }
           @endphp
-          <div class="d-flex flex-wrap gap-2">
-            <a href="https://api.whatsapp.com/send?phone={{ $whatsapp }}" target="_blank" class="btn btn-primary px-4 py-2">
-              Escríbenos por WhatsApp
-            </a>
+          <div class="contact-actions">
+            @if(!empty($whatsapp))
+              <a href="https://api.whatsapp.com/send?phone={{ $whatsapp }}" target="_blank" class="contact-btn contact-btn-primary">
+                <i class="bi bi-whatsapp"></i> Escríbenos por WhatsApp
+              </a>
+            @endif
             @if(!empty($mapsUrl))
-              <a href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-dark px-4 py-2">
-                Ver ubicación en Google Maps
+              <a href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer" class="contact-btn contact-btn-secondary">
+                <i class="bi bi-geo-alt"></i> Ver ubicación en Google Maps
               </a>
             @endif
           </div>
@@ -1007,9 +1167,33 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
+    const landingHeader = document.querySelector('.landing-header');
     const navLinks = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
     const navbarCollapse = document.getElementById('landingNavbar');
     const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;
+
+    function syncLandingHeaderState() {
+      if (!landingHeader) {
+        return;
+      }
+
+      const isScrolled = window.scrollY > 14;
+      landingHeader.classList.toggle('is-scrolled', isScrolled);
+    }
+
+    window.addEventListener('scroll', syncLandingHeaderState, { passive: true });
+
+    if (navbarCollapse) {
+      navbarCollapse.addEventListener('shown.bs.collapse', () => {
+        landingHeader?.classList.add('is-scrolled');
+      });
+
+      navbarCollapse.addEventListener('hidden.bs.collapse', () => {
+        syncLandingHeaderState();
+      });
+    }
+
+    syncLandingHeaderState();
 
     navLinks.forEach(link => {
       link.addEventListener('click', () => {

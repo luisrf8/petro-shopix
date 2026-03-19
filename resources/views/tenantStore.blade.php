@@ -170,7 +170,10 @@
                                     </div>
                                     <div class="col-md-8">
                                         <label for="economic_activity" class="form-label fw-bold">Rubro económico</label>
-                                        <input type="text" name="economic_activity" id="economic_activity" class="form-control form-control-lg border border-radius-lg" value="{{ $tenant->economic_activity ?? '' }}" placeholder="Ej: Salud, Hogar, Consultoría" required>
+                                        <select name="economic_activity" id="economic_activity" class="form-select form-select-lg border border-radius-lg" data-selected="{{ $tenant->economic_activity ?? '' }}" required>
+                                            <option value="">Selecciona un rubro</option>
+                                        </select>
+                                        <small id="economic_activity_help" class="text-muted d-block mt-1"></small>
                                     </div>
                                 </div>
 
@@ -916,6 +919,61 @@ function initMap() {
     const aiReferenceImage = document.getElementById('aiReferenceImage');
     const aiPromptInput = document.getElementById('aiPromptInput');
     const baseStoreUrl = "{{ rtrim(url('/'), '/') }}";
+    const businessTypeSelect = document.getElementById('business_type');
+    const economicActivitySelect = document.getElementById('economic_activity');
+
+    const businessCatalog = {
+        tienda: [
+            'Alimentos y Bebidas',
+            'Moda y Accesorios',
+            'Hogar y Construccion',
+            'Tecnologia',
+            'Salud y Belleza',
+            'Otros'
+        ],
+        servicio: [
+            'Gastronomia',
+            'Cuidado Personal',
+            'Servicios Tecnicos',
+            'Profesionales',
+            'Logistica y Educacion'
+        ]
+    };
+
+    const businessExamples = {
+        'Alimentos y Bebidas': 'Supermercados, Panaderias, Licorerias, Carnicerias.',
+        'Moda y Accesorios': 'Ropa, Calzado, Joyeria, Opticas.',
+        'Hogar y Construccion': 'Ferreterias, Mueblerias, Decoracion, Pinturerias.',
+        'Tecnologia': 'Electronica, Computacion, Telefonia Movil.',
+        'Salud y Belleza': 'Farmacias, Perfumerias, Cosmetica.',
+        'Otros': 'Jugueterias, Librerias, Pet Shops (Mascotas).',
+        'Gastronomia': 'Restaurantes, Cafeterias, Fast Food, Caterings.',
+        'Cuidado Personal': 'Peluquerias, Centros de Estetica, Spas, Gimnasios.',
+        'Servicios Tecnicos': 'Talleres mecanicos, Reparacion de electrodomesticos, Soporte IT.',
+        'Profesionales': 'Consultorios medicos, Estudios contables/legales, Arquitectura.',
+        'Logistica y Educacion': 'Mensajeria, Institutos de idiomas, Jardines de infantes.'
+    };
+
+    const refreshEconomicActivities = (selectedValue = '') => {
+        if (!businessTypeSelect || !economicActivitySelect) {
+            return;
+        }
+
+        const businessType = String(businessTypeSelect.value || 'tienda').toLowerCase() === 'servicio' ? 'servicio' : 'tienda';
+        const options = businessCatalog[businessType] || [];
+        const help = document.getElementById('economic_activity_help');
+
+        economicActivitySelect.innerHTML = '<option value="">Selecciona un rubro</option>';
+        options.forEach((option) => {
+            const selected = String(option).toLowerCase() === String(selectedValue || '').toLowerCase();
+            economicActivitySelect.insertAdjacentHTML('beforeend', `<option value="${option}" ${selected ? 'selected' : ''}>${option}</option>`);
+        });
+
+        const currentValue = economicActivitySelect.value;
+        help.textContent = currentValue && businessExamples[currentValue]
+            ? `Ejemplos: ${businessExamples[currentValue]}`
+            : 'Selecciona una categoria para ver ejemplos.';
+    };
 
     const normalizeSlug = (value) => String(value ?? '')
         .toLowerCase()
@@ -964,6 +1022,15 @@ function initMap() {
     if (storeSlugInput) {
         storeSlugInput.addEventListener('input', updateStorePublicUrl);
         updateStorePublicUrl();
+    }
+
+    if (businessTypeSelect) {
+        businessTypeSelect.addEventListener('change', () => refreshEconomicActivities(''));
+    }
+
+    if (economicActivitySelect) {
+        economicActivitySelect.addEventListener('change', () => refreshEconomicActivities(economicActivitySelect.value));
+        refreshEconomicActivities(economicActivitySelect.dataset.selected || '');
     }
 
     if (copyStoreUrlBtn && storePublicUrlInput) {

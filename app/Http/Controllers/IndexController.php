@@ -114,12 +114,20 @@ class IndexController extends Controller
 
     private function normalizeDirectoryBusinessType(?string $value): string
     {
-        $normalized = Str::lower(trim((string) $value));
-        if ($normalized === '') {
+        $key = $this->normalizeLookupKey($value);
+        if ($key === '') {
             return '';
         }
 
-        return $normalized === 'servicio' ? 'Servicio' : 'Tienda';
+        if (in_array($key, ['servicio', 'servicios', 'service', 'services'], true)) {
+            return 'Servicio';
+        }
+
+        if (in_array($key, ['tienda', 'tiendas', 'store', 'stores', 'comercio', 'comercios'], true)) {
+            return 'Tienda';
+        }
+
+        return '';
     }
 
     private function normalizeDirectoryEconomicActivity(?string $value): string
@@ -131,7 +139,113 @@ class IndexController extends Controller
 
         $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
 
+        $canonical = $this->matchDirectoryActivityToCatalog($normalized);
+        if ($canonical !== '') {
+            return $canonical;
+        }
+
         return Str::title(Str::lower($normalized));
+    }
+
+    private function matchDirectoryActivityToCatalog(string $value): string
+    {
+        $needle = $this->normalizeLookupKey($value);
+        if ($needle === '') {
+            return '';
+        }
+
+        foreach ($this->directoryBusinessActivityCatalog() as $activity) {
+            if ($this->normalizeLookupKey($activity) === $needle) {
+                return $activity;
+            }
+        }
+
+        $aliases = [
+            'alimentosybebidas' => 'Alimentos y Bebidas',
+            'alimentos' => 'Alimentos y Bebidas',
+            'bebidas' => 'Alimentos y Bebidas',
+            'modayaccesorios' => 'Moda y Accesorios',
+            'moda' => 'Moda y Accesorios',
+            'accesorios' => 'Moda y Accesorios',
+            'hogaryconstruccion' => 'Hogar y Construccion',
+            'hogar' => 'Hogar y Construccion',
+            'construccion' => 'Hogar y Construccion',
+            'ferreteria' => 'Hogar y Construccion',
+            'tecnologia' => 'Tecnologia',
+            'tecnologico' => 'Tecnologia',
+            'electronica' => 'Tecnologia',
+            'computacion' => 'Tecnologia',
+            'telefonia' => 'Tecnologia',
+            'saludybelleza' => 'Salud y Belleza',
+            'salud' => 'Salud y Belleza',
+            'belleza' => 'Salud y Belleza',
+            'farmacia' => 'Salud y Belleza',
+            'cosmetica' => 'Salud y Belleza',
+            'gastronomia' => 'Gastronomia',
+            'restaurante' => 'Gastronomia',
+            'cafeteria' => 'Gastronomia',
+            'caterings' => 'Gastronomia',
+            'cuidadopersonal' => 'Cuidado Personal',
+            'peluqueria' => 'Cuidado Personal',
+            'estetica' => 'Cuidado Personal',
+            'spa' => 'Cuidado Personal',
+            'gimnasio' => 'Cuidado Personal',
+            'serviciostecnicos' => 'Servicios Tecnicos',
+            'serviciotecnico' => 'Servicios Tecnicos',
+            'reparacion' => 'Servicios Tecnicos',
+            'soporteit' => 'Servicios Tecnicos',
+            'profesionales' => 'Profesionales',
+            'profesional' => 'Profesionales',
+            'consultorio' => 'Profesionales',
+            'consultoria' => 'Profesionales',
+            'arquitectura' => 'Profesionales',
+            'logisticayeducacion' => 'Logistica y Educacion',
+            'logistica' => 'Logistica y Educacion',
+            'educacion' => 'Logistica y Educacion',
+            'mensajeria' => 'Logistica y Educacion',
+            'instituto' => 'Logistica y Educacion',
+            'otros' => 'Otros',
+            'general' => 'Otros',
+        ];
+
+        return $aliases[$needle] ?? '';
+    }
+
+    private function directoryBusinessActivityCatalog(): array
+    {
+        return [
+            'Alimentos y Bebidas',
+            'Moda y Accesorios',
+            'Hogar y Construccion',
+            'Tecnologia',
+            'Salud y Belleza',
+            'Otros',
+            'Gastronomia',
+            'Cuidado Personal',
+            'Servicios Tecnicos',
+            'Profesionales',
+            'Logistica y Educacion',
+        ];
+    }
+
+    private function normalizeLookupKey(?string $value): string
+    {
+        $normalized = Str::lower(trim((string) $value));
+        if ($normalized === '') {
+            return '';
+        }
+
+        $normalized = strtr($normalized, [
+            'á' => 'a',
+            'é' => 'e',
+            'í' => 'i',
+            'ó' => 'o',
+            'ú' => 'u',
+            'ü' => 'u',
+            'ñ' => 'n',
+        ]);
+
+        return preg_replace('/[^a-z0-9]/', '', $normalized) ?? '';
     }
 
     private function resolveLocationName($value, $lookup)

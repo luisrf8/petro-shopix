@@ -39,22 +39,130 @@
   }
 
   .tenant-nav-action-btn {
-    border: 1px solid rgba(var(--tenant-accent-rgb), 0.55);
-    background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.42), rgba(var(--tenant-secondary-rgb), 0.35));
+    border: 1px solid rgba(255, 255, 255, 0.44);
+    background: rgba(255, 255, 255, 0.14);
     color: #fff !important;
-    backdrop-filter: blur(8px);
+    min-height: 42px;
+    padding-inline: 0.9rem;
+    box-shadow: none;
   }
 
   .tenant-nav-action-btn:hover,
   .tenant-nav-action-btn:focus {
-    border-color: rgba(var(--tenant-accent-rgb), 0.88);
-    background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.6), rgba(var(--tenant-secondary-rgb), 0.5));
+    border-color: rgba(255, 255, 255, 0.68);
+    background: rgba(255, 255, 255, 0.24);
     color: #fff !important;
   }
 
+  .landing-header.is-scrolled .tenant-nav-action-btn,
+  #landingNavbar.show .tenant-nav-action-btn {
+    background: #f8fafc;
+    border-color: #d6e0ef;
+    color: #1e293b !important;
+  }
+
+  .landing-header.is-scrolled .tenant-nav-action-btn:hover,
+  .landing-header.is-scrolled .tenant-nav-action-btn:focus,
+  #landingNavbar.show .tenant-nav-action-btn:hover,
+  #landingNavbar.show .tenant-nav-action-btn:focus {
+    background: #eef2ff;
+    border-color: rgba(var(--tenant-accent-rgb), 0.46);
+    color: #0f172a !important;
+  }
+
+  .tenant-nav-action-btn i {
+    width: 1.65rem;
+    height: 1.65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-size: 0.92rem;
+    background: rgba(255, 255, 255, 0.22);
+  }
+
+  .landing-header.is-scrolled .tenant-nav-action-btn i,
+  #landingNavbar.show .tenant-nav-action-btn i {
+    background: #e8eef9;
+  }
+
   .tenant-nav-action-btn .badge {
-    border: 1px solid rgba(var(--tenant-accent-rgb), 0.55);
+    border: 1px solid rgba(var(--tenant-accent-rgb), 0.4);
     background: var(--tenant-primary) !important;
+    font-weight: 700;
+  }
+  
+  .tenant-icon-btn .badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.32rem;
+    font-size: 0.66rem;
+    line-height: 1;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.24);
+    z-index: 2;
+  }
+
+  .tenant-user-dropdown-btn {
+    min-height: 42px;
+    padding-right: 0.75rem;
+    max-width: 230px;
+    white-space: nowrap;
+  }
+
+  .tenant-user-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  .tenant-icon-btn {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    padding: 0;
+    justify-content: center;
+    position: relative;
+    overflow: visible;
+  }
+
+  .tenant-icon-btn i {
+    margin: 0;
+  }
+
+  .tenant-user-menu {
+    border: 1px solid #dbe3ee;
+    border-radius: 14px;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.14);
+    padding: 0.35rem;
+    min-width: 220px;
+  }
+
+  .tenant-user-menu .dropdown-item {
+    border-radius: 10px;
+    font-weight: 600;
+    color: #1f2937;
+    padding: 0.58rem 0.7rem;
+  }
+
+  .tenant-user-menu .dropdown-item:hover,
+  .tenant-user-menu .dropdown-item:focus {
+    background: #eef2ff;
+    color: #111827;
+  }
+
+  .tenant-user-menu .dropdown-item.text-danger:hover,
+  .tenant-user-menu .dropdown-item.text-danger:focus {
+    background: #fef2f2;
+    color: #b91c1c;
   }
 
   .tenant-order-card {
@@ -158,22 +266,46 @@
     background: linear-gradient(135deg, var(--tenant-secondary), var(--tenant-primary));
     border-color: var(--tenant-secondary);
   }
+
+  @media (max-width: 991.98px) {
+    .tenant-user-name {
+      max-width: 180px;
+    }
+
+    #tenant-session-indicator-wrap .dropdown-toggle::after {
+      display: none;
+    }
+
+    #tenant-session-indicator-wrap .tenant-user-menu {
+      display: none !important;
+    }
+
+    #landingNavbar.show .tenant-icon-btn {
+      width: 100%;
+      min-width: 0;
+      justify-content: flex-start;
+      padding: 0 0.85rem;
+      gap: 0.45rem;
+    }
+
+    #landingNavbar.show .tenant-icon-btn .badge {
+      top: 8px;
+      right: 10px;
+    }
+
+    #landingNavbar.show .tenant-mobile-only-menu-label {
+      display: inline;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+  }
+
+  .tenant-mobile-only-menu-label {
+    display: none;
+  }
 </style>
 
-<li class="nav-item">
-  <button type="button"
-          id="cart-toggle-button"
-          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2"
-          data-bs-toggle="offcanvas"
-          data-bs-target="#tenantCartOffcanvas"
-          aria-controls="tenantCartOffcanvas">
-    <i class="bi bi-cart3"></i>
-    <span>Carrito</span>
-    <span class="badge rounded-pill bg-dark" id="tenant-cart-count">0</span>
-  </button>
-</li>
-
-<li class="nav-item" id="tenant-session-login-wrap">
+<li class="nav-item ms-lg-auto" id="tenant-session-login-wrap">
   <button type="button"
           id="tenant-session-login"
           class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
@@ -182,26 +314,46 @@
   </button>
 </li>
 
-<li class="nav-item d-none" id="tenant-session-indicator-wrap">
-  <span class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
+<li class="nav-item d-none dropdown ms-lg-auto" id="tenant-session-indicator-wrap">
+  <button type="button"
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2 dropdown-toggle tenant-user-dropdown-btn"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+          aria-label="Menú de usuario"
+          title="Menú de usuario">
     <i class="bi bi-person-circle"></i>
-    <span id="tenant-session-indicator">Sesión iniciada</span>
-  </span>
+    <span id="tenant-session-indicator" class="tenant-user-name">Sesión iniciada</span>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end tenant-user-menu">
+    <li id="tenant-orders-wrap">
+      <button type="button" id="tenant-orders-btn" class="dropdown-item d-inline-flex align-items-center gap-2">
+        <i class="bi bi-bag-check"></i>
+        <span>Listado de compras</span>
+      </button>
+    </li>
+    <li><hr class="dropdown-divider my-1"></li>
+    <li id="tenant-session-logout-wrap">
+      <button type="button" id="tenant-session-logout" class="dropdown-item text-danger d-inline-flex align-items-center gap-2">
+        <i class="bi bi-box-arrow-right"></i>
+        <span>Cerrar sesión</span>
+      </button>
+    </li>
+  </ul>
 </li>
 
-<li class="nav-item d-none" id="tenant-orders-wrap">
+<li class="nav-item d-none d-lg-none" id="tenant-orders-mobile-wrap">
   <button type="button"
-          id="tenant-orders-btn"
+          id="tenant-orders-mobile-btn"
           class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-bag-check"></i>
-    <span>Estado de compras</span>
+    <span>Listado de compras</span>
   </button>
 </li>
 
-<li class="nav-item d-none" id="tenant-session-logout-wrap">
+<li class="nav-item d-none d-lg-none" id="tenant-session-logout-mobile-wrap">
   <button type="button"
-          id="tenant-session-logout"
-          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
+          id="tenant-session-logout-mobile-btn"
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2 text-danger">
     <i class="bi bi-box-arrow-right"></i>
     <span>Cerrar sesión</span>
   </button>
@@ -210,12 +362,28 @@
 <li class="nav-item d-none" id="tenant-notifications-wrap">
   <button type="button"
           id="tenant-notifications-btn"
-          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2"
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center tenant-icon-btn"
+          aria-label="Notificaciones"
+          title="Notificaciones"
           data-bs-toggle="modal"
           data-bs-target="#tenantNotificationsModal">
     <i class="bi bi-bell"></i>
-    <span>Notificaciones</span>
+    <span class="tenant-mobile-only-menu-label">Notificaciones</span>
     <span class="badge rounded-pill bg-danger d-none" id="tenant-notifications-count">0</span>
+  </button>
+</li>
+
+<li class="nav-item d-none d-lg-block">
+  <button type="button"
+          id="cart-toggle-button"
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center tenant-icon-btn"
+          aria-label="Carrito"
+          title="Carrito"
+          data-bs-toggle="offcanvas"
+          data-bs-target="#tenantCartOffcanvas"
+          aria-controls="tenantCartOffcanvas">
+    <i class="bi bi-cart3"></i>
+    <span class="badge rounded-pill bg-dark tenant-cart-count">0</span>
   </button>
 </li>
 
@@ -318,8 +486,12 @@
     const indicatorText = document.getElementById('tenant-session-indicator');
     const logoutWrap = document.getElementById('tenant-session-logout-wrap');
     const logoutButton = document.getElementById('tenant-session-logout');
+    const logoutMobileWrap = document.getElementById('tenant-session-logout-mobile-wrap');
+    const logoutMobileButton = document.getElementById('tenant-session-logout-mobile-btn');
     const ordersWrap = document.getElementById('tenant-orders-wrap');
     const ordersButton = document.getElementById('tenant-orders-btn');
+    const ordersMobileWrap = document.getElementById('tenant-orders-mobile-wrap');
+    const ordersMobileButton = document.getElementById('tenant-orders-mobile-btn');
     const ordersList = document.getElementById('tenant-orders-list');
     const ordersModal = document.getElementById('tenantOrdersModal');
     const authModal = document.getElementById('tenantAuthModal');
@@ -633,6 +805,8 @@
       indicatorWrap.classList.toggle('d-none', !hasSession);
       logoutWrap.classList.toggle('d-none', !hasSession);
       ordersWrap.classList.toggle('d-none', !hasSession);
+      logoutMobileWrap?.classList.toggle('d-none', !hasSession);
+      ordersMobileWrap?.classList.toggle('d-none', !hasSession);
       notificationsWrap.classList.toggle('d-none', !hasSession);
 
       if (hasSession) {
@@ -751,6 +925,10 @@
       }
     });
 
+    ordersMobileButton?.addEventListener('click', () => {
+      ordersButton?.click();
+    });
+
     loginButton.addEventListener('click', () => {
       if (openTenantAuthModal()) {
         return;
@@ -769,6 +947,10 @@
         },
       }));
       window.location.reload();
+    });
+
+    logoutMobileButton?.addEventListener('click', () => {
+      logoutButton?.click();
     });
   })();
 </script>

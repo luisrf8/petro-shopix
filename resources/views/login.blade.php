@@ -133,11 +133,7 @@
 <body>
     <div class="container py-4 min-vh-100 d-flex align-items-center justify-content-center">
         <div class="login-shell w-100">
-            <div class="text-center mb-4">
-                <a href="/" class="text-decoration-none">
-                    <img src="{{ asset('assets/img/shopix5.png') }}" class="login-brand" alt="Shopix">
-                </a>
-            </div>
+
 
             <div class="login-card">
                 <div class="row g-0">
@@ -151,6 +147,11 @@
                         </div>
                     </div>
                     <div class="col-lg-7 login-form-wrap">
+                        <div class="text-center mb-4">
+                            <a href="/" class="text-decoration-none">
+                                <img src="{{ asset('assets/img/shopix5.png') }}" class="login-brand" alt="Shopix">
+                            </a>
+                        </div>
                         <h1 class="h3 login-title">Iniciar sesión</h1>
                         <p class="login-subtitle">Ingresa tus credenciales para continuar.</p>
 

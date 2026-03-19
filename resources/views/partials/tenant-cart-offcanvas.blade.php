@@ -615,7 +615,7 @@
     }
 
     const storageKey = `shopix_cart_${tenantSlug}`;
-    const cartCountElement = document.getElementById('tenant-cart-count');
+    const cartCountElements = Array.from(document.querySelectorAll('.tenant-cart-count'));
     const cartItemsElement = document.getElementById('tenant-cart-items');
     const cartSubtotalElement = document.getElementById('tenant-cart-subtotal');
     const cartDisabledAlert = document.getElementById('tenant-cart-disabled-alert');
@@ -897,7 +897,9 @@
         subtotal,
       });
 
-      cartCountElement.textContent = totalQty;
+      cartCountElements.forEach(el => {
+        el.textContent = totalQty;
+      });
       cartSubtotalElement.textContent = `${subtotal.toFixed(2)} $`;
 
       checkoutButton.disabled = cart.length === 0;

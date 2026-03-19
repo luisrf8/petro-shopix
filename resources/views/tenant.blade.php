@@ -27,6 +27,8 @@
                   <th>Nombre</th>
                   <th>URL</th>
                   <th>Email</th>
+                  <th>Tipo</th>
+                  <th>Rubro</th>
                   <th>Plan</th>
                   <th>Editar</th>
                   <th>Eliminar</th>
@@ -46,6 +48,8 @@
                     <td>{{ $tenant->name }}</td>
                     <td>{{ $tenant->slug }}</td>
                     <td>{{ $tenant->email }}</td>
+                    <td>{{ $tenant->business_type ?? 'No definido' }}</td>
+                    <td>{{ $tenant->economic_activity ?? 'No definido' }}</td>
 
                     <td>
                       @php
@@ -158,7 +162,10 @@
 
             <div class="mb-3">
               <label for="editTenantEconomicActivity" class="form-label">Rubro económico</label>
-              <input type="text" class="form-control border border-1 p-2" id="editTenantEconomicActivity" name="economic_activity" placeholder="Ej: Gastronomía, Tecnología" required>
+              <select class="form-select border border-1 p-2" id="editTenantEconomicActivity" name="economic_activity" required>
+                <option value="">Selecciona un rubro</option>
+              </select>
+              <small id="editTenantEconomicActivityHelp" class="text-muted d-block mt-1"></small>
             </div>
 
             <div class="mb-3">
@@ -206,6 +213,71 @@
 
 @push('scripts')
 <script>
+  const tenantBusinessCatalog = {
+    tienda: [
+      'Alimentos y Bebidas',
+      'Moda y Accesorios',
+      'Hogar y Construccion',
+      'Tecnologia',
+      'Salud y Belleza',
+      'Otros'
+    ],
+    servicio: [
+      'Gastronomia',
+      'Cuidado Personal',
+      'Servicios Tecnicos',
+      'Profesionales',
+      'Logistica y Educacion'
+    ]
+  };
+
+  const tenantBusinessExamples = {
+    'Alimentos y Bebidas': 'Supermercados, Panaderias, Licorerias, Carnicerias.',
+    'Moda y Accesorios': 'Ropa, Calzado, Joyeria, Opticas.',
+    'Hogar y Construccion': 'Ferreterias, Mueblerias, Decoracion, Pinturerias.',
+    'Tecnologia': 'Electronica, Computacion, Telefonia Movil.',
+    'Salud y Belleza': 'Farmacias, Perfumerias, Cosmetica.',
+    'Otros': 'Jugueterias, Librerias, Pet Shops (Mascotas).',
+    'Gastronomia': 'Restaurantes, Cafeterias, Fast Food, Caterings.',
+    'Cuidado Personal': 'Peluquerias, Centros de Estetica, Spas, Gimnasios.',
+    'Servicios Tecnicos': 'Talleres mecanicos, Reparacion de electrodomesticos, Soporte IT.',
+    'Profesionales': 'Consultorios medicos, Estudios contables/legales, Arquitectura.',
+    'Logistica y Educacion': 'Mensajeria, Institutos de idiomas, Jardines de infantes.'
+  };
+
+  function populateTenantEconomicActivities(typeValue, selectedValue = '') {
+    const businessType = String(typeValue || 'tienda').toLowerCase() === 'servicio' ? 'servicio' : 'tienda';
+    const select = document.getElementById('editTenantEconomicActivity');
+    const help = document.getElementById('editTenantEconomicActivityHelp');
+    if (!select) {
+      return;
+    }
+
+    const options = tenantBusinessCatalog[businessType] || [];
+    select.innerHTML = '<option value="">Selecciona un rubro</option>';
+    options.forEach((option) => {
+      const selected = String(option).toLowerCase() === String(selectedValue || '').toLowerCase();
+      select.insertAdjacentHTML('beforeend', `<option value="${option}" ${selected ? 'selected' : ''}>${option}</option>`);
+    });
+
+    const selectedOption = select.value;
+    help.textContent = selectedOption && tenantBusinessExamples[selectedOption]
+      ? `Ejemplos: ${tenantBusinessExamples[selectedOption]}`
+      : 'Selecciona una categoria para ver ejemplos.';
+  }
+
+  document.getElementById('editTenantBusinessType')?.addEventListener('change', function () {
+    populateTenantEconomicActivities(this.value, '');
+  });
+
+  document.getElementById('editTenantEconomicActivity')?.addEventListener('change', function () {
+    const help = document.getElementById('editTenantEconomicActivityHelp');
+    const selectedOption = this.value;
+    help.textContent = selectedOption && tenantBusinessExamples[selectedOption]
+      ? `Ejemplos: ${tenantBusinessExamples[selectedOption]}`
+      : 'Selecciona una categoria para ver ejemplos.';
+  });
+
   // Llenar modal para editar Tenant
   document.querySelectorAll('.btn-edit-tenant').forEach(button => {
     button.addEventListener('click', function () {
@@ -214,7 +286,10 @@
       document.getElementById('editTenantSlug').value = this.dataset.slug;
       document.getElementById('editTenantEmail').value = this.dataset.email;
       document.getElementById('editTenantBusinessType').value = this.dataset.businessType || 'tienda';
-      document.getElementById('editTenantEconomicActivity').value = this.dataset.economicActivity || '';
+      populateTenantEconomicActivities(
+        this.dataset.businessType || 'tienda',
+        this.dataset.economicActivity || ''
+      );
       document.getElementById('editTenantLogo').value = this.dataset.logo;
       document.getElementById('editOwnerName').value = this.dataset.ownerName || '';
       document.getElementById('editOwnerEmail').value = this.dataset.ownerEmail || '';
@@ -234,6 +309,8 @@
     const logoPath = this.value ? this.value : '/assets/img/shopix5.png';
     logoPreview.src = logoPath;
   });
+
+  populateTenantEconomicActivities('tienda', '');
 
 
   // Actualizar Tenant

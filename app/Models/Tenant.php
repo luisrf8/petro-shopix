@@ -10,6 +10,8 @@ class Tenant extends Model
 {
     use HasFactory;
 
+    private static array $locationNameCache = [];
+
     protected static function booted()
     {
         static::created(function (Tenant $tenant) {
@@ -153,5 +155,43 @@ class Tenant extends Model
     public function activePlanPayment()
     {
         return $this->hasOne(TenantPlanPayment::class)->where('status', 'active');
+    }
+
+    public function getCountryNameAttribute(): ?string
+    {
+        return $this->resolveLocationName($this->country ?? null, Country::class);
+    }
+
+    public function getStateNameAttribute(): ?string
+    {
+        return $this->resolveLocationName($this->state ?? null, State::class);
+    }
+
+    public function getCityNameAttribute(): ?string
+    {
+        return $this->resolveLocationName($this->city ?? null, City::class);
+    }
+
+    private function resolveLocationName($value, string $modelClass): ?string
+    {
+        if (is_null($value) || trim((string) $value) === '') {
+            return null;
+        }
+
+        $rawValue = trim((string) $value);
+
+        if (!ctype_digit($rawValue)) {
+            return $rawValue;
+        }
+
+        $cacheKey = $modelClass . ':' . $rawValue;
+        if (array_key_exists($cacheKey, self::$locationNameCache)) {
+            return self::$locationNameCache[$cacheKey];
+        }
+
+        $resolved = $modelClass::query()->whereKey((int) $rawValue)->value('name');
+        self::$locationNameCache[$cacheKey] = $resolved ? (string) $resolved : $rawValue;
+
+        return self::$locationNameCache[$cacheKey];
     }
 }

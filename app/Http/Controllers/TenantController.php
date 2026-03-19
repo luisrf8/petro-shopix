@@ -32,6 +32,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
 
@@ -238,7 +239,7 @@ class TenantController extends Controller
             'color_primary'   => 'required|string|max:7',
             'color_secondary' => 'required|string|max:7',
             'color_accent'    => 'required|string|max:7',
-            'business_type'   => 'required|string|regex:/^(tienda|servicio)$/i',
+            'business_type'   => ['required', 'string', Rule::regex('/^(tienda|servicio)$/i')],
             'economic_activity' => 'required|string|max:150|regex:/.*\S.*/',
             'country'         => 'nullable|string|max:255',
             'state'           => 'nullable|string|max:255',
@@ -251,6 +252,11 @@ class TenantController extends Controller
             'users.*.password'=> 'nullable|string|min:8',
             'plan_id'         => 'required|exists:plans,id',
         ]);
+
+        $this->assertEconomicActivityAllowed(
+            $validated['business_type'] ?? null,
+            $validated['economic_activity'] ?? null
+        );
 
         $normalizedSlug = Str::slug((string) $validated['slug']);
 
@@ -284,7 +290,7 @@ class TenantController extends Controller
                 'color_secondary' => $validated['color_secondary'],
                 'color_accent'    => $validated['color_accent'],
                 'business_type'   => $this->normalizeBusinessType($validated['business_type']),
-                'economic_activity' => $this->normalizeEconomicActivity($validated['economic_activity']),
+                'economic_activity' => $this->normalizeEconomicActivity($validated['economic_activity'], $validated['business_type']),
                 'country'         => $validated['country'] ?? null,
                 'state'           => $validated['state'] ?? null,
                 'city'            => $validated['city'] ?? null,
@@ -407,7 +413,7 @@ class TenantController extends Controller
             'color_primary'         => 'required|string|max:7',
             'color_secondary'       => 'required|string|max:7',
             'color_accent'          => 'required|string|max:7',
-            'business_type'         => 'required|string|regex:/^(tienda|servicio)$/i',
+            'business_type'         => ['required', 'string', Rule::regex('/^(tienda|servicio)$/i')],
             'economic_activity'     => 'required|string|max:150|regex:/.*\S.*/',
             'country'               => 'required|exists:countries,id',
             'state'                 => 'required|exists:states,id',
@@ -426,6 +432,11 @@ class TenantController extends Controller
             'users.owner.phone_number' => 'nullable|string|max:20',
             'users.owner.dni'       => 'nullable|string|max:50',
         ]);
+
+        $this->assertEconomicActivityAllowed(
+            $validated['business_type'] ?? null,
+            $validated['economic_activity'] ?? null
+        );
 
         $normalizedSlug = Str::slug((string) $validated['slug']);
 
@@ -463,7 +474,7 @@ class TenantController extends Controller
                 'color_secondary' => $validated['color_secondary'],
                 'color_accent'    => $validated['color_accent'],
                 'business_type'   => $this->normalizeBusinessType($validated['business_type']),
-                'economic_activity' => $this->normalizeEconomicActivity($validated['economic_activity']),
+                'economic_activity' => $this->normalizeEconomicActivity($validated['economic_activity'], $validated['business_type']),
                 'country'         => $validated['country'],
                 'state'           => $validated['state'],
                 'city'            => $validated['city'],
@@ -568,7 +579,7 @@ class TenantController extends Controller
             'color_primary'   => 'nullable|string|max:7',
             'color_secondary' => 'nullable|string|max:7',
             'color_accent'    => 'nullable|string|max:7',
-            'business_type'   => 'sometimes|required|string|regex:/^(tienda|servicio)$/i',
+            'business_type'   => ['sometimes', 'required', 'string', Rule::regex('/^(tienda|servicio)$/i')],
             'economic_activity' => 'sometimes|required|string|max:150|regex:/.*\S.*/',
             'country'         => 'nullable|string|max:255',
             'state'           => 'nullable|string|max:255',
@@ -592,6 +603,13 @@ class TenantController extends Controller
             'plan_id' => 'nullable|exists:plans,id',
             'is_active' => 'nullable|boolean',
         ]);
+
+        if (array_key_exists('economic_activity', $validated)) {
+            $this->assertEconomicActivityAllowed(
+                $validated['business_type'] ?? $tenant->business_type,
+                $validated['economic_activity'] ?? null
+            );
+        }
 
         $latestPaidPlanPayment = $tenant->tenantPlanPayments()
             ->where('status', 'paid')
@@ -686,7 +704,10 @@ class TenantController extends Controller
                 ? $this->normalizeBusinessType($validated['business_type'])
                 : $tenant->business_type,
             'economic_activity' => array_key_exists('economic_activity', $validated)
-                ? $this->normalizeEconomicActivity($validated['economic_activity'])
+                ? $this->normalizeEconomicActivity(
+                    $validated['economic_activity'],
+                    $validated['business_type'] ?? $tenant->business_type
+                )
                 : $tenant->economic_activity,
             'country' => $validated['country'] ?? $tenant->country,
             'state' => $validated['state'] ?? $tenant->state,
@@ -792,7 +813,7 @@ class TenantController extends Controller
                 'slug'            => 'nullable|string|max:255|unique:tenants,slug,' . $tenant->id,
                 'slogan'          => 'nullable|string|max:255',
                 'description'     => 'nullable|string',
-                'business_type'   => 'required|string|regex:/^(tienda|servicio)$/i',
+                'business_type'   => ['required', 'string', Rule::regex('/^(tienda|servicio)$/i')],
                 'economic_activity' => 'required|string|max:150|regex:/.*\S.*/',
                 'logo'            => 'nullable|image|mimes:png,svg|max:2048',
                 'color_primary'   => 'nullable|string|max:7',
@@ -811,6 +832,11 @@ class TenantController extends Controller
                 'instagram'         => 'nullable|string|max:255',
                 'facebook'         => 'nullable|string|max:255',
             ]);
+
+            $this->assertEconomicActivityAllowed(
+                $validated['business_type'] ?? null,
+                $validated['economic_activity'] ?? null
+            );
 
             $newUserInput = $request->input('new_user', []);
             $shouldCreateNewUser = false;
@@ -866,7 +892,7 @@ class TenantController extends Controller
                 'slogan'          => $validated['slogan'] ?? $tenant->slogan,
                 'description'     => $validated['description'] ?? $tenant->description,
                 'business_type'   => $this->normalizeBusinessType($validated['business_type']),
-                'economic_activity'=> $this->normalizeEconomicActivity($validated['economic_activity']),
+                'economic_activity'=> $this->normalizeEconomicActivity($validated['economic_activity'], $validated['business_type']),
                 'color_primary'   => $validated['color_primary'] ?? $tenant->color_primary,
                 'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
                 'color_accent'    => $validated['color_accent'] ?? $tenant->color_accent,
@@ -1306,7 +1332,7 @@ class TenantController extends Controller
         return $normalized === 'servicio' ? 'Servicio' : 'Tienda';
     }
 
-    private function normalizeEconomicActivity(?string $value): ?string
+    private function normalizeEconomicActivity(?string $value, ?string $businessType = null): ?string
     {
         $normalized = trim((string) $value);
         if ($normalized === '') {
@@ -1315,7 +1341,83 @@ class TenantController extends Controller
 
         $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
 
+        $businessTypeKey = $this->resolveBusinessTypeKey($businessType);
+        $catalog = $this->getBusinessActivityCatalog();
+        if ($businessTypeKey && isset($catalog[$businessTypeKey])) {
+            foreach ($catalog[$businessTypeKey] as $option) {
+                if (Str::lower($option) === Str::lower($normalized)) {
+                    return $option;
+                }
+            }
+        }
+
         return Str::title(Str::lower($normalized));
+    }
+
+    private function assertEconomicActivityAllowed(?string $businessType, ?string $economicActivity): void
+    {
+        $businessTypeKey = $this->resolveBusinessTypeKey($businessType);
+        $normalizedActivity = trim((string) $economicActivity);
+
+        if (!$businessTypeKey || $normalizedActivity === '') {
+            return;
+        }
+
+        $catalog = $this->getBusinessActivityCatalog();
+        $options = $catalog[$businessTypeKey] ?? [];
+        $normalizedActivity = preg_replace('/\s+/', ' ', $normalizedActivity) ?? $normalizedActivity;
+
+        foreach ($options as $option) {
+            if (Str::lower($option) === Str::lower($normalizedActivity)) {
+                return;
+            }
+        }
+
+        $businessTypeLabel = $businessTypeKey === 'servicio' ? 'Servicio' : 'Tienda';
+        throw ValidationException::withMessages([
+            'economic_activity' => [
+                'El rubro economico no corresponde al tipo de negocio seleccionado (' . $businessTypeLabel . '). Opciones validas: ' . implode(', ', $options) . '.',
+            ],
+        ]);
+    }
+
+    private function resolveBusinessTypeKey(?string $value): ?string
+    {
+        $normalized = Str::lower(trim((string) $value));
+        if ($normalized === '') {
+            return null;
+        }
+
+        if ($normalized === 'tienda') {
+            return 'tienda';
+        }
+
+        if ($normalized === 'servicio') {
+            return 'servicio';
+        }
+
+        return null;
+    }
+
+    private function getBusinessActivityCatalog(): array
+    {
+        return [
+            'tienda' => [
+                'Alimentos y Bebidas',
+                'Moda y Accesorios',
+                'Hogar y Construccion',
+                'Tecnologia',
+                'Salud y Belleza',
+                'Otros',
+            ],
+            'servicio' => [
+                'Gastronomia',
+                'Cuidado Personal',
+                'Servicios Tecnicos',
+                'Profesionales',
+                'Logistica y Educacion',
+            ],
+        ];
     }
 
     private function filterDataByExistingColumns(string $tableName, array $data): array

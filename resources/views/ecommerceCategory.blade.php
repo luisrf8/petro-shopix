@@ -54,24 +54,86 @@
     }
 
     .landing-header {
-      transition: background 0.3s ease-in-out;
+      transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
       z-index: 1050;
-      background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.82), rgba(var(--tenant-secondary-rgb), 0.72));
-      backdrop-filter: blur(8px);
-      border-bottom: 1px solid rgba(var(--tenant-accent-rgb), 0.28);
+      background: transparent;
+      backdrop-filter: none;
+      border-bottom: 1px solid transparent;
       padding: 0.5rem 0;
     }
 
+    .landing-header.is-scrolled {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      border-bottom-color: rgba(var(--tenant-primary-rgb), 0.16);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    }
+
     .landing-header .navbar-toggler {
-      border: 1px solid rgba(var(--tenant-accent-rgb), 0.55);
-      background: rgba(var(--tenant-primary-rgb), 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.16);
       padding: 0.35rem 0.55rem;
+    }
+
+    .landing-header.is-scrolled .navbar-toggler {
+      border-color: rgba(var(--tenant-primary-rgb), 0.35);
+      background: #ffffff;
+    }
+
+    .landing-header.is-scrolled .navbar-toggler-icon {
+      filter: invert(1) grayscale(1);
     }
 
     .landing-nav-link {
       font-weight: 600;
-      padding: 0.4rem 0.75rem;
+      padding: 0.46rem 0.88rem;
       border-radius: 999px;
+      font-size: 0.96rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.42rem;
+      border: 1px solid transparent;
+    }
+
+    .tenant-main-nav-btn {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.44);
+      color: #ffffff !important;
+    }
+
+    .tenant-main-nav-btn:hover,
+    .tenant-main-nav-btn:focus {
+      background: rgba(255, 255, 255, 0.22);
+      border-color: rgba(255, 255, 255, 0.66);
+      color: #ffffff !important;
+    }
+
+    .landing-header.is-scrolled .tenant-main-nav-btn,
+    #landingNavbar.show .tenant-main-nav-btn {
+      background: #f8fafc;
+      border-color: #d6e0ef;
+      color: #1e293b !important;
+    }
+
+    .landing-header.is-scrolled .tenant-main-nav-btn:hover,
+    .landing-header.is-scrolled .tenant-main-nav-btn:focus,
+    #landingNavbar.show .tenant-main-nav-btn:hover,
+    #landingNavbar.show .tenant-main-nav-btn:focus {
+      background: #eef2ff;
+      border-color: rgba(var(--tenant-accent-rgb), 0.45);
+      color: #0f172a !important;
+    }
+
+    .tenant-logo-chip {
+      border: 1px solid rgba(255, 255, 255, 0.46) !important;
+      background: rgba(255, 255, 255, 0.14) !important;
+      border-radius: 12px !important;
+      transition: background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .landing-header.is-scrolled .tenant-logo-chip {
+      border-color: #d6e0ef !important;
+      background: #ffffff !important;
     }
 
     .landing-nav-link.category-link.active {
@@ -416,7 +478,11 @@
 
     @media (max-width: 991.98px) {
       .landing-header {
-        background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.92), rgba(var(--tenant-secondary-rgb), 0.84));
+        background: transparent;
+      }
+
+      .landing-header.is-scrolled {
+        background: rgba(255, 255, 255, 0.95);
       }
 
       .products-layout {
@@ -442,7 +508,16 @@
       .landing-nav-link {
         display: block;
         width: 100%;
-        text-align: center;
+        text-align: left;
+      }
+
+      #landingNavbar.show {
+        margin-top: 0.6rem;
+        padding: 0.75rem;
+        border: 1px solid #dbe4f0;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.97);
+        box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
       }
 
       .category-card {
@@ -481,7 +556,7 @@
       <nav class="navbar navbar-expand-lg navbar-dark p-0">
         <a class="navbar-brand d-flex align-items-center" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}">
           @if($tenant->logo)
-            <span class="btn btn-light p-1 px-3 m-0">
+            <span class="btn p-1 px-3 m-0 tenant-logo-chip">
               <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
             </span>
           @else
@@ -489,28 +564,35 @@
           @endif
         </a>
 
+        <button type="button"
+                class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center tenant-icon-btn d-lg-none ms-auto me-2"
+                aria-label="Carrito"
+                title="Carrito"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#tenantCartOffcanvas"
+                aria-controls="tenantCartOffcanvas">
+          <i class="bi bi-cart3"></i>
+          <span class="badge rounded-pill bg-dark tenant-cart-count">0</span>
+        </button>
+
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#landingNavbar" aria-controls="landingNavbar" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
 
         <div class="collapse navbar-collapse" id="landingNavbar">
-          <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
-            @foreach($categories as $category)
-              <li class="nav-item">
-                <a class="btn btn-outline-light landing-nav-link category-link" href="#" data-id="{{ $category->id }}">{{ $category->name }}</a>
-              </li>
-            @endforeach
-            @if(isset($materialPackages) && $materialPackages->count() > 0)
-              <li class="nav-item">
-                <a class="btn btn-outline-light landing-nav-link category-link" href="#" data-id="packages">Paquetes</a>
-              </li>
-            @endif
+          <ul class="navbar-nav w-100 align-items-lg-center gap-lg-2">
             <li class="nav-item">
-              <a class="btn btn-outline-light landing-nav-link category-link" href="#" data-id="all">Todos</a>
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}"><i class="bi bi-grid"></i> Categorías</a>
+            </li>
+            <li class="nav-item">
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}#productos"><i class="bi bi-bag"></i> Productos</a>
+            </li>
+            <li class="nav-item">
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}#contacto"><i class="bi bi-chat-dots"></i> Contacto</a>
             </li>
             @include('partials.tenant-cart-nav')
             <li class="nav-item">
-              <a class="btn btn-outline-light landing-nav-link" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}">Volver</a>
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}"><i class="bi bi-arrow-left"></i> Volver</a>
             </li>
           </ul>
         </div>
@@ -746,9 +828,35 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+  const landingHeader = document.querySelector('.landing-header');
   const navLinksCollapse = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
   const navbarCollapse = document.getElementById('landingNavbar');
   const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;
+
+  const hasHeroSection = !!document.querySelector('.hero');
+
+  function syncLandingHeaderState() {
+    if (!landingHeader) {
+      return;
+    }
+
+    const isScrolled = !hasHeroSection || window.scrollY > 14;
+    landingHeader.classList.toggle('is-scrolled', isScrolled);
+  }
+
+  window.addEventListener('scroll', syncLandingHeaderState, { passive: true });
+
+  if (navbarCollapse) {
+    navbarCollapse.addEventListener('shown.bs.collapse', () => {
+      landingHeader?.classList.add('is-scrolled');
+    });
+
+    navbarCollapse.addEventListener('hidden.bs.collapse', () => {
+      syncLandingHeaderState();
+    });
+  }
+
+  syncLandingHeaderState();
 
   navLinksCollapse.forEach(link => {
     link.addEventListener('click', () => {

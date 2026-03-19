@@ -5,18 +5,37 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Shopix - Gestión de Tiendas Virtuales</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <style>
+    :root {
+      --text-main: #0f172a;
+      --text-soft: #4b5563;
+      --brand-blue: #1d4ed8;
+      --line-soft: #dbe4f0;
+      --surface: #ffffff;
+      --surface-soft: #f6f8fc;
+      --shadow-soft: 0 18px 42px rgba(15, 23, 42, 0.08);
+    }
+
     body {
-      font-family: 'Inter', sans-serif;
-      background-color: #fff;
-      color: #000;
+      font-family: 'Manrope', sans-serif;
+      background:
+        radial-gradient(60rem 24rem at -10% 0%, rgba(37, 99, 235, 0.1), transparent 60%),
+        radial-gradient(52rem 22rem at 110% 10%, rgba(14, 165, 233, 0.12), transparent 58%),
+        linear-gradient(180deg, #f8fbff 0%, #f4f7fb 48%, #f8fafd 100%);
+      color: var(--text-main);
     }
 
     .landing-header {
-      transition: background 0.3s ease-in-out;
+      transition: background 0.25s ease-in-out;
       z-index: 1050;
       background: transparent;
+      backdrop-filter: none;
+      border-bottom: 0;
       padding: 0.5rem 0;
     }
 
@@ -29,42 +48,52 @@
     .landing-nav-link {
       font-weight: 600;
       padding: 0.4rem 0.75rem;
+      border-radius: 12px;
     }
 
     .shadow-soft {
       filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
     }
 
-        .hero {
-            position: relative;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            color: white;
-            /* La imagen de fondo debe ser llamativa y de alta resolución */
-            background: url('../../assets/img/shopixbg.png') no-repeat center center;
-            background-size: cover;
-            overflow: hidden; /* Asegura que la superposición no se salga */
-        }
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: white;
+      background: url('../../assets/img/shopixbg.png') no-repeat center center;
+      background-size: cover;
+      overflow: hidden;
+    }
 
-        /* Nueva capa oscura para contraste */
-        .hero-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.62); /* Negro semi-transparente */
-            z-index: 0;
-        }
+    .hero-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(140deg, rgba(2, 6, 23, 0.82), rgba(15, 23, 42, 0.72));
+      z-index: 0;
+    }
         
-        /* Contenido del Hero sobre la superposición */
-        .hero .container {
-          z-index: 1; /* Coloca el contenido por encima del overlay */
-          padding-top: 5.5rem;
-        }
+    .hero .container {
+      z-index: 1;
+      padding-top: 5.5rem;
+      position: relative;
+    }
+
+    .hero .container::before {
+      content: '';
+      position: absolute;
+      inset: auto -12% -28% auto;
+      width: 20rem;
+      height: 20rem;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.34), transparent 68%);
+      pointer-events: none;
+    }
 
     .filter-box {
       background: white;
@@ -75,31 +104,47 @@
 
     .section-title {
       font-size: clamp(1.4rem, 4.5vw, 2rem);
-      font-weight: 700;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 800;
+      letter-spacing: -0.01em;
     }
 
     .card-product {
-      border: none;
-      border-radius: 12px;
+      border: 1px solid var(--line-soft);
+      border-radius: 18px;
       overflow: hidden;
-      box-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
+      box-shadow: var(--shadow-soft);
+      background: var(--surface);
+      transition: transform 0.22s ease, box-shadow 0.22s ease;
     }
 
     .card-product:hover {
-      transform: scale(1.01);
+      transform: translateY(-4px);
+      box-shadow: 0 22px 48px rgba(15, 23, 42, 0.14);
     }
 
     .icon-box {
       text-align: center;
     }
 
+    .feature-card,
+    .benefit-card {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line-soft);
+      border-radius: 16px;
+      padding: 1.25rem 1rem;
+      height: 100%;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+    }
+
     .icon-box i {
       font-size: 2rem;
       margin-bottom: 10px;
+      color: var(--brand-blue);
     }
 
     footer {
-      background: #001a49ff;
+      background: #0b172d;
       color: #fff;
       padding: 40px 0;
       text-align: center;
@@ -120,20 +165,138 @@
       text-shadow: 1px 1px 3px rgba(1, 0, 0, 2);
     }
     .hero-title {
-      font-size: 5rem;
-        font-weight: 700;
+      font-size: clamp(3rem, 11vw, 6.3rem);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 800;
       line-height: 1.1;
-        color: #fff; 
-        text-shadow: 2px 2px 8px rgba(0, 0, 0, 1); 
+      color: #fff;
+      text-shadow: 2px 2px 8px rgba(0, 0, 0, 1);
     }
 
     .hero-slogan {
-      font-size: 5rem;
+      font-size: clamp(1.05rem, 3.8vw, 1.75rem);
       font-weight: 600;
       line-height: 1.25;
       color: #fff;
       text-shadow: 2px 2px 8px rgba(0, 0, 0, 1);
       margin-top: 0.5rem;
+      max-width: 900px;
+      margin-inline: auto;
+    }
+
+    .hero-panel {
+      max-width: 620px;
+      margin: 1.8rem auto 0;
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 1rem;
+      box-shadow: 0 12px 30px rgba(2, 6, 23, 0.3);
+    }
+
+    .hero-order-form {
+      max-width: 520px;
+      margin-inline: auto;
+      display: grid;
+      gap: 0.6rem;
+    }
+
+    .hero-order-caption {
+      margin: 0 0 0.35rem;
+      font-weight: 700;
+      color: #ffffff;
+      text-align: center;
+    }
+
+    .hero-order-row {
+      width: 100%;
+    }
+
+    .hero-order-input {
+      width: 100%;
+    }
+
+    .hero-order-btn {
+      width: 100%;
+      max-width: 220px;
+      margin-inline: auto;
+    }
+
+    .section-soft {
+      background: var(--surface-soft);
+    }
+
+    .allies-shell {
+      background: #fff;
+      border: 1px solid var(--line-soft);
+      border-radius: 20px;
+      padding: 1.25rem;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .allies-logo {
+      max-height: 82px;
+      object-fit: contain;
+      filter: saturate(0.95);
+      transition: transform 0.2s ease;
+    }
+
+    .allies-logo:hover {
+      transform: translateY(-2px);
+    }
+
+    .contact-card {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line-soft);
+      border-radius: 20px;
+      padding: 1.5rem;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .contact-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+    }
+
+    .contact-btn {
+      border-radius: 999px;
+      padding: 0.62rem 1.1rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+      text-decoration: none;
+    }
+
+    .contact-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.14);
+    }
+
+    .contact-btn-primary {
+      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      color: #ffffff;
+      border-color: rgba(37, 99, 235, 0.35);
+    }
+
+    .contact-btn-primary:hover {
+      color: #ffffff;
+      background: linear-gradient(135deg, #1e40af, #1d4ed8);
+    }
+
+    .contact-btn-secondary {
+      background: #ffffff;
+      color: #1f2937;
+      border-color: #cbd5e1;
+    }
+
+    .contact-btn-secondary:hover {
+      color: #111827;
+      background: #f8fafc;
     }
 
     /* También puedes aplicar un text-shadow más sutil al menú de navegación */
@@ -145,7 +308,7 @@
     /* Agrega esta nueva clase a tu bloque <style> */
     @media (max-width: 991.98px) {
       .landing-header {
-        background: rgba(255, 255, 255, 0.96);
+        background: transparent;
       }
 
       .navbar-nav {
@@ -157,7 +320,7 @@
       }
 
       .hero-title {
-        font-size: clamp(1.6rem, 5.6vw, 3rem);
+        font-size: clamp(2.2rem, 8.6vw, 4.2rem);
       }
 
       .hero-slogan {
@@ -177,11 +340,20 @@
       }
 
       .hero-title {
-        font-size: clamp(1.35rem, 8vw, 2rem);
+        font-size: clamp(2rem, 10vw, 3rem);
       }
 
       .hero-slogan {
         font-size: clamp(0.9rem, 4.6vw, 1.25rem);
+      }
+
+      .hero-panel {
+        padding: 0.85rem;
+      }
+
+      .contact-btn {
+        width: 100%;
+        justify-content: center;
       }
     }
   </style>
@@ -235,41 +407,43 @@
     <div class="container text-center">
       <h1 class="hero-title">SHOPIX</h1>
       <h2 class="hero-slogan">GESTIONA TU TIENDA O SERVICIO VIRTUAL FÁCILMENTE</h2>
-      <div class="mt-4 mx-auto" style="max-width: 560px;">
-        <label for="publicOrderIdInput" class="form-label text-white fw-semibold">Consultar estatus de compra</label>
-        <div class="d-flex gap-2 flex-wrap justify-content-center">
-          <input type="number" min="1" id="publicOrderIdInput" class="form-control bg-white" placeholder="Ingresa tu número de pedido">
-          <button type="button" id="publicOrderCheckBtn" class="btn btn-light text-dark fw-semibold">Ver estatus</button>
-        </div>
-      </div>
+
     </div>
   </section>
 
 
   <!-- FUNCIONALIDADES -->
-  <section id="funcionalidades" class="py-5 bg-light">
+  <section id="funcionalidades" class="py-5 section-soft">
     <div class="container">
       <h2 class="section-title mb-5 text-center">Funciones Principales</h2>
-      <div class="row text-center">
+      <div class="row text-center g-3">
         <div class="col-12 col-sm-6 col-lg-3 icon-box mb-4 mb-lg-0">
-          <i class="bi bi-shop"></i>
-          <h5>Gestión de Tienda</h5>
-          <p>Organiza todos tus productos y categorías fácilmente.</p>
+          <div class="feature-card">
+            <i class="bi bi-shop"></i>
+            <h5>Gestión de Tienda</h5>
+            <p>Organiza todos tus productos y categorías fácilmente.</p>
+          </div>
         </div>
         <div class="col-12 col-sm-6 col-lg-3 icon-box mb-4 mb-lg-0">
-          <i class="bi bi-box-seam"></i>
-          <h5>Inventario Inteligente</h5>
-          <p>Control automático de existencias y alertas de stock bajo.</p>
+          <div class="feature-card">
+            <i class="bi bi-box-seam"></i>
+            <h5>Inventario Inteligente</h5>
+            <p>Control automático de existencias y alertas de stock bajo.</p>
+          </div>
         </div>
         <div class="col-12 col-sm-6 col-lg-3 icon-box mb-4 mb-lg-0">
-          <i class="bi bi-cash-stack"></i>
-          <h5>Ventas y Compras</h5>
-          <p>Registra tus movimientos y genera reportes detallados.</p>
+          <div class="feature-card">
+            <i class="bi bi-cash-stack"></i>
+            <h5>Ventas y Compras</h5>
+            <p>Registra tus movimientos y genera reportes detallados.</p>
+          </div>
         </div>
         <div class="col-12 col-sm-6 col-lg-3 icon-box mb-4 mb-lg-0">
-          <i class="bi bi-bar-chart"></i>
-          <h5>Reportes y Pagos</h5>
-          <p>Obtén reportes en tiempo real y administra tus pagos con facilidad.</p>
+          <div class="feature-card">
+            <i class="bi bi-bar-chart"></i>
+            <h5>Reportes y Pagos</h5>
+            <p>Obtén reportes en tiempo real y administra tus pagos con facilidad.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -303,7 +477,7 @@
               </ul>
             </div>
             
-            <div class="card-footer bg-transparent border-0 text-center">
+            <div class="card-footer bg-transparent border-0 text-center pt-3">
               @if ($plan->status == 1)
                 <a href="/create-tenant-user"
                   target="_blank"
@@ -334,29 +508,36 @@
       <h2 class="section-title mb-5">Beneficios de Usar Shopix</h2>
       <div class="row justify-content-center">
         <div class="col-12 col-md-4 icon-box mb-4 mb-md-0">
-          <i class="bi bi-speedometer"></i>
-          <h5>Rápido y Eficiente</h5>
-          <p>Todo lo que necesitas para tu tienda en un solo panel.</p>
+          <div class="benefit-card">
+            <i class="bi bi-speedometer"></i>
+            <h5>Rápido y Eficiente</h5>
+            <p>Todo lo que necesitas para tu tienda en un solo panel.</p>
+          </div>
         </div>
         <div class="col-12 col-md-4 icon-box mb-4 mb-md-0">
-          <i class="bi bi-cloud-check"></i>
-          <h5>Accesible desde Cualquier Lugar</h5>
-          <p>Gestiona tu negocio desde tu computadora o teléfono.</p>
+          <div class="benefit-card">
+            <i class="bi bi-cloud-check"></i>
+            <h5>Accesible desde Cualquier Lugar</h5>
+            <p>Gestiona tu negocio desde tu computadora o teléfono.</p>
+          </div>
         </div>
         <div class="col-12 col-md-4 icon-box mb-4 mb-md-0">
-          <i class="bi bi-people"></i>
-          <h5>Multiusuario</h5>
-          <p>Agrega empleados, asigna roles y trabaja en equipo.</p>
+          <div class="benefit-card">
+            <i class="bi bi-people"></i>
+            <h5>Multiusuario</h5>
+            <p>Agrega empleados, asigna roles y trabaja en equipo.</p>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
 <!-- Tiendas -->
-<section id="beneficios" class="py-5 bg-light">
+<section id="aliados" class="py-5 section-soft">
   <div class="container text-center">
     <h2 class="section-title mb-5 fw-bold">Aliados Comerciales</h2>
 
+    <div class="allies-shell">
     <div id="carouselTiendas" class="carousel slide" data-bs-ride="carousel" data-bs-interval="2000">
       <div class="carousel-inner">
 
@@ -368,12 +549,12 @@
                 @if($tienda->logo)
                   <img src="{{ \App\Support\ImageStorage::url($tienda->logo) ?? asset('assets/img/shopix5.png') }}" 
                        alt="{{ $tienda->name }}" 
-                       class="img-fluid" 
+                       class="img-fluid allies-logo" 
                        style="max-height: 100px;">
                 @else
                   <img src="{{ asset('assets/img/shopix5.png') }}" 
                        alt="{{ $tienda->name }}" 
-                       class="img-fluid" 
+                       class="img-fluid allies-logo" 
                        style="max-height: 100px;">
                 @endif
               </div>
@@ -392,33 +573,46 @@
         <span class="carousel-control-next-icon"></span>
       </button>
     </div>
+    </div>
   </div>
 </section>
-
+      <div class="hero-panel">
+        <p class="hero-order-caption text-dark">Consultar estatus de compra</p>
+        <div class="hero-order-form">
+          <div class="hero-order-row">
+            <input type="number" min="1" id="publicOrderIdInput" class="form-control bg-white hero-order-input" placeholder="Ingresa tu número de pedido">
+          </div>
+          <div class="hero-order-row">
+            <button type="button" id="publicOrderCheckBtn" class="btn btn-light text-dark fw-semibold hero-order-btn border">Ver estatus</button>
+          </div>
+        </div>
+      </div>
 
   <!-- CONTACTO / UBICACIÓN -->
-  <section id="contacto" class="py-5 bg-light">
+  <section id="contacto" class="py-5 section-soft">
     <div class="container">
       <div class="row align-items-center">
         <div class="col-12 col-md-6 mb-4 mb-md-0">
-          <h2 class="section-title mb-3">Contáctanos</h2>
-          <p class="mb-3">Obtén una demo personalizada o consulta nuestros planes.</p>
-          <div class="d-flex flex-wrap gap-2">
-            <a href="https://api.whatsapp.com/send?phone=584148859372" target="_blank" class="btn btn-primary px-4 py-2">
-              Escríbenos por WhatsApp
-            </a>
-            <a href="https://www.google.com/maps?q=9.7527562,-63.1679763" target="_blank" rel="noopener noreferrer" class="btn btn-outline-dark px-4 py-2">
-              Ver ubicación en Google Maps
-            </a>
-          </div>
-          <div class="mt-4 d-flex gap-4">
-            <a href="https://www.instagram.com/infinitycenter.ca/" target="_blank" class="text-dark fs-4"><i class="bi bi-instagram"></i></a>
-            <a href="https://facebook.com" target="_blank" class="text-dark fs-4"><i class="bi bi-facebook"></i></a>
-            <a href="https://t.me" target="_blank" class="text-dark fs-4"><i class="bi bi-telegram"></i></a>
+          <div class="contact-card">
+            <h2 class="section-title mb-3">Contáctanos</h2>
+            <p class="mb-3">Obtén una demo personalizada o consulta nuestros planes.</p>
+            <div class="contact-actions">
+              <a href="https://api.whatsapp.com/send?phone=584148859372" target="_blank" class="contact-btn contact-btn-primary">
+                <i class="bi bi-whatsapp"></i> Escríbenos por WhatsApp
+              </a>
+              <a href="https://www.google.com/maps?q=9.7527562,-63.1679763" target="_blank" rel="noopener noreferrer" class="contact-btn contact-btn-secondary">
+                <i class="bi bi-geo-alt"></i> Ver ubicación en Google Maps
+              </a>
+            </div>
+            <div class="mt-4 d-flex gap-4">
+              <a href="https://www.instagram.com/infinitycenter.ca/" target="_blank" class="text-dark fs-4"><i class="bi bi-instagram"></i></a>
+              <a href="https://facebook.com" target="_blank" class="text-dark fs-4"><i class="bi bi-facebook"></i></a>
+              <a href="https://t.me" target="_blank" class="text-dark fs-4"><i class="bi bi-telegram"></i></a>
+            </div>
           </div>
         </div>
         <div class="col-12 col-md-6">
-          <div class="rounded-4 overflow-hidden shadow" style="height: 300px;">
+          <div class="rounded-4 overflow-hidden shadow" style="height: 320px; border: 1px solid var(--line-soft);">
             <iframe
               src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d62734.306809791316!2d-63.1679763!3d9.7527562!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1ses!2sve!4v1700000000000"
               width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"
@@ -437,7 +631,6 @@
     </div>
   </footer>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 </body>
 <script>
     const navLinks = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
