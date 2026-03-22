@@ -327,7 +327,7 @@
 
     .trust-pill {
       border: 1px solid rgba(var(--tenant-accent-rgb), 0.45);
-      background: rgba(var(--tenant-accent-rgb), 0.12);
+      background: white;
       color: var(--tenant-primary);
       border-radius: 999px;
       font-size: 0.84rem;
