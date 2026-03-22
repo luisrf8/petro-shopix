@@ -11,7 +11,6 @@ use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\UserController;
-use App\Http\Controllers\GoogleDriveController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\NotificationController;
@@ -26,10 +25,6 @@ Route::post('/registerEcomm', [AuthenticatedSessionController::class, 'registerE
 Route::post('/create-user', [UserController::class, 'store']);
 Route::post('/user/{id}', [UserController::class, 'update']);
 Route::post('users/{id}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggleStatus');
-
-// Rutas para Google OAuth
-Route::get('/auth/google', [GoogleDriveController::class, 'redirectToGoogle']);
-Route::get('/auth/google/callback', [GoogleDriveController::class, 'handleGoogleCallback']);
 
 // Rutas de productos y categorías
 Route::get('/products', [ProductController::class, 'index'])->name('products.index');

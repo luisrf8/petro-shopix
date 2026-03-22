@@ -344,23 +344,38 @@ class ImageStorage
         $namePrefix = trim($directory, '/');
         $baseName = trim(basename($originalName));
         $safeName = trim(($namePrefix !== '' ? $namePrefix . '-' : '') . $baseName);
-        $metadata = ['name' => $safeName];
 
-        $folderId = trim((string) config('services.image_storage.google_drive_folder_id', ''));
-        if ($folderId !== '') {
-            $metadata['parents'] = [$folderId];
+        $folderId = trim((string) config('services.image_storage.google_drive_folder_id', env('GOOGLE_DRIVE_FOLDER_ID', '')));
+        if ($folderId === '') {
+            throw new RuntimeException('Falta GOOGLE_DRIVE_FOLDER_ID. Define el ID de la carpeta destino en Google Drive.');
         }
+        $metadata = [
+            'name' => $safeName,
+            'parents' => [$folderId],
+        ];
 
-        $created = $service->files->create(
-            new DriveFile($metadata),
-            [
-                'data' => $binary,
-                'mimeType' => $mimeType,
-                'uploadType' => 'multipart',
-                'fields' => 'id',
-                'supportsAllDrives' => true,
-            ]
-        );
+        try {
+            $created = $service->files->create(
+                new DriveFile($metadata),
+                [
+                    'data' => $binary,
+                    'mimeType' => $mimeType,
+                    'uploadType' => 'multipart',
+                    'fields' => 'id',
+                    'supportsAllDrives' => true,
+                ]
+            );
+        } catch (GoogleServiceException $exception) {
+            if (self::extractDriveErrorReason($exception) === 'storageQuotaExceeded') {
+                throw new RuntimeException(
+                    'Google Drive devolvio storageQuotaExceeded. Con service account debes usar una carpeta en Shared Drive con permisos para la cuenta de servicio. Para cuentas personales, usa OAuth de usuario.',
+                    0,
+                    $exception
+                );
+            }
+
+            throw $exception;
+        }
 
         $fileId = (string) ($created->id ?? '');
         if ($fileId === '') {

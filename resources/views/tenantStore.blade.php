@@ -1247,6 +1247,7 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
 
         if (data.success) {
             alert(data.message);
+            window.location.reload();
         } else if (data.errors) {
             // Mostrar errores de validación
             console.log(data.errors);

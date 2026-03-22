@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Google\Client;
 use Google\Service\Drive;
-use Illuminate\Support\Facades\File;
 use App\Support\ImageStorage;
 use RuntimeException;
 
@@ -13,23 +12,28 @@ class GoogleDriveController extends Controller
 {
     private $client;
     private $isConfigured = false;
-    private $credentialsPath;
+    private $configurationError = '';
 
     public function __construct()
     {
         $this->client = new Client();
-
-        $configuredPath = (string) config('services.image_storage.google_drive_credentials', storage_path('app/credentials.json'));
-        $this->credentialsPath = $this->resolveCredentialsPath($configuredPath);
-
-        if (File::exists($this->credentialsPath)) {
-            $this->client->setAuthConfig($this->credentialsPath);
-            $this->isConfigured = true;
-        }
-
         $this->client->addScope(Drive::DRIVE);
         $this->client->setAccessType('offline');
+        $this->client->setIncludeGrantedScopes(true);
         $this->client->setPrompt('select_account consent');
+
+        $clientId = trim((string) config('services.image_storage.google_drive_oauth_client_id', ''));
+        $clientSecret = trim((string) config('services.image_storage.google_drive_oauth_client_secret', ''));
+
+        if ($clientId === '' || $clientSecret === '') {
+            $this->configurationError = 'Faltan GOOGLE_DRIVE_OAUTH_CLIENT_ID o GOOGLE_DRIVE_OAUTH_CLIENT_SECRET en el archivo .env.';
+            return;
+        }
+
+        $this->client->setClientId($clientId);
+        $this->client->setClientSecret($clientSecret);
+        $this->client->setRedirectUri(route('google-drive.callback'));
+        $this->isConfigured = true;
     }
 
     private function ensureConfigured()
@@ -39,22 +43,10 @@ class GoogleDriveController extends Controller
         }
 
         return response()->json([
-            'message' => 'Google Drive no está configurado. Falta el archivo de credenciales en: ' . $this->credentialsPath,
+            'message' => $this->configurationError !== ''
+                ? $this->configurationError
+                : 'Google Drive OAuth no esta configurado.',
         ], 503);
-    }
-
-    private function resolveCredentialsPath(string $credentialsPath): string
-    {
-        $credentialsPath = trim($credentialsPath);
-        if ($credentialsPath === '') {
-            return storage_path('app/credentials.json');
-        }
-
-        if (preg_match('#^(?:[A-Za-z]:[\\/]|\\\\|/)#', $credentialsPath) === 1) {
-            return $credentialsPath;
-        }
-
-        return base_path($credentialsPath);
     }
 
     public function uploadFile(Request $request)
@@ -84,8 +76,8 @@ class GoogleDriveController extends Controller
 
     public function redirectToGoogle()
     {
-        if (!$this->isConfigured) {
-            return redirect()->back()->with('error', 'Google Drive no está configurado.');
+        if ($response = $this->ensureConfigured()) {
+            return $response;
         }
 
         return redirect()->away($this->client->createAuthUrl());
@@ -93,14 +85,74 @@ class GoogleDriveController extends Controller
 
     public function handleGoogleCallback(Request $request)
     {
-        if (!$this->isConfigured) {
-            return redirect()->back()->with('error', 'Google Drive no está configurado.');
+        if ($response = $this->ensureConfigured()) {
+            return $response;
         }
 
-        $this->client->authenticate($request->get('code'));
-        $request->session()->put('google_drive_token', $this->client->getAccessToken());
+        $oauthError = trim((string) $request->query('error', ''));
+        if ($oauthError !== '') {
+            $errorDescription = trim((string) $request->query('error_description', ''));
 
-        return redirect('/'); // Redirige a la página principal o donde desees
+            return response()->json([
+                'message' => 'Google OAuth devolvio un error: ' . $oauthError,
+                'error_description' => $errorDescription !== '' ? $errorDescription : null,
+                'connect_url' => route('google-drive.connect'),
+            ], 422);
+        }
+
+        $code = trim((string) $request->query('code', ''));
+        if ($code === '') {
+            return response()->json([
+                'message' => 'No se recibio el parametro code desde Google OAuth. No abras callback manualmente; inicia desde connect_url.',
+                'connect_url' => route('google-drive.connect'),
+            ], 422);
+        }
+
+        $token = $this->client->fetchAccessTokenWithAuthCode($code);
+        if (is_array($token) && isset($token['error'])) {
+            $error = trim((string) ($token['error_description'] ?? $token['error'] ?? 'Error desconocido en OAuth.'));
+
+            return response()->json([
+                'message' => 'No se pudo obtener el access token de Google: ' . $error,
+            ], 422);
+        }
+
+        $refreshToken = trim((string) ($token['refresh_token'] ?? ''));
+        if ($refreshToken === '') {
+            $existingRefreshToken = trim((string) config('services.image_storage.google_drive_oauth_refresh_token', ''));
+            if ($existingRefreshToken !== '') {
+                $refreshToken = $existingRefreshToken;
+            }
+        }
+
+        if ($refreshToken === '') {
+            return response()->json([
+                'message' => 'Google no devolvio refresh_token. Revoca acceso de la app en tu cuenta Google y vuelve a autorizar para forzar consentimiento offline.',
+            ], 422);
+        }
+
+        $request->session()->put('google_drive_oauth_refresh_token', $refreshToken);
+
+        return response()->json([
+            'message' => 'OAuth completado. Guarda este valor en GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN en tu .env.',
+            'refresh_token' => $refreshToken,
+            'env_example' => 'GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN=' . $refreshToken,
+        ]);
+    }
+
+    public function oauthStatus()
+    {
+        $oauthClientId = trim((string) config('services.image_storage.google_drive_oauth_client_id', ''));
+        $oauthClientSecret = trim((string) config('services.image_storage.google_drive_oauth_client_secret', ''));
+        $oauthRefreshToken = trim((string) config('services.image_storage.google_drive_oauth_refresh_token', ''));
+
+        return response()->json([
+            'oauth_client_id_configured' => $oauthClientId !== '',
+            'oauth_client_secret_configured' => $oauthClientSecret !== '',
+            'oauth_refresh_token_configured' => $oauthRefreshToken !== '',
+            'connect_url' => route('google-drive.connect'),
+            'callback_url' => route('google-drive.callback'),
+        ]);
     }
 
     public function streamImage(string $fileId)

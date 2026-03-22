@@ -49,6 +49,10 @@ Route::post('/tenant-ai-image', [TenantController::class, 'generateTenantImage']
 
 // RUTAS CON AUTENTICACIÓN
 Route::middleware('auth')->group(function () {
+    Route::get('/settings/google-drive/oauth', [GoogleDriveController::class, 'oauthStatus'])->name('google-drive.oauth.status');
+    Route::get('/settings/google-drive/connect', [GoogleDriveController::class, 'redirectToGoogle'])->name('google-drive.connect');
+    Route::get('/settings/google-drive/callback', [GoogleDriveController::class, 'handleGoogleCallback'])->name('google-drive.callback');
+
     Route::get('/dashboard', [IndexController::class, 'index'])->name('dashboard');
     Route::post('/logout', [AuthenticatedSessionController::class, 'logout'])->name('logout');
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
