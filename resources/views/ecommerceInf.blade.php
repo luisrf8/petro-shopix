@@ -152,8 +152,15 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: linear-gradient(180deg, rgba(var(--tenant-primary-rgb), 0.68), rgba(var(--tenant-secondary-rgb), 0.86));
       z-index: 0;
+    }
+
+    .hero-overlay.hero-overlay-image {
+      background: linear-gradient(0deg, rgba(2, 6, 23, 0.42) 0%, rgba(2, 6, 23, 0.18) 30%, rgba(2, 6, 23, 0.08) 55%, rgba(2, 6, 23, 0.02) 100%);
+    }
+
+    .hero-overlay.hero-overlay-color {
+      background: linear-gradient(180deg, rgba(var(--tenant-primary-rgb), 0.68), rgba(var(--tenant-secondary-rgb), 0.86));
     }
 
     .hero .container {
@@ -783,7 +790,7 @@
       overflow: hidden;
   ">
 
-    <div class="hero-overlay"></div>
+    <div class="hero-overlay {{ isset($tenant->background_image) && $tenant->background_image ? 'hero-overlay-image' : 'hero-overlay-color' }}"></div>
     <div class="container text-center">
       @php
           $businessTypeLabel = !empty($tenant->business_type)
