@@ -840,6 +840,36 @@ function confirmRemoveImage(imageId) {
       .catch(error => console.error('Error:', error));
     }
   }
+
+async function deleteProduct(productId) {
+  if (!confirm('¿Estás seguro de que deseas eliminar este producto?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/products/${productId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        'Accept': 'application/json',
+      },
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (response.ok && payload.success) {
+      alert(payload.message || 'Producto eliminado correctamente');
+      window.location.href = "{{ route('products.index') }}";
+      return;
+    }
+
+    throw new Error(payload.message || 'Error al eliminar el producto');
+  } catch (error) {
+    console.error('Error:', error);
+    alert(error.message || 'Error al eliminar el producto');
+  }
+}
+
 document.getElementById('editProductForm').addEventListener('submit', function(event) {
   event.preventDefault(); // Evitar que se recargue la página
   console.log("Formulario enviado");

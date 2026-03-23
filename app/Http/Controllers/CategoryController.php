@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Support\ImageStorage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class CategoryController extends Controller
 {
@@ -54,30 +56,55 @@ class CategoryController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
-        $request->validate([
-            'name'        => 'required|string|max:255|unique:categories',
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('categories', 'name')->where(function ($query) use ($request) {
+                    return $query->where('tenant_id', $request->input('tenant_id'));
+                }),
+            ],
             'description' => 'nullable|string',
-            'tenant_id'   => 'required',
-            'image'       => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
+            'tenant_id' => 'required',
+            'image' => 'nullable|file|mimes:png,jpg,jpeg,gif,svg,webp|max:5120',
         ]);
 
         $imagePath = null;
 
-        if ($request->hasFile('image')) {
-            $imagePath = ImageStorage::storeUploadedFile($request->file('image'), 'categories/images');
+        try {
+            if ($request->hasFile('image')) {
+                $imagePath = ImageStorage::storeUploadedFile($request->file('image'), 'categories/images');
+            }
+
+            $category = Category::create([
+                'name' => $validated['name'],
+                'description' => $validated['description'] ?? null,
+                'tenant_id' => $validated['tenant_id'],
+                'image' => $imagePath,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Categoría creada correctamente.',
+                'category' => $category,
+            ], 201);
+        } catch (\Throwable $exception) {
+            if ($imagePath) {
+                ImageStorage::delete($imagePath);
+            }
+
+            Log::error('Error al crear categoria', [
+                'tenant_id' => $validated['tenant_id'] ?? null,
+                'name' => $validated['name'] ?? null,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo crear la categoría. Si adjuntaste una imagen, verifica el formato o intenta nuevamente.',
+            ], 500);
         }
-
-        $category = Category::create([
-            'name'        => $request->name,
-            'description' => $request->description,
-            'tenant_id'   => $request->tenant_id,
-            'image'       => $imagePath,
-        ]);
-
-        return response()->json([
-            'message'  => 'Category created successfully',
-            'category' => $category
-        ], 201);
     }
 
     public function show(Category $category)
@@ -94,10 +121,19 @@ class CategoryController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
-        $request->validate([
-            'name'        => 'required|string|max:255|unique:categories,name,' . $category->id,
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('categories', 'name')
+                    ->ignore($category->id)
+                    ->where(function ($query) use ($category) {
+                        return $query->where('tenant_id', $category->tenant_id);
+                    }),
+            ],
             'description' => 'nullable|string',
-            'image'       => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
+            'image' => 'nullable|file|mimes:png,jpg,jpeg,gif,svg,webp|max:5120',
         ]);
 
         // Manejar imagen
@@ -113,14 +149,15 @@ class CategoryController extends Controller
         }
 
         $category->update([
-            'name'        => $request->name,
-            'description' => $request->description,
+            'name'        => $validated['name'],
+            'description' => $validated['description'] ?? null,
             'image'       => $category->image,
         ]);
 
         $category->refresh();
 
         return response()->json([
+            'success' => true,
             'message'  => 'Categoría actualizada con éxito.',
             'category' => $category
         ], 200);

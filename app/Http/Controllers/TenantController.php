@@ -258,6 +258,12 @@ class TenantController extends Controller
             $validated['economic_activity'] ?? null
         );
 
+        $this->assertLocationHierarchy(
+            $validated['country'] ?? null,
+            $validated['state'] ?? null,
+            $validated['city'] ?? null
+        );
+
         $normalizedSlug = Str::slug((string) $validated['slug']);
 
         if ($normalizedSlug === '') {
@@ -838,6 +844,12 @@ class TenantController extends Controller
                 $validated['economic_activity'] ?? null
             );
 
+            $this->assertLocationHierarchy(
+                $validated['country'] ?? null,
+                $validated['state'] ?? null,
+                $validated['city'] ?? null
+            );
+
             $newUserInput = $request->input('new_user', []);
             $shouldCreateNewUser = false;
             if (is_array($newUserInput)) {
@@ -1379,6 +1391,39 @@ class TenantController extends Controller
                 'El rubro economico no corresponde al tipo de negocio seleccionado (' . $businessTypeLabel . '). Opciones validas: ' . implode(', ', $options) . '.',
             ],
         ]);
+    }
+
+    private function assertLocationHierarchy($countryId, $stateId, $cityId): void
+    {
+        if ($stateId) {
+            $state = State::query()->find($stateId);
+            if (!$state) {
+                throw ValidationException::withMessages([
+                    'state' => ['El estado seleccionado no existe.'],
+                ]);
+            }
+
+            if ($countryId && (int) $state->country_id !== (int) $countryId) {
+                throw ValidationException::withMessages([
+                    'state' => ['El estado seleccionado no pertenece al país indicado.'],
+                ]);
+            }
+        }
+
+        if ($cityId) {
+            $city = City::query()->find($cityId);
+            if (!$city) {
+                throw ValidationException::withMessages([
+                    'city' => ['La ciudad seleccionada no existe.'],
+                ]);
+            }
+
+            if ($stateId && (int) $city->state_id !== (int) $stateId) {
+                throw ValidationException::withMessages([
+                    'city' => ['La ciudad seleccionada no pertenece al estado indicado.'],
+                ]);
+            }
+        }
     }
 
     private function resolveBusinessTypeKey(?string $value): ?string

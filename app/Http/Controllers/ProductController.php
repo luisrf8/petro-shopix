@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -162,54 +163,97 @@ class ProductController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
-        $request->validate([
-            // Validaciones que necesites…
+        $validated = $request->validate([
+            'category_id' => 'required|exists:categories,id',
+            'productName' => 'required|string|max:255',
+            'productDescription' => 'required|string',
+            'productDiscount' => 'nullable|numeric|min:0|max:100',
+            'tax_ids' => 'nullable|array',
+            'tax_ids.*' => 'exists:taxes,id',
+            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
 
-        $product = Product::create([
-            'category_id' => $request->category_id,
-            'name' => $request->productName,
-            'description' => $request->productDescription,
-            'discount_percentage' => max(0, min(100, (float) $request->input('productDiscount', 0))),
-            'tenant_id' => $request->tenant_id
-        ]);
-
-        // 📌 GUARDAR TAXES SELECCIONADOS (si existen)
-        if ($request->has('tax_ids') && is_array($request->tax_ids)) {
-            $product->taxes()->sync($request->tax_ids);
-        }
-
-        // Guardar imágenes
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $image) {
-                $path = ImageStorage::storeUploadedFile($image, 'products');
-                ProductImage::create([
-                    'product_id' => $product->id,
-                    'path' => $path,
-                ]);
-            }
-        }
-
-        // Guardar Variantes
-        $variants = $request->variants;
+        $variants = $request->input('variants', []);
         if (is_string($variants)) {
             $variants = json_decode($variants, true);
         }
 
-        if (!empty($variants) && is_array($variants)) {
-            foreach ($variants as $variant) {
-                $productVariant = ProductVariant::create([
-                    'product_id' => $product->id,
-                    'size' => $variant['name'],
-                    'price' => $variant['price'],
-                    'discount_percentage' => max(0, min(100, (float) ($variant['discount_percentage'] ?? 0))),
-                    'stock' => $variant['stock'],
-                    'barcode' => $this->sanitizeVariantCode($variant['barcode'] ?? null),
+        if (!is_array($variants)) {
+            throw ValidationException::withMessages([
+                'variants' => ['El formato de las variantes no es valido.'],
+            ]);
+        }
+
+        $normalizedBarcodes = [];
+        foreach ($variants as $index => $variant) {
+            $barcode = $this->sanitizeVariantCode($variant['barcode'] ?? null);
+
+            if (!empty($barcode)) {
+                if (in_array($barcode, $normalizedBarcodes, true)) {
+                    throw ValidationException::withMessages([
+                        "variants.$index.barcode" => ['El codigo de barras esta repetido dentro del mismo producto.'],
+                    ]);
+                }
+
+                $normalizedBarcodes[] = $barcode;
+                $this->assertVariantCodeAvailable($barcode);
+            }
+        }
+
+        $tenantId = (int) (auth()->user()->tenant_id ?? $request->tenant_id ?? 0);
+        if ($tenantId <= 0) {
+            throw ValidationException::withMessages([
+                'tenant_id' => ['No se pudo identificar el tenant del producto.'],
+            ]);
+        }
+
+        $storedImagePaths = [];
+
+        try {
+            DB::transaction(function () use ($request, $validated, $variants, $tenantId, &$storedImagePaths) {
+                $product = Product::create([
+                    'category_id' => $validated['category_id'],
+                    'name' => $validated['productName'],
+                    'description' => $validated['productDescription'],
+                    'discount_percentage' => max(0, min(100, (float) ($validated['productDiscount'] ?? 0))),
+                    'tenant_id' => $tenantId,
                 ]);
 
-                $this->assertVariantCodeAvailable($productVariant->barcode);
-                $this->ensureVariantCodes($productVariant);
+                if (!empty($validated['tax_ids']) && is_array($validated['tax_ids'])) {
+                    $product->taxes()->sync($validated['tax_ids']);
+                }
+
+                if ($request->hasFile('images')) {
+                    foreach ($request->file('images') as $image) {
+                        $path = ImageStorage::storeUploadedFile($image, 'products');
+                        $storedImagePaths[] = $path;
+
+                        ProductImage::create([
+                            'product_id' => $product->id,
+                            'path' => $path,
+                        ]);
+                    }
+                }
+
+                foreach ($variants as $variant) {
+                    $productVariant = ProductVariant::create([
+                        'product_id' => $product->id,
+                        'size' => $variant['name'],
+                        'price' => $variant['price'],
+                        'discount_percentage' => max(0, min(100, (float) ($variant['discount_percentage'] ?? 0))),
+                        'stock' => $variant['stock'],
+                        'barcode' => $this->sanitizeVariantCode($variant['barcode'] ?? null),
+                    ]);
+
+                    $this->ensureVariantCodes($productVariant);
+                }
+            });
+        } catch (\Throwable $exception) {
+            foreach ($storedImagePaths as $storedImagePath) {
+                ImageStorage::delete($storedImagePath);
             }
+
+            throw $exception;
         }
 
         return response()->json(['success' => true, 'message' => 'Product created successfully']);
@@ -1124,6 +1168,65 @@ class ProductController extends Controller
             'message' => 'Producto actualizado correctamente',
             'product' => $product,
         ]);
+    }
+
+    public function destroy($id)
+    {
+        DB::raw("SET @user_id = " . auth()->id());
+
+        $product = Product::with(['images', 'variants'])->findOrFail($id);
+
+        if ((int) ($product->tenant_id ?? 0) !== (int) (auth()->user()->tenant_id ?? 0)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No autorizado.',
+            ], 403);
+        }
+
+        $variantIds = $product->variants->pluck('id')->filter()->all();
+
+        if ($this->productHasProtectedRelations($variantIds)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se puede eliminar el producto porque ya tiene movimientos o registros asociados. Puedes desactivarlo en su lugar.',
+            ], 409);
+        }
+
+        DB::transaction(function () use ($product) {
+            foreach ($product->images as $image) {
+                ImageStorage::delete($image->path);
+            }
+
+            $product->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Producto eliminado correctamente.',
+        ]);
+    }
+
+    private function productHasProtectedRelations(array $variantIds): bool
+    {
+        if (empty($variantIds)) {
+            return false;
+        }
+
+        $protectedTables = [
+            'sales_order_details',
+            'sales_return_items',
+            'purchase_order_detail',
+            'warehouse_movements',
+            'material_package_items',
+        ];
+
+        foreach ($protectedTables as $table) {
+            if (Schema::hasTable($table) && DB::table($table)->whereIn('product_variant_id', $variantIds)->exists()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function generateReport(Request $request)

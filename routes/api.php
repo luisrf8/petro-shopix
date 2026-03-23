@@ -54,6 +54,7 @@ Route::post('categories/{id}/toggle-status', [CategoryController::class, 'toggle
 // ------------------------ PRODUCTOS ------------------------
 
 Route::post('/products/{id}', [ProductController::class, 'update'])->name('products.update');
+Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
 Route::post('/products/{product}/generate-codes', [ProductController::class, 'generateCodes'])->name('products.generateCodes');
 Route::post('/create-product', [ProductController::class, 'create']);
 // Route::post('/create-product', [ProductController::class, 'store'])->name('products.store');

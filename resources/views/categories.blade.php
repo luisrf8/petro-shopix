@@ -573,21 +573,29 @@
       fetch('api/create-category', {
         method: 'POST',
         headers: {
-          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+          'Accept': 'application/json'
         },
         body: formData
       })
-      .then(response => {
-        if (response.status === 201) {
-          alert('Categoría creada correctamente');
+      .then(async response => {
+        const payload = await response.json().catch(() => ({}));
+
+        if (response.status === 201 && payload.success) {
+          alert(payload.message || 'Categoría creada correctamente');
           window.location.reload();
-        } else {
-          throw new Error('Error al crear la categoría');
+          return;
         }
+
+        const validationMessage = payload?.errors
+          ? Object.values(payload.errors).flat().join('\n')
+          : null;
+
+        throw new Error(validationMessage || payload.message || 'Error al crear la categoría');
       })
       .catch(error => {
         console.error('Error:', error);
-        alert('Ocurrió un error al crear la Categoría');
+        alert(error.message || 'Ocurrió un error al crear la categoría');
       });
     });
     // Evento para llenar el modal con los datos de la categoría seleccionada
@@ -640,21 +648,29 @@
       fetch(`api/categories/${categoryId}`, {
         method: 'POST', // Usa 'PUT' si tu API lo requiere
         headers: {
-          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+          'Accept': 'application/json'
         },
         body: formData
       })
-      .then(response => {
-        if (response.status === 200) { // Valida el código de estado HTTP
-          alert('Categoría actualizada correctamente');
+      .then(async response => {
+        const payload = await response.json().catch(() => ({}));
+
+        if (response.status === 200 && payload.success) {
+          alert(payload.message || 'Categoría actualizada correctamente');
           window.location.reload();
-        } else {
-          throw new Error('Error al actualizar la categoría');
+          return;
         }
+
+        const validationMessage = payload?.errors
+          ? Object.values(payload.errors).flat().join('\n')
+          : null;
+
+        throw new Error(validationMessage || payload.message || 'Error al actualizar la categoría');
       })
       .catch(error => {
         console.error('Error:', error);
-        alert('Ocurrió un error al actualizar la Categoría');
+        alert(error.message || 'Ocurrió un error al actualizar la categoría');
       });
     });
     document.querySelectorAll('.toggle-status-btn').forEach(button => {

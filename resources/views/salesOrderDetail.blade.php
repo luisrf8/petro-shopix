@@ -85,7 +85,8 @@
           <h6 class="mb-0">Productos en la Orden</h6>
         </div>
         <div class="card-body">
-          <table class="table">
+          <div class="table-responsive order-table-wrapper">
+          <table class="table order-detail-table align-middle mb-0">
             <thead>
               <tr>
                 <th>Producto</th>
@@ -98,15 +99,16 @@
             <tbody>
               @foreach($order->details as $detalle)
               <tr>
-                <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
-                <td>{{ $detalle->quantity }}</td>
-                <td>{{ $detalle->variant->size ?? '' }}</td>
-                <td>${{ number_format($detalle->price, 2) }}</td>
-                <td>${{ number_format($detalle->amount, 2) }}</td>
+                <td data-label="Producto">{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
+                <td data-label="Cantidad">{{ $detalle->quantity }}</td>
+                <td data-label="Variante">{{ $detalle->variant->size ?? '' }}</td>
+                <td data-label="Precio Unitario">${{ number_format($detalle->price, 2) }}</td>
+                <td data-label="Subtotal">${{ number_format($detalle->amount, 2) }}</td>
               </tr>
               @endforeach
             </tbody>
           </table>
+          </div>
           <p><strong>Total Orden:</strong> ${{ number_format($totalOrden, 2) }}</p>
           <p><strong>{{ $order->has_returns ? 'Total Devolucion' : ''}} </strong> ${{ $order->has_returns ? number_format($order->total_devuelto, 2) : '' }}</p>
         </div>
@@ -118,7 +120,8 @@
           <h6 class="mb-0">Pagos Registrados</h6>
         </div>
         <div class="card-body">
-          <table class="table">
+          <div class="table-responsive order-table-wrapper">
+          <table class="table order-detail-table align-middle mb-0">
             <thead>
               <tr>
                 <th>Moneda</th>
@@ -134,20 +137,20 @@
             <tbody>
               @foreach($order->payments as $payment)
               <tr>
-                <td>{{ $payment->currency }}</td>
-                <td>{{ $payment->payment->name}}</td>
-                <td>${{ number_format($payment->amount, 2) }}</td>
-                <td>{{ $payment->payment->admin_name }}</td>
-                <td>{{ $payment->payment->bank }}</td>
-                <td>{{ $payment->reference ?? 'N/A' }}</td>
-                <td id="payment-{{ $payment->id }}">
+                <td data-label="Moneda">{{ $payment->currency }}</td>
+                <td data-label="Método de Pago">{{ $payment->payment->name}}</td>
+                <td data-label="Monto">${{ number_format($payment->amount, 2) }}</td>
+                <td data-label="Beneficiario">{{ $payment->payment->admin_name }}</td>
+                <td data-label="Banco">{{ $payment->payment->bank }}</td>
+                <td data-label="Referencia">{{ $payment->reference ?? 'N/A' }}</td>
+                <td id="payment-{{ $payment->id }}" data-label="Comprobante">
                     @if($payment->images->isNotEmpty())
                       <a href="{{ \App\Support\ImageStorage::url($payment->images->first()->image_path) ?? '#' }}" target="_blank" class="btn btn-sm btn-outline-dark mb-0">Ver imagen</a>
                     @else
                       <span class="text-muted">Sin imagen</span>
                     @endif
                 </td>
-                <td>
+                <td data-label="Estado">
                     @if(!$isWarehouseRole)
                       <select class="btn btn-sm toggle-status-btn 
                         {{ $payment->status == 0 ? 'btn-outline-warning' : ($payment->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
@@ -164,6 +167,7 @@
               @endforeach
             </tbody>
           </table>
+          </div>
           <p><strong>Total Pagado:</strong> ${{ number_format($totalPagado, 2) }}</p>
           <p><strong>{{ $order->has_returns ? 'Total Devolucion' : ''}} </strong> ${{ number_format($order->total_devuelto, 2) }}</p>
         </div>
@@ -190,7 +194,8 @@
 
                           <div class="mb-3">
                               <h6>Productos de la Orden</h6>
-                              <table class="table">
+                                <div class="table-responsive order-table-wrapper">
+                                <table class="table order-detail-table align-middle mb-0">
                                   <thead>
                                       <tr>
                                           <th>Producto</th>
@@ -201,9 +206,9 @@
                                   <tbody>
                                       @foreach($order->details as $detalle)
                                           <tr>
-                                              <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
-                                              <td>{{ $detalle->quantity }}</td>
-                                              <td>
+                                            <td data-label="Producto">{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
+                                            <td data-label="Cantidad">{{ $detalle->quantity }}</td>
+                                            <td data-label="Devolver">
                                                   <input type="number" class="form-control return-quantity border border-1 border-radius-lg p-2" 
                                                       data-id="{{ $detalle->variant->id }}" 
                                                       data-max="{{ $detalle->quantity }}" 
@@ -215,6 +220,7 @@
                                       @endforeach
                                   </tbody>
                               </table>
+                                    </div>
                           </div>
 
                           <div class="d-flex justify-content-end">
@@ -229,6 +235,57 @@
       @endif
     </div>
     @endsection
+
+@push('styles')
+<style>
+  .order-table-wrapper {
+    width: 100%;
+  }
+
+  @media (max-width: 767.98px) {
+    .order-detail-table thead {
+      display: none;
+    }
+
+    .order-detail-table,
+    .order-detail-table tbody,
+    .order-detail-table tr,
+    .order-detail-table td {
+      display: block;
+      width: 100%;
+    }
+
+    .order-detail-table tr {
+      border: 1px solid #dee2e6;
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      margin-bottom: 0.75rem;
+      background: #fff;
+      box-shadow: 0 0.125rem 0.375rem rgba(0, 0, 0, 0.05);
+    }
+
+    .order-detail-table td {
+      border: 0;
+      padding: 0.45rem 0;
+      text-align: left;
+      white-space: normal;
+    }
+
+    .order-detail-table td::before {
+      content: attr(data-label);
+      display: block;
+      font-weight: 700;
+      color: #344767;
+      margin-bottom: 0.2rem;
+    }
+
+    .order-detail-table td[data-label="Estado"] select,
+    .order-detail-table td[data-label="Devolver"] input {
+      width: 100%;
+    }
+  }
+</style>
+@endpush
 
 @push('scripts')
 <script src="{{ asset('assets/js/core/popper.min.js') }}"></script>

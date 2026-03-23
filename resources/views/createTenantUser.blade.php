@@ -233,12 +233,17 @@
                 </div>
 
                 <div class="row mb-3">
+                    @php
+                      $selectedCountryId = old('country');
+                      $selectedStateId = old('state');
+                      $selectedCityId = old('city');
+                    @endphp
                     <div class="col-md-4">
                         <label for="country" class="form-label fw-bold">País</label>
                                                                     <select name="country" id="country" class="form-control form-control-lg border border-radius-lg p-2" required>
                                                 <option value="">Selecciona un país</option>
                                                 @foreach($countries as $country)
-                                                    <option value="{{ $country->id }}">
+                                    <option value="{{ $country->id }}" {{ (string) $selectedCountryId === (string) $country->id ? 'selected' : '' }}>
                                                         {{ $country->name }}
                                                     </option>
                                                 @endforeach
@@ -246,25 +251,25 @@
                     </div>
                   <div class="col-md-4">
                       <label for="state" class="form-label fw-bold">Estado / Provincia</label>
-                      <select name="state" id="state" class="form-control form-control-lg border border-radius-lg p-2" required>
+                      <select name="state" id="state" class="form-control form-control-lg border border-radius-lg p-2" required {{ $selectedCountryId ? '' : 'disabled' }}>
                           <option value="">Selecciona un estado</option>
-                          @foreach($states as $state)
-                              <option value="{{ $state->id }}">
-                                  {{ $state->name }}
-                              </option>
-                          @endforeach
+                        @foreach($states->where('country_id', $selectedCountryId) as $state)
+                          <option value="{{ $state->id }}" {{ (string) $selectedStateId === (string) $state->id ? 'selected' : '' }}>
+                            {{ $state->name }}
+                          </option>
+                        @endforeach
                       </select>
                       <div id="state-loading" style="display:none;">Cargando estados...</div>
                   </div>
                   <div class="col-md-4">
                       <label for="city" class="form-label fw-bold">Ciudad</label>
-                      <select name="city" id="city" class="form-control form-control-lg border border-radius-lg p-2" required>
+                      <select name="city" id="city" class="form-control form-control-lg border border-radius-lg p-2" required {{ $selectedStateId ? '' : 'disabled' }}>
                           <option value="">Selecciona una ciudad</option>
-                          @foreach($cities as $city)
-                              <option value="{{ $city->id }}">
-                                  {{ $city->name }}
-                              </option>
-                          @endforeach
+                        @foreach($cities->where('state_id', $selectedStateId) as $city)
+                          <option value="{{ $city->id }}" {{ (string) $selectedCityId === (string) $city->id ? 'selected' : '' }}>
+                            {{ $city->name }}
+                          </option>
+                        @endforeach
                       </select>
                       <div id="city-loading" style="display:none;">Cargando ciudades...</div>
                   </div>
@@ -892,6 +897,8 @@
         const countryId = this.value;
         stateSelect.innerHTML = '<option value="">Selecciona un estado</option>';
         citySelect.innerHTML = '<option value="">Selecciona una ciudad</option>';
+        stateSelect.disabled = true;
+        citySelect.disabled = true;
 
         if (!countryId) return;
 
@@ -903,6 +910,7 @@
           data.forEach(state => {
             stateSelect.insertAdjacentHTML('beforeend', `<option value="${state.id}">${state.name}</option>`);
           });
+          stateSelect.disabled = false;
         } catch (error) {
           console.error(error);
         } finally {
@@ -913,6 +921,7 @@
       stateSelect.addEventListener('change', async function() {
         const stateId = this.value;
         citySelect.innerHTML = '<option value="">Selecciona una ciudad</option>';
+        citySelect.disabled = true;
 
         if (!stateId) return;
 
@@ -924,6 +933,7 @@
           data.forEach(city => {
             citySelect.insertAdjacentHTML('beforeend', `<option value="${city.id}">${city.name}</option>`);
           });
+          citySelect.disabled = false;
         } catch (error) {
           console.error(error);
         } finally {
