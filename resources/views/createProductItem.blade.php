@@ -12,6 +12,40 @@
         border: 2px solid #000 !important;
         background-color: #f1f1f1;
     }
+
+    .shopix-toast-container {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 1080;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .shopix-toast {
+        min-width: 260px;
+        max-width: 420px;
+        background: #111827;
+        color: #fff;
+        border-radius: 10px;
+        padding: 0.7rem 0.9rem;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        opacity: 0;
+        transform: translateY(-8px);
+        transition: opacity .2s ease, transform .2s ease;
+        font-size: 0.92rem;
+    }
+
+    .shopix-toast.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .shopix-toast.info { background: #1d4ed8; }
+    .shopix-toast.warning { background: #b45309; }
+    .shopix-toast.error { background: #b91c1c; }
+    .shopix-toast.success { background: #166534; }
 </style>
     <div class="container">
         <div class="card my-4">
@@ -55,6 +89,8 @@
                     <div class="mb-3">
                         <label for="productImages" class="form-label">Imagenes</label>
                         <input type="file" id="productImages" name="images[]" class="form-control border border-radius-lg p-2" multiple accept="image/*">
+                        <small class="text-muted d-block mt-1">Si subes JPG/JPEG se convertirá automáticamente a PNG. Si pesa mucho, se reducirá la resolución para evitar errores.</small>
+                        <div id="productImageNotice" class="alert alert-warning mt-2 d-none" role="alert"></div>
                         <div id="imagePreview" class="mt-3 d-flex flex-wrap"></div>
                     </div>
 
@@ -96,8 +132,165 @@
 @push('scripts')
 
     <script>
+        const PRODUCT_SAFE_IMAGE_BYTES = 1.8 * 1024 * 1024;
+
+        function showShopixToast(message, type = 'info') {
+            let container = document.getElementById('shopixToastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'shopixToastContainer';
+                container.className = 'shopix-toast-container';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `shopix-toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => toast.classList.add('show'));
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 220);
+            }, 3600);
+        }
+
+        function showProductImageNotice(message, type = 'warning') {
+            showShopixToast(message, type === 'danger' ? 'error' : type);
+        }
+
+        function hideProductImageNotice() {
+            const notice = document.getElementById('productImageNotice');
+            if (!notice) return;
+            notice.classList.add('d-none');
+            notice.textContent = '';
+        }
+
+        function loadImageElement(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const objectUrl = URL.createObjectURL(file);
+                img.onload = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    resolve(img);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    reject(new Error('No se pudo procesar la imagen.'));
+                };
+                img.src = objectUrl;
+            });
+        }
+
+        function canvasToBlob(canvas, type, quality) {
+            return new Promise((resolve) => {
+                canvas.toBlob((blob) => resolve(blob), type, quality);
+            });
+        }
+
+        async function optimizeProductImage(file) {
+            const rasterTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+            if (!rasterTypes.includes((file.type || '').toLowerCase())) {
+                return { file, changed: false, convertedToPng: false };
+            }
+
+            const source = await loadImageElement(file);
+            const originalWidth = source.naturalWidth || source.width;
+            const originalHeight = source.naturalHeight || source.height;
+
+            let width = originalWidth;
+            let height = originalHeight;
+            const maxDimension = 2200;
+
+            if (width > maxDimension || height > maxDimension) {
+                const scale = Math.min(maxDimension / width, maxDimension / height);
+                width = Math.max(1, Math.round(width * scale));
+                height = Math.max(1, Math.round(height * scale));
+            }
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(source, 0, 0, width, height);
+
+            const forcePng = ['image/jpeg', 'image/jpg'].includes((file.type || '').toLowerCase());
+            const targetType = forcePng ? 'image/png' : (file.type || 'image/png');
+            let blob = await canvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.9 : undefined);
+
+            while (blob && blob.size > PRODUCT_SAFE_IMAGE_BYTES && width > 640 && height > 640) {
+                width = Math.max(640, Math.round(width * 0.85));
+                height = Math.max(640, Math.round(height * 0.85));
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(source, 0, 0, width, height);
+                blob = await canvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.82 : undefined);
+            }
+
+            if (!blob) {
+                return { file, changed: false, convertedToPng: false };
+            }
+
+            const changed = blob.size !== file.size || width !== originalWidth || height !== originalHeight || forcePng;
+            if (!changed) {
+                return { file, changed: false, convertedToPng: false };
+            }
+
+            const baseName = file.name.replace(/\.[^.]+$/, '');
+            const extension = targetType === 'image/png' ? 'png' : (targetType === 'image/webp' ? 'webp' : 'png');
+            const optimizedFile = new File([blob], `${baseName}.${extension}`, { type: targetType });
+
+            return {
+                file: optimizedFile,
+                changed: true,
+                convertedToPng: forcePng,
+                stillLarge: optimizedFile.size > PRODUCT_SAFE_IMAGE_BYTES,
+            };
+        }
+
+        async function optimizeProductInputFiles(inputEl) {
+            if (!inputEl?.files?.length) {
+                return;
+            }
+
+            const dt = new DataTransfer();
+            let changedCount = 0;
+            let convertedCount = 0;
+            let stillLargeCount = 0;
+
+            for (const file of Array.from(inputEl.files)) {
+                try {
+                    const optimized = await optimizeProductImage(file);
+                    dt.items.add(optimized.file);
+                    if (optimized.changed) changedCount += 1;
+                    if (optimized.convertedToPng) convertedCount += 1;
+                    if (optimized.stillLarge) stillLargeCount += 1;
+                } catch (error) {
+                    dt.items.add(file);
+                }
+            }
+
+            inputEl.files = dt.files;
+
+            if (changedCount > 0) {
+                let msg = `Se optimizaron ${changedCount} imagen(es)`;
+                if (convertedCount > 0) {
+                    msg += ` y ${convertedCount} JPG/JPEG se convirtieron a PNG`;
+                }
+                msg += ' para evitar errores por tamaño.';
+                if (stillLargeCount > 0) {
+                    msg += ' Aún hay archivos grandes: baja la resolución manualmente.';
+                }
+                showProductImageNotice(msg, stillLargeCount > 0 ? 'warning' : 'info');
+            } else {
+                hideProductImageNotice();
+            }
+        }
+
         // Handle image preview
-        document.getElementById('productImages').addEventListener('change', function(event) {
+        document.getElementById('productImages').addEventListener('change', async function(event) {
+            await optimizeProductInputFiles(event.target);
             const preview = document.getElementById('imagePreview');
             preview.innerHTML = '';
             Array.from(event.target.files).forEach(file => {
@@ -154,10 +347,12 @@
             });
         });
 
-        document.getElementById('createProductForm').addEventListener('submit', function (event) {
+        document.getElementById('createProductForm').addEventListener('submit', async function (event) {
             const authUser = @json($authUser);
             const tenantId = Number(authUser.tenant_id);
             event.preventDefault();
+
+            await optimizeProductInputFiles(document.getElementById('productImages'));
 
             let formData = new FormData(this);
             formData.append('tenant_id', tenantId); // 👈 Agregas el tenant_id
@@ -189,6 +384,10 @@
                     const payload = await response.json().catch(() => ({}));
 
                     if (!response.ok || !payload.success) {
+                        if (response.status === 403) {
+                            throw new Error('La imagen es demasiado pesada para el servidor (403). Baja la resolución o usa PNG comprimido.');
+                        }
+
                         const validationMessage = payload?.errors
                             ? Object.values(payload.errors).flat().join('\n')
                             : null;
@@ -200,7 +399,7 @@
                 })
                 .catch((error) => {
                     console.error('Error:', error);
-                    alert(error.message || 'Error creating product. Please check console for details.');
+                    showShopixToast(error.message || 'Error creating product. Please check console for details.', 'error');
                 });
         });
 

@@ -77,11 +77,54 @@
       0%, 100% { opacity: 0.3; transform: translateY(0); }
       50% { opacity: 1; transform: translateY(-3px); }
     }
+
+    .shopix-toast-stack {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 2060;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      pointer-events: none;
+    }
+
+    .shopix-toast {
+      min-width: 280px;
+      max-width: 420px;
+      background: #1f2937;
+      color: #fff;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      padding: 0.75rem 1rem;
+      opacity: 0;
+      transform: translateY(-6px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      pointer-events: auto;
+    }
+
+    .shopix-toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .shopix-toast.success {
+      background: #0f5132;
+    }
+
+    .shopix-toast.warning {
+      background: #7a4e00;
+    }
+
+    .shopix-toast.error {
+      background: #842029;
+    }
   </style>
 </head>
 <!-- Activa tu mejor versión. -->
  <!-- Ropa deportiva que se adapta a tu ritmo y potencia tu confianza. -->
 <body>
+  <div id="shopixToastContainer" class="shopix-toast-stack"></div>
   <!-- HEADER -->
   <div class="w-100 position-fixed top-0 px-4" style="z-index: 1050;">
     <div class="py-3 w-100">
@@ -158,10 +201,10 @@
                 </div>
 
                 <div class="mb-4">
-                  <label for="logo" class="form-label fw-bold">Logo (PNG o SVG)</label>
+                  <label for="logo" class="form-label fw-bold">Logo (PNG, JPG, JPEG o SVG)</label>
                   <div class="d-flex align-items-center gap-3 flex-wrap">
                     <img id="logo-preview" src="#" class="logo-preview rounded d-none p-2 bg-white shadow-sm">
-                    <input type="file" name="logo" id="logo" class="form-control form-control-lg" accept=".png,.svg">
+                    <input type="file" name="logo" id="logo" class="form-control form-control-lg" accept=".png,.jpg,.jpeg,.webp,.svg">
                   </div>
                 </div>
                 <div class="mb-3">
@@ -386,10 +429,148 @@
     let googleScriptLoading = false;
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
     const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
+    const TENANT_SAFE_IMAGE_BYTES = 1800 * 1024;
+    const TENANT_IMAGE_MAX_DIMENSION = 2200;
     let aiModalInstance = null;
     let currentAiTarget = null;
     let aiChatHistory = [];
     let aiLatestResult = null;
+
+    function showTenantToast(message, type = 'info') {
+      const container = document.getElementById('shopixToastContainer');
+      if (!container || !message) {
+        return;
+      }
+
+      const toast = document.createElement('div');
+      toast.className = `shopix-toast ${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => toast.classList.add('show'));
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 220);
+      }, 3600);
+    }
+
+    function loadTenantImageElement(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve(img);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('No se pudo procesar la imagen.'));
+        };
+        img.src = objectUrl;
+      });
+    }
+
+    function tenantCanvasToBlob(canvas, type, quality) {
+      return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), type, quality));
+    }
+
+    async function optimizeTenantImageFile(file) {
+      const type = String(file?.type || '').toLowerCase();
+      if (type === 'image/svg+xml') {
+        return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+      }
+
+      const rasterTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!rasterTypes.includes(type)) {
+        return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+      }
+
+      const source = await loadTenantImageElement(file);
+      const originalWidth = source.naturalWidth || source.width;
+      const originalHeight = source.naturalHeight || source.height;
+
+      let width = originalWidth;
+      let height = originalHeight;
+      if (width > TENANT_IMAGE_MAX_DIMENSION || height > TENANT_IMAGE_MAX_DIMENSION) {
+        const scale = Math.min(TENANT_IMAGE_MAX_DIMENSION / width, TENANT_IMAGE_MAX_DIMENSION / height);
+        width = Math.max(1, Math.round(width * scale));
+        height = Math.max(1, Math.round(height * scale));
+      }
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(source, 0, 0, width, height);
+
+      const forcePng = ['image/jpeg', 'image/jpg'].includes(type);
+      const targetType = forcePng ? 'image/png' : (type || 'image/png');
+      let blob = await tenantCanvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.9 : undefined);
+
+      while (blob && blob.size > TENANT_SAFE_IMAGE_BYTES && width > 640 && height > 640) {
+        width = Math.max(640, Math.round(width * 0.85));
+        height = Math.max(640, Math.round(height * 0.85));
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(source, 0, 0, width, height);
+        blob = await tenantCanvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.82 : undefined);
+      }
+
+      if (!blob) {
+        return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+      }
+
+      const changed = blob.size !== file.size || width !== originalWidth || height !== originalHeight || forcePng;
+      if (!changed) {
+        return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+      }
+
+      const baseName = file.name.replace(/\.[^.]+$/, '');
+      const extension = targetType === 'image/png' ? 'png' : (targetType === 'image/webp' ? 'webp' : 'png');
+      const optimizedFile = new File([blob], `${baseName}.${extension}`, { type: targetType });
+
+      return {
+        file: optimizedFile,
+        changed: true,
+        convertedToPng: forcePng,
+        stillLarge: optimizedFile.size > TENANT_SAFE_IMAGE_BYTES,
+      };
+    }
+
+    async function optimizeTenantInputFile(inputId, previewId) {
+      const input = document.getElementById(inputId);
+      const preview = document.getElementById(previewId);
+      const selectedFile = input?.files?.[0];
+      if (!input || !preview || !selectedFile) {
+        return;
+      }
+
+      try {
+        const optimized = await optimizeTenantImageFile(selectedFile);
+        const dt = new DataTransfer();
+        dt.items.add(optimized.file);
+        input.files = dt.files;
+
+        preview.src = URL.createObjectURL(optimized.file);
+        preview.classList.remove('d-none');
+
+        if (optimized.changed) {
+          let message = 'Imagen optimizada para evitar errores de tamaño.';
+          if (optimized.convertedToPng) {
+            message = 'Se convirtio JPG/JPEG a PNG y se optimizo la imagen.';
+          }
+          if (optimized.stillLarge) {
+            message += ' Aun puede ser grande; reduce la resolucion si falla.';
+          }
+          showTenantToast(message, optimized.stillLarge ? 'warning' : 'info');
+        }
+      } catch (error) {
+        preview.src = URL.createObjectURL(selectedFile);
+        preview.classList.remove('d-none');
+        showTenantToast('No se pudo optimizar la imagen seleccionada.', 'warning');
+      }
+    }
 
     async function setGeneratedImageInInput({ inputId, previewId, base64Data, mimeType, fileName }) {
       const input = document.getElementById(inputId);
@@ -406,13 +587,22 @@
 
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: mimeType || 'image/png' });
-      const file = new File([blob], fileName, { type: mimeType || 'image/png' });
+      const originalFile = new File([blob], fileName, { type: mimeType || 'image/png' });
+      const optimized = await optimizeTenantImageFile(originalFile);
+      const file = optimized.file;
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
       input.files = dataTransfer.files;
 
       preview.src = URL.createObjectURL(file);
       preview.classList.remove('d-none');
+
+      if (optimized.changed) {
+        const toastMessage = optimized.convertedToPng
+          ? 'La imagen de IA se optimizo y se convirtio a PNG.'
+          : 'La imagen de IA se optimizo para subirla sin errores.';
+        showTenantToast(toastMessage, optimized.stillLarge ? 'warning' : 'info');
+      }
     }
 
     function appendAiMessage(role, content) {
@@ -533,7 +723,7 @@
 
     async function generateImageWithGemini({ type, prompt, inputId, previewId, fileName }) {
       if (!prompt) {
-        alert('Debes escribir un prompt para generar la imagen.');
+        showTenantToast('Debes escribir un prompt para generar la imagen.', 'warning');
         return;
       }
 
@@ -588,7 +778,7 @@
 
       } catch (error) {
         appendAiMessage('assistant', 'No pude generar la imagen. Ajusta el prompt e intenta nuevamente.');
-        alert(error.message || 'Error al generar la imagen con Gemini.');
+        showTenantToast(error.message || 'Error al generar la imagen con Gemini.', 'error');
       } finally {
         setAiLoadingState(false);
       }
@@ -770,19 +960,14 @@
         slugPreview.textContent = normalizedValue || 'mi-empresa';
       });
 
-      logoInput.addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = e => {
-            logoPreview.src = e.target.result;
-            logoPreview.classList.remove('d-none');
-          };
-          reader.readAsDataURL(file);
-        } else {
+      logoInput.addEventListener('change', async (event) => {
+        if (!event.target.files?.length) {
           logoPreview.src = '#';
           logoPreview.classList.add('d-none');
+          return;
         }
+
+        await optimizeTenantInputFile('logo', 'logo-preview');
       });
 
       if (openLogoAiModalBtn) {

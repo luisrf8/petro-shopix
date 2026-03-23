@@ -33,6 +33,40 @@
         0%, 100% { opacity: 0.3; transform: translateY(0); }
         50% { opacity: 1; transform: translateY(-3px); }
       }
+
+      .shopix-toast-container {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 1080;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .shopix-toast {
+        min-width: 260px;
+        max-width: 420px;
+        background: #111827;
+        color: #fff;
+        border-radius: 10px;
+        padding: 0.7rem 0.9rem;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        opacity: 0;
+        transform: translateY(-8px);
+        transition: opacity .2s ease, transform .2s ease;
+        font-size: 0.92rem;
+      }
+
+      .shopix-toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .shopix-toast.info { background: #1d4ed8; }
+      .shopix-toast.warning { background: #b45309; }
+      .shopix-toast.error { background: #b91c1c; }
+      .shopix-toast.success { background: #166534; }
     </style>
     <div class="container-fluid py-2">
       <!-- Modal para crear categoría -->
@@ -63,6 +97,7 @@
                         name="image"
                         accept=".png,.jpg,.jpeg,.svg"
                     >
+                  <small class="text-muted d-block mt-1">JPG/JPEG se convertirá a PNG y si la imagen pesa mucho se comprimirá para evitar errores 403.</small>
                 </div>
                 <div class="mb-3">
                   <button type="button" class="btn btn-outline-dark w-100" id="openCreateCategoryAiBtn">
@@ -191,6 +226,7 @@
                     <small class="text-muted">
                         Dejar vacío si no deseas cambiar la imagen
                     </small>
+                  <small class="text-muted d-block mt-1">También aplica conversión JPG/JPEG a PNG y compresión automática por tamaño.</small>
                 </div>
                 <div class="mb-3">
                   <button type="button" class="btn btn-outline-dark w-100" id="openEditCategoryAiBtn">
@@ -307,6 +343,140 @@
     const authUser = @json($authUser);
     const tenantId = Number(authUser.tenant_id);
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
+    const CATEGORY_SAFE_IMAGE_BYTES = 1.8 * 1024 * 1024;
+
+    function showShopixToast(message, type = 'info') {
+      let container = document.getElementById('shopixToastContainer');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'shopixToastContainer';
+        container.className = 'shopix-toast-container';
+        document.body.appendChild(container);
+      }
+
+      const toast = document.createElement('div');
+      toast.className = `shopix-toast ${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => toast.classList.add('show'));
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 220);
+      }, 3600);
+    }
+
+    function notifyCategory(message) {
+      showShopixToast(message, 'info');
+    }
+
+    function loadImageForCategory(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve(img);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('No se pudo procesar la imagen.'));
+        };
+        img.src = objectUrl;
+      });
+    }
+
+    function categoryCanvasBlob(canvas, type, quality) {
+      return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+    }
+
+    async function optimizeCategoryFile(file) {
+      const rasterTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      const type = String(file.type || '').toLowerCase();
+      if (!rasterTypes.includes(type)) {
+        return { file, changed: false, convertedToPng: false, stillLarge: file.size > CATEGORY_SAFE_IMAGE_BYTES };
+      }
+
+      const img = await loadImageForCategory(file);
+      const sourceWidth = img.naturalWidth || img.width;
+      const sourceHeight = img.naturalHeight || img.height;
+      let width = sourceWidth;
+      let height = sourceHeight;
+      const maxDimension = 2200;
+
+      if (width > maxDimension || height > maxDimension) {
+        const scale = Math.min(maxDimension / width, maxDimension / height);
+        width = Math.max(1, Math.round(width * scale));
+        height = Math.max(1, Math.round(height * scale));
+      }
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const convertedToPng = type === 'image/jpeg' || type === 'image/jpg';
+      const targetType = convertedToPng ? 'image/png' : (type || 'image/png');
+      let blob = await categoryCanvasBlob(canvas, targetType, targetType === 'image/webp' ? 0.9 : undefined);
+
+      while (blob && blob.size > CATEGORY_SAFE_IMAGE_BYTES && width > 640 && height > 640) {
+        width = Math.max(640, Math.round(width * 0.85));
+        height = Math.max(640, Math.round(height * 0.85));
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        blob = await categoryCanvasBlob(canvas, targetType, targetType === 'image/webp' ? 0.82 : undefined);
+      }
+
+      if (!blob) {
+        return { file, changed: false, convertedToPng: false, stillLarge: file.size > CATEGORY_SAFE_IMAGE_BYTES };
+      }
+
+      const changed = convertedToPng || blob.size !== file.size || width !== sourceWidth || height !== sourceHeight;
+      if (!changed) {
+        return { file, changed: false, convertedToPng: false, stillLarge: blob.size > CATEGORY_SAFE_IMAGE_BYTES };
+      }
+
+      const baseName = file.name.replace(/\.[^.]+$/, '');
+      const extension = targetType === 'image/webp' ? 'webp' : 'png';
+      const optimized = new File([blob], `${baseName}.${extension}`, { type: targetType });
+
+      return {
+        file: optimized,
+        changed: true,
+        convertedToPng,
+        stillLarge: optimized.size > CATEGORY_SAFE_IMAGE_BYTES,
+      };
+    }
+
+    async function optimizeCategoryInput(inputId) {
+      const input = document.getElementById(inputId);
+      const file = input?.files?.[0];
+      if (!file) return { changed: false };
+
+      const optimized = await optimizeCategoryFile(file);
+      if (optimized.changed) {
+        const dt = new DataTransfer();
+        dt.items.add(optimized.file);
+        input.files = dt.files;
+
+        let message = 'Imagen optimizada para evitar errores por tamaño.';
+        if (optimized.convertedToPng) {
+          message = 'JPG/JPEG convertido a PNG y optimizado para evitar errores 403.';
+        }
+        if (optimized.stillLarge) {
+          message += ' Sigue pesada: baja la resolución manualmente.';
+        }
+        notifyCategory(message);
+      } else if (optimized.stillLarge) {
+        notifyCategory('La imagen puede ser demasiado pesada. Baja la resolución para evitar error 403.');
+      }
+
+      return optimized;
+    }
+
     function initCategoryAiFlow(config) {
       const modalEl = document.getElementById(config.modalId);
       const sourceModalEl = document.getElementById(config.sourceModalId);
@@ -411,6 +581,8 @@
         dt.items.add(file);
         input.files = dt.files;
 
+        await optimizeCategoryInput(config.targetInputId);
+
         preview.src = URL.createObjectURL(file);
         preview.style.display = 'block';
         appendMessage('assistant', 'Imagen aplicada al formulario. Puedes seguir ajustando o cerrar con la X.');
@@ -420,7 +592,7 @@
         const promptInput = document.getElementById(config.promptId);
         const prompt = String(promptInput.value || '').trim();
         if (!prompt) {
-          alert('Escribe un mensaje para generar la imagen.');
+          showShopixToast('Escribe un mensaje para generar la imagen.', 'warning');
           return;
         }
 
@@ -461,7 +633,7 @@
           promptInput.value = '';
         } catch (error) {
           appendMessage('assistant', 'No pude generar la imagen. Intenta ajustar tu mensaje.');
-          alert(error.message || 'Error al generar imagen con IA.');
+          showShopixToast(error.message || 'Error al generar imagen con IA.', 'error');
         } finally {
           setLoading(false);
         }
@@ -549,7 +721,8 @@
       fileName: 'categoria-gemini-editar.png',
     });
 
-    document.getElementById('createCategoryImage').addEventListener('change', function () {
+    document.getElementById('createCategoryImage').addEventListener('change', async function () {
+      await optimizeCategoryInput('createCategoryImage');
       const file = this.files?.[0];
       const preview = document.getElementById('createCategoryImagePreview');
       if (!file) {
@@ -565,8 +738,10 @@
       reader.readAsDataURL(file);
     });
 
-    document.getElementById('createCategoryForm').addEventListener('submit', function(event) {
+    document.getElementById('createCategoryForm').addEventListener('submit', async function(event) {
       event.preventDefault();
+
+      await optimizeCategoryInput('createCategoryImage');
 
       let formData = new FormData(this);
       formData.append('tenant_id', tenantId); // 👈 Agregas el tenant_id
@@ -582,9 +757,13 @@
         const payload = await response.json().catch(() => ({}));
 
         if (response.status === 201 && payload.success) {
-          alert(payload.message || 'Categoría creada correctamente');
+          showShopixToast(payload.message || 'Categoría creada correctamente', 'success');
           window.location.reload();
           return;
+        }
+
+        if (response.status === 403) {
+          throw new Error('Error 403: la imagen es demasiado pesada. Baja la resolución o comprímela antes de subir.');
         }
 
         const validationMessage = payload?.errors
@@ -595,7 +774,7 @@
       })
       .catch(error => {
         console.error('Error:', error);
-        alert(error.message || 'Ocurrió un error al crear la categoría');
+        showShopixToast(error.message || 'Ocurrió un error al crear la categoría', 'error');
       });
     });
     // Evento para llenar el modal con los datos de la categoría seleccionada
@@ -625,7 +804,8 @@
       });
     });
 
-    document.getElementById('editCategoryImage').addEventListener('change', function () {
+    document.getElementById('editCategoryImage').addEventListener('change', async function () {
+      await optimizeCategoryInput('editCategoryImage');
         const file = this.files[0];
         if (!file) return;
 
@@ -639,8 +819,10 @@
     });
 
     // Enviar la actualización al servidor
-    document.getElementById('editCategoryForm').addEventListener('submit', function (event) {
+    document.getElementById('editCategoryForm').addEventListener('submit', async function (event) {
       event.preventDefault(); // Evita el envío normal del formulario
+
+      await optimizeCategoryInput('editCategoryImage');
 
       const formData = new FormData(this);
       const categoryId = formData.get('id');
@@ -657,9 +839,13 @@
         const payload = await response.json().catch(() => ({}));
 
         if (response.status === 200 && payload.success) {
-          alert(payload.message || 'Categoría actualizada correctamente');
+          showShopixToast(payload.message || 'Categoría actualizada correctamente', 'success');
           window.location.reload();
           return;
+        }
+
+        if (response.status === 403) {
+          throw new Error('Error 403: la imagen es demasiado pesada. Baja la resolución o comprímela antes de subir.');
         }
 
         const validationMessage = payload?.errors
@@ -670,7 +856,7 @@
       })
       .catch(error => {
         console.error('Error:', error);
-        alert(error.message || 'Ocurrió un error al actualizar la categoría');
+        showShopixToast(error.message || 'Ocurrió un error al actualizar la categoría', 'error');
       });
     });
     document.querySelectorAll('.toggle-status-btn').forEach(button => {

@@ -380,9 +380,167 @@
 
 <script>
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
+    const PRODUCT_ITEM_SAFE_IMAGE_BYTES = 1.8 * 1024 * 1024;
     let productAiModalInstance = null;
     let productAiHistory = [];
     let productAiLatestResult = null;
+
+    function showProductToast(message, type = 'info') {
+      let container = document.getElementById('shopixToastContainer');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'shopixToastContainer';
+        container.style.position = 'fixed';
+        container.style.top = '1rem';
+        container.style.right = '1rem';
+        container.style.zIndex = '1080';
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.gap = '0.5rem';
+        document.body.appendChild(container);
+      }
+
+      const colors = {
+        info: '#1d4ed8',
+        warning: '#b45309',
+        error: '#b91c1c',
+        success: '#166534',
+      };
+
+      const toast = document.createElement('div');
+      toast.textContent = message;
+      toast.style.minWidth = '260px';
+      toast.style.maxWidth = '420px';
+      toast.style.background = colors[type] || colors.info;
+      toast.style.color = '#fff';
+      toast.style.borderRadius = '10px';
+      toast.style.padding = '0.7rem 0.9rem';
+      toast.style.boxShadow = '0 8px 20px rgba(0, 0, 0, 0.2)';
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(-8px)';
+      toast.style.transition = 'opacity .2s ease, transform .2s ease';
+      toast.style.fontSize = '0.92rem';
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateY(0)';
+      });
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-8px)';
+        setTimeout(() => toast.remove(), 220);
+      }, 3600);
+    }
+
+    function loadProductImageElement(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve(img);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('No se pudo procesar la imagen.'));
+        };
+        img.src = objectUrl;
+      });
+    }
+
+    function productCanvasToBlob(canvas, type, quality) {
+      return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+    }
+
+    async function optimizeProductSingleImage(file) {
+      const rasterTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      const type = String(file.type || '').toLowerCase();
+      if (!rasterTypes.includes(type)) {
+        return { file, changed: false, convertedToPng: false, stillLarge: file.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES };
+      }
+
+      const img = await loadProductImageElement(file);
+      const sourceWidth = img.naturalWidth || img.width;
+      const sourceHeight = img.naturalHeight || img.height;
+      let width = sourceWidth;
+      let height = sourceHeight;
+      const maxDimension = 2200;
+
+      if (width > maxDimension || height > maxDimension) {
+        const scale = Math.min(maxDimension / width, maxDimension / height);
+        width = Math.max(1, Math.round(width * scale));
+        height = Math.max(1, Math.round(height * scale));
+      }
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const convertedToPng = type === 'image/jpeg' || type === 'image/jpg';
+      const targetType = convertedToPng ? 'image/png' : (type || 'image/png');
+      let blob = await productCanvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.9 : undefined);
+
+      while (blob && blob.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES && width > 640 && height > 640) {
+        width = Math.max(640, Math.round(width * 0.85));
+        height = Math.max(640, Math.round(height * 0.85));
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        blob = await productCanvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.82 : undefined);
+      }
+
+      if (!blob) {
+        return { file, changed: false, convertedToPng: false, stillLarge: file.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES };
+      }
+
+      const changed = convertedToPng || blob.size !== file.size || width !== sourceWidth || height !== sourceHeight;
+      if (!changed) {
+        return { file, changed: false, convertedToPng: false, stillLarge: blob.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES };
+      }
+
+      const baseName = file.name.replace(/\.[^.]+$/, '');
+      const extension = targetType === 'image/webp' ? 'webp' : 'png';
+      const optimized = new File([blob], `${baseName}.${extension}`, { type: targetType });
+
+      return {
+        file: optimized,
+        changed: true,
+        convertedToPng,
+        stillLarge: optimized.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES,
+      };
+    }
+
+    async function optimizeProductImageInput(inputId) {
+      const input = document.getElementById(inputId);
+      const file = input?.files?.[0];
+      if (!file) {
+        return { changed: false };
+      }
+
+      const optimized = await optimizeProductSingleImage(file);
+      if (optimized.changed) {
+        const dt = new DataTransfer();
+        dt.items.add(optimized.file);
+        input.files = dt.files;
+
+        let message = 'Imagen optimizada para evitar errores por tamaño.';
+        if (optimized.convertedToPng) {
+          message = 'JPG/JPEG convertido a PNG y optimizado para evitar errores 403.';
+        }
+        if (optimized.stillLarge) {
+          message += ' Sigue pesada: baja la resolución manualmente.';
+        }
+        showProductToast(message, optimized.stillLarge ? 'warning' : 'info');
+      } else if (optimized.stillLarge) {
+        showProductToast('La imagen puede ser demasiado pesada. Baja la resolución para evitar error 403.', 'warning');
+      }
+
+      return optimized;
+    }
 
     function productAiAppendMessage(role, content) {
       const chatBox = document.getElementById('productAiChat');
@@ -461,7 +619,10 @@
       dt.items.add(file);
       input.files = dt.files;
 
-      preview.src = URL.createObjectURL(file);
+      await optimizeProductImageInput('image');
+
+      const optimizedFile = input.files?.[0] || file;
+      preview.src = URL.createObjectURL(optimizedFile);
       preview.style.display = 'block';
     }
 
@@ -469,7 +630,7 @@
       const promptInput = document.getElementById('productAiPrompt');
       const prompt = String(promptInput.value || '').trim();
       if (!prompt) {
-        alert('Escribe un mensaje para generar la imagen.');
+        showProductToast('Escribe un mensaje para generar la imagen.', 'warning');
         return;
       }
 
@@ -512,7 +673,7 @@
         promptInput.value = '';
       } catch (error) {
         productAiAppendMessage('assistant', 'No pude generar la imagen. Ajusta tu mensaje e intenta de nuevo.');
-        alert(error.message || 'Error al generar imagen con IA.');
+        showProductToast(error.message || 'Error al generar imagen con IA.', 'error');
       } finally {
         productAiSetLoading(false);
       }
@@ -522,7 +683,7 @@
       const input = document.getElementById('image');
       const file = input?.files?.[0];
       if (!file) {
-        alert('Primero sube una imagen para quitar el fondo.');
+        showProductToast('Primero sube una imagen para quitar el fondo.', 'warning');
         return;
       }
 
@@ -564,9 +725,9 @@
         }
 
         await productAiApplyToInput(payload.data, payload.mime_type || 'image/png', 'producto-sin-fondo.png');
-        alert('Fondo eliminado y imagen cargada en el formulario.');
+        showProductToast('Fondo eliminado y imagen cargada en el formulario.', 'success');
       } catch (error) {
-        alert(error.message || 'Error al quitar fondo con IA.');
+        showProductToast(error.message || 'Error al quitar fondo con IA.', 'error');
       } finally {
         removeBgBtn.disabled = false;
         removeBgBtn.textContent = oldText;
@@ -1137,7 +1298,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const addImageModalInstance = bootstrap.Modal.getOrCreateInstance(addImageModalEl);
   productAiModalInstance = bootstrap.Modal.getOrCreateInstance(productAiModalEl);
 
-  document.getElementById('image').addEventListener('change', function () {
+  document.getElementById('image').addEventListener('change', async function () {
+    await optimizeProductImageInput('image');
     const file = this.files?.[0];
     const preview = document.getElementById('addImagePreview');
     if (!file) {
@@ -1151,6 +1313,16 @@ document.addEventListener('DOMContentLoaded', () => {
       preview.style.display = 'block';
     };
     reader.readAsDataURL(file);
+  });
+
+  document.getElementById('addImageForm')?.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    const optimized = await optimizeProductImageInput('image');
+    if (optimized?.stillLarge) {
+      showProductToast('La imagen sigue demasiado pesada. Baja más la resolución antes de guardar.', 'warning');
+      return;
+    }
+    this.submit();
   });
 
   document.getElementById('openProductAiBtn').addEventListener('click', () => {
