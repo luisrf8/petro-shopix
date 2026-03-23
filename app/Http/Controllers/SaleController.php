@@ -34,6 +34,7 @@ use App\Models\DollarRate;
 use App\Models\Tax;
 use App\Models\Tenant;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;

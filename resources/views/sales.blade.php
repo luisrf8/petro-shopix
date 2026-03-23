@@ -2058,16 +2058,19 @@ function updateQuantity(id, newQty) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
             'X-CSRF-TOKEN': csrfToken
         },
         body: JSON.stringify(summary)
     })
-        .then(response => {
+        .then(async response => {
+            const payload = await response.json().catch(() => ({}));
+
             if (response.ok) {
-                return response.json();
-            } else {
-                throw new Error('Error al confirmar la compra.');
+                return payload;
             }
+
+            throw new Error(payload.message || payload.error || 'Error al confirmar la compra.');
         })
         .then(data => {
             alert(data.message || 'Compra confirmada con éxito.');
@@ -2094,7 +2097,7 @@ function updateQuantity(id, newQty) {
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Error al confirmar la compra.');
+            alert(error.message || 'Error al confirmar la compra.');
         })
         .finally(() => {
             // Restaurar botón en cualquier caso

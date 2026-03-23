@@ -145,7 +145,7 @@
               </div>
               <div class="mb-3">
                 <label for="productDescription" class="form-label">Descripción</label>
-                <textarea class="form-control border border-1 p-2" id="productDescription" name="description" rows="3" required></textarea>
+                <textarea class="form-control border border-1 p-2" id="productDescription" name="description" rows="3"></textarea>
               </div>
               <div class="mb-3">
                 <label for="productPrice" class="form-label">Precio</label>

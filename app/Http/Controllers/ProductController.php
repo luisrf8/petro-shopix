@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -150,7 +151,7 @@ class ProductController extends Controller
 
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            'description' => 'required|string',
+            'description' => 'nullable|string',
             'category_id' => 'required',
             'tenant_id' => 'required'
         ]);
@@ -166,11 +167,11 @@ class ProductController extends Controller
         $validated = $request->validate([
             'category_id' => 'required|exists:categories,id',
             'productName' => 'required|string|max:255',
-            'productDescription' => 'required|string',
+            'productDescription' => 'nullable|string',
             'productDiscount' => 'nullable|numeric|min:0|max:100',
             'tax_ids' => 'nullable|array',
             'tax_ids.*' => 'exists:taxes,id',
-            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
         ]);
 
         $variants = $request->input('variants', []);
@@ -214,7 +215,7 @@ class ProductController extends Controller
                 $product = Product::create([
                     'category_id' => $validated['category_id'],
                     'name' => $validated['productName'],
-                    'description' => $validated['productDescription'],
+                    'description' => $validated['productDescription'] ?? null,
                     'discount_percentage' => max(0, min(100, (float) ($validated['productDiscount'] ?? 0))),
                     'tenant_id' => $tenantId,
                 ]);
@@ -253,7 +254,17 @@ class ProductController extends Controller
                 ImageStorage::delete($storedImagePath);
             }
 
-            throw $exception;
+            Log::error('Error al crear producto', [
+                'tenant_id' => $tenantId,
+                'category_id' => $validated['category_id'] ?? null,
+                'product_name' => $validated['productName'] ?? null,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo crear el producto. Si adjuntaste imágenes, verifica el formato o intenta nuevamente.',
+            ], 500);
         }
 
         return response()->json(['success' => true, 'message' => 'Product created successfully']);
@@ -1149,7 +1160,7 @@ class ProductController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'description' => 'required|string|max:500',
+            'description' => 'nullable|string|max:500',
             'category' => 'required|exists:categories,id',
             'is_active' => 'required|boolean',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
@@ -1157,7 +1168,7 @@ class ProductController extends Controller
 
         $product->update([
             'name' => $validated['name'],
-            'description' => $validated['description'],
+            'description' => $validated['description'] ?? null,
             'category_id' => $validated['category'],
             'is_active' => $validated['is_active'],
             'discount_percentage' => (float) ($validated['discount_percentage'] ?? 0),

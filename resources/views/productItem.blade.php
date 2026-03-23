@@ -280,7 +280,7 @@
                         </div>
                         <div class="form-group">
                             <label for="productDescription">Descripción</label>
-                            <input class="form-control border border-1 p-2" id="productDescription" name="description" rows="3" value="{{ old('description', $product->description) }}" required></input>
+                          <input class="form-control border border-1 p-2" id="productDescription" name="description" rows="3" value="{{ old('description', $product->description) }}"></input>
                         </div>
                         <div class="form-group mb-4">
                             <label for="productCategory">Categoría</label>
