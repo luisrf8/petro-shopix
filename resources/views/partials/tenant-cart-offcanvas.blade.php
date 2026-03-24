@@ -1223,8 +1223,8 @@
       }
     }
 
-    const PRO_PAYMENT_SAFE_IMAGE_BYTES = 2 * 1024 * 1024;
-    const PRO_PAYMENT_SAFE_TOTAL_BYTES = 10 * 1024 * 1024;
+    const PRO_PAYMENT_SAFE_IMAGE_BYTES = 1.5 * 1024 * 1024;
+    const PRO_PAYMENT_SAFE_TOTAL_BYTES = 8 * 1024 * 1024;
 
     function fileToDataUrl(file) {
       return new Promise((resolve, reject) => {

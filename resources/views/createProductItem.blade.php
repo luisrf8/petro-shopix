@@ -132,8 +132,8 @@
 @push('scripts')
 
     <script>
-        const PRODUCT_SAFE_IMAGE_BYTES = 1.8 * 1024 * 1024;
-        const PRODUCT_SAFE_TOTAL_UPLOAD_BYTES = 18 * 1024 * 1024;
+        const PRODUCT_SAFE_IMAGE_BYTES = 1.5 * 1024 * 1024;
+        const PRODUCT_SAFE_TOTAL_UPLOAD_BYTES = 12 * 1024 * 1024;
 
         function showShopixToast(message, type = 'info') {
             let container = document.getElementById('shopixToastContainer');

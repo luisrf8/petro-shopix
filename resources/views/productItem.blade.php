@@ -380,7 +380,7 @@
 
 <script>
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
-    const PRODUCT_ITEM_SAFE_IMAGE_BYTES = 1.8 * 1024 * 1024;
+    const PRODUCT_ITEM_SAFE_IMAGE_BYTES = 1.5 * 1024 * 1024;
     let productAiModalInstance = null;
     let productAiHistory = [];
     let productAiLatestResult = null;

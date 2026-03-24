@@ -343,7 +343,7 @@
     const authUser = @json($authUser);
     const tenantId = Number(authUser.tenant_id);
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
-    const CATEGORY_SAFE_IMAGE_BYTES = 1.8 * 1024 * 1024;
+    const CATEGORY_SAFE_IMAGE_BYTES = 1.5 * 1024 * 1024;
 
     function showShopixToast(message, type = 'info') {
       let container = document.getElementById('shopixToastContainer');

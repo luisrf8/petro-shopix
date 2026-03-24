@@ -671,7 +671,7 @@
 <script>
   let map, marker;
     const tenantAiImageEndpoint = "{{ route('tenant.ai-image') }}";
-    const TENANT_SAFE_IMAGE_BYTES = 1800 * 1024;
+    const TENANT_SAFE_IMAGE_BYTES = 1500 * 1024;
     const TENANT_IMAGE_MAX_DIMENSION = 2200;
     let aiModalInstance = null;
     let currentAiTarget = null;

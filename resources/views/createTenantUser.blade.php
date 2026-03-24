@@ -429,7 +429,7 @@
     let googleScriptLoading = false;
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
     const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
-    const TENANT_SAFE_IMAGE_BYTES = 1800 * 1024;
+    const TENANT_SAFE_IMAGE_BYTES = 1500 * 1024;
     const TENANT_IMAGE_MAX_DIMENSION = 2200;
     let aiModalInstance = null;
     let currentAiTarget = null;
