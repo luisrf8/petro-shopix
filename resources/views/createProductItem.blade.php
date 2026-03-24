@@ -89,7 +89,7 @@
                     <div class="mb-3">
                         <label for="productImages" class="form-label">Imagenes</label>
                         <input type="file" id="productImages" name="images[]" class="form-control border border-radius-lg p-2" multiple accept="image/*">
-                        <small class="text-muted d-block mt-1">Si subes JPG/JPEG se convertirá automáticamente a PNG. Si pesa mucho, se reducirá la resolución para evitar errores.</small>
+                        <small class="text-muted d-block mt-1">Si subes JPG/JPEG/PNG se convertirá automáticamente a WEBP. Si pesa mucho, se reducirá la resolución para evitar errores.</small>
                         <div id="productImageNotice" class="alert alert-warning mt-2 d-none" role="alert"></div>
                         <div id="imagePreview" class="mt-3 d-flex flex-wrap"></div>
                     </div>
@@ -132,8 +132,8 @@
 @push('scripts')
 
     <script>
-        const PRODUCT_SAFE_IMAGE_BYTES = 1.5 * 1024 * 1024;
-        const PRODUCT_SAFE_TOTAL_UPLOAD_BYTES = 12 * 1024 * 1024;
+        const PRODUCT_SAFE_IMAGE_BYTES = 1.2 * 1024 * 1024;
+        const PRODUCT_SAFE_TOTAL_UPLOAD_BYTES = 9 * 1024 * 1024;
 
         function showShopixToast(message, type = 'info') {
             let container = document.getElementById('shopixToastContainer');
@@ -220,7 +220,7 @@
         async function optimizeProductImage(file) {
             const rasterTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
             if (!rasterTypes.includes((file.type || '').toLowerCase())) {
-                return { file, changed: false, convertedToPng: false };
+                return { file, changed: false, convertedToWebp: false };
             }
 
             const source = await loadImageElement(file);
@@ -243,9 +243,10 @@
             canvas.height = height;
             ctx.drawImage(source, 0, 0, width, height);
 
-            const forcePng = ['image/jpeg', 'image/jpg'].includes((file.type || '').toLowerCase());
-            const targetType = forcePng ? 'image/png' : (file.type || 'image/png');
-            let blob = await canvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.9 : undefined);
+            const sourceType = (file.type || '').toLowerCase();
+            const targetType = 'image/webp';
+            const convertedToWebp = sourceType !== 'image/webp';
+            let blob = await canvasToBlob(canvas, targetType, 0.9);
 
             while (blob && blob.size > PRODUCT_SAFE_IMAGE_BYTES && width > 640 && height > 640) {
                 width = Math.max(640, Math.round(width * 0.85));
@@ -253,26 +254,25 @@
                 canvas.width = width;
                 canvas.height = height;
                 ctx.drawImage(source, 0, 0, width, height);
-                blob = await canvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.82 : undefined);
+                blob = await canvasToBlob(canvas, targetType, 0.82);
             }
 
             if (!blob) {
-                return { file, changed: false, convertedToPng: false };
+                return { file, changed: false, convertedToWebp: false };
             }
 
-            const changed = blob.size !== file.size || width !== originalWidth || height !== originalHeight || forcePng;
+            const changed = blob.size !== file.size || width !== originalWidth || height !== originalHeight || convertedToWebp;
             if (!changed) {
-                return { file, changed: false, convertedToPng: false };
+                return { file, changed: false, convertedToWebp: false };
             }
 
             const baseName = file.name.replace(/\.[^.]+$/, '');
-            const extension = targetType === 'image/png' ? 'png' : (targetType === 'image/webp' ? 'webp' : 'png');
-            const optimizedFile = new File([blob], `${baseName}.${extension}`, { type: targetType });
+            const optimizedFile = new File([blob], `${baseName}.webp`, { type: targetType });
 
             return {
                 file: optimizedFile,
                 changed: true,
-                convertedToPng: forcePng,
+                convertedToWebp,
                 stillLarge: optimizedFile.size > PRODUCT_SAFE_IMAGE_BYTES,
             };
         }
@@ -292,7 +292,7 @@
                     const optimized = await optimizeProductImage(file);
                     dt.items.add(optimized.file);
                     if (optimized.changed) changedCount += 1;
-                    if (optimized.convertedToPng) convertedCount += 1;
+                    if (optimized.convertedToWebp) convertedCount += 1;
                     if (optimized.stillLarge) stillLargeCount += 1;
                 } catch (error) {
                     dt.items.add(file);
@@ -304,7 +304,7 @@
             if (changedCount > 0) {
                 let msg = `Se optimizaron ${changedCount} imagen(es)`;
                 if (convertedCount > 0) {
-                    msg += ` y ${convertedCount} JPG/JPEG se convirtieron a PNG`;
+                    msg += ` y ${convertedCount} imagen(es) se convirtieron a WEBP`;
                 }
                 msg += ' para evitar errores por tamaño.';
                 if (stillLargeCount > 0) {

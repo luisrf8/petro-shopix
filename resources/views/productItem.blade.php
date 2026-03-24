@@ -380,7 +380,7 @@
 
 <script>
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
-    const PRODUCT_ITEM_SAFE_IMAGE_BYTES = 1.5 * 1024 * 1024;
+    const PRODUCT_ITEM_SAFE_IMAGE_BYTES = 1.2 * 1024 * 1024;
     let productAiModalInstance = null;
     let productAiHistory = [];
     let productAiLatestResult = null;
@@ -462,7 +462,7 @@
       const rasterTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
       const type = String(file.type || '').toLowerCase();
       if (!rasterTypes.includes(type)) {
-        return { file, changed: false, convertedToPng: false, stillLarge: file.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES };
+        return { file, changed: false, convertedToWebp: false, stillLarge: file.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES };
       }
 
       const img = await loadProductImageElement(file);
@@ -484,9 +484,9 @@
       canvas.height = height;
       ctx.drawImage(img, 0, 0, width, height);
 
-      const convertedToPng = type === 'image/jpeg' || type === 'image/jpg';
-      const targetType = convertedToPng ? 'image/png' : (type || 'image/png');
-      let blob = await productCanvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.9 : undefined);
+      const targetType = 'image/webp';
+      const convertedToWebp = type !== 'image/webp';
+      let blob = await productCanvasToBlob(canvas, targetType, 0.9);
 
       while (blob && blob.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES && width > 640 && height > 640) {
         width = Math.max(640, Math.round(width * 0.85));
@@ -494,26 +494,25 @@
         canvas.width = width;
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
-        blob = await productCanvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.82 : undefined);
+        blob = await productCanvasToBlob(canvas, targetType, 0.82);
       }
 
       if (!blob) {
-        return { file, changed: false, convertedToPng: false, stillLarge: file.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES };
+        return { file, changed: false, convertedToWebp: false, stillLarge: file.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES };
       }
 
-      const changed = convertedToPng || blob.size !== file.size || width !== sourceWidth || height !== sourceHeight;
+      const changed = convertedToWebp || blob.size !== file.size || width !== sourceWidth || height !== sourceHeight;
       if (!changed) {
-        return { file, changed: false, convertedToPng: false, stillLarge: blob.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES };
+        return { file, changed: false, convertedToWebp: false, stillLarge: blob.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES };
       }
 
       const baseName = file.name.replace(/\.[^.]+$/, '');
-      const extension = targetType === 'image/webp' ? 'webp' : 'png';
-      const optimized = new File([blob], `${baseName}.${extension}`, { type: targetType });
+      const optimized = new File([blob], `${baseName}.webp`, { type: targetType });
 
       return {
         file: optimized,
         changed: true,
-        convertedToPng,
+        convertedToWebp,
         stillLarge: optimized.size > PRODUCT_ITEM_SAFE_IMAGE_BYTES,
       };
     }
@@ -535,8 +534,8 @@
         input.files = dt.files;
 
         let message = `Imagen optimizada automaticamente: ${formatProductItemSize(originalSize)} -> ${formatProductItemSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
-        if (optimized.convertedToPng) {
-          message = `JPG/JPEG convertido a PNG y optimizado: ${formatProductItemSize(originalSize)} -> ${formatProductItemSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
+        if (optimized.convertedToWebp) {
+          message = `Imagen convertida a WEBP y optimizada: ${formatProductItemSize(originalSize)} -> ${formatProductItemSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
         }
         if (optimized.stillLarge) {
           message += ` Aun supera el maximo recomendado (${recommendedLimit}); baja la resolucion manualmente.`;

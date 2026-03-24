@@ -97,7 +97,7 @@
                         name="image"
                         accept=".png,.jpg,.jpeg,.svg"
                     >
-                  <small class="text-muted d-block mt-1">JPG/JPEG se convertirá a PNG y si la imagen pesa mucho se comprimirá para evitar errores 413.</small>
+                  <small class="text-muted d-block mt-1">JPG/JPEG/PNG se convertirá a WEBP y si la imagen pesa mucho se comprimirá para evitar errores 413.</small>
                 </div>
                 <div class="mb-3">
                   <button type="button" class="btn btn-outline-dark w-100" id="openCreateCategoryAiBtn">
@@ -343,7 +343,7 @@
     const authUser = @json($authUser);
     const tenantId = Number(authUser.tenant_id);
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
-    const CATEGORY_SAFE_IMAGE_BYTES = 1.5 * 1024 * 1024;
+    const CATEGORY_SAFE_IMAGE_BYTES = 1.2 * 1024 * 1024;
 
     function showShopixToast(message, type = 'info') {
       let container = document.getElementById('shopixToastContainer');
@@ -418,7 +418,7 @@
       const rasterTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
       const type = String(file.type || '').toLowerCase();
       if (!rasterTypes.includes(type)) {
-        return { file, changed: false, convertedToPng: false, stillLarge: file.size > CATEGORY_SAFE_IMAGE_BYTES };
+        return { file, changed: false, convertedToWebp: false, stillLarge: file.size > CATEGORY_SAFE_IMAGE_BYTES };
       }
 
       const img = await loadImageForCategory(file);
@@ -440,9 +440,9 @@
       canvas.height = height;
       ctx.drawImage(img, 0, 0, width, height);
 
-      const convertedToPng = type === 'image/jpeg' || type === 'image/jpg';
-      const targetType = convertedToPng ? 'image/png' : (type || 'image/png');
-      let blob = await categoryCanvasBlob(canvas, targetType, targetType === 'image/webp' ? 0.9 : undefined);
+      const targetType = 'image/webp';
+      const convertedToWebp = type !== 'image/webp';
+      let blob = await categoryCanvasBlob(canvas, targetType, 0.9);
 
       while (blob && blob.size > CATEGORY_SAFE_IMAGE_BYTES && width > 640 && height > 640) {
         width = Math.max(640, Math.round(width * 0.85));
@@ -450,26 +450,25 @@
         canvas.width = width;
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
-        blob = await categoryCanvasBlob(canvas, targetType, targetType === 'image/webp' ? 0.82 : undefined);
+        blob = await categoryCanvasBlob(canvas, targetType, 0.82);
       }
 
       if (!blob) {
-        return { file, changed: false, convertedToPng: false, stillLarge: file.size > CATEGORY_SAFE_IMAGE_BYTES };
+        return { file, changed: false, convertedToWebp: false, stillLarge: file.size > CATEGORY_SAFE_IMAGE_BYTES };
       }
 
-      const changed = convertedToPng || blob.size !== file.size || width !== sourceWidth || height !== sourceHeight;
+      const changed = convertedToWebp || blob.size !== file.size || width !== sourceWidth || height !== sourceHeight;
       if (!changed) {
-        return { file, changed: false, convertedToPng: false, stillLarge: blob.size > CATEGORY_SAFE_IMAGE_BYTES };
+        return { file, changed: false, convertedToWebp: false, stillLarge: blob.size > CATEGORY_SAFE_IMAGE_BYTES };
       }
 
       const baseName = file.name.replace(/\.[^.]+$/, '');
-      const extension = targetType === 'image/webp' ? 'webp' : 'png';
-      const optimized = new File([blob], `${baseName}.${extension}`, { type: targetType });
+      const optimized = new File([blob], `${baseName}.webp`, { type: targetType });
 
       return {
         file: optimized,
         changed: true,
-        convertedToPng,
+        convertedToWebp,
         stillLarge: optimized.size > CATEGORY_SAFE_IMAGE_BYTES,
       };
     }
@@ -489,8 +488,8 @@
         input.files = dt.files;
 
         let message = `Imagen optimizada automaticamente: ${formatCategorySize(originalSize)} -> ${formatCategorySize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
-        if (optimized.convertedToPng) {
-          message = `JPG/JPEG convertido a PNG y optimizado: ${formatCategorySize(originalSize)} -> ${formatCategorySize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
+        if (optimized.convertedToWebp) {
+          message = `Imagen convertida a WEBP y optimizada: ${formatCategorySize(originalSize)} -> ${formatCategorySize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
         }
         if (optimized.stillLarge) {
           message += ` Aun supera el maximo recomendado (${recommendedLimit}); baja la resolucion manualmente.`;

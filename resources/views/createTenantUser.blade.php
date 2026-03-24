@@ -429,7 +429,7 @@
     let googleScriptLoading = false;
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
     const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
-    const TENANT_SAFE_IMAGE_BYTES = 1500 * 1024;
+    const TENANT_SAFE_IMAGE_BYTES = 1200 * 1024;
     const TENANT_IMAGE_MAX_DIMENSION = 2200;
     let aiModalInstance = null;
     let currentAiTarget = null;
@@ -501,12 +501,12 @@
     async function optimizeTenantImageFile(file) {
       const type = String(file?.type || '').toLowerCase();
       if (type === 'image/svg+xml') {
-        return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+        return { file, changed: false, convertedToWebp: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
       }
 
       const rasterTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
       if (!rasterTypes.includes(type)) {
-        return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+        return { file, changed: false, convertedToWebp: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
       }
 
       const source = await loadTenantImageElement(file);
@@ -527,9 +527,9 @@
       canvas.height = height;
       ctx.drawImage(source, 0, 0, width, height);
 
-      const forcePng = ['image/jpeg', 'image/jpg'].includes(type);
-      const targetType = forcePng ? 'image/png' : (type || 'image/png');
-      let blob = await tenantCanvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.9 : undefined);
+      const targetType = 'image/webp';
+      const convertedToWebp = type !== 'image/webp';
+      let blob = await tenantCanvasToBlob(canvas, targetType, 0.9);
 
       while (blob && blob.size > TENANT_SAFE_IMAGE_BYTES && width > 640 && height > 640) {
         width = Math.max(640, Math.round(width * 0.85));
@@ -537,26 +537,25 @@
         canvas.width = width;
         canvas.height = height;
         ctx.drawImage(source, 0, 0, width, height);
-        blob = await tenantCanvasToBlob(canvas, targetType, targetType === 'image/webp' ? 0.82 : undefined);
+        blob = await tenantCanvasToBlob(canvas, targetType, 0.82);
       }
 
       if (!blob) {
-        return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+        return { file, changed: false, convertedToWebp: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
       }
 
-      const changed = blob.size !== file.size || width !== originalWidth || height !== originalHeight || forcePng;
+      const changed = blob.size !== file.size || width !== originalWidth || height !== originalHeight || convertedToWebp;
       if (!changed) {
-        return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+        return { file, changed: false, convertedToWebp: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
       }
 
       const baseName = file.name.replace(/\.[^.]+$/, '');
-      const extension = targetType === 'image/png' ? 'png' : (targetType === 'image/webp' ? 'webp' : 'png');
-      const optimizedFile = new File([blob], `${baseName}.${extension}`, { type: targetType });
+      const optimizedFile = new File([blob], `${baseName}.webp`, { type: targetType });
 
       return {
         file: optimizedFile,
         changed: true,
-        convertedToPng: forcePng,
+        convertedToWebp,
         stillLarge: optimizedFile.size > TENANT_SAFE_IMAGE_BYTES,
       };
     }
@@ -583,8 +582,8 @@
 
         if (optimized.changed) {
           let message = `Imagen optimizada automaticamente: ${formatTenantSize(originalSize)} -> ${formatTenantSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
-          if (optimized.convertedToPng) {
-            message = `JPG/JPEG convertido a PNG y optimizado: ${formatTenantSize(originalSize)} -> ${formatTenantSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
+          if (optimized.convertedToWebp) {
+            message = `Imagen convertida a WEBP y optimizada: ${formatTenantSize(originalSize)} -> ${formatTenantSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
           }
           if (optimized.stillLarge) {
             message += ` Aun supera el maximo recomendado (${recommendedLimit}); baja la resolucion manualmente.`;
@@ -626,8 +625,8 @@
       preview.classList.remove('d-none');
 
       if (optimized.changed) {
-        const toastMessage = optimized.convertedToPng
-          ? 'La imagen de IA se optimizo y se convirtio a PNG.'
+        const toastMessage = optimized.convertedToWebp
+          ? 'La imagen de IA se optimizo y se convirtio a WEBP.'
           : 'La imagen de IA se optimizo para subirla sin errores.';
         showTenantToast(toastMessage, optimized.stillLarge ? 'warning' : 'info');
       }
