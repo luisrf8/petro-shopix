@@ -176,6 +176,25 @@
             return Array.from(inputEl.files).reduce((acc, file) => acc + (file.size || 0), 0);
         }
 
+        function setSubmitButtonLoading(button, isLoading, loadingText = 'Guardando...') {
+            if (!button) return;
+
+            if (isLoading) {
+                if (button.dataset.loading === '1') return;
+                button.dataset.loading = '1';
+                button.dataset.originalHtml = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>${loadingText}`;
+                return;
+            }
+
+            button.disabled = false;
+            button.dataset.loading = '0';
+            if (button.dataset.originalHtml) {
+                button.innerHTML = button.dataset.originalHtml;
+            }
+        }
+
         function loadImageElement(file) {
             return new Promise((resolve, reject) => {
                 const img = new Image();
@@ -361,6 +380,12 @@
             const tenantId = Number(authUser.tenant_id);
             event.preventDefault();
 
+            const submitBtn = this.querySelector('button[type="submit"]');
+            if (submitBtn?.dataset.loading === '1') {
+                return;
+            }
+            setSubmitButtonLoading(submitBtn, true, 'Creando...');
+
             const productImagesInput = document.getElementById('productImages');
             await optimizeProductInputFiles(productImagesInput);
 
@@ -369,6 +394,7 @@
                 const totalMb = (totalImageBytes / (1024 * 1024)).toFixed(1);
                 const safeMb = (PRODUCT_SAFE_TOTAL_UPLOAD_BYTES / (1024 * 1024)).toFixed(0);
                 showShopixToast(`Las imagenes seleccionadas pesan ${totalMb} MB en total. Reduce el total por debajo de ${safeMb} MB para evitar el error 413.`, 'error');
+                setSubmitButtonLoading(submitBtn, false);
                 return;
             }
 
@@ -422,6 +448,9 @@
                 .catch((error) => {
                     console.error('Error:', error);
                     showShopixToast(error.message || 'Error creating product. Please check console for details.', 'error');
+                })
+                .finally(() => {
+                    setSubmitButtonLoading(submitBtn, false);
                 });
         });
 

@@ -434,6 +434,10 @@
       }, 3600);
     }
 
+    function formatProductItemSize(bytes) {
+      return `${(Number(bytes || 0) / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
     function loadProductImageElement(file) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -521,22 +525,25 @@
         return { changed: false };
       }
 
+      const originalSize = Number(file.size || 0);
       const optimized = await optimizeProductSingleImage(file);
+      const optimizedSize = Number(optimized.file?.size || originalSize);
+      const recommendedLimit = formatProductItemSize(PRODUCT_ITEM_SAFE_IMAGE_BYTES);
       if (optimized.changed) {
         const dt = new DataTransfer();
         dt.items.add(optimized.file);
         input.files = dt.files;
 
-        let message = 'Imagen optimizada para evitar errores por tamaño.';
+        let message = `Imagen optimizada automaticamente: ${formatProductItemSize(originalSize)} -> ${formatProductItemSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
         if (optimized.convertedToPng) {
-          message = 'JPG/JPEG convertido a PNG y optimizado para evitar errores 413.';
+          message = `JPG/JPEG convertido a PNG y optimizado: ${formatProductItemSize(originalSize)} -> ${formatProductItemSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
         }
         if (optimized.stillLarge) {
-          message += ' Sigue pesada: baja la resolución manualmente.';
+          message += ` Aun supera el maximo recomendado (${recommendedLimit}); baja la resolucion manualmente.`;
         }
         showProductToast(message, optimized.stillLarge ? 'warning' : 'info');
       } else if (optimized.stillLarge) {
-        showProductToast('La imagen puede ser demasiado pesada. Baja la resolución para evitar error 413.', 'warning');
+        showProductToast(`La imagen pesa ${formatProductItemSize(optimizedSize)}. Recomendado por imagen: ${recommendedLimit}.`, 'warning');
       }
 
       return optimized;

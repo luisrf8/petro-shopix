@@ -697,6 +697,29 @@
         }, 3600);
     }
 
+    function formatTenantSize(bytes) {
+        return `${(Number(bytes || 0) / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function setTenantSubmitLoading(button, isLoading, loadingText = 'Guardando...') {
+        if (!button) return;
+
+        if (isLoading) {
+            if (button.dataset.loading === '1') return;
+            button.dataset.loading = '1';
+            button.dataset.originalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>${loadingText}`;
+            return;
+        }
+
+        button.disabled = false;
+        button.dataset.loading = '0';
+        if (button.dataset.originalHtml) {
+            button.innerHTML = button.dataset.originalHtml;
+        }
+    }
+
     function loadTenantImageElement(file) {
         return new Promise((resolve, reject) => {
             const img = new Image();
@@ -789,7 +812,10 @@
         }
 
         try {
+            const originalSize = Number(selectedFile.size || 0);
             const optimized = await optimizeTenantImageFile(selectedFile);
+            const optimizedSize = Number(optimized.file?.size || originalSize);
+            const recommendedLimit = formatTenantSize(TENANT_SAFE_IMAGE_BYTES);
             const dt = new DataTransfer();
             dt.items.add(optimized.file);
             input.files = dt.files;
@@ -798,14 +824,16 @@
             preview.classList.remove('d-none');
 
             if (optimized.changed) {
-                let message = 'Imagen optimizada para evitar errores de tamaño.';
+                let message = `Imagen optimizada automaticamente: ${formatTenantSize(originalSize)} -> ${formatTenantSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
                 if (optimized.convertedToPng) {
-                    message = 'Se convirtio JPG/JPEG a PNG y se optimizo la imagen.';
+                    message = `JPG/JPEG convertido a PNG y optimizado: ${formatTenantSize(originalSize)} -> ${formatTenantSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
                 }
                 if (optimized.stillLarge) {
-                    message += ' Aun puede ser grande; reduce la resolucion si falla.';
+                    message += ` Aun supera el maximo recomendado (${recommendedLimit}); baja la resolucion manualmente.`;
                 }
                 showTenantToast(message, optimized.stillLarge ? 'warning' : 'info');
+            } else if (optimized.stillLarge) {
+                showTenantToast(`La imagen pesa ${formatTenantSize(optimizedSize)}. Recomendado por imagen: ${recommendedLimit}.`, 'warning');
             }
         } catch (error) {
             preview.src = URL.createObjectURL(selectedFile);
@@ -1416,6 +1444,12 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
 
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn?.dataset.loading === '1') {
+            return;
+        }
+        setTenantSubmitLoading(submitBtn, true, 'Guardando...');
+
         const formData = new FormData(form);
 
         try {
@@ -1443,11 +1477,13 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
             }
 
             const defaultError = response.status === 413
-                ? 'La solicitud es demasiado grande (413). Reduce el peso total de las imágenes e intenta de nuevo.'
+                ? `La solicitud es demasiado grande (413). Recomendado por imagen: ${formatTenantSize(TENANT_SAFE_IMAGE_BYTES)}.`
                 : 'Error desconocido';
             showTenantToast(data.message || defaultError, 'error');
         } catch (error) {
             showTenantToast('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
+        } finally {
+            setTenantSubmitLoading(submitBtn, false);
         }
     });
 

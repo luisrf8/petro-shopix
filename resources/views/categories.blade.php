@@ -371,6 +371,29 @@
       showShopixToast(message, 'info');
     }
 
+    function formatCategorySize(bytes) {
+      return `${(Number(bytes || 0) / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function setCategorySubmitLoading(button, isLoading, loadingText = 'Guardando...') {
+      if (!button) return;
+
+      if (isLoading) {
+        if (button.dataset.loading === '1') return;
+        button.dataset.loading = '1';
+        button.dataset.originalHtml = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>${loadingText}`;
+        return;
+      }
+
+      button.disabled = false;
+      button.dataset.loading = '0';
+      if (button.dataset.originalHtml) {
+        button.innerHTML = button.dataset.originalHtml;
+      }
+    }
+
     function loadImageForCategory(file) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -456,22 +479,25 @@
       const file = input?.files?.[0];
       if (!file) return { changed: false };
 
+      const originalSize = Number(file.size || 0);
       const optimized = await optimizeCategoryFile(file);
+      const optimizedSize = Number(optimized.file?.size || originalSize);
+      const recommendedLimit = formatCategorySize(CATEGORY_SAFE_IMAGE_BYTES);
       if (optimized.changed) {
         const dt = new DataTransfer();
         dt.items.add(optimized.file);
         input.files = dt.files;
 
-        let message = 'Imagen optimizada para evitar errores por tamaño.';
+        let message = `Imagen optimizada automaticamente: ${formatCategorySize(originalSize)} -> ${formatCategorySize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
         if (optimized.convertedToPng) {
-          message = 'JPG/JPEG convertido a PNG y optimizado para evitar errores 413.';
+          message = `JPG/JPEG convertido a PNG y optimizado: ${formatCategorySize(originalSize)} -> ${formatCategorySize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
         }
         if (optimized.stillLarge) {
-          message += ' Sigue pesada: baja la resolución manualmente.';
+          message += ` Aun supera el maximo recomendado (${recommendedLimit}); baja la resolucion manualmente.`;
         }
         notifyCategory(message);
       } else if (optimized.stillLarge) {
-        notifyCategory('La imagen puede ser demasiado pesada. Baja la resolución para evitar error 413.');
+        notifyCategory(`La imagen pesa ${formatCategorySize(optimizedSize)}. Recomendado por imagen: ${recommendedLimit}.`);
       }
 
       return optimized;
@@ -741,6 +767,12 @@
     document.getElementById('createCategoryForm').addEventListener('submit', async function(event) {
       event.preventDefault();
 
+      const submitBtn = this.querySelector('button[type="submit"]');
+      if (submitBtn?.dataset.loading === '1') {
+        return;
+      }
+      setCategorySubmitLoading(submitBtn, true, 'Guardando...');
+
       await optimizeCategoryInput('createCategoryImage');
 
       let formData = new FormData(this);
@@ -763,7 +795,9 @@
         }
 
         if (response.status === 413) {
-          throw new Error('Error 413: la solicitud es demasiado grande. Baja la resolución o comprime la imagen antes de subir.');
+          const selectedBytes = Number(document.getElementById('createCategoryImage')?.files?.[0]?.size || 0);
+          const selectedSize = selectedBytes > 0 ? formatCategorySize(selectedBytes) : 'no detectado';
+          throw new Error(`Error 413: solicitud demasiado grande. Peso detectado: ${selectedSize}. Recomendado por imagen: ${formatCategorySize(CATEGORY_SAFE_IMAGE_BYTES)}.`);
         }
 
         const validationMessage = payload?.errors
@@ -775,6 +809,9 @@
       .catch(error => {
         console.error('Error:', error);
         showShopixToast(error.message || 'Ocurrió un error al crear la categoría', 'error');
+      })
+      .finally(() => {
+        setCategorySubmitLoading(submitBtn, false);
       });
     });
     // Evento para llenar el modal con los datos de la categoría seleccionada
@@ -822,6 +859,12 @@
     document.getElementById('editCategoryForm').addEventListener('submit', async function (event) {
       event.preventDefault(); // Evita el envío normal del formulario
 
+      const submitBtn = this.querySelector('button[type="submit"]');
+      if (submitBtn?.dataset.loading === '1') {
+        return;
+      }
+      setCategorySubmitLoading(submitBtn, true, 'Guardando...');
+
       await optimizeCategoryInput('editCategoryImage');
 
       const formData = new FormData(this);
@@ -845,7 +888,9 @@
         }
 
         if (response.status === 413) {
-          throw new Error('Error 413: la solicitud es demasiado grande. Baja la resolución o comprime la imagen antes de subir.');
+          const selectedBytes = Number(document.getElementById('editCategoryImage')?.files?.[0]?.size || 0);
+          const selectedSize = selectedBytes > 0 ? formatCategorySize(selectedBytes) : 'no detectado';
+          throw new Error(`Error 413: solicitud demasiado grande. Peso detectado: ${selectedSize}. Recomendado por imagen: ${formatCategorySize(CATEGORY_SAFE_IMAGE_BYTES)}.`);
         }
 
         const validationMessage = payload?.errors
@@ -857,6 +902,9 @@
       .catch(error => {
         console.error('Error:', error);
         showShopixToast(error.message || 'Ocurrió un error al actualizar la categoría', 'error');
+      })
+      .finally(() => {
+        setCategorySubmitLoading(submitBtn, false);
       });
     });
     document.querySelectorAll('.toggle-status-btn').forEach(button => {
