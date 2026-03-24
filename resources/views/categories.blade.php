@@ -97,7 +97,7 @@
                         name="image"
                         accept=".png,.jpg,.jpeg,.svg"
                     >
-                  <small class="text-muted d-block mt-1">JPG/JPEG se convertirá a PNG y si la imagen pesa mucho se comprimirá para evitar errores 403.</small>
+                  <small class="text-muted d-block mt-1">JPG/JPEG se convertirá a PNG y si la imagen pesa mucho se comprimirá para evitar errores 413.</small>
                 </div>
                 <div class="mb-3">
                   <button type="button" class="btn btn-outline-dark w-100" id="openCreateCategoryAiBtn">
@@ -464,14 +464,14 @@
 
         let message = 'Imagen optimizada para evitar errores por tamaño.';
         if (optimized.convertedToPng) {
-          message = 'JPG/JPEG convertido a PNG y optimizado para evitar errores 403.';
+          message = 'JPG/JPEG convertido a PNG y optimizado para evitar errores 413.';
         }
         if (optimized.stillLarge) {
           message += ' Sigue pesada: baja la resolución manualmente.';
         }
         notifyCategory(message);
       } else if (optimized.stillLarge) {
-        notifyCategory('La imagen puede ser demasiado pesada. Baja la resolución para evitar error 403.');
+        notifyCategory('La imagen puede ser demasiado pesada. Baja la resolución para evitar error 413.');
       }
 
       return optimized;
@@ -762,8 +762,8 @@
           return;
         }
 
-        if (response.status === 403) {
-          throw new Error('Error 403: la imagen es demasiado pesada. Baja la resolución o comprímela antes de subir.');
+        if (response.status === 413) {
+          throw new Error('Error 413: la solicitud es demasiado grande. Baja la resolución o comprime la imagen antes de subir.');
         }
 
         const validationMessage = payload?.errors
@@ -844,8 +844,8 @@
           return;
         }
 
-        if (response.status === 403) {
-          throw new Error('Error 403: la imagen es demasiado pesada. Baja la resolución o comprímela antes de subir.');
+        if (response.status === 413) {
+          throw new Error('Error 413: la solicitud es demasiado grande. Baja la resolución o comprime la imagen antes de subir.');
         }
 
         const validationMessage = payload?.errors

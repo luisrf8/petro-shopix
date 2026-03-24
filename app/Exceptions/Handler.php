@@ -3,6 +3,8 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Http\Exceptions\PostTooLargeException;
+use Illuminate\Http\Request;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -36,6 +38,21 @@ class Handler extends ExceptionHandler
     {
         $this->reportable(function (Throwable $e) {
             //
+        });
+
+        $this->renderable(function (PostTooLargeException $e, Request $request) {
+            $message = 'La solicitud enviada es demasiado grande para el servidor. Reduce el peso total de los archivos e intenta nuevamente.';
+
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                ], 413);
+            }
+
+            return redirect()->back()->withInput()->withErrors([
+                'upload' => $message,
+            ]);
         });
     }
 }

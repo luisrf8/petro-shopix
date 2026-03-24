@@ -133,6 +133,7 @@
 
     <script>
         const PRODUCT_SAFE_IMAGE_BYTES = 1.8 * 1024 * 1024;
+        const PRODUCT_SAFE_TOTAL_UPLOAD_BYTES = 18 * 1024 * 1024;
 
         function showShopixToast(message, type = 'info') {
             let container = document.getElementById('shopixToastContainer');
@@ -165,6 +166,14 @@
             if (!notice) return;
             notice.classList.add('d-none');
             notice.textContent = '';
+        }
+
+        function getSelectedImagesTotalBytes(inputEl) {
+            if (!inputEl?.files?.length) {
+                return 0;
+            }
+
+            return Array.from(inputEl.files).reduce((acc, file) => acc + (file.size || 0), 0);
         }
 
         function loadImageElement(file) {
@@ -352,7 +361,16 @@
             const tenantId = Number(authUser.tenant_id);
             event.preventDefault();
 
-            await optimizeProductInputFiles(document.getElementById('productImages'));
+            const productImagesInput = document.getElementById('productImages');
+            await optimizeProductInputFiles(productImagesInput);
+
+            const totalImageBytes = getSelectedImagesTotalBytes(productImagesInput);
+            if (totalImageBytes > PRODUCT_SAFE_TOTAL_UPLOAD_BYTES) {
+                const totalMb = (totalImageBytes / (1024 * 1024)).toFixed(1);
+                const safeMb = (PRODUCT_SAFE_TOTAL_UPLOAD_BYTES / (1024 * 1024)).toFixed(0);
+                showShopixToast(`Las imagenes seleccionadas pesan ${totalMb} MB en total. Reduce el total por debajo de ${safeMb} MB para evitar el error 413.`, 'error');
+                return;
+            }
 
             let formData = new FormData(this);
             formData.append('tenant_id', tenantId); // 👈 Agregas el tenant_id
@@ -384,8 +402,12 @@
                     const payload = await response.json().catch(() => ({}));
 
                     if (!response.ok || !payload.success) {
+                        if (response.status === 413) {
+                            throw new Error('La solicitud es demasiado grande para el servidor (413). Reduce el peso total de las imagenes o subelas en menos cantidad.');
+                        }
+
                         if (response.status === 403) {
-                            throw new Error('La imagen es demasiado pesada para el servidor (403). Baja la resolución o usa PNG comprimido.');
+                            throw new Error('El servidor rechazo la subida (403). Verifica permisos o politicas de tamaño en el servidor.');
                         }
 
                         const validationMessage = payload?.errors

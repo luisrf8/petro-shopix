@@ -1418,27 +1418,36 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
 
         const formData = new FormData(form);
 
-        const response = await fetch("{{ route('tenant.update') }}", {
-            method: "POST",
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-            },
-            body: formData
-        });
+        try {
+            const response = await fetch("{{ route('tenant.update') }}", {
+                method: "POST",
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
+                },
+                body: formData
+            });
 
-        const data = await response.json();
+            const data = await response.json().catch(() => ({}));
 
-        if (data.success) {
-            showTenantToast(data.message || 'Tienda actualizada correctamente.', 'success');
-            setTimeout(() => window.location.reload(), 700);
-        } else if (data.errors) {
-            const firstError = Object.values(data.errors || {}).flat()?.[0] || 'Revisa los datos del formulario.';
-            showTenantToast(firstError, 'warning');
-        } else {
-            const defaultError = response.status === 403
-                ? 'La imagen no pudo subirse. Reduce el peso de la imagen e intenta de nuevo.'
+            if (response.ok && data.success) {
+                showTenantToast(data.message || 'Tienda actualizada correctamente.', 'success');
+                setTimeout(() => window.location.reload(), 700);
+                return;
+            }
+
+            if (data.errors) {
+                const firstError = Object.values(data.errors || {}).flat()?.[0] || 'Revisa los datos del formulario.';
+                showTenantToast(firstError, 'warning');
+                return;
+            }
+
+            const defaultError = response.status === 413
+                ? 'La solicitud es demasiado grande (413). Reduce el peso total de las imágenes e intenta de nuevo.'
                 : 'Error desconocido';
             showTenantToast(data.message || defaultError, 'error');
+        } catch (error) {
+            showTenantToast('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
         }
     });
 

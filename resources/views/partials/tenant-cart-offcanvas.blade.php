@@ -1223,6 +1223,9 @@
       }
     }
 
+    const PRO_PAYMENT_SAFE_IMAGE_BYTES = 2 * 1024 * 1024;
+    const PRO_PAYMENT_SAFE_TOTAL_BYTES = 10 * 1024 * 1024;
+
     function fileToDataUrl(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -1230,6 +1233,10 @@
         reader.onerror = () => reject(new Error('No se pudo leer la imagen de referencia.'));
         reader.readAsDataURL(file);
       });
+    }
+
+    function formatBytesToMb(bytes) {
+      return `${(Number(bytes || 0) / (1024 * 1024)).toFixed(1)} MB`;
     }
 
     function updateProPaymentSummary() {
@@ -1383,9 +1390,16 @@
         if (imageInput) {
           const row = imageInput.closest('[data-pro-payment-row]');
           const file = imageInput.files?.[0] || null;
+
+          if (file && file.size > PRO_PAYMENT_SAFE_IMAGE_BYTES) {
+            imageInput.value = '';
+            alert(`La imagen de comprobante supera ${formatBytesToMb(PRO_PAYMENT_SAFE_IMAGE_BYTES)}. Reduce su tamaño para evitar error 413.`);
+          }
+
+          const effectiveFile = imageInput.files?.[0] || null;
           const nameElement = row ? row.querySelector('.pro-payment-reference-image-name') : null;
           if (nameElement) {
-            nameElement.textContent = file ? file.name : 'Sin imagen cargada';
+            nameElement.textContent = effectiveFile ? effectiveFile.name : 'Sin imagen cargada';
           }
         }
         updateProPaymentSummary();
@@ -1512,6 +1526,17 @@
       }
 
       const paymentRows = Array.from(document.querySelectorAll('[data-pro-payment-row]'));
+
+      const totalProofBytes = paymentRows.reduce((sum, row) => {
+        const imageFile = row.querySelector('.pro-payment-reference-image')?.files?.[0] || null;
+        return sum + Number(imageFile?.size || 0);
+      }, 0);
+
+      if (totalProofBytes > PRO_PAYMENT_SAFE_TOTAL_BYTES) {
+        alert(`Las imágenes de comprobante pesan ${formatBytesToMb(totalProofBytes)} en total. Reduce el total por debajo de ${formatBytesToMb(PRO_PAYMENT_SAFE_TOTAL_BYTES)} para evitar error 413.`);
+        return;
+      }
+
       const payments = (await Promise.all(paymentRows.map(async row => {
         const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
         const amountRaw = Number(row.querySelector('.pro-payment-amount')?.value || 0);
@@ -1596,6 +1621,12 @@
       }
 
       if (!response.ok) {
+        if (response.status === 413) {
+          alert('La solicitud es demasiado grande (413). Reduce el peso total de los comprobantes e intenta de nuevo.');
+          setProSubmitLoading(false);
+          return;
+        }
+
         alert(data.message || data.error || 'No se pudo completar el pedido.');
         setProSubmitLoading(false);
         return;

@@ -529,14 +529,14 @@
 
         let message = 'Imagen optimizada para evitar errores por tamaño.';
         if (optimized.convertedToPng) {
-          message = 'JPG/JPEG convertido a PNG y optimizado para evitar errores 403.';
+          message = 'JPG/JPEG convertido a PNG y optimizado para evitar errores 413.';
         }
         if (optimized.stillLarge) {
           message += ' Sigue pesada: baja la resolución manualmente.';
         }
         showProductToast(message, optimized.stillLarge ? 'warning' : 'info');
       } else if (optimized.stillLarge) {
-        showProductToast('La imagen puede ser demasiado pesada. Baja la resolución para evitar error 403.', 'warning');
+        showProductToast('La imagen puede ser demasiado pesada. Baja la resolución para evitar error 413.', 'warning');
       }
 
       return optimized;
