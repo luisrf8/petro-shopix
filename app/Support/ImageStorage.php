@@ -73,6 +73,47 @@ class ImageStorage
         return $file->store(trim($directory, '/'), self::disk());
     }
 
+    public static function storeUploadedImageAsWebp(UploadedFile $file, string $directory, int $quality = 82): string
+    {
+        $mimeType = Str::lower((string) ($file->getClientMimeType() ?: $file->getMimeType() ?: ''));
+        $rasterMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+
+        if (!in_array($mimeType, $rasterMimeTypes, true)) {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        if (!function_exists('imagecreatefromstring') || !function_exists('imagewebp')) {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        $binary = file_get_contents($file->getRealPath());
+        if ($binary === false || $binary === '') {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        $resource = @imagecreatefromstring($binary);
+        if ($resource === false) {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        if (function_exists('imagepalettetotruecolor')) {
+            imagepalettetotruecolor($resource);
+        }
+        imagealphablending($resource, true);
+        imagesavealpha($resource, true);
+
+        ob_start();
+        $encoded = @imagewebp($resource, null, max(0, min(100, $quality)));
+        $webpBinary = ob_get_clean();
+        imagedestroy($resource);
+
+        if ($encoded !== true || !is_string($webpBinary) || $webpBinary === '') {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        return self::storeBinary($webpBinary, $directory, 'webp', 'image/webp');
+    }
+
     public static function storeBinary(string $binary, string $directory, string $extension = 'png', ?string $mimeType = null): string
     {
         $safeExtension = ltrim(Str::lower($extension), '.');

@@ -52,6 +52,44 @@
             border-bottom: 1px solid #e3e6ea !important;
         }
     }
+
+    @media (max-width: 1199.98px) {
+        #cart.offcanvas-admin-desktop {
+            width: min(96vw, 460px);
+        }
+
+        .category-item {
+            width: 160px !important;
+        }
+
+        .variant-row {
+            gap: .75rem !important;
+            flex-wrap: wrap;
+            align-items: flex-start !important;
+        }
+
+        .variant-row .variant-label {
+            flex: 1 1 85%;
+        }
+
+        .payment-method-row {
+            align-items: flex-start !important;
+            gap: .75rem;
+        }
+
+        .product-detail-layout {
+            flex-direction: column;
+            gap: 1rem !important;
+        }
+
+        .product-detail-image {
+            width: 100% !important;
+            max-width: 240px;
+            margin: 0 auto;
+            height: auto !important;
+            aspect-ratio: 1 / 1;
+        }
+    }
   </style>
   @extends('layouts.app')
 
@@ -252,7 +290,7 @@
                                                 $variantDiscount = (float) ($variant->discount_percentage ?? 0);
                                                 $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
                                             @endphp
-                                            <div class="d-flex gap-5 justify-content-between align-items-center">
+                                            <div class="d-flex gap-5 justify-content-between align-items-center variant-row">
                                                 <label for="variant_{{ $variant->id }}" class="d-block mt-2 variant-label" style="cursor: pointer;" data-product-name="{{ $item->name }}">
                                                     <input type="checkbox" class="form-check-input me-2 variant-checkbox" id="variant_{{ $variant->id }}" name="selectedVariants[]" value="{{ $variant->id }}"
                                                     data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}" data-stock="{{ $variant->stock }}"
@@ -334,7 +372,7 @@
 
                             @foreach ($methods as $method)
                                 <div class="card mb-2 p-2">
-                                    <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex justify-content-between align-items-center payment-method-row">
                                         <div class="d-flex gap-2 align-items-center">
                                             @if ($method->qr_image)
                                                 @php $qr = json_decode($method->qr_image)[0] ?? null; @endphp
@@ -544,9 +582,9 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div class="d-flex gap-4">
+                <div class="d-flex gap-4 product-detail-layout">
                     <!-- Imagen del producto -->
-                    <div style="width: 200px; height: 200px;">
+                    <div class="product-detail-image" style="width: 200px; height: 200px;">
                         <img id="modalProductImage" src="" alt="Imagen del producto" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">
                     </div>
                     <!-- Información del producto -->

@@ -35,6 +35,37 @@
         0%, 100% { opacity: 0.3; transform: translateY(0); }
         50% { opacity: 1; transform: translateY(-3px); }
       }
+
+      @media (max-width: 991.98px) {
+        .product-detail-body {
+          flex-direction: column !important;
+          gap: 1rem;
+        }
+
+        .product-thumbs {
+          flex-direction: row !important;
+          flex-wrap: wrap;
+          margin-right: 0 !important;
+        }
+
+        .product-main-image {
+          width: 100% !important;
+          height: auto !important;
+          max-width: 340px;
+          aspect-ratio: 1 / 1;
+          margin: 0 auto;
+        }
+
+        .product-meta {
+          margin-left: 0 !important;
+          margin-right: 0 !important;
+        }
+
+        #editProductModal .modal-footer .btn,
+        #editProductModal .modal-body .btn {
+          width: 100%;
+        }
+      }
     </style>
     <div class="container-fluid py-2">
       <div class="row">
@@ -52,11 +83,11 @@
                   <div class="row">
                     <div class="col-md-12">
               <!-- <div class="card"> -->
-                      <div class="card" data-product-id="{{ $product->id }}">
-                          <div class="card-body d-flex flex-row">
+                      <div class="card product-detail-card" data-product-id="{{ $product->id }}">
+                          <div class="card-body d-flex flex-row product-detail-body">
                             <div class="d-flex">
                               {{-- Miniaturas a la izquierda --}}
-                              <div class="d-flex flex-column me-3" style="gap: 0.5rem;">
+                              <div class="d-flex flex-column me-3 product-thumbs" style="gap: 0.5rem;">
                                 @foreach($product->images as $index => $image)
                                   <img 
                                     src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}" 
@@ -69,7 +100,7 @@
                               </div>
 
                       {{-- Imagen principal y botones --}}
-                      <div class="position-relative" style="width: 25rem; height: 25rem;">
+                      <div class="position-relative product-main-image" style="width: 25rem; height: 25rem;">
                         <p class="text-info position-absolute top-0 end-0 m-2 d-flex flex-column align-items-end" style="gap: 0.5rem;">
                           <button class="btn btn-danger btn-sm" onclick="confirmRemoveImage(currentImageId)">Eliminar imagen</button>
                         </p>
@@ -121,7 +152,7 @@
                       </div>
                     </div>
                     <!-- Product details -->
-                    <div class="mx-4">
+                    <div class="mx-4 product-meta">
                       <!-- <div class="card-header">{{ $product->name }}</div> -->
                       <h2><strong>{{ $product->name }}</strong></h2>
                       <p><strong>Categoría:</strong> {{ $product->category->name }}</p>
@@ -265,7 +296,7 @@
             </div>
             <!-- Modal -->
             <div class="modal fade" id="editProductModal" tabindex="-1" role="dialog" aria-labelledby="editProductModalLabel" aria-hidden="true">
-              <div class="modal-dialog" role="document">
+              <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down" role="document">
                 <div class="modal-content">
                   <div class="modal-header d-flex justify-content-between">
                     <h5 class="modal-title" id="editProductModalLabel">Editar Producto</h5>

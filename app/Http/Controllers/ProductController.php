@@ -226,7 +226,7 @@ class ProductController extends Controller
 
                 if ($request->hasFile('images')) {
                     foreach ($request->file('images') as $image) {
-                        $path = ImageStorage::storeUploadedFile($image, 'products');
+                        $path = ImageStorage::storeUploadedImageAsWebp($image, 'products');
                         $storedImagePaths[] = $path;
 
                         ProductImage::create([
@@ -401,7 +401,7 @@ class ProductController extends Controller
         ]);
     
             // Guardar la imagen en el almacenamiento
-            $path = ImageStorage::storeUploadedFile($request->file('image'), 'products');
+            $path = ImageStorage::storeUploadedImageAsWebp($request->file('image'), 'products');
     
             // Asociar la imagen al producto
             ProductImage::create([

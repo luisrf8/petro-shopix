@@ -284,7 +284,7 @@ class TenantController extends Controller
             // 📂 Subir logo si existe
             $logoPath = null;
             if ($request->hasFile('logo')) {
-                $logoPath = ImageStorage::storeUploadedFile($request->file('logo'), 'tenants/logos');
+                $logoPath = ImageStorage::storeUploadedImageAsWebp($request->file('logo'), 'tenants/logos');
             }
 
             $tenantData = [
@@ -463,12 +463,12 @@ class TenantController extends Controller
         try {
             $logoPath = null;
             if ($request->hasFile('logo')) {
-                $logoPath = ImageStorage::storeUploadedFile($request->file('logo'), 'tenants/logos');
+                $logoPath = ImageStorage::storeUploadedImageAsWebp($request->file('logo'), 'tenants/logos');
             }
 
             $backgroundPath = null;
             if ($request->hasFile('background_image')) {
-                $backgroundPath = ImageStorage::storeUploadedFile($request->file('background_image'), 'tenants/backgrounds');
+                $backgroundPath = ImageStorage::storeUploadedImageAsWebp($request->file('background_image'), 'tenants/backgrounds');
             }
 
             $tenantData = [
@@ -881,7 +881,7 @@ class TenantController extends Controller
 
             // Manejar subida de logo
             if ($request->hasFile('logo')) {
-                $logoPath = ImageStorage::storeUploadedFile($request->file('logo'), 'tenants/logos');
+                $logoPath = ImageStorage::storeUploadedImageAsWebp($request->file('logo'), 'tenants/logos');
                 $tenant->logo = $logoPath;
             }
             // Manejar imagen de fondo
@@ -893,7 +893,7 @@ class TenantController extends Controller
                 }
 
                 // Guardar nueva imagen
-                $backgroundPath = ImageStorage::storeUploadedFile($request->file('background_image'), 'tenants/backgrounds');
+                $backgroundPath = ImageStorage::storeUploadedImageAsWebp($request->file('background_image'), 'tenants/backgrounds');
 
                 $tenant->background_image = $backgroundPath;
             }
