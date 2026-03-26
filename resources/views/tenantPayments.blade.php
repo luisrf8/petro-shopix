@@ -94,6 +94,13 @@
                           @endif
                           <form method="POST" action="{{ route('tenant.planPayment.approve', ['tenant' => $pending->tenant_id, 'payment' => $pending->id]) }}">
                             @csrf
+                            <label class="form-label text-xs mb-1">Fecha corte</label>
+                            <input
+                              type="datetime-local"
+                              name="expires_at"
+                              value="{{ now()->addDays((int) ($pending->plan->duration_days ?? 0))->format('Y-m-d\\TH:i') }}"
+                              class="form-control form-control-sm mb-2"
+                            >
                             <button type="submit" class="btn btn-success btn-sm mb-0">Aprobar</button>
                           </form>
                           <form method="POST" action="{{ route('tenant.planPayment.reject', ['tenant' => $pending->tenant_id, 'payment' => $pending->id]) }}">
@@ -163,7 +170,23 @@
                       <span class="badge {{ $statusClass }}">{{ $statusLabel }}</span>
                     </td>
                     <td>{{ optional($payment->paid_at)->format('d/m/Y H:i') ?? '-' }}</td>
-                    <td>{{ optional($resolvedCutoffDate)->format('d/m/Y H:i') ?? '-' }}</td>
+                    <td>
+                      @if($payment->status === 'paid')
+                        <form method="POST" action="{{ route('tenant.planPayment.cutoff.update', ['tenant' => $payment->tenant_id, 'payment' => $payment->id]) }}" class="d-flex align-items-center gap-2">
+                          @csrf
+                          <input
+                            type="datetime-local"
+                            name="expires_at"
+                            value="{{ optional($resolvedCutoffDate)->format('Y-m-d\\TH:i') }}"
+                            class="form-control form-control-sm"
+                            required
+                          >
+                          <button type="submit" class="btn btn-outline-dark btn-sm mb-0">Guardar</button>
+                        </form>
+                      @else
+                        {{ optional($resolvedCutoffDate)->format('d/m/Y H:i') ?? '-' }}
+                      @endif
+                    </td>
                     <td>{{ $payment->payment_reference ?? 'Sin referencia' }}</td>
                     <td>
                       @if(!empty($payment->payment_proof))

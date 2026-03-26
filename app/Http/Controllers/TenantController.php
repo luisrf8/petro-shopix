@@ -426,13 +426,20 @@ class TenantController extends Controller
             return back()->with('warning', 'Solo se pueden aprobar pagos pendientes.');
         }
 
+        $validated = $request->validate([
+            'review_notes' => 'nullable|string|max:1000',
+            'expires_at' => 'nullable|date',
+        ]);
+
         $plan = Plan::query()->findOrFail((int) $payment->plan_id);
         $approvedAt = now();
-        $expiresAt = $this->resolvePlanExpirationDate($tenant, $plan, $approvedAt);
+        $expiresAt = !empty($validated['expires_at'])
+            ? Carbon::parse($validated['expires_at'])
+            : $this->resolvePlanExpirationDate($tenant, $plan, $approvedAt);
 
         $payment->status = 'paid';
         $payment->paid_at = $approvedAt;
-        $payment->review_notes = $request->input('review_notes') ?: $payment->review_notes;
+        $payment->review_notes = $validated['review_notes'] ?? $payment->review_notes;
 
         if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
             $payment->expires_at = $expiresAt;
@@ -449,6 +456,39 @@ class TenantController extends Controller
         $payment->save();
 
         return back()->with('success', 'Pago de plan aprobado correctamente.');
+    }
+
+    public function updatePlanPaymentCutoffDate(Request $request, Tenant $tenant, TenantPlanPayment $payment)
+    {
+        if ((int) $payment->tenant_id !== (int) $tenant->id) {
+            abort(404);
+        }
+
+        if (!Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
+            return back()->with('warning', 'No existe la columna de fecha de corte para este entorno.');
+        }
+
+        if ($payment->status !== 'paid') {
+            return back()->with('warning', 'Solo puedes editar la fecha de corte de pagos aprobados.');
+        }
+
+        $validated = $request->validate([
+            'expires_at' => 'required|date',
+        ]);
+
+        $payment->expires_at = Carbon::parse($validated['expires_at']);
+
+        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_at')) {
+            $payment->reviewed_at = now();
+        }
+
+        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_by')) {
+            $payment->reviewed_by = auth()->id();
+        }
+
+        $payment->save();
+
+        return back()->with('success', 'Fecha de corte actualizada correctamente.');
     }
 
     public function rejectPlanPayment(Request $request, Tenant $tenant, TenantPlanPayment $payment)

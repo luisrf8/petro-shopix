@@ -128,6 +128,7 @@ Route::middleware(['auth', 'free.plan.access', 'basic.plan.access'])->group(func
     Route::post('/tenant-update', [TenantController::class, 'updateTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.update');
     Route::post('/tenant-store/plan-payment-request', [TenantController::class, 'submitPlanPaymentRequest'])->middleware('role.name:owner')->name('tenant.planPayment.request');
     Route::post('/tenants/{tenant}/plan-payments/{payment}/approve', [TenantController::class, 'approvePlanPayment'])->middleware('role.name:4')->name('tenant.planPayment.approve');
+    Route::post('/tenants/{tenant}/plan-payments/{payment}/cutoff', [TenantController::class, 'updatePlanPaymentCutoffDate'])->middleware('role.name:4')->name('tenant.planPayment.cutoff.update');
     Route::post('/tenants/{tenant}/plan-payments/{payment}/reject', [TenantController::class, 'rejectPlanPayment'])->middleware('role.name:4')->name('tenant.planPayment.reject');
     Route::resource('tenants', TenantController::class)->middleware('role.name:4');
 
