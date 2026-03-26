@@ -33,40 +33,6 @@
 
 @section('content')
     <div class="container-fluid py-2">
-      <div class="py-1 px-3 text-end" data-bs-toggle="modal" data-bs-target="#createCategoryModal">
-        <label class="admin-mobile-action-trigger">
-          + Agregar Categoría
-        </label>
-      </div>
-      <!-- Modal para crear categoría -->
-      <div class="modal fade" id="createCategoryModal" tabindex="-1" aria-labelledby="createCategoryModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title" id="createCategoryModalLabel">Crear Categoría</h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-              <!-- Formulario para crear el Categoría -->
-              <form id="createCategoryForm" enctype="multipart/form-data">
-                @csrf
-                <div class="mb-3">
-                  <label for="categoryName" class="form-label">Nombre</label>
-                  <input type="text" class="form-control border border-1 p-2" id="categoryName" name="name" required>
-                </div>
-                <div class="mb-3">
-                  <label for="categoryDescription" class="form-label">Descripción</label>
-                  <textarea class="form-control border border-1 p-2" id="categoryDescription" name="description" rows="3" required></textarea>
-                </div>
-                <div class="d-flex flex-row-reverse">
-                  <button type="submit" class="btn btn-info">Guardar</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- Modal para crear categoría -->
       <div class="row">
         <div class="col-lg-12">
           <!-- Buscador -->
