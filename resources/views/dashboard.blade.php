@@ -3,6 +3,43 @@
 @section('title', 'Shopix - Dashboard')
 
 @section('content')
+        <style>
+            .dashboard-toast-stack {
+                position: fixed;
+                top: 1rem;
+                right: 1rem;
+                z-index: 2060;
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .dashboard-toast {
+                min-width: 280px;
+                max-width: 420px;
+                border-radius: 10px;
+                color: #fff;
+                padding: 0.75rem 1rem;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+                opacity: 0;
+                transform: translateY(-6px);
+                transition: opacity 0.2s ease, transform 0.2s ease;
+            }
+
+            .dashboard-toast.show {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            .dashboard-toast.warning {
+                background: #7a4e00;
+            }
+
+            .dashboard-toast.error {
+                background: #842029;
+            }
+        </style>
+        <div id="dashboardToastContainer" class="dashboard-toast-stack"></div>
     <div class="container-fluid py-2">
       <div class="row">
         <div class="ms-3">
@@ -12,6 +49,22 @@
           </p>
         </div>
 
+                                @if(isset($currentPlanPayment) && $currentPlanPayment)
+                                <div class="col-12 mb-3">
+                                        @if(!is_null($currentPlanDaysRemaining) && $currentPlanDaysRemaining < 0)
+                                                <div class="alert alert-danger border mb-0" role="alert">
+                                                        Tu plan <strong>{{ $currentPlanPayment->plan->name ?? 'actual' }}</strong> está vencido hace {{ abs((int) $currentPlanDaysRemaining) }} días.
+                                                        Registra tu pago desde <a href="{{ route('tenant.store') }}" class="alert-link">Gestión de Tienda</a>.
+                                                </div>
+                                        @elseif(!is_null($currentPlanDaysRemaining) && $currentPlanDaysRemaining <= 7)
+                                                <div class="alert alert-warning border mb-0" role="alert">
+                                                        Tu plan <strong>{{ $currentPlanPayment->plan->name ?? 'actual' }}</strong> vence en {{ (int) $currentPlanDaysRemaining }} días.
+                                                        Puedes anticipar el pago desde <a href="{{ route('tenant.store') }}" class="alert-link">Gestión de Tienda</a>.
+                                                </div>
+                                        @endif
+                                </div>
+                                @endif
+
                 @if(!empty($tenantPublicUrl))
                 <div class="col-12 mb-3">
                     <div class="card">
@@ -19,8 +72,12 @@
                             <label class="form-label mb-2">URL pública de tu tienda</label>
                             <div class="input-group">
                                 <input type="text" class="form-control p-2 border border-radius-lg" id="dashboardStoreUrlInput" value="{{ $tenantPublicUrl }}" readonly>
-                                <a href="{{ $tenantPublicUrl }}" target="_blank" rel="noopener" class="btn btn-outline-dark">Abrir tienda</a>
-                                <button type="button" class="btn btn-outline-secondary" id="dashboardCopyStoreUrlBtn">Copiar enlace</button>
+                                <a href="{{ $tenantPublicUrl }}" target="_blank" rel="noopener" class="btn btn-outline-dark url-icon-action-btn" aria-label="Abrir tienda" title="Abrir tienda">
+                                    <i class="material-symbols-rounded">open_in_new</i>
+                                </a>
+                                <button type="button" class="btn btn-outline-secondary url-icon-action-btn" id="dashboardCopyStoreUrlBtn" aria-label="Copiar enlace" title="Copiar enlace" data-icon-default="content_copy">
+                                    <i class="material-symbols-rounded">content_copy</i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -246,6 +303,23 @@
         const topProductSales = @json($topProductSales); // [120, 90, 70, 50, 30]
         const dashboardStoreUrlInput = document.getElementById('dashboardStoreUrlInput');
         const dashboardCopyStoreUrlBtn = document.getElementById('dashboardCopyStoreUrlBtn');
+        const dashboardPlanDaysRemaining = {{ isset($currentPlanDaysRemaining) && !is_null($currentPlanDaysRemaining) ? (int) $currentPlanDaysRemaining : 'null' }};
+
+        const showDashboardToast = (message, type = 'warning') => {
+            const container = document.getElementById('dashboardToastContainer');
+            if (!container || !message) return;
+
+            const toast = document.createElement('div');
+            toast.className = `dashboard-toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add('show'));
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 220);
+            }, 3600);
+        };
 
         const copyText = async (text) => {
             if (navigator.clipboard?.writeText) {
@@ -268,13 +342,31 @@
 
         if (dashboardCopyStoreUrlBtn && dashboardStoreUrlInput) {
             dashboardCopyStoreUrlBtn.addEventListener('click', async () => {
-                const originalText = dashboardCopyStoreUrlBtn.textContent;
+                const icon = dashboardCopyStoreUrlBtn.querySelector('.material-symbols-rounded');
+                const defaultIcon = dashboardCopyStoreUrlBtn.dataset.iconDefault || 'content_copy';
                 const copied = await copyText(dashboardStoreUrlInput.value || '');
-                dashboardCopyStoreUrlBtn.textContent = copied ? 'Copiado' : 'Error';
+                if (icon) {
+                    icon.textContent = copied ? 'check' : 'error';
+                }
                 setTimeout(() => {
-                    dashboardCopyStoreUrlBtn.textContent = originalText;
+                    if (icon) {
+                        icon.textContent = defaultIcon;
+                    }
                 }, 1400);
             });
+        }
+
+        if (dashboardPlanDaysRemaining !== null) {
+            setTimeout(() => {
+                if (dashboardPlanDaysRemaining < 0) {
+                    showDashboardToast(`Tu plan está vencido hace ${Math.abs(dashboardPlanDaysRemaining)} días. Registra el pago en Gestión de Tienda.`, 'error');
+                    return;
+                }
+
+                if (dashboardPlanDaysRemaining <= 7) {
+                    showDashboardToast(`Tu plan vence en ${dashboardPlanDaysRemaining} días. Registra tu pago con anticipación en Gestión de Tienda.`, 'warning');
+                }
+            }, 250);
         }
 
         var ctx2 = document.getElementById("chart-line").getContext("2d");

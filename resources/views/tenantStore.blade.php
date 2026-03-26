@@ -145,15 +145,60 @@
 
 @php
     $authUser = auth()->user();
-    $canAssignStoreRoles = $authUser?->canAssignStoreRoles() ?? false;
+    $canAssignStoreRoles = ($authUser?->canAssignStoreRoles() ?? false) && !($isFreePlanTenant ?? false);
     $isOwnerRole = $authUser?->isOwner() ?? false;
     $tenantStoreUrl = $tenant->full_url ?? (url('/').'/'.$tenant->slug);
     $tenantBusinessType = \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'tienda'));
+    $currentPlanName = $currentPlanPayment?->plan?->name ?? 'Sin plan activo';
+    $currentPlanAmount = $currentPlanPayment?->amount;
+    $currentCutoffDate = optional($currentPlanCutoffDate)->format('d/m/Y H:i') ?? 'Sin fecha de corte';
+    $currentPlanDaysRemainingLabel = is_null($currentPlanDaysRemaining)
+        ? 'Sin vigencia registrada'
+        : ($currentPlanDaysRemaining < 0
+            ? 'Vencido hace '.abs((int) $currentPlanDaysRemaining).' días'
+            : ($currentPlanDaysRemaining === 0
+                ? 'Vence hoy'
+                : 'Faltan '.$currentPlanDaysRemaining.' días'));
 @endphp
 
 <div class="p-4 ">
     <div id="shopixToastContainer" class="shopix-toast-stack"></div>
     <h1 class="">Gestión de Tienda</h1>
+
+    @if(!is_null($currentPlanDaysRemaining))
+        @if($currentPlanDaysRemaining < 0)
+            <div class="alert alert-danger border" role="alert">
+                Tu plan está vencido ({{ $currentPlanDaysRemainingLabel }}). Registra y envía tu pago en la pestaña <strong>Plan y Pagos</strong> para reactivar el servicio.
+            </div>
+        @elseif($currentPlanDaysRemaining <= 7)
+            <div class="alert alert-warning border" role="alert">
+                Tu plan está próximo a vencer ({{ $currentPlanDaysRemainingLabel }}). Puedes cargar el pago desde <strong>Plan y Pagos</strong>.
+            </div>
+        @endif
+    @endif
+
+    @if($pendingPlanPayment)
+        <div class="alert alert-info border" role="alert">
+            Tienes una solicitud de pago pendiente de aprobación para el plan <strong>{{ $pendingPlanPayment->plan->name ?? 'N/A' }}</strong>.
+        </div>
+    @endif
+
+    @if($isBasicPlanTenant ?? false)
+        <div class="alert alert-warning border" role="alert">
+            <strong>Limitaciones del plan Básico:</strong>
+            <ul class="mb-0 mt-2 ps-3">
+                <li>Solo puedes tener un usuario administrador.</li>
+                <li>No puedes crear almacenes adicionales (solo el almacén central).</li>
+                <li>No puedes crear listas de materiales.</li>
+                <li>No tienes acceso al módulo de reportes.</li>
+            </ul>
+            <div class="mt-3">
+                <button type="button" class="btn btn-dark btn-sm mb-0" id="goToPlanPaymentsBtn">
+                    Subir de plan
+                </button>
+            </div>
+        </div>
+    @endif
 
     <div class="row">
         {{-- Columna izquierda --}}
@@ -181,12 +226,20 @@
                             </button>
                         </li>
 
-                        {{-- NUEVO: Usuarios de la tienda --}}
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">
-                                Usuarios
+                            <button class="nav-link" id="plan-tab" data-bs-toggle="tab" data-bs-target="#plan" type="button" role="tab">
+                                Plan y Pagos
                             </button>
                         </li>
+
+                        {{-- NUEVO: Usuarios de la tienda --}}
+                        @if(!($isFreePlanTenant ?? false))
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">
+                                    Usuarios
+                                </button>
+                            </li>
+                        @endif
                     </ul>
 
                     {{-- Formulario principal --}}
@@ -251,15 +304,20 @@
                                             href="{{ $tenantStoreUrl }}"
                                             target="_blank"
                                             rel="noopener"
-                                            class="btn btn-outline-dark"
-                                            id="openStoreUrlBtn">
-                                            Abrir tienda
+                                            class="btn btn-outline-dark url-icon-action-btn"
+                                            id="openStoreUrlBtn"
+                                            aria-label="Abrir tienda"
+                                            title="Abrir tienda">
+                                            <i class="material-symbols-rounded">open_in_new</i>
                                         </a>
                                         <button
                                             type="button"
-                                            class="btn btn-outline-secondary"
-                                            id="copyStoreUrlBtn">
-                                            Copiar enlace
+                                            class="btn btn-outline-secondary url-icon-action-btn"
+                                            id="copyStoreUrlBtn"
+                                            aria-label="Copiar enlace"
+                                            title="Copiar enlace"
+                                            data-icon-default="content_copy">
+                                            <i class="material-symbols-rounded">content_copy</i>
                                         </button>
                                     </div>
                                 </div>
@@ -423,7 +481,62 @@
                                 </div>
                             </div>
 
-                            {{-- TAB 4: Usuarios --}}
+                            {{-- TAB 4: Plan y pagos --}}
+                            <div class="tab-pane fade" id="plan" role="tabpanel">
+                                <h5 class="mt-2">Plan actual y fecha de corte</h5>
+                                <div class="alert alert-light border mb-3">
+                                    <p class="mb-1"><strong>Plan actual:</strong> {{ $currentPlanName }}</p>
+                                    <p class="mb-1"><strong>Monto:</strong> {{ is_null($currentPlanAmount) ? 'N/A' : '$'.number_format((float) $currentPlanAmount, 2) }}</p>
+                                    <p class="mb-0"><strong>Fecha de corte:</strong> {{ $currentCutoffDate }}</p>
+                                </div>
+
+                                @if($pendingPlanPayment)
+                                    <div class="alert alert-warning border mb-3">
+                                        Tienes una solicitud pendiente para el plan <strong>{{ $pendingPlanPayment->plan->name ?? 'N/A' }}</strong>.
+                                        Estado: pendiente de aprobación administrativa.
+                                    </div>
+                                @endif
+
+                                <h6 class="mb-3">Solicitar cambio/renovación de plan</h6>
+                                <div class="mb-3">
+                                    <label for="plan_request_plan_id" class="form-label">Plan a solicitar</label>
+                                    <select id="plan_request_plan_id" class="form-control form-control-lg border border-radius-lg p-2">
+                                        <option value="">Selecciona un plan</option>
+                                        @foreach($plans as $plan)
+                                            <option value="{{ $plan->id }}" data-price="{{ (float) ($plan->price ?? 0) }}">
+                                                {{ $plan->name }} - ${{ number_format((float) ($plan->price ?? 0), 2) }} - {{ (int) ($plan->duration_days ?? 0) }} días
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    <small class="text-muted d-block mt-1">Si el plan no es gratuito, debes cargar referencia y comprobante.</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="plan_request_reference" class="form-label">Referencia de pago</label>
+                                    <input type="text" id="plan_request_reference" class="form-control p-2 border border-radius-lg" placeholder="Ej: TRX-123456789">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="plan_request_proof" class="form-label">Comprobante de pago</label>
+                                    <input type="file" id="plan_request_proof" class="form-control form-control-lg border border-radius-lg" accept=".png,.jpg,.jpeg,.webp">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="plan_request_notes" class="form-label">Notas (opcional)</label>
+                                    <textarea id="plan_request_notes" rows="3" class="form-control p-2 border border-radius-lg" placeholder="Comentario para administración"></textarea>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    id="submitPlanPaymentBtn"
+                                    class="btn btn-sm btn-dark text-white"
+                                    @if($pendingPlanPayment) disabled @endif>
+                                    Enviar solicitud de pago
+                                </button>
+                            </div>
+
+                            {{-- TAB 5: Usuarios --}}
+                            @if(!($isFreePlanTenant ?? false))
                             <div class="tab-pane fade" id="users" role="tabpanel">
                                 <h5 class="mt-2">Usuarios de la tienda</h5>
                                 <div class="accordion mb-4" id="rolesAccordion">
@@ -457,6 +570,11 @@
                                             Como admin puedes crear usuarios operativos y asignar roles de vendedor y almacenista. La asignacion de admin queda reservada al owner.
                                         @endif
                                     </div>
+                                    @if($isBasicPlanTenant ?? false)
+                                        <div class="alert alert-warning border mb-4">
+                                            En plan Básico solo puedes tener un owner y un admin. Solo se permite crear un usuario admin si aún no existe.
+                                        </div>
+                                    @endif
                                 @else
                                     <div class="alert alert-warning border mb-4">
                                         Tu rol no tiene permisos para crear usuarios ni asignar roles desde esta pantalla.
@@ -513,6 +631,7 @@
                                     </div>
                                 @endif
                             </div>
+                            @endif
                         </div>
 
                         <button type="submit" class="btn btn-sm btn-dark text-white w-100 mt-3">Guardar Cambios</button>
@@ -1138,6 +1257,15 @@ function initMap() {
     const baseStoreUrl = "{{ rtrim(url('/'), '/') }}";
     const businessTypeSelect = document.getElementById('business_type');
     const economicActivitySelect = document.getElementById('economic_activity');
+    const submitPlanPaymentBtn = document.getElementById('submitPlanPaymentBtn');
+    const goToPlanPaymentsBtn = document.getElementById('goToPlanPaymentsBtn');
+    const planRequestPlanInput = document.getElementById('plan_request_plan_id');
+    const planRequestReferenceInput = document.getElementById('plan_request_reference');
+    const planRequestProofInput = document.getElementById('plan_request_proof');
+    const planRequestNotesInput = document.getElementById('plan_request_notes');
+    const tenantPlanPaymentRequestEndpoint = "{{ route('tenant.planPayment.request') }}";
+    const tenantPlanDaysRemaining = {{ is_null($currentPlanDaysRemaining) ? 'null' : (int) $currentPlanDaysRemaining }};
+    const tenantHasPendingPlanPayment = {{ $pendingPlanPayment ? 'true' : 'false' }};
 
     const businessCatalog = {
         tienda: [
@@ -1252,14 +1380,117 @@ function initMap() {
 
     if (copyStoreUrlBtn && storePublicUrlInput) {
         copyStoreUrlBtn.addEventListener('click', async () => {
-            const originalText = copyStoreUrlBtn.textContent;
+            const icon = copyStoreUrlBtn.querySelector('.material-symbols-rounded');
+            const defaultIcon = copyStoreUrlBtn.dataset.iconDefault || 'content_copy';
             const copied = await copyText(storePublicUrlInput.value || '');
-            copyStoreUrlBtn.textContent = copied ? 'Copiado' : 'Error';
+            if (icon) {
+                icon.textContent = copied ? 'check' : 'error';
+            }
             setTimeout(() => {
-                copyStoreUrlBtn.textContent = originalText;
+                if (icon) {
+                    icon.textContent = defaultIcon;
+                }
             }, 1400);
         });
     }
+
+    if (submitPlanPaymentBtn) {
+        submitPlanPaymentBtn.addEventListener('click', async () => {
+            const selectedPlanOption = planRequestPlanInput?.selectedOptions?.[0] || null;
+            const selectedPlanId = planRequestPlanInput?.value || '';
+            const selectedPlanPrice = Number(selectedPlanOption?.dataset?.price || 0);
+            const isFreePlan = selectedPlanPrice <= 0;
+
+            if (!selectedPlanId) {
+                showTenantToast('Selecciona un plan antes de enviar la solicitud.', 'warning');
+                return;
+            }
+
+            if (!isFreePlan && !(planRequestReferenceInput?.value || '').trim()) {
+                showTenantToast('Debes ingresar una referencia de pago para ese plan.', 'warning');
+                return;
+            }
+
+            if (!isFreePlan && !planRequestProofInput?.files?.length) {
+                showTenantToast('Debes adjuntar un comprobante de pago para ese plan.', 'warning');
+                return;
+            }
+
+            setTenantSubmitLoading(submitPlanPaymentBtn, true, 'Enviando...');
+
+            try {
+                const requestData = new FormData();
+                requestData.append('plan_id', selectedPlanId);
+                requestData.append('payment_reference', (planRequestReferenceInput?.value || '').trim());
+                requestData.append('notes', (planRequestNotesInput?.value || '').trim());
+
+                if (planRequestProofInput?.files?.[0]) {
+                    requestData.append('payment_proof', planRequestProofInput.files[0]);
+                }
+
+                const response = await fetch(tenantPlanPaymentRequestEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                        'Accept': 'application/json'
+                    },
+                    body: requestData,
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (response.ok) {
+                    showTenantToast(data.message || 'Solicitud enviada correctamente.', 'success');
+                    setTimeout(() => window.location.reload(), 800);
+                    return;
+                }
+
+                const firstError = Object.values(data.errors || {}).flat()?.[0];
+                showTenantToast(firstError || data.message || 'No se pudo enviar la solicitud.', 'error');
+            } catch (error) {
+                showTenantToast('No se pudo conectar para enviar la solicitud.', 'error');
+            } finally {
+                setTenantSubmitLoading(submitPlanPaymentBtn, false);
+            }
+        });
+    }
+
+    if (goToPlanPaymentsBtn) {
+        goToPlanPaymentsBtn.addEventListener('click', () => {
+            const planTabTrigger = document.getElementById('plan-tab');
+            if (!planTabTrigger) {
+                return;
+            }
+
+            const tabInstance = bootstrap.Tab.getOrCreateInstance(planTabTrigger);
+            tabInstance.show();
+
+            setTimeout(() => {
+                document.getElementById('plan_request_plan_id')?.focus();
+            }, 220);
+        });
+    }
+
+    setTimeout(() => {
+        if (tenantHasPendingPlanPayment) {
+            showTenantToast('Tienes un pago de plan pendiente de aprobación por administración.', 'info');
+            return;
+        }
+
+        if (tenantPlanDaysRemaining === null) {
+            return;
+        }
+
+        if (tenantPlanDaysRemaining < 0) {
+            showTenantToast(`Tu plan está vencido desde hace ${Math.abs(tenantPlanDaysRemaining)} días.`, 'error');
+            return;
+        }
+
+        if (tenantPlanDaysRemaining <= 7) {
+            const dayLabel = tenantPlanDaysRemaining === 1 ? 'día' : 'días';
+            showTenantToast(`Tu plan vence en ${tenantPlanDaysRemaining} ${dayLabel}. Registra el pago para evitar cortes.`, 'warning');
+        }
+    }, 380);
 
     // Vista previa del logo
     logoInput.addEventListener('change', async (event) => {

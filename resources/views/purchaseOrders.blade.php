@@ -10,11 +10,11 @@
               <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
                 <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
                   <h6 class="text-white text-capitalize ps-3">ORDENES DE COMPRA REALIZADAS</h6>
-                  <div class="py-1 px-3 text-end" data-bs-toggle="modal" data-bs-target="#reportModal">
-                    <label class="text-white">
+                  <div class="py-1 px-3 text-end admin-mobile-actions" data-bs-toggle="modal" data-bs-target="#reportModal">
+                    <label class="text-white admin-mobile-action-trigger">
                       + Generar Reporte
                     </label>
-                    <a class="text-white ms-6" href="/purchase">
+                    <a class="text-white ms-6 admin-mobile-action-trigger" href="/purchase">
                       + Generar Compra
                     </a>
                   </div>
@@ -50,7 +50,7 @@
                           <td>{{ $order->total_items }}</td>
                           <td>{{ number_format($order->total_amount, 2) }}</td>
                           <td>
-                            <a href="/order/{{ $order->id }}" class="text-secondary font-weight-bold text-xs toggle-status-btn">Ver Detalles</a>
+                            <a href="/order/{{ $order->id }}" class="text-secondary font-weight-bold text-xs toggle-status-btn admin-mobile-action-trigger">Ver Detalles</a>
                           </td>
                         </tr>
                       @endforeach

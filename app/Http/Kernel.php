@@ -65,6 +65,8 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'role' => \App\Http\Middleware\CheckRole::class,
         'role.name' => \App\Http\Middleware\EnsureRoleName::class,
+        'free.plan.access' => \App\Http\Middleware\RestrictFreePlanAccess::class,
+        'basic.plan.access' => \App\Http\Middleware\RestrictBasicPlanAccess::class,
         'verify.access.token' => \App\Http\Middleware\VerifyAccessToken::class,
         // 'auth.jwt' => \Tymon\JWTAuth\Middleware\Authenticate::class,
         'auth.jwt' => \Tymon\JWTAuth\Http\Middleware\Authenticate::class,

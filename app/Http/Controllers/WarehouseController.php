@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
+use App\Models\TenantPlanPayment;
 
 class WarehouseController extends Controller
 {
@@ -53,13 +55,19 @@ class WarehouseController extends Controller
             ->get();
 
         $movementTypes = WarehouseMovement::typeOptions();
+        $isBasicPlanTenant = $this->isBasicPlanTenant((int) $user->tenant_id);
 
-        return view('warehouses', compact('warehouses', 'products', 'stocks', 'variants', 'movements', 'movementTypes'));
+        return view('warehouses', compact('warehouses', 'products', 'stocks', 'variants', 'movements', 'movementTypes', 'isBasicPlanTenant'));
     }
 
     public function store(Request $request): RedirectResponse
     {
         $user = auth()->user();
+
+        if ($this->isBasicPlanTenant((int) $user->tenant_id)) {
+            return redirect()->route('warehouses.index')
+                ->with('warning', 'El plan Básico no permite crear almacenes adicionales.');
+        }
 
         $validated = $request->validate([
             'name' => [
@@ -88,6 +96,20 @@ class WarehouseController extends Controller
         });
 
         return redirect()->route('warehouses.index')->with('success', 'Almacén creado correctamente.');
+    }
+
+    private function isBasicPlanTenant(int $tenantId): bool
+    {
+        $latestPaid = TenantPlanPayment::with('plan')
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'paid')
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $planName = Str::lower(Str::ascii((string) ($latestPaid?->plan?->name ?? '')));
+
+        return Str::contains($planName, ['basico', 'basic']);
     }
 
     public function update(Request $request, Warehouse $warehouse): RedirectResponse

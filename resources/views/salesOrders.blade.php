@@ -9,14 +9,18 @@
             <div class="card">
               <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
                 <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
-                  <h6 class="text-white text-capitalize ps-3">VENTAS REALIZADAS</h6>
-                  <div class="py-1 px-3 text-end">
-                    <label class="text-white"  data-bs-toggle="modal" data-bs-target="#reportModal">
-                      + Generar Reporte
-                    </label>
-                    <a class="text-white ms-6" href="/sales">
-                      + Generar Venta
-                    </a>
+                  <h6 class="text-white text-capitalize ps-3">{{ $pageTitle ?? 'VENTAS REALIZADAS' }}</h6>
+                  <div class="py-1 px-3 text-end admin-mobile-actions">
+                    @if(!($isPendingDeliveryView ?? false) && ($canApprovePayments ?? true))
+                      <label class="text-white admin-mobile-action-trigger"  data-bs-toggle="modal" data-bs-target="#reportModal">
+                        + Generar Reporte
+                      </label>
+                    @endif
+                    @if(!($isPendingDeliveryView ?? false) && (($canApprovePayments ?? false) || ($canDeliverOrders ?? false)))
+                      <a class="text-white ms-6 admin-mobile-action-trigger" href="/sales">
+                        + Generar Venta
+                      </a>
+                    @endif
                   </div>
                 </div>
               </div> 
@@ -64,7 +68,7 @@
                             @endif
                           </td>
                           <td>
-                            <a href="/sales/{{ $order->id }}" class="text-secondary font-weight-bold text-xs toggle-status-btn">Ver Detalles</a>
+                            <a href="/sales/{{ $order->id }}" class="text-secondary font-weight-bold text-xs toggle-status-btn admin-mobile-action-trigger">Ver Detalles</a>
                           </td>
                         </tr>
                       @endforeach
@@ -77,6 +81,7 @@
       </div>
     </div>
 
+@if(!($isPendingDeliveryView ?? false) && ($canApprovePayments ?? true))
 <!-- Modal para generar reporte -->
 <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -106,6 +111,7 @@
         </div>
     </div>
 </div>
+@endif
     @endsection
 
 @push('scripts')
@@ -117,7 +123,7 @@
 
 <!-- Control Center for Material Dashboard: parallax effects, scripts for the example pages etc -->
   <script>
-    document.getElementById('createProductForm').addEventListener('submit', function(event) {
+    document.getElementById('createProductForm')?.addEventListener('submit', function(event) {
       event.preventDefault(); // Evita el envío normal del formulario
 
       let formData = new FormData(this); // Crear un FormData con los datos del formulario
@@ -146,6 +152,9 @@
     });
     
     function getReport() {
+        if (!document.getElementById('reportModal')) {
+          return;
+        }
         event.preventDefault();
         const range = document.getElementById('range').value;
         fetch('api/sales-orders-report', {
@@ -178,7 +187,7 @@
         });
     }
 
-    document.getElementById('createCategoryForm').addEventListener('submit', function(event) {
+    document.getElementById('createCategoryForm')?.addEventListener('submit', function(event) {
       event.preventDefault(); // Evita el envío normal del formulario
 
       let formData = new FormData(this); // Crear un FormData con los datos del formulario

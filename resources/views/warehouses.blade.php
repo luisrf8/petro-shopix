@@ -2,8 +2,58 @@
 
 @section('title', 'Almacenes')
 
+@push('styles')
+<style>
+  .warehouse-management .warehouse-table th,
+  .warehouse-management .warehouse-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  @media (max-width: 768px) {
+    .warehouse-management {
+      padding-left: 0.35rem;
+      padding-right: 0.35rem;
+    }
+
+    .warehouse-management .card-header {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 0.5rem;
+    }
+
+    .warehouse-management .card-header h5,
+    .warehouse-management .card-header h6 {
+      line-height: 1.25;
+    }
+
+    .warehouse-management .form-check {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      min-height: 40px;
+    }
+
+    .warehouse-management .table-responsive {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .warehouse-management .warehouse-table {
+      min-width: 760px;
+    }
+
+    .warehouse-management .warehouse-table th,
+    .warehouse-management .warehouse-table td {
+      font-size: 0.74rem;
+      padding: 0.5rem 0.45rem;
+    }
+  }
+</style>
+@endpush
+
 @section('content')
-<div class="container-fluid py-2">
+<div class="container-fluid py-2 warehouse-management">
   <div class="row mt-4 g-4">
     <div class="col-12">
       <div class="card mb-0">
@@ -26,6 +76,9 @@
             <div class="col-12 col-xl-5">
               <div class="border rounded-3 p-3 h-100 bg-white">
                 <h6 class="mb-3">Registrar almacén</h6>
+                @if($isBasicPlanTenant ?? false)
+                  <div class="alert alert-warning mb-0">El plan Básico no permite crear almacenes adicionales. Solo está disponible el almacén central.</div>
+                @else
                 <form method="POST" action="{{ route('warehouses.store') }}" class="row g-3">
                   @csrf
                   <div class="col-12">
@@ -50,6 +103,7 @@
                     <button type="submit" class="btn btn-dark mb-0 w-100">Crear almacén</button>
                   </div>
                 </form>
+                @endif
               </div>
             </div>
 
@@ -128,7 +182,7 @@
         </div>
         <div class="card-body p-3">
           <div class="table-responsive">
-            <table class="table align-items-center mb-0">
+            <table class="table align-items-center mb-0 warehouse-table">
               <thead>
                 <tr>
                   <th>Nombre</th>
@@ -186,7 +240,7 @@
         </div>
         <div class="card-body p-3">
           <div class="table-responsive">
-            <table class="table table-bordered align-items-center mb-0">
+            <table class="table table-bordered align-items-center mb-0 warehouse-table">
               <thead>
                 <tr>
                   <th>Fecha</th>
@@ -297,7 +351,7 @@
         </div>
         <div class="card-body p-3">
           <div class="table-responsive">
-            <table class="table table-bordered align-items-center mb-0">
+            <table class="table table-bordered align-items-center mb-0 warehouse-table">
               <thead>
                 <tr>
                   <th>Producto</th>

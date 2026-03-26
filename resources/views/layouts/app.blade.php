@@ -83,9 +83,163 @@
         border-radius: 8px;
       }
 
+      .admin-mobile-search {
+        width: 100%;
+        max-width: 320px;
+      }
+
+      .admin-mobile-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+      }
+
+      .admin-mobile-action-trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(52, 71, 103, 0.25);
+        border-radius: 0.5rem;
+        min-height: 38px;
+        padding: 0.4rem 0.75rem;
+        line-height: 1.2;
+        text-align: center;
+        white-space: normal;
+      }
+
+      .admin-mobile-action-trigger.text-white {
+        border-color: rgba(255, 255, 255, 0.45);
+      }
+
+      .url-icon-action-btn {
+        width: 42px;
+        min-width: 42px;
+        height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+      }
+
+      .url-icon-action-btn .material-symbols-rounded {
+        font-size: 20px;
+        line-height: 1;
+      }
+
+      .url-icon-action-btn.url-icon-action-btn-sm {
+        width: 32px;
+        min-width: 32px;
+        height: 32px;
+      }
+
+      .url-icon-action-btn.url-icon-action-btn-sm .material-symbols-rounded {
+        font-size: 18px;
+      }
+
+      input[type="checkbox"],
+      input[type="radio"] {
+        accent-color: #6c757d;
+      }
+
+      .form-check-input:checked {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+      }
+
+      .form-check-input:focus {
+        border-color: #6c757d !important;
+        box-shadow: 0 0 0 0.15rem rgba(108, 117, 125, 0.25) !important;
+      }
+
       @media (max-width: 768px) {
         .module-wizard-tooltip {
           width: calc(100vw - 1rem);
+        }
+
+        .main-content .card-header .bg-gradient-dark {
+          flex-wrap: wrap;
+          gap: 0.5rem;
+          align-items: flex-start !important;
+        }
+
+        .main-content .card-header .text-end {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: stretch !important;
+          gap: 0.45rem;
+          padding-top: 0.25rem;
+        }
+
+        .main-content .card-header .text-end .ms-6 {
+          margin-left: 0 !important;
+        }
+
+        .admin-mobile-actions {
+          width: 100%;
+          justify-content: stretch;
+        }
+
+        .admin-mobile-actions > * {
+          flex: 1 1 calc(50% - 0.6rem);
+          min-width: 140px;
+        }
+
+        .admin-mobile-search {
+          max-width: 100%;
+        }
+
+        .admin-mobile-action-trigger {
+          width: 100%;
+          min-height: 40px;
+        }
+
+        .main-content .card-header .text-end > label.text-white,
+        .main-content .card-header .text-end > a.text-white,
+        .main-content .card-header [data-bs-toggle="modal"] > label.text-white,
+        .main-content .card-header .py-1.px-3.text-end[data-bs-toggle="modal"] > label.text-white {
+          display: inline-flex;
+          width: 100%;
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+          white-space: normal;
+          line-height: 1.25;
+          padding: 0.45rem 0.7rem;
+          border: 1px solid rgba(255, 255, 255, 0.45);
+          border-radius: 0.5rem;
+          cursor: pointer;
+        }
+
+        .main-content .card .table-responsive {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .main-content .card .table-responsive table {
+          min-width: 640px;
+        }
+
+        .main-content .card .table th,
+        .main-content .card .table td {
+          font-size: 0.72rem;
+          padding: 0.55rem 0.45rem;
+          vertical-align: middle;
+        }
+
+        .main-content a.btn-edit-user,
+        .main-content a.toggle-status-btn,
+        .main-content button.toggle-status-btn,
+        .main-content .toggle-status-btn {
+          display: inline-flex !important;
+          align-items: center;
+          justify-content: center;
+          white-space: nowrap;
+          line-height: 1.2;
+          padding: 0.35rem 0.55rem;
+          border: 1px solid currentColor;
+          border-radius: 0.45rem;
+          min-height: 30px;
         }
       }
     </style>
@@ -113,6 +267,18 @@
       </aside>
     <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg ">
     @include('layouts.head')
+
+        <div class="container-fluid pt-2">
+          @if(session('warning'))
+            <div class="alert alert-warning text-dark" role="alert">{{ session('warning') }}</div>
+          @endif
+          @if(session('success'))
+            <div class="alert alert-success text-white" role="alert">{{ session('success') }}</div>
+          @endif
+          @if(session('error'))
+            <div class="alert alert-danger text-white" role="alert">{{ session('error') }}</div>
+          @endif
+        </div>
 
         @yield('content')
     </main>

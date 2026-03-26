@@ -45,6 +45,22 @@
       padding: 0.35rem 0.55rem;
     }
 
+    .landing-header .navbar-collapse.show {
+      margin-top: 0.65rem;
+      padding: 0.65rem;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(15, 23, 42, 0.9);
+      box-shadow: 0 14px 32px rgba(2, 6, 23, 0.32);
+      backdrop-filter: blur(10px);
+    }
+
+    .landing-header .navbar-collapse.show .landing-nav-link {
+      background: rgba(255, 255, 255, 0.95) !important;
+      color: #0f172a !important;
+      border-color: rgba(148, 163, 184, 0.45);
+    }
+
     .landing-nav-link {
       font-weight: 600;
       padding: 0.4rem 0.75rem;
@@ -309,6 +325,10 @@
     @media (max-width: 991.98px) {
       .landing-header {
         background: transparent;
+      }
+
+      .landing-header .navbar-collapse {
+        transition: all 0.2s ease;
       }
 
       .navbar-nav {
@@ -592,7 +612,7 @@
   <section id="contacto" class="py-5 section-soft">
     <div class="container">
       <div class="row align-items-center">
-        <div class="col-12 col-md-6 mb-4 mb-md-0">
+        <div class="col-12 mb-4 mb-md-0">
           <div class="contact-card">
             <h2 class="section-title mb-3">Contáctanos</h2>
             <p class="mb-3">Obtén una demo personalizada o consulta nuestros planes.</p>
@@ -600,23 +620,12 @@
               <a href="https://api.whatsapp.com/send?phone=584148859372" target="_blank" class="contact-btn contact-btn-primary">
                 <i class="bi bi-whatsapp"></i> Escríbenos por WhatsApp
               </a>
-              <a href="https://www.google.com/maps?q=9.7527562,-63.1679763" target="_blank" rel="noopener noreferrer" class="contact-btn contact-btn-secondary">
-                <i class="bi bi-geo-alt"></i> Ver ubicación en Google Maps
-              </a>
             </div>
             <div class="mt-4 d-flex gap-4">
               <a href="https://www.instagram.com/infinitycenter.ca/" target="_blank" class="text-dark fs-4"><i class="bi bi-instagram"></i></a>
               <a href="https://facebook.com" target="_blank" class="text-dark fs-4"><i class="bi bi-facebook"></i></a>
               <a href="https://t.me" target="_blank" class="text-dark fs-4"><i class="bi bi-telegram"></i></a>
             </div>
-          </div>
-        </div>
-        <div class="col-12 col-md-6">
-          <div class="rounded-4 overflow-hidden shadow" style="height: 320px; border: 1px solid var(--line-soft);">
-            <iframe
-              src="https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d62734.306809791316!2d-63.1679763!3d9.7527562!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1ses!2sve!4v1700000000000"
-              width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"
-              referrerpolicy="no-referrer-when-downgrade"></iframe>
           </div>
         </div>
       </div>

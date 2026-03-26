@@ -154,7 +154,26 @@ class TenantController extends Controller
     public function index()
     {
         // Trae todos los tenants con todos sus planes asociados
-        $tenants = Tenant::with(['tenantPlanPayments.plan', 'users.role'])->get();
+        $tenants = Tenant::with(['tenantPlanPayments.plan', 'tenantPlanPayments.reviewer', 'users.role'])->get();
+
+        $tenantsWithDueData = $tenants->map(function (Tenant $tenant) {
+            $latestPaid = $this->getTenantLatestPaidPlanPayment($tenant);
+            $daysRemaining = $this->calculatePlanDaysRemaining($latestPaid);
+            $tenant->latest_paid_plan_payment = $latestPaid;
+            $tenant->plan_days_remaining = $daysRemaining;
+
+            return $tenant;
+        });
+
+        $nearDueTenants = $tenantsWithDueData
+            ->filter(fn (Tenant $tenant) => is_int($tenant->plan_days_remaining) && $tenant->plan_days_remaining >= 0 && $tenant->plan_days_remaining <= 7)
+            ->sortBy('plan_days_remaining')
+            ->values();
+
+        $overdueTenants = $tenantsWithDueData
+            ->filter(fn (Tenant $tenant) => is_int($tenant->plan_days_remaining) && $tenant->plan_days_remaining < 0)
+            ->sortBy('plan_days_remaining')
+            ->values();
 
 
         // O solo el plan activo de cada tenant
@@ -162,13 +181,50 @@ class TenantController extends Controller
 
         $plans = Plan::all();
 
-        return view('tenant', compact('tenants', 'plans'));
+        return view('tenant', compact('tenants', 'plans', 'nearDueTenants', 'overdueTenants'));
+    }
+
+    public function paymentsIndex()
+    {
+        $tenants = Tenant::with(['tenantPlanPayments.plan', 'tenantPlanPayments.reviewer', 'users.role'])->get();
+
+        $payments = TenantPlanPayment::with(['tenant', 'plan', 'reviewer'])
+            ->orderByDesc('created_at')
+            ->get();
+
+        $pendingPayments = $payments->where('status', 'pending')->values();
+
+        $tenantsWithDueData = $tenants->map(function (Tenant $tenant) {
+            $latestPaid = $this->getTenantLatestPaidPlanPayment($tenant);
+            $daysRemaining = $this->calculatePlanDaysRemaining($latestPaid);
+            $tenant->latest_paid_plan_payment = $latestPaid;
+            $tenant->plan_days_remaining = $daysRemaining;
+
+            return $tenant;
+        });
+
+        $nearDueTenants = $tenantsWithDueData
+            ->filter(fn (Tenant $tenant) => is_int($tenant->plan_days_remaining) && $tenant->plan_days_remaining >= 0 && $tenant->plan_days_remaining <= 7)
+            ->sortBy('plan_days_remaining')
+            ->values();
+
+        $overdueTenants = $tenantsWithDueData
+            ->filter(fn (Tenant $tenant) => is_int($tenant->plan_days_remaining) && $tenant->plan_days_remaining < 0)
+            ->sortBy('plan_days_remaining')
+            ->values();
+
+        return view('tenantPayments', compact('payments', 'pendingPayments', 'nearDueTenants', 'overdueTenants'));
     }
     
     public function getTenant()
     {
         $user = auth()->user();
-        $tenant = Tenant::with(['users.role'])->where('id', $user->tenant_id)->first();
+        $tenant = Tenant::with(['users.role', 'tenantPlanPayments.plan'])
+            ->where('id', $user->tenant_id)
+            ->first();
+        $currentPlanPayment = $this->getTenantLatestPaidPlanPayment($tenant);
+        $isBasicPlanTenant = $this->isBasicPlanTenant($tenant);
+        $isFreePlanTenant = (float) ($currentPlanPayment?->plan?->price ?? -1) <= 0;
         $assignableRoleKeys = $user?->assignableStoreRoleKeys() ?? [];
         $roles = Role::whereNotIn('name', ['owner', 'user', 'super_user'])
             ->get()
@@ -176,11 +232,253 @@ class TenantController extends Controller
                 return in_array(User::canonicalRoleName($role->name), $assignableRoleKeys, true);
             })
             ->values();
+
+        $ownerRoleIds = $this->resolveOwnerRoleIds();
+        $adminRoleIds = $this->resolveAdminRoleIds();
+        $ownerCount = $tenant->users->whereIn('role_id', $ownerRoleIds)->count();
+        $adminCount = $tenant->users->whereIn('role_id', $adminRoleIds)->count();
+
+        if ($isBasicPlanTenant) {
+            $roles = $roles->filter(function (Role $role) use ($adminRoleIds, $adminCount) {
+                if (!in_array((int) $role->id, $adminRoleIds, true)) {
+                    return false;
+                }
+
+                return $adminCount < 1;
+            })->values();
+        }
+        $plans = Plan::query()->where('status', 0)->orderBy('price')->get();
+        $currentPlanCutoffDate = $this->resolvePaymentCutoffDate($currentPlanPayment);
+        $currentPlanDaysRemaining = $this->calculatePlanDaysRemaining($currentPlanPayment);
+        $pendingPlanPayment = $tenant->tenantPlanPayments()
+            ->with('plan')
+            ->where('status', 'pending')
+            ->latest('created_at')
+            ->first();
         $roleDefinitions = User::storeRoleDefinitions();
         $countries = Country::all();
         $states = State::all();
         $cities = City::all();
-        return view('tenantStore', compact('tenant', 'roles', 'countries', 'states', 'cities', 'roleDefinitions', 'assignableRoleKeys'));
+        return view('tenantStore', compact(
+            'tenant',
+            'roles',
+            'countries',
+            'states',
+            'cities',
+            'roleDefinitions',
+            'assignableRoleKeys',
+            'plans',
+            'currentPlanPayment',
+            'currentPlanCutoffDate',
+            'currentPlanDaysRemaining',
+            'pendingPlanPayment',
+            'isFreePlanTenant',
+            'isBasicPlanTenant',
+            'ownerCount',
+            'adminCount'
+        ));
+    }
+
+    public function submitPlanPaymentRequest(Request $request)
+    {
+        $user = auth()->user();
+        $tenant = Tenant::query()->findOrFail($user->tenant_id);
+
+        $validated = $request->validate([
+            'plan_id' => 'required|exists:plans,id',
+            'payment_reference' => 'nullable|string|max:255',
+            'payment_proof' => 'nullable|image|mimes:png,jpg,jpeg,webp|max:4096',
+            'notes' => 'nullable|string|max:1000',
+        ]);
+
+        $plan = Plan::query()->findOrFail((int) $validated['plan_id']);
+        $hasPendingRequest = $tenant->tenantPlanPayments()->where('status', 'pending')->exists();
+
+        if ($hasPendingRequest) {
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ya tienes una solicitud de pago pendiente por revisar.',
+                ], 422);
+            }
+
+            return back()->with('warning', 'Ya tienes una solicitud de pago pendiente por revisar.');
+        }
+
+        $isFreePlan = $this->isFreePlan($plan);
+
+        if (!$isFreePlan && empty(trim((string) ($validated['payment_reference'] ?? '')))) {
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => [
+                        'payment_reference' => ['Debes ingresar una referencia de pago para planes de pago.'],
+                    ],
+                ], 422);
+            }
+
+            return back()->withErrors([
+                'payment_reference' => 'Debes ingresar una referencia de pago para planes de pago.',
+            ])->withInput();
+        }
+
+        if (!$isFreePlan && !$request->hasFile('payment_proof')) {
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'errors' => [
+                        'payment_proof' => ['Debes subir un comprobante de pago para planes de pago.'],
+                    ],
+                ], 422);
+            }
+
+            return back()->withErrors([
+                'payment_proof' => 'Debes subir un comprobante de pago para planes de pago.',
+            ])->withInput();
+        }
+
+        if (!$isFreePlan && !ImageStorage::usesGoogleDrive()) {
+            $message = 'No se pudo registrar el pago porque Google Drive no está configurado para comprobantes. Configura Drive e intenta nuevamente.';
+
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                ], 422);
+            }
+
+            return back()->withErrors([
+                'payment_proof' => $message,
+            ])->withInput();
+        }
+
+        $paymentProofPath = null;
+        if ($request->hasFile('payment_proof')) {
+            $paymentProofPath = ImageStorage::storeUploadedImageAsWebp($request->file('payment_proof'), 'tenant/plan-payments');
+
+            if (!ImageStorage::isGooglePath($paymentProofPath)) {
+                ImageStorage::delete($paymentProofPath);
+
+                $message = 'El comprobante no se subió correctamente a Google Drive. Intenta nuevamente.';
+
+                if ($request->expectsJson() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $message,
+                    ], 422);
+                }
+
+                return back()->withErrors([
+                    'payment_proof' => $message,
+                ])->withInput();
+            }
+        }
+
+        $status = $isFreePlan ? 'paid' : 'pending';
+        $paidAt = $isFreePlan ? now() : null;
+        $expiresAt = $isFreePlan ? $this->resolvePlanExpirationDate($tenant, $plan, now()) : null;
+
+        $paymentData = [
+            'tenant_id' => $tenant->id,
+            'plan_id' => $plan->id,
+            'amount' => (float) ($plan->price ?? 0),
+            'status' => $status,
+            'paid_at' => $paidAt,
+            'payment_reference' => $validated['payment_reference'] ?? null,
+            'payment_proof' => $paymentProofPath,
+            'review_notes' => $validated['notes'] ?? null,
+        ];
+
+        if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
+            $paymentData['expires_at'] = $expiresAt;
+        }
+
+        TenantPlanPayment::create($paymentData);
+
+        if ($isFreePlan) {
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Plan gratuito activado correctamente.',
+                ]);
+            }
+
+            return back()->with('success', 'Plan gratuito activado correctamente.');
+        }
+
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Solicitud de pago enviada correctamente. Queda pendiente de aprobación.',
+            ]);
+        }
+
+        return back()->with('success', 'Solicitud de pago enviada correctamente. Queda pendiente de aprobación.');
+    }
+
+    public function approvePlanPayment(Request $request, Tenant $tenant, TenantPlanPayment $payment)
+    {
+        if ((int) $payment->tenant_id !== (int) $tenant->id) {
+            abort(404);
+        }
+
+        if ($payment->status !== 'pending') {
+            return back()->with('warning', 'Solo se pueden aprobar pagos pendientes.');
+        }
+
+        $plan = Plan::query()->findOrFail((int) $payment->plan_id);
+        $approvedAt = now();
+        $expiresAt = $this->resolvePlanExpirationDate($tenant, $plan, $approvedAt);
+
+        $payment->status = 'paid';
+        $payment->paid_at = $approvedAt;
+        $payment->review_notes = $request->input('review_notes') ?: $payment->review_notes;
+
+        if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
+            $payment->expires_at = $expiresAt;
+        }
+
+        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_at')) {
+            $payment->reviewed_at = now();
+        }
+
+        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_by')) {
+            $payment->reviewed_by = auth()->id();
+        }
+
+        $payment->save();
+
+        return back()->with('success', 'Pago de plan aprobado correctamente.');
+    }
+
+    public function rejectPlanPayment(Request $request, Tenant $tenant, TenantPlanPayment $payment)
+    {
+        if ((int) $payment->tenant_id !== (int) $tenant->id) {
+            abort(404);
+        }
+
+        if ($payment->status !== 'pending') {
+            return back()->with('warning', 'Solo se pueden rechazar pagos pendientes.');
+        }
+
+        $request->validate([
+            'review_notes' => 'nullable|string|max:1000',
+        ]);
+
+        $payment->status = 'failed';
+        $payment->review_notes = $request->input('review_notes') ?: 'Pago rechazado por administración.';
+
+        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_at')) {
+            $payment->reviewed_at = now();
+        }
+
+        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_by')) {
+            $payment->reviewed_by = auth()->id();
+        }
+
+        $payment->save();
+
+        return back()->with('warning', 'Pago de plan rechazado correctamente.');
     }
 
     public function createIndex()
@@ -801,6 +1099,8 @@ class TenantController extends Controller
     {
         $user = auth()->user();
         $tenant = Tenant::findOrFail($user->tenant_id);
+        $latestPaidPlan = $this->getTenantLatestPaidPlanPayment($tenant);
+        $isFreePlanTenant = (float) ($latestPaidPlan?->plan?->price ?? -1) <= 0;
 
         try {
             $assignableRoleKeys = $user?->assignableStoreRoleKeys() ?? [];
@@ -862,6 +1162,59 @@ class TenantController extends Controller
             }
 
             if ($shouldCreateNewUser) {
+                if ($isFreePlanTenant) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El plan Free no permite crear usuarios adicionales.',
+                    ], 403);
+                }
+
+                $newUserRoleId = (int) ($request->input('new_user.role_id') ?? 0);
+                if ($this->isBasicPlanTenant($tenant) && $newUserRoleId > 0) {
+                    $ownerRoleIds = $this->resolveOwnerRoleIds();
+                    $adminRoleIds = $this->resolveAdminRoleIds();
+                    $selectedRoleIsOwner = in_array($newUserRoleId, $ownerRoleIds, true);
+                    $selectedRoleIsAdmin = in_array($newUserRoleId, $adminRoleIds, true);
+
+                    if (!$selectedRoleIsAdmin) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'En plan Básico solo se permite crear un usuario administrador.',
+                        ], 403);
+                    }
+
+                    $currentOwnerCount = $tenant->users()
+                        ->whereIn('role_id', $ownerRoleIds)
+                        ->count();
+
+                    if ($currentOwnerCount > 1) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'La tienda tiene más de un owner. Debes regularizarlo antes de crear usuarios.',
+                        ], 403);
+                    }
+
+                    if ($selectedRoleIsOwner) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'El plan Básico no permite crear más usuarios owner.',
+                        ], 403);
+                    }
+
+                    if ($selectedRoleIsAdmin) {
+                        $currentAdminCount = $tenant->users()
+                            ->whereIn('role_id', $adminRoleIds)
+                            ->count();
+
+                        if ($currentAdminCount >= 1) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'El plan Básico solo permite un usuario con rol administrador.',
+                            ], 403);
+                        }
+                    }
+                }
+
                 if (!$user || !$user->canAssignStoreRoles() || empty($assignableRoleIds)) {
                     return response()->json([
                         'success' => false,
@@ -1317,14 +1670,118 @@ class TenantController extends Controller
 
     private function getTenantCurrentPlanName(Tenant $tenant): ?string
     {
-        $latestPaidPlanPayment = $tenant->tenantPlanPayments()
+        $latestPaidPlanPayment = $this->getTenantLatestPaidPlanPayment($tenant);
+
+        return $latestPaidPlanPayment?->plan?->name;
+    }
+
+    private function getTenantLatestPaidPlanPayment(Tenant $tenant): ?TenantPlanPayment
+    {
+        return $tenant->tenantPlanPayments()
             ->with('plan')
             ->where('status', 'paid')
             ->orderByDesc('paid_at')
             ->orderByDesc('id')
             ->first();
+    }
 
-        return $latestPaidPlanPayment?->plan?->name;
+    private function isFreePlan(Plan $plan): bool
+    {
+        return (float) ($plan->price ?? 0) <= 0;
+    }
+
+    private function resolvePlanExpirationDate(Tenant $tenant, Plan $plan, Carbon $baseDate): Carbon
+    {
+        $durationDays = max(0, (int) ($plan->duration_days ?? 0));
+        $startAt = clone $baseDate;
+
+        $latestPaid = $this->getTenantLatestPaidPlanPayment($tenant);
+        if ($latestPaid && $latestPaid->expires_at instanceof Carbon && $latestPaid->expires_at->greaterThan($baseDate)) {
+            $startAt = $latestPaid->expires_at->copy();
+        }
+
+        return $startAt->addDays($durationDays);
+    }
+
+    private function calculatePlanDaysRemaining(?TenantPlanPayment $payment): ?int
+    {
+        $cutoffDate = $this->resolvePaymentCutoffDate($payment);
+        if (!$cutoffDate) {
+            return null;
+        }
+
+        $expiresAt = $cutoffDate->copy();
+
+        $now = now();
+
+        if ($expiresAt->greaterThanOrEqualTo($now)) {
+            return $now->diffInDays($expiresAt);
+        }
+
+        return -1 * $expiresAt->diffInDays($now);
+    }
+
+    private function resolvePaymentCutoffDate(?TenantPlanPayment $payment): ?Carbon
+    {
+        if (!$payment) {
+            return null;
+        }
+
+        if (!empty($payment->expires_at)) {
+            return $payment->expires_at instanceof Carbon
+                ? $payment->expires_at->copy()
+                : Carbon::parse($payment->expires_at);
+        }
+
+        if (empty($payment->paid_at)) {
+            return null;
+        }
+
+        $durationDays = max(0, (int) ($payment->plan->duration_days ?? 0));
+
+        $paidAt = $payment->paid_at instanceof Carbon
+            ? $payment->paid_at->copy()
+            : Carbon::parse($payment->paid_at);
+
+        return $paidAt->addDays($durationDays);
+    }
+
+    private function isBasicPlanTenant(?Tenant $tenant): bool
+    {
+        if (!$tenant) {
+            return false;
+        }
+
+        $latestPaidPlan = $this->getTenantLatestPaidPlanPayment($tenant);
+        $planName = Str::lower(Str::ascii((string) ($latestPaidPlan?->plan?->name ?? '')));
+
+        return Str::contains($planName, ['basico', 'basic']);
+    }
+
+    private function resolveAdminRoleIds(): array
+    {
+        return Role::query()
+            ->get()
+            ->filter(function (Role $role) {
+                return User::canonicalRoleName((string) $role->name) === 'admin';
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    private function resolveOwnerRoleIds(): array
+    {
+        return Role::query()
+            ->get()
+            ->filter(function (Role $role) {
+                return User::canonicalRoleName((string) $role->name) === 'owner';
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
     }
 
     private function tenantHasProPlan(Tenant $tenant): bool

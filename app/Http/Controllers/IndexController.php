@@ -16,6 +16,7 @@ use App\Models\Plan;
 use App\Models\Country;
 use App\Models\State;
 use App\Models\City;
+use App\Models\TenantPlanPayment;
 use Carbon\Carbon;
 use App\Models\Log;
 use App\Models\SalesOrderDetail;
@@ -338,6 +339,24 @@ class IndexController extends Controller
         $tenantId = $user->tenant_id;
         $tenant = Tenant::find($tenantId);
         $tenantPublicUrl = $tenant?->slug ? url('/').'/'.$tenant->slug : null;
+        $currentPlanPayment = null;
+        $currentPlanDaysRemaining = null;
+
+        if ($tenantId) {
+            $currentPlanPayment = TenantPlanPayment::with('plan')
+                ->where('tenant_id', $tenantId)
+                ->where('status', 'paid')
+                ->orderByDesc('paid_at')
+                ->orderByDesc('id')
+                ->first();
+
+            if ($currentPlanPayment && !is_null($currentPlanPayment->expires_at)) {
+                $expiresAt = Carbon::parse($currentPlanPayment->expires_at);
+                $currentPlanDaysRemaining = $expiresAt->greaterThanOrEqualTo($now)
+                    ? $now->diffInDays($expiresAt)
+                    : (-1 * $expiresAt->diffInDays($now));
+            }
+        }
 
         // Cargas (filtradas por tenant)
         $users = User::with('role')->where('tenant_id', $tenantId)->get();
@@ -419,7 +438,9 @@ class IndexController extends Controller
             'months',
             'lowStockProducts',
             'user',
-            'tenantPublicUrl'
+            'tenantPublicUrl',
+            'currentPlanPayment',
+            'currentPlanDaysRemaining'
         ));
     }
     

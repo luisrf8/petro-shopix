@@ -704,7 +704,7 @@
           ? '<span class="badge bg-success">Leída</span>'
           : `<button type="button" class="btn btn-sm btn-outline-dark" data-mark-read="${row.id}">Marcar leída</button>`;
         const openButton = row.target_url
-          ? `<a href="${row.target_url}" class="btn btn-sm btn-dark"${row.is_read ? '' : ` data-mark-read-link="${row.id}"`}>Abrir</a>`
+          ? `<a href="${row.target_url}" class="btn btn-sm btn-dark url-icon-action-btn url-icon-action-btn-sm" aria-label="Abrir" title="Abrir"${row.is_read ? '' : ` data-mark-read-link="${row.id}"`}><i class="material-symbols-rounded">open_in_new</i></a>`
           : '';
 
         return `

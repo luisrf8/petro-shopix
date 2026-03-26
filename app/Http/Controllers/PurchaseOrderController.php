@@ -21,6 +21,12 @@ class PurchaseOrderController extends Controller
     {
         $user = auth()->user();
         $categories = Category::where('tenant_id', $user->tenant_id)->get();
+
+        if ($categories->isEmpty()) {
+            return redirect()->route('categories.index')
+                ->with('warning', 'Debes crear al menos una categoría antes de registrar entradas de inventario.');
+        }
+
         $productItems = Product::with(['images', 'variants'])
             ->where('tenant_id', $user->tenant_id)
             ->where('is_active', true)

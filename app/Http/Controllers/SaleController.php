@@ -73,6 +73,11 @@ class SaleController extends Controller
         ->where('is_active', true)
         ->get();
 
+        if ($categories->isEmpty()) {
+            return redirect()->route('categories.index')
+                ->with('warning', 'Debes crear al menos una categoría antes de registrar ventas.');
+        }
+
         return view('sales', compact('categories', 'paymentMethods', 'productItems', 'materialPackages', 'dollarRate', 'customerId', 'taxes'));
     }
     
@@ -485,8 +490,45 @@ class SaleController extends Controller
         foreach ($salesOrders as $order) {
             $order->total_items = $order->details->sum('quantity');
         }
+
+        $isSeller = $user?->hasStoreRole('seller') ?? false;
+        $isWarehouse = $user?->hasStoreRole('warehouse') ?? false;
+        $canApprovePayments = !$isWarehouse;
+        $canDeliverOrders = $isSeller || $isWarehouse || ($user?->isAdmin() ?? false) || ($user?->isOwner() ?? false);
+        $pageTitle = 'VENTAS REALIZADAS';
+        $isPendingDeliveryView = false;
     
-        return view('salesOrders', compact('salesOrders'));
+        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView'));
+    }
+
+    public function viewPendingDeliveryOrders()
+    {
+        $user = auth()->user();
+
+        $salesOrders = SalesOrder::with(['user', 'details', 'details.variant', 'payments'])
+            ->where('tenant_id', $user->tenant_id)
+            ->where('deliver_status', 0)
+            ->where(function ($query) {
+                $query->where('status', 1)
+                    ->orWhereHas('payments', function ($paymentQuery) {
+                        $paymentQuery->where('status', 1);
+                    });
+            })
+            ->orderBy('id', 'desc')
+            ->get();
+
+        foreach ($salesOrders as $order) {
+            $order->total_items = $order->details->sum('quantity');
+        }
+
+        $isSeller = $user?->hasStoreRole('seller') ?? false;
+        $isWarehouse = $user?->hasStoreRole('warehouse') ?? false;
+        $canApprovePayments = !$isWarehouse;
+        $canDeliverOrders = $isSeller || $isWarehouse || ($user?->isAdmin() ?? false) || ($user?->isOwner() ?? false);
+        $pageTitle = 'PEDIDOS PENDIENTES DE ENTREGA';
+        $isPendingDeliveryView = true;
+
+        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView'));
     }
 
     public function viewOrdersReport(Request $request)

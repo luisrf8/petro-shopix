@@ -32,6 +32,26 @@
     $tenantColorSecondary = $normalizeTenantHex($tenant->color_secondary ?? null, '#334155');
     $tenantColorAccent = $normalizeTenantHex($tenant->color_accent ?? null, '#38BDF8');
 
+    $countryName = $tenant->country_name ?? '';
+    $stateName = $tenant->state_name ?? '';
+    $cityName = $tenant->city_name ?? '';
+    $locationSummary = implode(' - ', array_filter([$countryName, $stateName, $cityName]));
+    $whatsapp = preg_replace('/\D/', '', (string) ($tenant->phone_code . $tenant->phone_number));
+    $mapsUrl = null;
+    if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
+      $mapsUrl = 'https://www.google.com/maps?q=' . $tenant->latitude . ',' . $tenant->longitude;
+    } else {
+      $addressParts = array_filter([
+        $tenant->address ?? '',
+        $cityName,
+        $stateName,
+        $countryName,
+      ]);
+      if (!empty($addressParts)) {
+        $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(implode(', ', $addressParts));
+      }
+    }
+
     [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
     [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
     [$tenantAccentR, $tenantAccentG, $tenantAccentB] = $toRgb($tenantColorAccent);
@@ -122,15 +142,23 @@
     }
 
     .tenant-logo-chip {
-      border: 1px solid rgba(255, 255, 255, 0.46) !important;
-      background: rgba(255, 255, 255, 0.14) !important;
+      border: 1px solid rgba(255, 255, 255, 0.75) !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96)) !important;
       border-radius: 12px !important;
       transition: background 0.25s ease, border-color 0.25s ease;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.22);
     }
 
     .landing-header.is-scrolled .tenant-logo-chip {
       border-color: #d6e0ef !important;
       background: #ffffff !important;
+    }
+
+    .tenant-logo-image {
+      width: 100px;
+      height: 50px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 1px rgba(2, 6, 23, 0.9));
     }
 
     .hero {
@@ -156,7 +184,7 @@
     }
 
     .hero-overlay.hero-overlay-image {
-      background: linear-gradient(0deg, rgba(2, 6, 23, 0.42) 0%, rgba(2, 6, 23, 0.18) 30%, rgba(2, 6, 23, 0.08) 55%, rgba(2, 6, 23, 0.02) 100%);
+      background: linear-gradient(180deg, rgba(2, 6, 23, 0.66) 0%, rgba(2, 6, 23, 0.52) 36%, rgba(2, 6, 23, 0.38) 68%, rgba(2, 6, 23, 0.3) 100%);
     }
 
     .hero-overlay.hero-overlay-color {
@@ -166,6 +194,16 @@
     .hero .container {
       z-index: 1;
       padding-top: 5.5rem;
+    }
+
+    .hero-copy-shell {
+      max-width: 980px;
+      margin-inline: auto;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 18px;
+      background: rgba(2, 6, 23, 0.28);
+      backdrop-filter: blur(2px);
+      padding: 1.25rem 1rem;
     }
 
     .hero-title {
@@ -217,6 +255,19 @@
       justify-content: center;
       gap: 0.6rem;
       flex-wrap: wrap;
+    }
+
+    .hero-action-secondary {
+      border-color: rgba(255, 255, 255, 0.72);
+      color: #ffffff;
+      background: rgba(15, 23, 42, 0.2);
+    }
+
+    .hero-action-secondary:hover,
+    .hero-action-secondary:focus {
+      color: #ffffff;
+      background: rgba(15, 23, 42, 0.35);
+      border-color: #ffffff;
     }
 
     .section-title {
@@ -340,6 +391,26 @@
       font-size: 0.84rem;
       font-weight: 600;
       padding: 0.35rem 0.75rem;
+    }
+
+    .discovery-map-btn {
+      border-radius: 999px;
+      font-weight: 700;
+      border: 1px solid rgba(var(--tenant-primary-rgb), 0.45);
+      color: var(--tenant-primary);
+      background: #ffffff;
+      padding: 0.38rem 0.9rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .discovery-map-btn:hover,
+    .discovery-map-btn:focus {
+      color: #ffffff;
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+      border-color: transparent;
     }
 
     .catalog-filter-rail {
@@ -596,14 +667,14 @@
     }
 
     .contact-btn-primary {
-      background: linear-gradient(135deg, #1d4ed8, #2563eb);
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
       color: #ffffff;
-      border-color: rgba(37, 99, 235, 0.35);
+      border-color: rgba(var(--tenant-primary-rgb), 0.45);
     }
 
     .contact-btn-primary:hover {
       color: #ffffff;
-      background: linear-gradient(135deg, #1e40af, #1d4ed8);
+      background: linear-gradient(135deg, var(--tenant-secondary), var(--tenant-primary));
     }
 
     .contact-btn-secondary {
@@ -737,7 +808,7 @@
         <a class="navbar-brand d-flex align-items-center" href="#top">
           @if($tenant->logo)
             <span class="btn p-1 px-3 m-0 tenant-logo-chip">
-              <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
+              <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid tenant-logo-image">
             </span>
           @else
             <span class="fw-bold text-white">{{ $tenant->name }}</span>
@@ -805,23 +876,27 @@
             $tenant->country_name ?? null,
           ]));
       @endphp
-      <h1 class="hero-title">{{ strtoupper($tenant->name) }}</h1>
-      <h2 class="hero-slogan">{{ $tenant->slogan ?? '' }}</h2>
-      <p class="hero-description">{{ $tenant->description ?? '' }}</p>
-      <div class="hero-badges">
-        @if(!empty($businessTypeLabel))
-          <span class="hero-badge">{{ $businessTypeLabel }}</span>
-        @endif
-        @if(!empty($economicActivityLabel))
-          <span class="hero-badge">{{ $economicActivityLabel }}</span>
-        @endif
-        @if(!empty($locationLabel))
-          <span class="hero-badge">{{ $locationLabel }}</span>
-        @endif
-      </div>
-      <div class="hero-actions">
-        <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-light px-4">Explorar categorías</a>
-        <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-light px-4">Ver productos</a>
+      <div class="hero-copy-shell">
+        <h1 class="hero-title">{{ strtoupper($tenant->name) }}</h1>
+        <h2 class="hero-slogan">{{ $tenant->slogan ?? '' }}</h2>
+        <p class="hero-description">{{ $tenant->description ?? '' }}</p>
+        <div class="hero-badges">
+          @if(!empty($businessTypeLabel))
+            <span class="hero-badge">{{ $businessTypeLabel }}</span>
+          @endif
+          @if(!empty($economicActivityLabel))
+            <span class="hero-badge">{{ $economicActivityLabel }}</span>
+          @endif
+          @if(!empty($locationLabel))
+            <span class="hero-badge">{{ $locationLabel }}</span>
+          @endif
+        </div>
+        <div class="hero-actions">
+          <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-light px-4">Ver productos</a>
+          @if(!empty($mapsUrl))
+            <a href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer" class="btn hero-action-secondary px-4">Ver dirección</a>
+          @endif
+        </div>
       </div>
     </div>
   </section>
@@ -838,6 +913,9 @@
           <span class="trust-pill"><i class="bi bi-shield-check me-1"></i>Compra segura</span>
           <span class="trust-pill"><i class="bi bi-lock me-1"></i>Privacidad protegida</span>
           <span class="trust-pill"><i class="bi bi-stars me-1"></i>Experiencia moderna</span>
+          @if(!empty($mapsUrl))
+            <a href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer" class="discovery-map-btn"><i class="bi bi-geo-alt"></i>Ver dirección</a>
+          @endif
         </div>
       </div>
 
@@ -1047,12 +1125,6 @@
       <div class="row align-items-center">
         <div class="col-12 col-md-6 mb-4 mb-md-0">
           <div class="contact-card">
-          @php
-              $countryName = $tenant->country_name ?? '';
-              $stateName = $tenant->state_name ?? '';
-              $cityName = $tenant->city_name ?? '';
-              $locationSummary = implode(' - ', array_filter([$countryName, $stateName, $cityName]));
-          @endphp
           <h2 class="section-title text-start mb-3">Contáctanos</h2>
           <p class="mb-3">{{ $tenant->name ?? '' }} - {{ $tenant->description ?? '' }}.</p>
           @if(!empty($locationSummary))
@@ -1061,23 +1133,6 @@
           @if(!empty($tenant->address))
             <p class="mb-3">Ubicada en {{ $tenant->address }}.</p>
           @endif
-          @php
-              $whatsapp = preg_replace('/\D/', '', $tenant->phone_code . $tenant->phone_number);
-              $mapsUrl = null;
-              if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
-                  $mapsUrl = 'https://www.google.com/maps?q=' . $tenant->latitude . ',' . $tenant->longitude;
-              } else {
-                  $addressParts = array_filter([
-                      $tenant->address ?? '',
-                      $cityName,
-                      $stateName,
-                      $countryName,
-                  ]);
-                  if (!empty($addressParts)) {
-                      $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(implode(', ', $addressParts));
-                  }
-              }
-          @endphp
           <div class="contact-actions">
             @if(!empty($whatsapp))
               <a href="https://api.whatsapp.com/send?phone={{ $whatsapp }}" target="_blank" class="contact-btn contact-btn-primary">
@@ -1086,7 +1141,7 @@
             @endif
             @if(!empty($mapsUrl))
               <a href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer" class="contact-btn contact-btn-secondary">
-                <i class="bi bi-geo-alt"></i> Ver ubicación en Google Maps
+                <i class="bi bi-geo-alt"></i> Ver dirección
               </a>
             @endif
           </div>

@@ -63,6 +63,7 @@
 <body class="bg-gray-100">
     @php
       use App\Models\Tenant;
+      use App\Models\TenantPlanPayment;
       use App\Models\User as UserModel;
       use App\Support\ImageStorage;
 
@@ -76,11 +77,13 @@
       $isSeller = (bool) ($user?->hasStoreRole('seller') ?? false);
       $isWarehouse = (bool) ($user?->hasStoreRole('warehouse') ?? false);
 
-      $canManageCatalog = $isOwner || $isAdmin;
+      $canSeeCategories = $isOwner || $isAdmin || $isSeller;
+      $canSeeProducts = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canSell = $isOwner || $isAdmin || $isSeller;
-      $canSeeSalesOrders = $canSell || $isWarehouse;
+      $canSeeSalesOrders = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canInventoryEntries = $isOwner || $isAdmin || $isWarehouse;
-      $canManageWarehousesAndMaterials = $isOwner || $isAdmin;
+      $canSeeWarehouses = $isOwner || $isAdmin || $isSeller || $isWarehouse;
+      $canSeeMaterials = $isOwner || $isAdmin || $isWarehouse;
       $canManageStore = $isOwner || $isAdmin;
 
       $tenantLogo = null;
@@ -94,6 +97,24 @@
       }
 
       $unreadNotificationsCount = $user ? $user->unreadNotifications()->count() : 0;
+
+        $isFreePlanTenant = false;
+          $isBasicPlanTenant = false;
+        if (!$isSuperAdmin && $tenant) {
+          $latestPaidPlan = TenantPlanPayment::with('plan')
+            ->where('tenant_id', (int) $tenant->id)
+            ->where('status', 'paid')
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->first();
+
+          $isFreePlanTenant = (float) ($latestPaidPlan?->plan?->price ?? -1) <= 0;
+            $planName = strtolower((string) \Illuminate\Support\Str::ascii((string) ($latestPaidPlan?->plan?->name ?? '')));
+            $isBasicPlanTenant = strpos($planName, 'basico') !== false || strpos($planName, 'basic') !== false;
+        }
+
+        $hasFreePlanRestriction = !$isSuperAdmin && $isFreePlanTenant;
+          $hasBasicPlanRestriction = !$isSuperAdmin && $isBasicPlanTenant;
     @endphp
     <div class="sidenav-header m-0 p-0 h-15 d-flex align-items-center justify-content-between px-2">
       <a class="navbar-brand d-flex justify-content-center align-items-center m-0" href="/dashboard">
@@ -109,41 +130,67 @@
       </button>
     </div>
     <hr class="horizontal dark mt-0 mb-2">
+    <style>
+      .sidebar-section-title {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin: 0.5rem 0 0.2rem;
+        padding: 0.35rem 0.65rem;
+        border-radius: 0.5rem;
+        background: rgba(33, 37, 41, 0.08);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #212529;
+      }
+    </style>
     <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main">
       <ul class="navbar-nav">
-      @if($canManageCatalog)
-        <li class="nav-item">
-          <a class="nav-link text-dark" href="/dashboard">
-            <i class="material-symbols-rounded opacity-5">dashboard</i>
-            <span class="nav-link-text ms-1">Administrador</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link text-dark" href="/categories">
-            <i class="material-symbols-rounded opacity-5">view_in_ar</i>
-            <span class="nav-link-text ms-1">Categorías</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link text-dark" href="/products">
-            <i class="material-symbols-rounded opacity-5">table_view</i>
-            <span class="nav-link-text ms-1">Productos</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link text-dark" href="/paymentMethods">
-            <i class="material-symbols-rounded opacity-5">view_in_ar</i>
-            <span class="nav-link-text ms-1">Métodos de Pago</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link text-dark" href="/tenant-store">
-            <i class="material-symbols-rounded opacity-5">view_in_ar</i>
-            <span class="nav-link-text ms-1">Gestión de Tienda</span>
-          </a>
-        </li>
+      @if($canSeeCategories || $canSeeProducts || $canManageStore)
+        @if(!$hasFreePlanRestriction && !$hasBasicPlanRestriction)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/dashboard">
+              <i class="material-symbols-rounded opacity-5">dashboard</i>
+              <span class="nav-link-text ms-1">Administrador</span>
+            </a>
+          </li>
+        @endif
+        @if($canSeeCategories)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/categories">
+              <i class="material-symbols-rounded opacity-5">view_in_ar</i>
+              <span class="nav-link-text ms-1">Categorías</span>
+            </a>
+          </li>
+        @endif
+        @if($canSeeProducts)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/products">
+              <i class="material-symbols-rounded opacity-5">table_view</i>
+              <span class="nav-link-text ms-1">Productos</span>
+            </a>
+          </li>
+        @endif
+        @if($isOwner || $isAdmin)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/paymentMethods">
+              <i class="material-symbols-rounded opacity-5">view_in_ar</i>
+              <span class="nav-link-text ms-1">Métodos de Pago</span>
+            </a>
+          </li>
+        @endif
+        @if($canManageStore)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/tenant-store">
+              <i class="material-symbols-rounded opacity-5">view_in_ar</i>
+              <span class="nav-link-text ms-1">Gestión de Tienda</span>
+            </a>
+          </li>
+        @endif
       @endif
-        @if($canSell)
+        @if($canSell && !$hasFreePlanRestriction)
 
         <li class="nav-item">
           <a class="nav-link text-dark" href="/sales">
@@ -152,7 +199,7 @@
           </a>
         </li>
       @endif
-        @if($canInventoryEntries)
+        @if($canInventoryEntries && !$hasFreePlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
@@ -161,13 +208,15 @@
           </li>
         @endif
 
-        @if($canManageWarehousesAndMaterials)
+        @if($canSeeWarehouses && !$hasFreePlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/warehouses">
               <i class="material-symbols-rounded opacity-5">warehouse</i>
               <span class="nav-link-text ms-1">Almacenes</span>
             </a>
           </li>
+        @endif
+        @if($canSeeMaterials && !$hasFreePlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/materials">
               <i class="material-symbols-rounded opacity-5">inventory_2</i>
@@ -176,7 +225,7 @@
           </li>
         @endif
 
-        @if($canInventoryEntries)
+        @if($canInventoryEntries && !$hasFreePlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase-orders">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
@@ -185,16 +234,16 @@
           </li>
         @endif
 
-        @if($isWarehouse)
+        @if($isWarehouse && !$hasFreePlanRestriction)
           <li class="nav-item">
-            <a class="nav-link text-dark" href="/sales-orders">
+            <a class="nav-link text-dark" href="/sales-orders/pending-delivery">
               <i class="material-symbols-rounded opacity-5">local_shipping</i>
-              <span class="nav-link-text ms-1">Entregas de Pedidos</span>
+              <span class="nav-link-text ms-1">Pedidos Pendientes</span>
             </a>
           </li>
         @endif
 
-        @if($canSeeSalesOrders && !$isWarehouse)
+        @if($canSeeSalesOrders && !$isWarehouse && !$hasFreePlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/sales-orders">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
@@ -203,7 +252,7 @@
           </li>
         @endif
 
-        @if($canSeeSalesOrders || $canInventoryEntries)
+        @if(($canSeeSalesOrders || $canInventoryEntries) && !$hasFreePlanRestriction && !$hasBasicPlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/reports">
               <i class="material-symbols-rounded opacity-5">summarize</i>
@@ -215,9 +264,20 @@
         @if($isSuperAdmin)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/plans">
-              <i class="material-symbols-rounded opacity-5">view_in_ar</i>
-              <!-- <i class="bi bi-bag"></i> -->
+              <i class="material-symbols-rounded opacity-5">sell</i>
               <span class="nav-link-text ms-1">Planes</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/tenant-payments#billing-overview-section">
+              <i class="material-symbols-rounded opacity-5">event_upcoming</i>
+              <span class="nav-link-text ms-1">Próximas de Pago</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/tenant-payments#pending-payments-section">
+              <i class="material-symbols-rounded opacity-5">request_quote</i>
+              <span class="nav-link-text ms-1">Pagos de Tiendas</span>
             </a>
           </li>
           <li class="nav-item">

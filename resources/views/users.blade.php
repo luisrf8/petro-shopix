@@ -18,7 +18,7 @@
               <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
                 <h6 class="text-white text-capitalize ps-3">USUARIOS</h6>
                 <div class="py-1 px-3 text-end " data-bs-toggle="modal" data-bs-target="#createCategoryModal">
-                  <label class="text-white">
+                  <label class="text-white admin-mobile-action-trigger">
                     + Crear Usuario
                   </label>
                 </div>
@@ -51,7 +51,7 @@
                           </span>
                         </td>
                         <td>
-                          <a class="text-secondary font-weight-bold text-xs btn-edit-user d-flex align-items-center justify-content-center" 
+                          <a class="text-secondary font-weight-bold text-xs btn-edit-user d-flex align-items-center justify-content-center admin-mobile-action-trigger" 
                             data-bs-toggle="modal" 
                             data-bs-target="#editUserModal" 
                             data-user-id="{{ $user->id }}"
@@ -62,7 +62,7 @@
                           </a>
                         </td>
                         <td>
-                          <a class="text-secondary font-weight-bold text-xs toggle-status-btn" 
+                          <a class="text-secondary font-weight-bold text-xs toggle-status-btn admin-mobile-action-trigger" 
                             data-id="{{ $user->id }}" 
                             data-status="{{ $user->is_active ? 'active' : 'inactive' }}">
                             {{ $user->is_active ? 'Inactivar' : 'Activar' }}

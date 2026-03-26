@@ -2,10 +2,39 @@
 
 @section('title', 'Categorías')
 
+@push('styles')
+<style>
+  .products-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .products-categories-track .category-item,
+  .products-categories-track > .flex-shrink-0 {
+    width: 200px;
+    scroll-snap-align: start;
+  }
+
+  @media (max-width: 768px) {
+    .products-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .products-categories-track .category-item,
+    .products-categories-track > .flex-shrink-0 {
+      width: 170px;
+    }
+  }
+</style>
+@endpush
+
 @section('content')
     <div class="container-fluid py-2">
       <div class="py-1 px-3 text-end" data-bs-toggle="modal" data-bs-target="#createCategoryModal">
-        <label>
+        <label class="admin-mobile-action-trigger">
           + Agregar Categoría
         </label>
       </div>
@@ -42,11 +71,11 @@
         <div class="col-lg-12">
           <!-- Buscador -->
           <div class="mb-3 px-2">
-            <input type="text" id="searchCategory" class="w-25 form-control border border-1 p-2 bg-white" placeholder="Buscar categoría...">
+            <input type="text" id="searchCategory" class="admin-mobile-search form-control border border-1 p-2 bg-white" placeholder="Buscar categoría...">
           </div>
           <!-- Carrusel scrollable -->
-          <div id="categoriesContainer" class="d-flex overflow-auto gap-3 px-2 py-3" style="scroll-snap-type: x mandatory;">
-            <div class=" flex-shrink-0" style="width: 200px; scroll-snap-align: start;">
+          <div id="categoriesContainer" class="products-categories-track d-flex overflow-auto gap-3 px-2 py-3" style="scroll-snap-type: x mandatory;">
+            <div class="flex-shrink-0">
               <a  href="/products" class="text-decoration-none">
                 <div class="card h-100">
                   <div class="card-header mx-3 p-3 text-center">
@@ -80,7 +109,7 @@
                     $icon = 'category'; // ícono por defecto
                 }
               @endphp
-              <div class="category-item flex-shrink-0" style="width: 200px; scroll-snap-align: start;" data-name="{{ strtolower($category['name']) }}">
+              <div class="category-item flex-shrink-0" data-name="{{ strtolower($category['name']) }}">
                 <a href="{{ route('products.byCategory', $category->id) }}" class="text-decoration-none">
                   <div class="card h-100">
                     <div class="card-header mx-3 p-3 text-center">
@@ -102,21 +131,21 @@
       <div class="row">
       <div class="col-md-12 mt-4">
         <div class="">
-          <div class="d-flex justify-content-between align-items-center">
-            <div class="px-3 w-30">
+          <div class="products-toolbar">
+            <div class="px-3 w-100" style="max-width: 420px;">
               <input type="text" id="searchProduct" class="w-100 form-control border border-1 p-2 bg-white" placeholder="Buscar producto...">
             </div>
-            <div class="px-3 d-flex justify-content-end align-items-center gap-5">
-              <a class="nav-link text-black" href="/createProduct">
+            <div class="px-3 admin-mobile-actions justify-content-end align-items-center">
+              <a class="nav-link text-black mb-0 admin-mobile-action-trigger" href="/createProduct">
                 + Agregar Producto
               </a>
-              <a class="nav-link text-black" href="javascript:;" data-bs-toggle="modal" data-bs-target="#importCatalogModal">
+              <a class="nav-link text-black mb-0 admin-mobile-action-trigger" href="javascript:;" data-bs-toggle="modal" data-bs-target="#importCatalogModal">
                 + Importar Catálogo
               </a>
-              <a class="nav-link text-black" href="/purchase">
+              <a class="nav-link text-black mb-0 admin-mobile-action-trigger" href="/purchase">
                 + Generar Compra
               </a>
-              <button id="generateReport" class="btn btn-dark mt-3" onclick="getReport()">
+              <button id="generateReport" class="btn btn-dark mb-0 admin-mobile-action-trigger" onclick="getReport()">
                 Generar Reporte
               </button>
             </div>

@@ -23,7 +23,9 @@
               </div>
               <div class="d-flex flex-column gap-2 align-items-end">
                 @if(!empty($notification['target_url']))
-                  <a href="{{ $notification['target_url'] }}" class="btn btn-sm btn-dark mb-0">Abrir</a>
+                  <a href="{{ $notification['target_url'] }}" class="btn btn-sm btn-dark mb-0 url-icon-action-btn url-icon-action-btn-sm" aria-label="Abrir" title="Abrir">
+                    <i class="material-symbols-rounded">open_in_new</i>
+                  </a>
                 @endif
                 @if(is_null($notification['read_at']))
                   <form method="POST" action="{{ route('notifications.read', $notification['id']) }}">
@@ -62,7 +64,7 @@
       const isUnread = !notification.is_read;
       const rowClass = isUnread ? 'bg-light' : '';
       const openButton = notification.target_url
-        ? `<a href="${notification.target_url}" class="btn btn-sm btn-dark mb-0">Abrir</a>`
+        ? `<a href="${notification.target_url}" class="btn btn-sm btn-dark mb-0 url-icon-action-btn url-icon-action-btn-sm" aria-label="Abrir" title="Abrir"><i class="material-symbols-rounded">open_in_new</i></a>`
         : '';
       const action = isUnread
         ? `<form method="POST" action="/notifications/${notification.id}/read">

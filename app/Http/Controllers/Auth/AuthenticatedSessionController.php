@@ -10,8 +10,10 @@ use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use App\Models\User;
+use App\Models\TenantPlanPayment;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Str;
  
 class AuthenticatedSessionController extends Controller
 {
@@ -63,9 +65,11 @@ class AuthenticatedSessionController extends Controller
         if (Auth::attempt($credentials)) {
             $request->session()->regenerate();
             $user = Auth::user();
+            $redirectTo = $this->resolvePostLoginRedirect($user);
  
             return response()->json([
                 'user'  => $user,
+                'redirect_to' => $redirectTo,
             ], 200);
         }
  
@@ -167,5 +171,33 @@ class AuthenticatedSessionController extends Controller
             'user' => $user,
             'token' => $token,  // El token JWT generado
         ], 201);
+    }
+
+    private function resolvePostLoginRedirect(?User $user): string
+    {
+        if (!$user) {
+            return '/products';
+        }
+
+        if ((int) ($user->role_id ?? 0) === 4) {
+            return '/dashboard';
+        }
+
+        $latestPaid = TenantPlanPayment::with('plan')
+            ->where('tenant_id', (int) ($user->tenant_id ?? 0))
+            ->where('status', 'paid')
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $planName = Str::lower(Str::ascii((string) ($latestPaid?->plan?->name ?? '')));
+        $isFreePlan = (float) ($latestPaid?->plan?->price ?? 0) <= 0;
+        $isBasicPlan = Str::contains($planName, ['basico', 'basic']);
+
+        if ($isFreePlan || $isBasicPlan) {
+            return '/products';
+        }
+
+        return '/dashboard';
     }
 }

@@ -9,12 +9,14 @@ use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Models\TenantPlanPayment;
 
 class MaterialPackageController extends Controller
 {
     public function index()
     {
         $user = auth()->user();
+        $isBasicPlanTenant = $this->isBasicPlanTenant((int) $user->tenant_id);
 
         $productItems = Product::with(['images', 'variants'])
             ->where('tenant_id', $user->tenant_id)
@@ -27,12 +29,17 @@ class MaterialPackageController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        return view('materials', compact('productItems', 'packages'));
+        return view('materials', compact('productItems', 'packages', 'isBasicPlanTenant'));
     }
 
     public function store(Request $request)
     {
         $user = auth()->user();
+
+        if ($this->isBasicPlanTenant((int) $user->tenant_id)) {
+            return redirect()->route('materials.index')
+                ->withErrors(['items' => 'El plan Básico no permite crear listas de materiales.']);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -143,5 +150,19 @@ class MaterialPackageController extends Controller
         } while (MaterialPackage::where('qr_code', $value)->orWhere('barcode', $value)->exists());
 
         return $value;
+    }
+
+    private function isBasicPlanTenant(int $tenantId): bool
+    {
+        $latestPaid = TenantPlanPayment::with('plan')
+            ->where('tenant_id', $tenantId)
+            ->where('status', 'paid')
+            ->orderByDesc('paid_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $planName = Str::lower(Str::ascii((string) ($latestPaid?->plan?->name ?? '')));
+
+        return Str::contains($planName, ['basico', 'basic']);
     }
 }

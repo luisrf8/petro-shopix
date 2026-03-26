@@ -56,6 +56,11 @@ class ProductController extends Controller
         $user = auth()->user();
 
         $categories = Category::where('tenant_id', $user->tenant_id)->get();
+        if ($categories->isEmpty()) {
+            return redirect()->route('categories.index')
+                ->with('warning', 'Primero debes crear al menos una categoría para registrar productos.');
+        }
+
         $taxes = Tax::all();
         return view('createProductItem', compact('categories', 'taxes'));
     }
@@ -99,15 +104,16 @@ class ProductController extends Controller
     {
         $user = auth()->user();
 
-        $category = Category::findOrFail($categoryId);
+        $category = Category::where('tenant_id', $user->tenant_id)->findOrFail($categoryId);
         $categories = Category::where('tenant_id', $user->tenant_id)
         ->where('is_active', true)
         ->get();
         $productItems = Product::where('category_id', $category->id)
         ->orderBy('created_at', 'desc')
         ->get();
+        $taxes = Tax::all();
     
-        return view('products', compact('productItems', 'category', 'categories'));
+        return view('products', compact('productItems', 'category', 'categories', 'taxes'));
     }
     public function showByCategoryEcomm($categoryId)
     {

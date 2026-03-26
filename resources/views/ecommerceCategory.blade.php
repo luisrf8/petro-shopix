@@ -32,6 +32,21 @@
     $tenantColorSecondary = $normalizeTenantHex($tenant->color_secondary ?? null, '#334155');
     $tenantColorAccent = $normalizeTenantHex($tenant->color_accent ?? null, '#38BDF8');
 
+    $mapsUrl = null;
+    if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
+      $mapsUrl = 'https://www.google.com/maps?q=' . $tenant->latitude . ',' . $tenant->longitude;
+    } else {
+      $addressParts = array_filter([
+        $tenant->address ?? '',
+        $tenant->city_name ?? '',
+        $tenant->state_name ?? '',
+        $tenant->country_name ?? '',
+      ]);
+      if (!empty($addressParts)) {
+        $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(implode(', ', $addressParts));
+      }
+    }
+
     [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
     [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
     [$tenantAccentR, $tenantAccentG, $tenantAccentB] = $toRgb($tenantColorAccent);
@@ -125,15 +140,23 @@
     }
 
     .tenant-logo-chip {
-      border: 1px solid rgba(255, 255, 255, 0.46) !important;
-      background: rgba(255, 255, 255, 0.14) !important;
+      border: 1px solid rgba(255, 255, 255, 0.75) !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96)) !important;
       border-radius: 12px !important;
       transition: background 0.25s ease, border-color 0.25s ease;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.22);
     }
 
     .landing-header.is-scrolled .tenant-logo-chip {
       border-color: #d6e0ef !important;
       background: #ffffff !important;
+    }
+
+    .tenant-logo-image {
+      width: 100px;
+      height: 50px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 1px rgba(2, 6, 23, 0.9));
     }
 
     .landing-nav-link.category-link.active {
@@ -557,7 +580,7 @@
         <a class="navbar-brand d-flex align-items-center" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}">
           @if($tenant->logo)
             <span class="btn p-1 px-3 m-0 tenant-logo-chip">
-              <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid" style="width: 100px; height: 50px; object-fit: contain;">
+              <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo {{ $tenant->name }}" class="img-fluid tenant-logo-image">
             </span>
           @else
             <span class="fw-bold text-white">{{ $tenant->name }}</span>
@@ -590,6 +613,11 @@
             <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}#contacto"><i class="bi bi-chat-dots"></i> Contacto</a>
             </li>
+            @if(!empty($mapsUrl))
+              <li class="nav-item">
+                <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer"><i class="bi bi-geo-alt"></i> Ver dirección</a>
+              </li>
+            @endif
             @include('partials.tenant-cart-nav')
             <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}"><i class="bi bi-arrow-left"></i> Volver</a>

@@ -226,7 +226,7 @@
                     localStorage.setItem('shopix_ecomm_user', JSON.stringify(data.user));
                 }
 
-                window.location.href = '/dashboard';
+                window.location.href = data?.redirect_to || '/products';
             } catch (error) {
                 showLoginError('Ocurrió un error al intentar iniciar sesión. Intenta nuevamente.');
             } finally {

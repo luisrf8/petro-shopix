@@ -22,6 +22,11 @@
             </div>
           @endif
 
+          @if($isBasicPlanTenant ?? false)
+            <div class="alert alert-warning mb-0">
+              El plan Básico no permite crear listas de materiales.
+            </div>
+          @else
           <form method="POST" action="{{ route('materials.store') }}" id="materialPackageForm">
             @csrf
             <div class="row g-3">
@@ -56,6 +61,7 @@
               <button type="submit" class="btn btn-info mb-0">Guardar paquete</button>
             </div>
           </form>
+          @endif
         </div>
       </div>
     </div>
