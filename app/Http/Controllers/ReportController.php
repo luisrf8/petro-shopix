@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\PurchaseOrder;
 use App\Models\SalesOrder;
+use App\Models\StoreExpense;
 use App\Models\User;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
@@ -17,9 +18,22 @@ use Illuminate\Http\Request;
 
 class ReportController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return view('reports.index');
+        $user = auth()->user();
+
+        $expenseCategories = StoreExpense::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->orderBy('category')
+            ->distinct()
+            ->pluck('category')
+            ->values();
+
+        return view('reports.index', [
+            'expenseCategories' => $expenseCategories,
+        ]);
     }
 
     public function topSellingProductsPdf(Request $request)
@@ -91,7 +105,7 @@ class ReportController extends Controller
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
 
-        $entries = PurchaseOrder::with(['warehouse', 'detalles.productVariant.product'])
+        $entries = PurchaseOrder::with(['warehouse', 'provider', 'detalles.productVariant.product'])
             ->where('tenant_id', $user->tenant_id)
             ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
             ->orderByDesc('date')
@@ -118,7 +132,7 @@ class ReportController extends Controller
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
 
-        $entries = PurchaseOrder::with(['warehouse', 'detalles'])
+        $entries = PurchaseOrder::with(['warehouse', 'provider', 'detalles'])
             ->where('tenant_id', $user->tenant_id)
             ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
             ->orderByDesc('date')
@@ -130,7 +144,7 @@ class ReportController extends Controller
                 (string) $order->id,
                 (string) $order->date,
                 (string) ($order->warehouse->name ?? 'N/A'),
-                (string) $order->provider_id,
+                (string) ($order->provider->name ?? $order->provider_name ?? 'N/A'),
                 (string) $order->detalles->sum('quantity'),
                 number_format((float) $order->detalles->sum('amount'), 2, '.', ''),
             ];
@@ -385,6 +399,110 @@ class ReportController extends Controller
         );
     }
 
+    public function customersPdf(Request $request)
+    {
+        [$rows, $summary] = $this->buildCustomersReportData($request);
+
+        return $this->renderPdf(
+            'reports.pdf.customers',
+            compact('rows', 'summary'),
+            'reporte_clientes'
+        );
+    }
+
+    public function customersExcel(Request $request)
+    {
+        [$rows] = $this->buildCustomersReportData($request);
+
+        $csvRows = $rows->map(function ($customer) {
+            return [
+                (string) $customer->name,
+                (string) $customer->email,
+                (string) ($customer->phone_number ?? ''),
+                (string) ($customer->dni ?? ''),
+                (string) $customer->orders_count,
+                number_format((float) ($customer->total_paid_amount ?? 0), 2, '.', ''),
+                (string) ($customer->last_purchase_at ? Carbon::parse($customer->last_purchase_at)->format('d/m/Y') : 'N/A'),
+                $customer->is_active ? 'Activo' : 'Inactivo',
+            ];
+        })->all();
+
+        return $this->downloadCsv(
+            'reporte_clientes',
+            ['Cliente', 'Correo', 'Telefono', 'DNI', 'Compras', 'Cobrado_USD', 'Ultima_Compra', 'Estado'],
+            $csvRows
+        );
+    }
+
+    public function receivablesPdf(Request $request)
+    {
+        [$rows, $summary] = $this->buildReceivablesReportData($request);
+
+        return $this->renderPdf(
+            'reports.pdf.receivables',
+            compact('rows', 'summary'),
+            'reporte_cuentas_por_cobrar'
+        );
+    }
+
+    public function receivablesExcel(Request $request)
+    {
+        [$rows] = $this->buildReceivablesReportData($request);
+
+        $csvRows = $rows->map(function ($order) {
+            return [
+                (string) $order->id,
+                (string) Carbon::parse($order->date)->format('d/m/Y'),
+                (string) ($order->user->name ?? 'N/A'),
+                (string) $order->details->sum('quantity'),
+                number_format((float) $order->order_total_amount, 2, '.', ''),
+                number_format((float) $order->approved_paid_amount, 2, '.', ''),
+                number_format((float) $order->pending_amount, 2, '.', ''),
+                (string) ($order->preference ?? 'N/A'),
+            ];
+        })->all();
+
+        return $this->downloadCsv(
+            'reporte_cuentas_por_cobrar',
+            ['Orden_ID', 'Fecha', 'Cliente', 'Items', 'Total_USD', 'Cobrado_USD', 'Saldo_USD', 'Entrega'],
+            $csvRows
+        );
+    }
+
+    public function storeExpensesPdf(Request $request)
+    {
+        [$rows, $summary] = $this->buildStoreExpensesReportData($request);
+
+        return $this->renderPdf(
+            'reports.pdf.store-expenses',
+            compact('rows', 'summary'),
+            'reporte_gastos_tienda'
+        );
+    }
+
+    public function storeExpensesExcel(Request $request)
+    {
+        [$rows] = $this->buildStoreExpensesReportData($request);
+
+        $csvRows = $rows->map(function ($expense) {
+            return [
+                (string) Carbon::parse($expense->spent_at)->format('d/m/Y'),
+                (string) $expense->title,
+                (string) ($expense->category ?? ''),
+                (string) ($expense->provider_name ?? ''),
+                (string) ($expense->payment_method ?? ''),
+                number_format((float) $expense->amount, 2, '.', ''),
+                (string) ($expense->status ?? 'paid'),
+            ];
+        })->all();
+
+        return $this->downloadCsv(
+            'reporte_gastos_tienda',
+            ['Fecha', 'Concepto', 'Categoria', 'Proveedor', 'Metodo_Pago', 'Monto_USD', 'Estado'],
+            $csvRows
+        );
+    }
+
     private function resolveDateRange(Request $request): array
     {
         $startInput = $request->query('start_date');
@@ -437,5 +555,117 @@ class ReportController extends Controller
         }, $fileName, [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    private function buildCustomersReportData(Request $request): array
+    {
+        $user = auth()->user();
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+        $customerStatus = strtolower(trim((string) $request->query('customer_status', 'all')));
+
+        $rows = User::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->when($customerStatus === 'active', function ($query) {
+                $query->where('is_active', 1);
+            })
+            ->when($customerStatus === 'inactive', function ($query) {
+                $query->where('is_active', 0);
+            })
+            ->whereHas('salesOrders', function ($query) use ($user, $startDate, $endDate) {
+                $query->where('tenant_id', $user->tenant_id)
+                    ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
+            })
+            ->withCount(['salesOrders as orders_count' => function ($query) use ($user, $startDate, $endDate) {
+                $query->where('tenant_id', $user->tenant_id)
+                    ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
+            }])
+            ->withMax(['salesOrders as last_purchase_at' => function ($query) use ($user, $startDate, $endDate) {
+                $query->where('tenant_id', $user->tenant_id)
+                    ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
+            }], 'date')
+            ->withSum(['payments as total_paid_amount' => function ($query) use ($user, $startDate, $endDate) {
+                $query->where('payments.status', 1)
+                    ->whereHas('salesOrder', function ($salesOrderQuery) use ($user, $startDate, $endDate) {
+                        $salesOrderQuery->where('tenant_id', $user->tenant_id)
+                            ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
+                    });
+            }], 'amount')
+            ->orderByDesc('orders_count')
+            ->orderBy('name')
+            ->get();
+
+        $summary = [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'customer_status' => $customerStatus,
+            'customers' => (int) $rows->count(),
+            'orders' => (int) $rows->sum('orders_count'),
+            'total_paid' => (float) $rows->sum(fn (User $customer) => (float) ($customer->total_paid_amount ?? 0)),
+        ];
+
+        return [$rows, $summary];
+    }
+
+    private function buildReceivablesReportData(Request $request): array
+    {
+        $user = auth()->user();
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+        $minPendingBalance = max(0, (float) $request->query('min_pending_balance', 0));
+
+        $rows = SalesOrder::with(['user', 'details', 'payments'])
+            ->where('tenant_id', $user->tenant_id)
+            ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->where('status', '!=', 2)
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (SalesOrder $order) {
+                $order->order_total_amount = (float) $order->details->sum('amount');
+                $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
+                $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount, 2));
+
+                return $order;
+            })
+            ->filter(fn (SalesOrder $order) => $order->pending_amount >= $minPendingBalance && $order->pending_amount > 0)
+            ->values();
+
+        $summary = [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'min_pending_balance' => $minPendingBalance,
+            'orders' => (int) $rows->count(),
+            'total_amount' => (float) $rows->sum('order_total_amount'),
+            'total_paid' => (float) $rows->sum('approved_paid_amount'),
+            'total_pending' => (float) $rows->sum('pending_amount'),
+        ];
+
+        return [$rows, $summary];
+    }
+
+    private function buildStoreExpensesReportData(Request $request): array
+    {
+        $user = auth()->user();
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+        $expenseCategory = trim((string) $request->query('expense_category', ''));
+
+        $rows = StoreExpense::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->whereBetween('spent_at', [$startDate->toDateString(), $endDate->toDateString()])
+            ->when($expenseCategory !== '', function ($query) use ($expenseCategory) {
+                $query->where('category', $expenseCategory);
+            })
+            ->orderByDesc('spent_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $summary = [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'expense_category' => $expenseCategory,
+            'expenses' => (int) $rows->count(),
+            'total_amount' => (float) $rows->sum('amount'),
+        ];
+
+        return [$rows, $summary];
     }
 }

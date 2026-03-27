@@ -155,9 +155,17 @@
                             </div>
                 <div class="mb-3">
                     <label for="providerName" class="form-label">Proveedor</label>
-                    <input type="text" id="providerName" class="form-control border border-1 p-2" placeholder="Ej: Distribuidora ABC">
-                    <small class="text-muted">Si deseas separar órdenes por proveedor, escribe varios nombres separados por coma.</small>
+                    <input type="text" id="providerName" list="purchaseProviderOptions" class="form-control border border-1 p-2" placeholder="Ej: Distribuidora ABC">
+                    <small class="text-muted">Puedes seleccionar un proveedor registrado o escribir varios nombres separados por coma.</small>
+                    <div class="mt-2">
+                        <a href="{{ route('providers.index') }}" class="btn btn-outline-dark btn-sm mb-0">Gestionar proveedores</a>
+                    </div>
                 </div>
+                <datalist id="purchaseProviderOptions">
+                    @foreach(($providers ?? collect()) as $provider)
+                        <option value="{{ $provider->name }}"></option>
+                    @endforeach
+                </datalist>
                 <div class="mb-3">
                     <label for="purchaseDate" class="form-label">Fecha de compra</label>
                     <input type="date" id="purchaseDate" class="form-control border border-1 p-2">

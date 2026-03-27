@@ -4,16 +4,15 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
-use App\Providers\RouteServiceProvider;
+use App\Support\UserRedirector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use App\Models\User;
-use App\Models\TenantPlanPayment;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Str;
  
 class AuthenticatedSessionController extends Controller
 {
@@ -24,7 +23,17 @@ class AuthenticatedSessionController extends Controller
      */
     public function create()
     {
-        return view('login');
+        return $this->createAdmin();
+    }
+
+    public function createAdmin()
+    {
+        return view('auth.login-admin');
+    }
+
+    public function createCustomer()
+    {
+        return view('auth.login-customer');
     }
 
     /**
@@ -35,47 +44,75 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request)
     {
-        // Obtener las credenciales desde el request
+        return $this->authenticateCustomer($request);
+    }
+
+    public function authenticateCustomer(LoginRequest $request)
+    {
         $credentials = $request->only('email', 'password');
-    
-        // Intentar la autenticación tradicional
-        $request->authenticate();
-    
-        // Ya no usamos sesiones, así que no regeneramos
-    
-        // Obtener el usuario autenticado
+
+        if (!Auth::attempt($credentials)) {
+            return response()->json([
+                'message' => 'Credenciales incorrectas.',
+            ], 422);
+        }
+
         $user = Auth::user();
-        // Generar el token usando el usuario autenticado
+
+        if (!UserRedirector::isCustomer($user)) {
+            Auth::guard('web')->logout();
+
+            return response()->json([
+                'message' => 'Este acceso es solo para clientes desde las landings.',
+            ], 403);
+        }
+
         $token = JWTAuth::fromUser($user);
+
+        Auth::guard('web')->logout();
     
-        // Retornar el token y la información del usuario
         return response()->json([
             'token' => $token,
             'user'  => $user,
         ], 200);
     }
 
-    public function authenticate(Request $request): RedirectResponse
+    public function authenticate(Request $request): JsonResponse
+    {
+        return $this->authenticateAdmin($request);
+    }
+
+    public function authenticateAdmin(Request $request): JsonResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required'],
         ]);
  
-        if (Auth::attempt($credentials)) {
-            $request->session()->regenerate();
-            $user = Auth::user();
-            $redirectTo = $this->resolvePostLoginRedirect($user);
- 
+        if (!Auth::attempt($credentials)) {
             return response()->json([
-                'user'  => $user,
-                'redirect_to' => $redirectTo,
-            ], 200);
+                'message' => 'Credenciales incorrectas.',
+            ], 422);
         }
- 
-        return back()->withErrors([
-            'email' => 'The provided credentials do not match our records.',
-        ])->onlyInput('email');
+
+        $request->session()->regenerate();
+        $user = Auth::user();
+
+        if (UserRedirector::isCustomer($user)) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return response()->json([
+                'message' => 'Los clientes solo pueden iniciar sesión desde las landings de tienda.',
+                'redirect_to' => '/',
+            ], 403);
+        }
+
+        return response()->json([
+            'user'  => $user,
+            'redirect_to' => UserRedirector::resolveBackofficeRedirect($user),
+        ], 200);
     }
     /**
      * Destroy an authenticated session.
@@ -96,7 +133,7 @@ class AuthenticatedSessionController extends Controller
             return response()->json(['message' => 'Logged out successfully'], 200);
         }
 
-        return redirect('/login');
+        return redirect('/admin/login');
     }
 
     public function logout(Request $request)
@@ -108,7 +145,7 @@ class AuthenticatedSessionController extends Controller
             $request->session()->regenerateToken();
         }
 
-        return redirect('/login');
+        return redirect('/admin/login');
     }
 
     /**
@@ -173,31 +210,4 @@ class AuthenticatedSessionController extends Controller
         ], 201);
     }
 
-    private function resolvePostLoginRedirect(?User $user): string
-    {
-        if (!$user) {
-            return '/products';
-        }
-
-        if ((int) ($user->role_id ?? 0) === 4) {
-            return '/dashboard';
-        }
-
-        $latestPaid = TenantPlanPayment::with('plan')
-            ->where('tenant_id', (int) ($user->tenant_id ?? 0))
-            ->where('status', 'paid')
-            ->orderByDesc('paid_at')
-            ->orderByDesc('id')
-            ->first();
-
-        $planName = Str::lower(Str::ascii((string) ($latestPaid?->plan?->name ?? '')));
-        $isFreePlan = (float) ($latestPaid?->plan?->price ?? 0) <= 0;
-        $isBasicPlan = Str::contains($planName, ['basico', 'basic']);
-
-        if ($isFreePlan || $isBasicPlan) {
-            return '/products';
-        }
-
-        return '/dashboard';
-    }
 }

@@ -61,6 +61,16 @@ class User extends Authenticatable implements JWTSubject
         return $this->belongsTo(Role::class);
     }
 
+    public function salesOrders()
+    {
+        return $this->hasMany(SalesOrder::class);
+    }
+
+    public function payments()
+    {
+        return $this->hasManyThrough(Payment::class, SalesOrder::class, 'user_id', 'sales_order_id');
+    }
+
     public static function storeRoleDefinitions(): array
     {
         return [

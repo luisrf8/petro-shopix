@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use App\Models\Provider;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantWarehouseStock;
 use App\Models\PurchaseOrder;
@@ -39,7 +40,14 @@ class PurchaseOrderController extends Controller
             ->orderBy('name')
             ->get();
 
-        return view('purchase', compact('categories', 'productItems', 'warehouses')); // Asegúrate de tener una vista para mostrar las categorías.
+        $providers = Schema::hasTable('providers')
+            ? Provider::where('tenant_id', $user->tenant_id)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get()
+            : collect();
+
+        return view('purchase', compact('categories', 'productItems', 'warehouses', 'providers')); // Asegúrate de tener una vista para mostrar las categorías.
     }
 
     public function getVariants(Request $request)
@@ -151,9 +159,34 @@ class PurchaseOrderController extends Controller
                     continue;
                 }
 
+                if (Schema::hasTable('providers')) {
+                    Provider::firstOrCreate(
+                        [
+                            'tenant_id' => $user->tenant_id,
+                            'name' => $providerName,
+                        ],
+                        [
+                            'is_active' => true,
+                        ]
+                    );
+                }
+
+                $provider = Schema::hasTable('providers')
+                    ? Provider::firstOrCreate(
+                        [
+                            'tenant_id' => $user->tenant_id,
+                            'name' => $providerName,
+                        ],
+                        [
+                            'is_active' => true,
+                        ]
+                    )
+                    : null;
+
                 if (!isset($groupedData[$providerName])) {
                     $groupedData[$providerName] = [
-                        'provider_id' => $providerName,
+                        'provider_id' => $provider?->id,
+                        'provider_name' => $providerName,
                         'details' => [],
                     ];
                 }
@@ -176,6 +209,7 @@ class PurchaseOrderController extends Controller
             foreach ($groupedData as $orderData) {
                 $orderPayload = [
                     'provider_id' => $orderData['provider_id'],
+                    'provider_name' => $orderData['provider_name'] ?? null,
                     'warehouse_id' => $warehouse->id,
                     'date' => $purchaseDate,
                 ];
@@ -235,7 +269,7 @@ class PurchaseOrderController extends Controller
     public function viewOrders()
     {
         $user = auth()->user();
-        $purchaseOrders = PurchaseOrder::with(['warehouse', 'detalles', 'detalles.productVariant.product.images'])
+        $purchaseOrders = PurchaseOrder::with(['warehouse', 'provider', 'detalles', 'detalles.productVariant.product.images'])
         ->where('tenant_id', $user->tenant_id)
         ->orderBy('date', 'desc')
         ->get();
@@ -259,7 +293,7 @@ class PurchaseOrderController extends Controller
     public function showByOrder($id)
     {
         $user = auth()->user();
-        $order = PurchaseOrder::with(['warehouse', 'detalles', 'detalles.productVariant', 'detalles.productVariant.product.images'])
+        $order = PurchaseOrder::with(['warehouse', 'provider', 'detalles', 'detalles.productVariant', 'detalles.productVariant.product.images'])
             ->where('tenant_id', $user->tenant_id)
             ->findOrFail($id);
 

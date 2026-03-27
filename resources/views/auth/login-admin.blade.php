@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Shopix | Iniciar sesión</title>
+    <title>Shopix | Login administrativo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-
     <style>
         body {
             min-height: 100vh;
@@ -133,8 +132,6 @@
 <body>
     <div class="container py-4 min-vh-100 d-flex align-items-center justify-content-center">
         <div class="login-shell w-100">
-
-
             <div class="login-card">
                 <div class="row g-0">
                     <div class="col-lg-5 login-aside">
@@ -142,9 +139,10 @@
                         <p>Este inicio de sesión es exclusivo para administración de tienda y panel superior.</p>
                         <div class="mt-2 d-grid gap-2">
                             <div class="login-point"><i class="bi bi-shield-check"></i><span>Acceso seguro y protegido</span></div>
-                            <div class="login-point"><i class="bi bi-bag-check"></i><span>Clientes ingresan solo desde las landings</span></div>
-                            <div class="login-point"><i class="bi bi-stars"></i><span>Experiencia moderna y rápida</span></div>
+                            <div class="login-point"><i class="bi bi-diagram-3"></i><span>Separado del acceso de clientes</span></div>
+                            <div class="login-point"><i class="bi bi-stars"></i><span>Gestión del backoffice</span></div>
                         </div>
+                        <a href="{{ route('client.login') }}" class="btn btn-outline-light btn-sm mt-3">Ir a login de cliente</a>
                     </div>
                     <div class="col-lg-7 login-form-wrap">
                         <div class="text-center mb-4">
@@ -152,8 +150,8 @@
                                 <img src="{{ asset('assets/img/shopix5.png') }}" class="login-brand" alt="Shopix">
                             </a>
                         </div>
-                        <h1 class="h3 login-title">Iniciar sesión</h1>
-                        <p class="login-subtitle">Ingresa con una cuenta administrativa para continuar.</p>
+                        <h1 class="h3 login-title">Login administrativo</h1>
+                        <p class="login-subtitle">Ingresa con una cuenta de administración para continuar.</p>
 
                         <div id="login-alert" class="alert login-error d-none" role="alert"></div>
 
@@ -207,7 +205,7 @@
             submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Ingresando...';
 
             try {
-                const response = await fetch('/login', {
+                const response = await fetch('/admin/login', {
                     method: 'POST',
                     body: formData,
                 });
@@ -217,13 +215,6 @@
                 if (!response.ok) {
                     showLoginError(data.message || 'Credenciales incorrectas.');
                     return;
-                }
-
-                if (data?.token) {
-                    localStorage.setItem('shopix_ecomm_token', data.token);
-                }
-                if (data?.user) {
-                    localStorage.setItem('shopix_ecomm_user', JSON.stringify(data.user));
                 }
 
                 window.location.href = data?.redirect_to || '/products';

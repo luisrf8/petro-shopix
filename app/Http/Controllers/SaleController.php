@@ -531,6 +531,59 @@ class SaleController extends Controller
         return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView'));
     }
 
+    public function viewReceivables()
+    {
+        $user = auth()->user();
+
+        $salesOrders = SalesOrder::with(['user', 'details', 'payments'])
+            ->where('tenant_id', $user->tenant_id)
+            ->where('status', '!=', 2)
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (SalesOrder $order) {
+                $order->total_items = (int) $order->details->sum('quantity');
+                $order->order_total_amount = (float) $order->details->sum('amount');
+                $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
+                $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount, 2));
+
+                return $order;
+            })
+            ->filter(fn (SalesOrder $order) => $order->pending_amount > 0)
+            ->values();
+
+        $totalReceivable = (float) $salesOrders->sum('pending_amount');
+        $ordersCount = (int) $salesOrders->count();
+
+        return view('accountsReceivable', compact('salesOrders', 'totalReceivable', 'ordersCount'));
+    }
+
+    public function viewPaidPendingDelivery()
+    {
+        $user = auth()->user();
+
+        $salesOrders = SalesOrder::with(['user', 'details', 'payments'])
+            ->where('tenant_id', $user->tenant_id)
+            ->where('deliver_status', 0)
+            ->where('status', '!=', 2)
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (SalesOrder $order) {
+                $order->total_items = (int) $order->details->sum('quantity');
+                $order->order_total_amount = (float) $order->details->sum('amount');
+                $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
+                $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount, 2));
+
+                return $order;
+            })
+            ->filter(fn (SalesOrder $order) => $order->pending_amount <= 0.0001)
+            ->values();
+
+        $ordersCount = (int) $salesOrders->count();
+        $totalPaidOrdersAmount = (float) $salesOrders->sum('approved_paid_amount');
+
+        return view('paidPendingDeliveries', compact('salesOrders', 'ordersCount', 'totalPaidOrdersAmount'));
+    }
+
     public function viewOrdersReport(Request $request)
     {
         $range = $request->input('range', 'monthly');

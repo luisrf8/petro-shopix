@@ -8,6 +8,7 @@ use App\Models\ProductInventory;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\SalesOrder;
+use App\Models\StoreExpense;
 use App\Models\User;
 use App\Models\PurchaseOrder;
 use App\Models\DollarRate;
@@ -405,6 +406,124 @@ class IndexController extends Controller
             return $monthlySales[$month] ?? 0;
         });
 
+        $monthlyExpenseRows = Schema::hasTable('store_expenses')
+            ? StoreExpense::selectRaw('DATE_FORMAT(spent_at, "%b") as month, SUM(amount) as total')
+                ->where('tenant_id', $tenantId)
+                ->where('spent_at', '>=', $startOfNineMonthsAgo)
+                ->groupBy(DB::raw('YEAR(spent_at), MONTH(spent_at), DATE_FORMAT(spent_at, "%b")'))
+                ->orderByRaw('YEAR(spent_at), MONTH(spent_at)')
+                ->get()
+                ->pluck('total', 'month')
+                ->toArray()
+            : [];
+
+        $monthlySalesAmountRows = SalesOrderDetail::query()
+            ->join('sales_orders', 'sales_orders.id', '=', 'sales_order_details.sales_order_id')
+            ->selectRaw('DATE_FORMAT(sales_orders.date, "%b") as month, SUM(sales_order_details.amount) as total')
+            ->where('sales_orders.tenant_id', $tenantId)
+            ->where('sales_orders.date', '>=', $startOfNineMonthsAgo)
+            ->groupBy(DB::raw('YEAR(sales_orders.date), MONTH(sales_orders.date), DATE_FORMAT(sales_orders.date, "%b")'))
+            ->orderByRaw('YEAR(sales_orders.date), MONTH(sales_orders.date)')
+            ->get()
+            ->pluck('total', 'month')
+            ->toArray();
+
+        $monthlyCollectedRows = SalesOrder::query()
+            ->join('payments', 'payments.sales_order_id', '=', 'sales_orders.id')
+            ->selectRaw('DATE_FORMAT(sales_orders.date, "%b") as month, SUM(payments.amount) as total')
+            ->where('sales_orders.tenant_id', $tenantId)
+            ->where('sales_orders.date', '>=', $startOfNineMonthsAgo)
+            ->where('payments.status', 1)
+            ->groupBy(DB::raw('YEAR(sales_orders.date), MONTH(sales_orders.date), DATE_FORMAT(sales_orders.date, "%b")'))
+            ->orderByRaw('YEAR(sales_orders.date), MONTH(sales_orders.date)')
+            ->get()
+            ->pluck('total', 'month')
+            ->toArray();
+
+        $monthlyExpensesFormatted = $months->map(function ($month) use ($monthlyExpenseRows) {
+            return round((float) ($monthlyExpenseRows[$month] ?? 0), 2);
+        });
+
+        $monthlySalesAmountFormatted = $months->map(function ($month) use ($monthlySalesAmountRows) {
+            return round((float) ($monthlySalesAmountRows[$month] ?? 0), 2);
+        });
+
+        $monthlyCollectedFormatted = $months->map(function ($month) use ($monthlyCollectedRows) {
+            return round((float) ($monthlyCollectedRows[$month] ?? 0), 2);
+        });
+
+        $monthlyProfitTrendFormatted = $months->map(function ($month) use ($monthlyCollectedRows, $monthlyExpenseRows) {
+            $collected = (float) ($monthlyCollectedRows[$month] ?? 0);
+            $expenses = (float) ($monthlyExpenseRows[$month] ?? 0);
+
+            return round($collected - $expenses, 2);
+        });
+
+        $salesAmountCurrentMonth = (float) SalesOrder::where('tenant_id', $tenantId)
+            ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
+            ->with('details')
+            ->get()
+            ->sum(fn ($order) => (float) $order->details->sum('amount'));
+
+        $collectedAmountCurrentMonth = (float) SalesOrder::where('tenant_id', $tenantId)
+            ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
+            ->with('payments')
+            ->get()
+            ->sum(fn ($order) => (float) $order->payments->where('status', 1)->sum('amount'));
+
+        $expensesAmountCurrentMonth = Schema::hasTable('store_expenses')
+            ? (float) StoreExpense::where('tenant_id', $tenantId)
+                ->whereBetween('spent_at', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
+                ->sum('amount')
+            : 0.0;
+
+        $receivablesAmount = (float) SalesOrder::with(['details', 'payments'])
+            ->where('tenant_id', $tenantId)
+            ->where('status', '!=', 2)
+            ->get()
+            ->sum(function ($order) {
+                $total = (float) $order->details->sum('amount');
+                $paid = (float) $order->payments->where('status', 1)->sum('amount');
+
+                return max(0, round($total - $paid, 2));
+            });
+
+        $financialSummary = [
+            'sales' => round($salesAmountCurrentMonth, 2),
+            'collected' => round($collectedAmountCurrentMonth, 2),
+            'expenses' => round($expensesAmountCurrentMonth, 2),
+            'receivables' => round($receivablesAmount, 2),
+            'net' => round($collectedAmountCurrentMonth - $expensesAmountCurrentMonth, 2),
+            'estimated_profit' => round($salesAmountCurrentMonth - $expensesAmountCurrentMonth, 2),
+            'estimated_margin' => $salesAmountCurrentMonth > 0
+                ? round((($salesAmountCurrentMonth - $expensesAmountCurrentMonth) / $salesAmountCurrentMonth) * 100, 2)
+                : 0,
+        ];
+
+        $monthlyTrend = [
+            'current' => (float) ($monthlyProfitTrendFormatted->last() ?? 0),
+            'previous' => (float) ($monthlyProfitTrendFormatted->slice(-2, 1)->first() ?? 0),
+        ];
+        $monthlyTrend['delta'] = round($monthlyTrend['current'] - $monthlyTrend['previous'], 2);
+        $monthlyTrend['delta_percent'] = $monthlyTrend['previous'] != 0.0
+            ? round(($monthlyTrend['delta'] / abs($monthlyTrend['previous'])) * 100, 2)
+            : null;
+
+        $topExpenseCategoryRows = Schema::hasTable('store_expenses')
+            ? StoreExpense::query()
+                ->selectRaw("COALESCE(NULLIF(category, ''), 'Sin categoria') as category_name, SUM(amount) as total_amount")
+                ->where('tenant_id', $tenantId)
+                ->groupBy('category_name')
+                ->orderByDesc('total_amount')
+                ->limit(5)
+                ->get()
+            : collect();
+
+        $topExpenseCategoryLabels = $topExpenseCategoryRows->pluck('category_name')->toArray();
+        $topExpenseCategoryTotals = $topExpenseCategoryRows
+            ->map(fn ($row) => round((float) $row->total_amount, 2))
+            ->toArray();
+
         // Top products (asegurando que el producto pertenezca al tenant)
         $topProducts = SalesOrderDetail::select('products.id', 'products.name', DB::raw('SUM(quantity) as total_sales'))
             ->join('product_variants', 'sales_order_details.product_variant_id', '=', 'product_variants.id')
@@ -433,14 +552,22 @@ class IndexController extends Controller
             'salesOrders',
             'weeklySalesCount',
             'monthlySalesFormatted',
+            'monthlyExpensesFormatted',
+            'monthlySalesAmountFormatted',
+            'monthlyCollectedFormatted',
+            'monthlyProfitTrendFormatted',
             'topProductNames',
             'topProductSales',
+            'topExpenseCategoryLabels',
+            'topExpenseCategoryTotals',
             'months',
             'lowStockProducts',
             'user',
             'tenantPublicUrl',
             'currentPlanPayment',
-            'currentPlanDaysRemaining'
+            'currentPlanDaysRemaining',
+            'financialSummary',
+            'monthlyTrend'
         ));
     }
     

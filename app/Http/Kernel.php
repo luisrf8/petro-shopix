@@ -67,6 +67,7 @@ class Kernel extends HttpKernel
         'role.name' => \App\Http\Middleware\EnsureRoleName::class,
         'free.plan.access' => \App\Http\Middleware\RestrictFreePlanAccess::class,
         'basic.plan.access' => \App\Http\Middleware\RestrictBasicPlanAccess::class,
+        'backoffice.access' => \App\Http\Middleware\EnsureBackofficeAccess::class,
         'verify.access.token' => \App\Http\Middleware\VerifyAccessToken::class,
         // 'auth.jwt' => \Tymon\JWTAuth\Middleware\Authenticate::class,
         'auth.jwt' => \Tymon\JWTAuth\Http\Middleware\Authenticate::class,

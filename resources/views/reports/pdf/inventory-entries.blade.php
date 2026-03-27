@@ -39,7 +39,7 @@
                     <td>{{ $order->id }}</td>
                     <td>{{ \Carbon\Carbon::parse($order->date)->format('d/m/Y') }}</td>
                     <td>{{ $order->warehouse->name ?? 'N/A' }}</td>
-                    <td>{{ $order->provider_id }}</td>
+                    <td>{{ $order->provider_display_name }}</td>
                     <td class="num">{{ number_format($order->detalles->sum('quantity')) }}</td>
                     <td class="num">{{ number_format($order->detalles->sum('amount'), 2) }}</td>
                 </tr>

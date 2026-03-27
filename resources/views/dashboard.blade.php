@@ -105,6 +105,83 @@
         </a>
         @endforeach
       </div>
+            <div class="row mt-4">
+                <div class="col-xl-3 col-sm-6 mb-4">
+                    <div class="card">
+                        <div class="card-body p-3">
+                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Ventas del mes</p>
+                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['sales'] ?? 0), 2) }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-sm-6 mb-4">
+                    <div class="card">
+                        <div class="card-body p-3">
+                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Cobrado del mes</p>
+                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['collected'] ?? 0), 2) }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-sm-6 mb-4">
+                    <div class="card">
+                        <div class="card-body p-3">
+                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Gastos del mes</p>
+                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['expenses'] ?? 0), 2) }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-sm-6 mb-4">
+                    <div class="card">
+                        <div class="card-body p-3">
+                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Cuentas por cobrar</p>
+                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['receivables'] ?? 0), 2) }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-sm-6 mb-4">
+                    <div class="card">
+                        <div class="card-body p-3">
+                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Utilidad estimada</p>
+                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['estimated_profit'] ?? 0), 2) }}</h4>
+                            <small class="text-muted">Margen: {{ number_format((float) ($financialSummary['estimated_margin'] ?? 0), 2) }}%</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-sm-6 mb-4">
+                    <div class="card">
+                        <div class="card-body p-3">
+                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Tendencia mensual</p>
+                            <h4 class="mb-0 {{ (float) ($monthlyTrend['delta'] ?? 0) >= 0 ? 'text-success' : 'text-danger' }}">
+                                {{ (float) ($monthlyTrend['delta'] ?? 0) >= 0 ? '+' : '' }}${{ number_format((float) ($monthlyTrend['delta'] ?? 0), 2) }}
+                            </h4>
+                            <small class="text-muted">
+                                @if(!is_null($monthlyTrend['delta_percent'] ?? null))
+                                    {{ (float) ($monthlyTrend['delta_percent'] ?? 0) >= 0 ? '+' : '' }}{{ number_format((float) ($monthlyTrend['delta_percent'] ?? 0), 2) }}% vs mes anterior
+                                @else
+                                    Sin base comparativa
+                                @endif
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row mt-1 mb-4">
+                <div class="col-12">
+                    <div class="card z-index-2">
+                        <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2 bg-transparent">
+                            <div class="bg-gradient-dark shadow-dark border-radius-lg py-3 pe-1">
+                                <div class="chart">
+                                    <canvas id="financial-chart" class="chart-canvas" height="110"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <h6 class="mb-0">Resumen financiero avanzado</h6>
+                            <p class="text-sm mb-0">Comparativa mensual de cobros, gastos y utilidad estimada.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
       <div class="row mt-4">
                 <div class="col-lg-4 col-md-6 mt-4 mb-4">
                     <div class="card z-index-2" style="min-height: 18.3rem;">
@@ -166,8 +243,8 @@
                             </div>
                         </div>
                         <div class="card-body">
-                            <h6 class="mb-0">Productos mas vendidos</h6>
-                            <p class="text-sm">Análisis general.</p>
+                            <h6 class="mb-0">Top gastos por categoría</h6>
+                            <p class="text-sm">Categorías con mayor egreso acumulado.</p>
                             <hr class="horizontal">
                         </div>
                     </div>
@@ -269,7 +346,7 @@
                                             Orden de Compra #{{ $order->id }}
                                         </h6>
                                         <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">
-                                            Proveedor: {{ $order->provider_id ?? 'No asignado' }} 
+                                            Proveedor: {{ $order->provider_display_name }} 
                                         </p>
                                         <p class="text-secondary font-weight-bold text-xs mt-1 mb-0">
                                             Fecha: {{ $order->date }}
@@ -298,9 +375,15 @@
   <script>
         // Asegúrate de que las variables estén bien formateadas para JS
         const monthlySalesFormatted = @json($monthlySalesFormatted); // Podría ser un número o string
+        const monthlyExpensesFormatted = @json($monthlyExpensesFormatted);
+        const monthlySalesAmountFormatted = @json($monthlySalesAmountFormatted);
+        const monthlyCollectedFormatted = @json($monthlyCollectedFormatted);
+        const monthlyProfitTrendFormatted = @json($monthlyProfitTrendFormatted);
         const months = @json($months); // Por ejemplo: [50, 20, 10, 22, 50, 10, 40]
         const topProductNames = @json($topProductNames); // ["Producto A", "Producto B", ...]
         const topProductSales = @json($topProductSales); // [120, 90, 70, 50, 30]
+        const topExpenseCategoryLabels = @json($topExpenseCategoryLabels);
+        const topExpenseCategoryTotals = @json($topExpenseCategoryTotals);
         const dashboardStoreUrlInput = document.getElementById('dashboardStoreUrlInput');
         const dashboardCopyStoreUrlBtn = document.getElementById('dashboardCopyStoreUrlBtn');
         const dashboardPlanDaysRemaining = {{ isset($currentPlanDaysRemaining) && !is_null($currentPlanDaysRemaining) ? (int) $currentPlanDaysRemaining : 'null' }};
@@ -369,14 +452,82 @@
             }, 250);
         }
 
-        var ctx2 = document.getElementById("chart-line").getContext("2d");
+        var financialCtx = document.getElementById("financial-chart")?.getContext("2d");
 
+        if (financialCtx) {
+            new Chart(financialCtx, {
+                type: "line",
+                data: {
+                    labels: months,
+                    datasets: [
+                        {
+                            label: "Cobrado",
+                            data: monthlyCollectedFormatted,
+                            borderColor: "rgba(255, 255, 255, .85)",
+                            backgroundColor: "transparent",
+                            borderWidth: 3,
+                            pointRadius: 3,
+                            tension: 0.25,
+                        },
+                        {
+                            label: "Gastos",
+                            data: monthlyExpensesFormatted,
+                            borderColor: "rgba(248, 113, 113, .95)",
+                            backgroundColor: "transparent",
+                            borderWidth: 3,
+                            pointRadius: 3,
+                            tension: 0.25,
+                        },
+                        {
+                            label: "Utilidad estimada",
+                            data: monthlyProfitTrendFormatted,
+                            borderColor: "rgba(34, 197, 94, .95)",
+                            backgroundColor: "transparent",
+                            borderWidth: 3,
+                            pointRadius: 3,
+                            tension: 0.25,
+                        }
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#f8f9fa' }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, .2)'
+                            },
+                            ticks: {
+                                color: '#f8f9fa'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#f8f9fa'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        var ctx2 = document.getElementById("chart-line")?.getContext("2d");
+
+        if (ctx2) {
         new Chart(ctx2, {
             type: "line",
             data: {
                 labels: months,
                 datasets: [{
-                    label: "Ventas mensuales",
+                    label: "Ventas mensuales (USD)",
                     tension: 0,
                     borderWidth: 0,
                     pointRadius: 5,
@@ -387,7 +538,7 @@
                     borderWidth: 4,
                     backgroundColor: "transparent",
                     fill: true,
-                    data: monthlySalesFormatted,
+                    data: monthlySalesAmountFormatted,
                     maxBarThickness: 6
 
                 }],
@@ -451,40 +602,42 @@
                 },
             },
         });
+        }
 
-        var ctx3 = document.getElementById("chart-line-tasks").getContext("2d");
+        var ctx3 = document.getElementById("chart-line-tasks")?.getContext("2d");
 
-        var maxLabelLength = 10;
+        var maxLabelLength = 14;
 
         // Guardamos etiquetas truncadas para mostrar en el eje X
-        var truncatedLabels = topProductNames.map(name => 
+        var truncatedLabels = topExpenseCategoryLabels.map(name => 
             name.length > maxLabelLength ? name.substring(0, maxLabelLength) + "…" : name
         );
 
         // Usamos el original para el tooltip
-        var originalLabels = topProductNames;
-        var productSales = topProductSales;
+        var originalLabels = topExpenseCategoryLabels;
+        var expensesByCategory = topExpenseCategoryTotals;
 
+        if (ctx3) {
         new Chart(ctx3, {
             type: "bar",
             data: {
                 labels: truncatedLabels,
                 datasets: [{
-                    label: "Ventas",
-                    data: productSales,
+                    label: "Gastos",
+                    data: expensesByCategory,
                     backgroundColor: [
-                        "rgba(255, 255, 255, .8)",
-                        "rgba(255, 255, 255, .8)",
-                        "rgba(255, 255, 255, .8)",
-                        "rgba(255, 255, 255, .8)",
-                        "rgba(255, 255, 255, .8)"
+                        "rgba(248, 113, 113, .9)",
+                        "rgba(251, 146, 60, .9)",
+                        "rgba(250, 204, 21, .9)",
+                        "rgba(45, 212, 191, .9)",
+                        "rgba(96, 165, 250, .9)"
                     ],
                     borderColor: [
-                        "rgba(255, 255, 255, .8)",
-                        "rgba(255, 255, 255, .8)",
-                        "rgba(255, 255, 255, .8)",
-                        "rgba(255, 255, 255, .8)",
-                        "rgba(255, 255, 255, .8)"
+                        "rgba(248, 113, 113, 1)",
+                        "rgba(251, 146, 60, 1)",
+                        "rgba(250, 204, 21, 1)",
+                        "rgba(45, 212, 191, 1)",
+                        "rgba(96, 165, 250, 1)"
                     ],
                     borderWidth: 1,
                     maxBarThickness: 6
@@ -502,7 +655,7 @@
                         callbacks: {
                             label: function (context) {
                                 const index = context.dataIndex;
-                                return `${originalLabels[index]}: ${context.raw} ventas`;
+                                return `${originalLabels[index]}: $${Number(context.raw || 0).toFixed(2)}`;
                             }
                         }
                     }
@@ -555,6 +708,7 @@
                 }
             }
         });
+        }
 
     </script>
 @endpush

@@ -19,7 +19,7 @@
                     <div class="card h-100">
                         <div class="card-body p-3">
                             <p class="text-xs text-secondary mb-1">Proveedor</p>
-                            <h6 class="mb-0">{{ $order->provider_id }}</h6>
+                            <h6 class="mb-0">{{ $order->provider_display_name }}</h6>
                         </div>
                     </div>
                 </div>

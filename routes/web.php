@@ -13,6 +13,8 @@ use App\Http\Controllers\{
     PaymentMethodController,
     IndexController,
     UserController,
+    CustomerController,
+    StoreExpenseController,
     TenantController,
     PlanController,
     TaxController,
@@ -27,8 +29,14 @@ use App\Http\Controllers\{
 
 // RUTAS DE INVITADOS
 Route::middleware('guest')->group(function () {
-    Route::get('login', [AuthenticatedSessionController::class, 'create'])->name('login');
-    Route::post('login', [AuthenticatedSessionController::class, 'authenticate']);
+    Route::get('admin/login', [AuthenticatedSessionController::class, 'createAdmin'])->name('login');
+    Route::post('admin/login', [AuthenticatedSessionController::class, 'authenticateAdmin'])->name('admin.login.submit');
+    Route::get('client/login', [AuthenticatedSessionController::class, 'createCustomer'])->name('client.login');
+    Route::post('client/login', [AuthenticatedSessionController::class, 'authenticateCustomer'])->name('client.login.submit');
+    Route::get('login', function () {
+        return redirect()->route('login');
+    });
+    Route::post('login', [AuthenticatedSessionController::class, 'authenticateAdmin']);
     
     Route::get('register', [RegisteredUserController::class, 'create'])->name('register');
     Route::post('register', [RegisteredUserController::class, 'store']);
@@ -48,7 +56,7 @@ Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
 Route::post('/tenant-ai-image', [TenantController::class, 'generateTenantImage'])->name('tenant.ai-image');
 
 // RUTAS CON AUTENTICACIÓN
-Route::middleware(['auth', 'free.plan.access', 'basic.plan.access'])->group(function () {
+Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.access'])->group(function () {
     Route::get('/settings/google-drive/oauth', [GoogleDriveController::class, 'oauthStatus'])->name('google-drive.oauth.status');
     Route::get('/settings/google-drive/connect', [GoogleDriveController::class, 'redirectToGoogle'])->name('google-drive.connect');
     Route::get('/settings/google-drive/callback', [GoogleDriveController::class, 'handleGoogleCallback'])->name('google-drive.callback');
@@ -80,6 +88,12 @@ Route::middleware(['auth', 'free.plan.access', 'basic.plan.access'])->group(func
 
     // Ventas
     Route::get('/sales', [SaleController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales');
+    Route::get('/customers', [CustomerController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('customers.index');
+    Route::post('/customers', [CustomerController::class, 'store'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('customers.store');
+    Route::put('/customers/{customer}', [CustomerController::class, 'update'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('customers.update');
+    Route::post('/customers/{customer}/toggle-status', [CustomerController::class, 'toggleStatus'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('customers.toggleStatus');
+    Route::get('/accounts-receivable', [SaleController::class, 'viewReceivables'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('accounts.receivable.index');
+    Route::get('/paid-pending-deliveries', [SaleController::class, 'viewPaidPendingDelivery'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.paidPendingDeliveries.index');
     Route::get('/sales-orders', [SaleController::class, 'viewOrders'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.orders');
     Route::get('/sales-orders/pending-delivery', [SaleController::class, 'viewPendingDeliveryOrders'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.orders.pendingDelivery');
     Route::get('/sales/{id}', [SaleController::class, 'showByOrder'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.showByOrder');
@@ -101,9 +115,22 @@ Route::middleware(['auth', 'free.plan.access', 'basic.plan.access'])->group(func
     Route::get('/reports/inventory/total/excel', [ReportController::class, 'inventoryTotalExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.inventory.total.excel');
     Route::get('/reports/system/modules/pdf', [ReportController::class, 'systemModulesPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.system.modules.pdf');
     Route::get('/reports/system/modules/excel', [ReportController::class, 'systemModulesExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.system.modules.excel');
+    Route::get('/reports/customers/pdf', [ReportController::class, 'customersPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.customers.pdf');
+    Route::get('/reports/customers/excel', [ReportController::class, 'customersExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.customers.excel');
+    Route::get('/reports/accounts-receivable/pdf', [ReportController::class, 'receivablesPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.accountsReceivable.pdf');
+    Route::get('/reports/accounts-receivable/excel', [ReportController::class, 'receivablesExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.accountsReceivable.excel');
+    Route::get('/reports/store-expenses/pdf', [ReportController::class, 'storeExpensesPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.storeExpenses.pdf');
+    Route::get('/reports/store-expenses/excel', [ReportController::class, 'storeExpensesExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.storeExpenses.excel');
 
     // Compras
     Route::get('/purchase', [PurchaseOrderController::class, 'index'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('purchase');
+    Route::get('/providers', [ProviderController::class, 'index'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('providers.index');
+    Route::post('/providers', [ProviderController::class, 'store'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('providers.store');
+    Route::put('/providers/{provider}', [ProviderController::class, 'update'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('providers.update');
+    Route::post('/providers/{provider}/toggle-status', [ProviderController::class, 'toggleStatus'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('providers.toggleStatus');
+    Route::get('/store-expenses', [StoreExpenseController::class, 'index'])->middleware('role.name:owner,admin,administrador')->name('store-expenses.index');
+    Route::post('/store-expenses', [StoreExpenseController::class, 'store'])->middleware('role.name:owner,admin,administrador')->name('store-expenses.store');
+    Route::put('/store-expenses/{expense}', [StoreExpenseController::class, 'update'])->middleware('role.name:owner,admin,administrador')->name('store-expenses.update');
     Route::get('/purchase-orders', [PurchaseOrderController::class, 'viewOrders'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('purchase.orders');
     Route::get('/order/{id}', [PurchaseOrderController::class, 'showByOrder'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('showByOrder');
 

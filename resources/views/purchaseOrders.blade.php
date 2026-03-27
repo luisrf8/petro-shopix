@@ -45,7 +45,7 @@
                           <td>{{ $order->id }}</td>
                           <td>{{ $order->date }}</td>
                           <td>{{ $order->warehouse->name ?? 'N/A' }}</td>
-                          <td>{{ $order->provider_id }}</td>
+                          <td>{{ $order->provider_display_name }}</td>
                           <td>{{ $order->total_variants }}</td>
                           <td>{{ $order->total_items }}</td>
                           <td>{{ number_format($order->total_amount, 2) }}</td>

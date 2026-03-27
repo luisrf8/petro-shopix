@@ -198,12 +198,39 @@
             <span class="nav-link-text ms-1">Realizar Venta</span>
           </a>
         </li>
+
+        <li class="nav-item">
+          <a class="nav-link text-dark" href="/customers">
+            <i class="material-symbols-rounded opacity-5">groups</i>
+            <span class="nav-link-text ms-1">Clientes</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link text-dark" href="/accounts-receivable">
+            <i class="material-symbols-rounded opacity-5">request_quote</i>
+            <span class="nav-link-text ms-1">Cuentas por Cobrar</span>
+          </a>
+        </li>
+
+        <li class="nav-item">
+          <a class="nav-link text-dark" href="/paid-pending-deliveries">
+            <i class="material-symbols-rounded opacity-5">inventory</i>
+            <span class="nav-link-text ms-1">Pagadas por Entregar</span>
+          </a>
+        </li>
       @endif
         @if($canInventoryEntries && !$hasFreePlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
               <span class="nav-link-text ms-1">Entrada de Inventario</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/providers">
+              <i class="material-symbols-rounded opacity-5">local_shipping</i>
+              <span class="nav-link-text ms-1">Proveedores</span>
             </a>
           </li>
         @endif
@@ -257,6 +284,15 @@
             <a class="nav-link text-dark" href="/reports">
               <i class="material-symbols-rounded opacity-5">summarize</i>
               <span class="nav-link-text ms-1">Reportes PDF</span>
+            </a>
+          </li>
+        @endif
+
+        @if($canManageStore && !$hasFreePlanRestriction)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/store-expenses">
+              <i class="material-symbols-rounded opacity-5">account_balance_wallet</i>
+              <span class="nav-link-text ms-1">Gastos de Tienda</span>
             </a>
           </li>
         @endif
