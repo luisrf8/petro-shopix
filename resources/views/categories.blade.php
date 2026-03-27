@@ -868,6 +868,7 @@
 
       const formData = new FormData(this);
       const categoryId = formData.get('id');
+      formData.append('tenant_id', tenantId);
 
       fetch(`api/categories/${categoryId}`, {
         method: 'POST', // Usa 'PUT' si tu API lo requiere
@@ -918,9 +919,12 @@
           method: 'POST',
           headers: {
             'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
           },
             body: JSON.stringify({
               is_active: newStatus === 'active' ? 1 : 0,
+              tenant_id: tenantId,
             })
         })
           .then(response => {

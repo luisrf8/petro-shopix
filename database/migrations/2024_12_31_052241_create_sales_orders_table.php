@@ -13,6 +13,10 @@ class CreateSalesOrdersTable extends Migration
      */
     public function up()
     {
+        if (Schema::hasTable('sales_orders')) {
+            return;
+        }
+
         Schema::create('sales_orders', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users'); // Suponiendo que tienes una tabla customers

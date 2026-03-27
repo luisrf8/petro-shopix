@@ -27,8 +27,12 @@ return new class extends Migration {
             'payment_images',
         ];
 
-        foreach ($tables as $table) {
-            Schema::table($table, function (Blueprint $table) {
+        foreach ($tables as $tableName) {
+            if (!Schema::hasTable($tableName) || Schema::hasColumn($tableName, 'tenant_id')) {
+                continue;
+            }
+
+            Schema::table($tableName, function (Blueprint $table) {
                 $table->foreignId('tenant_id')->nullable()->constrained('tenants')->cascadeOnDelete();
             });
         }
@@ -55,8 +59,12 @@ return new class extends Migration {
             'payment_images',
         ];
 
-        foreach ($tables as $table) {
-            Schema::table($table, function (Blueprint $table) {
+        foreach ($tables as $tableName) {
+            if (!Schema::hasTable($tableName) || !Schema::hasColumn($tableName, 'tenant_id')) {
+                continue;
+            }
+
+            Schema::table($tableName, function (Blueprint $table) {
                 $table->dropConstrainedForeignId('tenant_id');
             });
         }

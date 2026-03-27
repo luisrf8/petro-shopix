@@ -53,4 +53,21 @@ return [
         'google_drive_fallback_to_local_on_error' => env('GOOGLE_DRIVE_FALLBACK_TO_LOCAL_ON_ERROR', true),
     ],
 
+    'thefactory_hka' => [
+        'base_url' => env('TFHKA_BASE_URL', 'https://demoemisionv2.thefactoryhka.com.ve'),
+        'username' => env('TFHKA_USER', env('TFHKA_TOKEN_USER', '')),
+        'password' => env('TFHKA_PASSWORD', env('TFHKA_TOKEN_PASSWORD', '')),
+        'default_serie' => env('TFHKA_SERIE', ''),
+        'default_document_type' => env('TFHKA_DOCUMENT_TYPE', '01'),
+        'default_sale_type' => env('TFHKA_SALE_TYPE', 'Interna'),
+        'default_payment_type' => env('TFHKA_PAYMENT_TYPE', 'Inmediato'),
+        'default_branch' => env('TFHKA_BRANCH', '0001'),
+        'default_currency' => env('TFHKA_CURRENCY', 'BSD'),
+        'default_foreign_currency' => env('TFHKA_FOREIGN_CURRENCY', 'USD'),
+        'default_exchange_rate' => (float) env('TFHKA_EXCHANGE_RATE', 1),
+        'auto_next_number' => env('TFHKA_AUTO_NEXT_NUMBER', true),
+        'timeout' => (int) env('TFHKA_TIMEOUT', 25),
+        'verify_ssl' => env('TFHKA_VERIFY_SSL', true),
+    ],
+
 ];

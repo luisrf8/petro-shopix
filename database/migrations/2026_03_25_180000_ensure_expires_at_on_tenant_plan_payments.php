@@ -9,6 +9,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        if (!Schema::hasTable('tenant_plan_payments')) {
+            return;
+        }
+
         if (!Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
             Schema::table('tenant_plan_payments', function (Blueprint $table) {
                 $table->dateTime('expires_at')->nullable()->after('paid_at');
@@ -16,6 +20,10 @@ return new class extends Migration {
         }
 
         if (!Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
+            return;
+        }
+
+        if (!Schema::hasTable('plans')) {
             return;
         }
 

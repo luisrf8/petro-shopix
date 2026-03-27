@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        if (!Schema::hasTable('tenant_plan_payments')) {
+            return;
+        }
+
         Schema::table('tenant_plan_payments', function (Blueprint $table) {
             if (!Schema::hasColumn('tenant_plan_payments', 'payment_reference')) {
                 $table->string('payment_reference')->nullable();
@@ -32,6 +36,10 @@ return new class extends Migration {
 
     public function down(): void
     {
+        if (!Schema::hasTable('tenant_plan_payments')) {
+            return;
+        }
+
         Schema::table('tenant_plan_payments', function (Blueprint $table) {
             $columns = [];
 

@@ -61,10 +61,16 @@
           margin-right: 0 !important;
         }
 
-        #editProductModal .modal-footer .btn,
-        #editProductModal .modal-body .btn {
-          width: 100%;
-        }
+      }
+
+      #addImageForm .form-control,
+      #addImageForm .form-select,
+      #editProductForm .form-control,
+      #variantEditorList .form-control,
+      #newVariantContainer .form-control,
+      #productAiPrompt {
+        border: 1px solid #d2d6da !important;
+        padding: 0.5rem !important;
       }
     </style>
     <div class="container-fluid py-2">
@@ -134,6 +140,15 @@
                                 <img id="addImagePreview" src="" class="img-fluid rounded" style="max-height:160px; display:none;">
                               </div>
                               <div class="mb-3">
+                                <label for="variantImageSelector" class="form-label">Asignar a variante (opcional)</label>
+                                <select class="form-select" id="variantImageSelector" name="variant_id">
+                                  <option value="">Imagen general del producto</option>
+                                  @foreach ($product->variants as $variant)
+                                    <option value="{{ $variant->id }}">{{ $variant->size }} ({{ number_format((float) $variant->price, 2) }} $)</option>
+                                  @endforeach
+                                </select>
+                              </div>
+                              <div class="mb-3">
                                 <label for="image" class="form-label">Seleccionar imagen</label>
                                 <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
                               </div>
@@ -153,102 +168,160 @@
                     </div>
                     <!-- Product details -->
                     <div class="mx-4 product-meta">
-                      <!-- <div class="card-header">{{ $product->name }}</div> -->
                       <h2><strong>{{ $product->name }}</strong></h2>
-                      <p><strong>Categoría:</strong> {{ $product->category->name }}</p>
-                      <p><strong>Descripción:</strong> {{ $product->description }}</p>
-                      <p><strong>Descuento del producto:</strong> {{ number_format((float) ($product->discount_percentage ?? 0), 2) }}%</p>
-                      <button type="button" class="btn btn-outline-dark btn-sm mb-3" id="generateProductCodesBtn">Generar códigos de todas las variantes</button>
-                      <p><strong>Impuestos:</strong> 
-                        @foreach ($product->taxes as $tax)
-                          {{ $tax->name }} - {{ $tax->rate }} %
-                        @endforeach
-                      </p>
-                      <p><strong>Variantes:</strong>
-                        <ul>
-                          @foreach ($product->variants as $variant)
-                              @php
-                                $productDiscount = (float) ($product->discount_percentage ?? 0);
-                                $variantDiscount = (float) ($variant->discount_percentage ?? 0);
-                                $effectivePrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
-                              @endphp
-                              <li class="mb-2">
-                                {{ $variant->size }} - Precio: {{ number_format($effectivePrice, 2) }} $
-                                @if($productDiscount > 0 || $variantDiscount > 0)
-                                  <small class="text-muted">(base: {{ number_format((float) $variant->price, 2) }} $, desc: {{ number_format($productDiscount + $variantDiscount, 2) }}%)</small>
-                                @endif
-                                - {{$variant->stock}} unidades disponibles
-                                <div class="small text-muted mt-1">
-                                  QR: <span id="variantQrCode-{{ $variant->id }}">{{ $variant->qr_code ?: '—' }}</span>
-                                  | Barras: <span id="variantBarcode-{{ $variant->id }}">{{ $variant->barcode ?: '—' }}</span>
-                                </div>
-                                <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
-                                  <input
-                                    type="text"
-                                    class="form-control form-control-sm"
-                                    style="max-width: 220px;"
-                                    value="{{ $variant->barcode ?: '' }}"
-                                    placeholder="Código de barras"
-                                    data-variant-barcode-input="{{ $variant->id }}"
-                                  >
-                                  <button
-                                    type="button"
-                                    class="btn btn-dark btn-sm mb-0 save-variant-barcode-btn"
-                                    data-variant-id="{{ $variant->id }}"
-                                  >
-                                    Guardar código
-                                  </button>
-                                </div>
-                                <button
-                                  type="button"
-                                  class="btn btn-outline-secondary btn-sm mt-1 generate-variant-codes-btn"
-                                  data-variant-id="{{ $variant->id }}"
-                                >
-                                  Generar códigos variante
-                                </button>
-                                <button
-                                  type="button"
-                                  class="btn btn-outline-secondary btn-sm mt-1 open-qr-modal-btn"
-                                  data-qr-title="QR variante {{ $variant->size }}"
-                                  data-qr-url="{{ route('variants.qrImage', $variant->id) }}"
-                                  data-qr-filename="variante-{{ $variant->id }}-qr.png"
-                                  id="showVariantQrBtn-{{ $variant->id }}"
-                                  {{ empty($variant->qr_code) ? 'disabled' : '' }}
-                                >
-                                  Ver QR variante
-                                </button>
-                                <button
-                                  type="button"
-                                  class="btn btn-outline-secondary btn-sm mt-1 download-qr-btn"
-                                  data-qr-url="{{ route('variants.qrImage', $variant->id) }}"
-                                  data-qr-filename="variante-{{ $variant->id }}-qr.png"
-                                  id="downloadVariantQrBtn-{{ $variant->id }}"
-                                  {{ empty($variant->qr_code) ? 'disabled' : '' }}
-                                >
-                                  Descargar QR
-                                </button>
-                                <button
-                                  type="button"
-                                  class="btn btn-outline-secondary btn-sm mt-1 print-qr-btn"
-                                  data-qr-url="{{ route('variants.qrImage', $variant->id) }}"
-                                  id="printVariantQrBtn-{{ $variant->id }}"
-                                  {{ empty($variant->qr_code) ? 'disabled' : '' }}
-                                >
-                                  Imprimir QR
-                                </button>
-                              </li>
-                          @endforeach
-                        </ul>
-                      </p>
-                      <!-- <p><strong>Categoría:</strong> {{ $product->category->name }}</p> -->
-                         <!-- Action Buttons -->
-                      <div class="mt-4">
-                        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#editProductModal" onclick="editProduct()">Editar</button>
-                        <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#addImageModal">Agregar imagen +</button>
-                        <button class="btn btn-dark" onclick="deleteProduct({{ $product->id }})">Eliminar</button>
+                      <p class="mb-1"><strong>Categoría:</strong> {{ $product->category->name }}</p>
+                      <p class="mb-1"><strong>Descripción:</strong> {{ $product->description }}</p>
+                      <p class="mb-2"><strong>Descuento del producto:</strong> {{ number_format((float) ($product->discount_percentage ?? 0), 2) }}%</p>
+                      <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button type="button" class="btn btn-outline-dark btn-sm" id="generateProductCodesBtn">Generar códigos de todas las variantes</button>
+                        <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#addImageModal">Agregar imagen +</button>
+                        <button class="btn btn-dark btn-sm" onclick="deleteProduct({{ $product->id }})">Eliminar</button>
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div class="card mt-3">
+                <div class="card-body">
+                  <h5 class="mb-3">Editar producto</h5>
+                  <form id="editProductForm" enctype="multipart/form-data" class="row g-3">
+                    @csrf
+                    <div class="col-md-6">
+                      <label for="editProductName" class="form-label">Nombre</label>
+                      <input type="text" class="form-control border" id="editProductName" name="name" value="{{ old('name', $product->name) }}" required>
+                    </div>
+                    <div class="col-md-6">
+                      <label for="productCategory" class="form-label">Categoría</label>
+                      <select class="form-control border" id="productCategory" name="category" required>
+                        @foreach($categories as $category)
+                          <option value="{{ $category->id }}" {{ $category->id == old('category', $product->category_id) ? 'selected' : '' }}>
+                            {{ $category->name }}
+                          </option>
+                        @endforeach
+                      </select>
+                    </div>
+                    <div class="col-12">
+                      <label for="editProductDescription" class="form-label">Descripción</label>
+                      <textarea class="form-control border" id="editProductDescription" name="description" rows="2">{{ old('description', $product->description) }}</textarea>
+                    </div>
+                    <div class="col-md-4">
+                      <label for="productStatus" class="form-label">Estado</label>
+                      <select class="form-control border" id="productStatus" name="is_active" required>
+                        <option value="1" {{ $product->is_active ? 'selected' : '' }}>Activo</option>
+                        <option value="0" {{ !$product->is_active ? 'selected' : '' }}>Inactivo</option>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <label for="productDiscountPercentage" class="form-label">Descuento (%)</label>
+                      <input type="number" class="form-control border" id="productDiscountPercentage" name="discount_percentage" min="0" max="100" step="0.01" value="{{ number_format((float) ($product->discount_percentage ?? 0), 2, '.', '') }}">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                      <button type="submit" class="btn btn-dark w-100" id="saveChangesBtn">Guardar Cambios</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
+              <div class="card mt-3">
+                <div class="card-body">
+                  <h5 class="mb-3">Impuestos del producto</h5>
+                  <div id="taxContainer" class="d-flex flex-wrap gap-3">
+                    @foreach ($taxes as $tax)
+                      <div class="form-check">
+                        <input
+                          class="form-check-input tax-checkbox"
+                          type="checkbox"
+                          value="{{ $tax->id }}"
+                          id="tax{{ $tax->id }}"
+                          {{ $product->taxes->contains($tax->id) ? 'checked' : '' }}
+                        >
+                        <label class="form-check-label" for="tax{{ $tax->id }}">
+                          {{ $tax->name }} ({{ $tax->rate }}%)
+                        </label>
+                      </div>
+                    @endforeach
+                  </div>
+
+                  <button type="button" class="btn btn-dark mt-3" id="saveProductTaxesBtn">
+                    Guardar impuestos
+                  </button>
+                </div>
+              </div>
+
+              <div class="card mt-3">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Variantes</h5>
+                    <button type="button" class="btn btn-outline-dark btn-sm" id="addVariantBtn">Agregar Variante</button>
+                  </div>
+
+                  <div id="variantEditorList" class="d-flex flex-column gap-3">
+                    @foreach ($product->variants as $variant)
+                      @php
+                        $productDiscount = (float) ($product->discount_percentage ?? 0);
+                        $variantDiscount = (float) ($variant->discount_percentage ?? 0);
+                        $effectivePrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+                        $variantImage = $variant->images->first();
+                      @endphp
+                      <div class="border rounded p-3" data-existing-variant-row="{{ $variant->id }}">
+                        <div class="row g-2 align-items-end">
+                          <div class="col-lg-2 col-md-6">
+                            <label class="form-label">Variante</label>
+                            <input type="text" class="form-control border" data-existing-size value="{{ $variant->size }}">
+                          </div>
+                          <div class="col-lg-2 col-md-6">
+                            <label class="form-label">Precio base</label>
+                            <input type="number" class="form-control border" data-existing-price value="{{ number_format((float) $variant->price, 2, '.', '') }}">
+                          </div>
+                          <div class="col-lg-2 col-md-6">
+                            <label class="form-label">Desc. variante %</label>
+                            <input type="number" class="form-control border" data-existing-discount min="0" max="100" step="0.01" value="{{ number_format((float) ($variant->discount_percentage ?? 0), 2, '.', '') }}">
+                          </div>
+                          <div class="col-lg-2 col-md-6">
+                            <label class="form-label">Stock</label>
+                            <input type="number" class="form-control border" data-existing-stock value="{{ $variant->stock }}">
+                          </div>
+                          <div class="col-lg-2 col-md-6">
+                            <label class="form-label">Código barras</label>
+                            <input type="text" class="form-control border" data-existing-barcode value="{{ $variant->barcode ?: '' }}" data-variant-barcode-input="{{ $variant->id }}">
+                          </div>
+                          <div class="col-lg-2 col-md-6">
+                            <label class="form-label">Imagen variante</label>
+                            <input type="file" class="form-control border existing-variant-image-input" data-existing-image="{{ $variant->id }}" accept="image/*">
+                          </div>
+                        </div>
+
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2">
+                          <div class="d-flex align-items-center gap-2">
+                            <img
+                              src="{{ $variantImage ? (\App\Support\ImageStorage::url($variantImage->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png') }}"
+                              alt="Imagen variante"
+                              id="variantPreview-{{ $variant->id }}"
+                              style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;"
+                            >
+                            <small class="text-muted">Precio final: {{ number_format($effectivePrice, 2) }} $</small>
+                          </div>
+                          <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-dark btn-sm save-existing-variant-btn" data-variant-id="{{ $variant->id }}">Guardar variante</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm generate-variant-codes-btn" data-variant-id="{{ $variant->id }}">Generar códigos</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm open-qr-modal-btn" data-qr-title="QR variante {{ $variant->size }}" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="showVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Ver QR</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm download-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="downloadVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Descargar QR</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm print-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" id="printVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Imprimir QR</button>
+                          </div>
+                        </div>
+
+                        <div class="small text-muted mt-2">
+                          QR: <span id="variantQrCode-{{ $variant->id }}">{{ $variant->qr_code ?: '—' }}</span>
+                          | Barras: <span id="variantBarcode-{{ $variant->id }}">{{ $variant->barcode ?: '—' }}</span>
+                        </div>
+                      </div>
+                    @endforeach
+                  </div>
+
+                  <div id="newVariantContainer" class="d-flex flex-column gap-3 mt-3"></div>
+
+                  <button type="button" class="btn btn-dark mt-3" id="saveVariantsBtn">Guardar variantes nuevas</button>
                 </div>
               </div>
             </div>
@@ -294,85 +367,6 @@
                 </div>
               </div>
             </div>
-            <!-- Modal -->
-            <div class="modal fade" id="editProductModal" tabindex="-1" role="dialog" aria-labelledby="editProductModalLabel" aria-hidden="true">
-              <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down" role="document">
-                <div class="modal-content">
-                  <div class="modal-header d-flex justify-content-between">
-                    <h5 class="modal-title" id="editProductModalLabel">Editar Producto</h5>
-                    <span aria-hidden="true" class="btn-close" data-bs-dismiss="modal"></span>
-                  </div>
-                  <div class="modal-body">
-                  <form id="editProductForm"enctype="multipart/form-data">
-                        @csrf
-                        <div class="form-group">
-                            <label for="productName">Nombre</label>
-                            <input type="text" class="form-control border border-1 p-2" id="productName" name="name" value="{{ old('name', $product->name) }}" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="productDescription">Descripción</label>
-                          <input class="form-control border border-1 p-2" id="productDescription" name="description" rows="3" value="{{ old('description', $product->description) }}"></input>
-                        </div>
-                        <div class="form-group mb-4">
-                            <label for="productCategory">Categoría</label>
-                            <select class="form-control border border-1 p-2" id="productCategory" name="category" required>
-                                @foreach($categories as $category)
-                                    <option value="{{ $category->id }}" 
-                                        {{ $category->id == old('category', $product->category_id) ? 'selected' : '' }}>
-                                        {{ $category->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="form-group mb-4">
-                          <label for="productStatus">Estado</label>
-                          <select class="form-control border border-1 p-2" id="productStatus" name="is_active" required>
-                            <option value="1" {{ $product->is_active ? 'selected' : '' }}>Activo</option>
-                            <option value="0" {{ !$product->is_active ? 'selected' : '' }}>Inactivo</option>
-                          </select>
-                        </div>
-                        <div class="form-group mb-4">
-                          <label for="productDiscountPercentage">Descuento del producto (%)</label>
-                          <input type="number" class="form-control border border-1 p-2" id="productDiscountPercentage" name="discount_percentage" min="0" max="100" step="0.01" value="{{ number_format((float) ($product->discount_percentage ?? 0), 2, '.', '') }}">
-                        </div>
-                        <button type="submit" class="btn btn-dark" id="saveChangesBtn">Guardar Cambios</button>
-                    </form>
-                    <div class="form-group">
-                        <label class="fw-bold">Impuestos</label>
-
-                        <div id="taxContainer">
-                            @foreach ($taxes as $tax)
-                                <div class="form-check">
-                                    <input 
-                                        class="form-check-input tax-checkbox" 
-                                        type="checkbox" 
-                                        value="{{ $tax->id }}" 
-                                        id="tax{{ $tax->id }}"
-                                        {{ $product->taxes->contains($tax->id) ? 'checked' : '' }}
-                                    >
-                                    <label class="form-check-label" for="tax{{ $tax->id }}">
-                                        {{ $tax->name }} ({{ $tax->rate }}%)
-                                    </label>
-                                </div>
-                            @endforeach
-                        </div>
-
-                        <button type="button" class="btn btn-dark mt-3" id="saveProductTaxesBtn">
-                            Guardar Impuestos del Producto
-                        </button>
-                    </div>
-                    <div class="form-group">
-                      <label for="productVariants">Variedades</label>
-                      <div id="variantContainer"></div>
-                      <button type="button" class="btn btn-secondary mt-3" id="addVariantBtn">Agregar Variante</button>
-                      <button type="button" class="btn btn-dark mt-3" id="saveVariantsBtn">Guardar Variantes Creadas</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- End Modal -->
-
             <div class="modal fade" id="productQrModal" tabindex="-1" aria-hidden="true">
               <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
@@ -782,241 +776,223 @@
       mainImageId.value = imageId;
     }
 
-    function confirmRemoveImage(imageId) {
-      if (confirm('¿Estás seguro de que deseas eliminar esta imagen?')) {
-        // Aquí iría tu lógica para eliminar la imagen
-        // Por ejemplo, una redirección o una llamada AJAX
-        window.location.href = `/productos/eliminar-imagen/${imageId}`;
-      }
-    }
   document.querySelectorAll('.thumbnail img').forEach(img => {
     img.addEventListener('click', function() {
       document.getElementById('mainImage').src = this.src;
     });
   });
-  document.getElementById('addVariantBtn').addEventListener('click', function () {
-    const variantContainer = document.getElementById('variantContainer');
+  const productCardForActions = document.querySelector('.card[data-product-id]');
+  const inlineProductId = productCardForActions?.getAttribute('data-product-id');
 
-    // Crear un nuevo div para la variante
-    const variantDiv = document.createElement('div');
-    variantDiv.classList.add('col', 'mb-3');
+  function createNewVariantRow() {
+    const container = document.getElementById('newVariantContainer');
+    if (!container) return;
 
-    // Crear contenedor para inputs
-    const inputContainer = document.createElement('div');
-    inputContainer.classList.add('input-group', 'gap-4');
-
-    // Input para el nombre de la variante
-    const variantInput = document.createElement('input');
-    variantInput.type = 'text';
-    variantInput.placeholder = 'Variante';
-    variantInput.classList.add('form-control', 'border', 'border-1', 'p-2');
-    variantInput.name = 'size';
-
-    // Input para el precio
-    const priceInput = document.createElement('input');
-    priceInput.type = 'number';
-    priceInput.placeholder = 'Precio';
-    priceInput.classList.add('form-control', 'border', 'border-1', 'p-2');
-    priceInput.name = 'price';
-
-    const discountInput = document.createElement('input');
-    discountInput.type = 'number';
-    discountInput.placeholder = 'Descuento %';
-    discountInput.classList.add('form-control', 'border', 'border-1', 'p-2');
-    discountInput.name = 'discount_percentage';
-    discountInput.min = '0';
-    discountInput.max = '100';
-    discountInput.step = '0.01';
-    discountInput.value = '0';
-
-    // Input para el stock
-    const stockInput = document.createElement('input');
-    stockInput.type = 'number';
-    stockInput.placeholder = 'Stock';
-    stockInput.classList.add('form-control', 'border', 'border-1', 'p-2');
-    stockInput.name = 'stock';
-
-    const barcodeInput = document.createElement('input');
-    barcodeInput.type = 'text';
-    barcodeInput.placeholder = 'Código de barras';
-    barcodeInput.classList.add('form-control', 'border', 'border-1', 'p-2');
-    barcodeInput.name = 'barcode';
-
-    // Botón para eliminar la variante
-    const deleteBtn = document.createElement('button');
-    deleteBtn.innerText = 'Eliminar';
-    deleteBtn.classList.add('btn', 'btn-danger', 'mt-2', 'ms-auto');
-
-    // Funcionalidad para eliminar la variante
-    deleteBtn.addEventListener('click', function () {
-        variantContainer.removeChild(variantDiv);
-    });
-
-    // Agregar inputs al contenedor de inputs
-    inputContainer.appendChild(variantInput);
-    inputContainer.appendChild(priceInput);
-    inputContainer.appendChild(discountInput);
-    inputContainer.appendChild(stockInput);
-    inputContainer.appendChild(barcodeInput);
-
-    // Agregar los elementos al div de variante
-    variantDiv.appendChild(inputContainer);
-    variantDiv.appendChild(deleteBtn);
-
-    // Agregar la nueva variante al contenedor
-    variantContainer.appendChild(variantDiv);
-});
-
-// Función para guardar variantes
-document.getElementById('saveVariantsBtn').addEventListener('click', function () {
-    const variantContainer = document.getElementById('variantContainer');
-    // Obtener el id del producto desde la tarjeta
-    const productId = document.querySelector('.card').getAttribute('data-product-id');
-    const variants = [];
-
-    // Recorrer todas las variantes creadas
-    variantContainer.querySelectorAll('.input-group').forEach(inputGroup => {
-        const size = inputGroup.querySelector('input[name="size"]').value;
-        const price = inputGroup.querySelector('input[name="price"]').value;
-        const discount_percentage = inputGroup.querySelector('input[name="discount_percentage"]').value;
-        const stock = inputGroup.querySelector('input[name="stock"]').value;
-        const barcode = inputGroup.querySelector('input[name="barcode"]').value;
-
-        // Validar que los campos no estén vacíos
-        if (size && price && stock) {
-          variants.push({ size, price, discount_percentage: discount_percentage || 0, stock, barcode });
-        }
-    });
-
-    // Enviar las variantes al servidor mediante AJAX
-    if (variants.length > 0) {
-        fetch('/api/variants/store', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
-            },
-            body: JSON.stringify({ product_id: productId, variants }),
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Variantes guardadas exitosamente.');
-                    location.reload();
-                } else {
-                    alert('Error al guardar variantes.');
-                }
-            })
-            .catch(error => console.error('Error:', error));
-    } else {
-        alert('Por favor, completa todos los campos antes de guardar.');
-    }
-});
-// ==========================
-//  GUARDAR IMPUESTOS ASOCIADOS AL PRODUCTO
-// ==========================
-
-document.getElementById('saveProductTaxesBtn').addEventListener('click', function () {
-    
-    const productId = document.querySelector('.card').getAttribute('data-product-id');
-
-    // IDs seleccionados
-    const selectedTaxIds = [...document.querySelectorAll('.tax-checkbox:checked')]
-        .map(cb => cb.value);
-
-    fetch(`/products/${productId}/taxes`, {
-        method: 'POST',
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]').getAttribute("content")
-        },
-        body: JSON.stringify({
-            taxes: selectedTaxIds
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            alert("Impuestos del producto actualizados");
-            location.reload();
-        } else {
-            alert("Hubo un error al actualizar");
-        }
-    })
-    .catch(err => console.error(err));
-});
-
-function editProduct() {
-  // Obtener los datos del producto desde el DOM o una llamada AJAX
-  const productData = {
-    variants: @json($product->variants) // Convertir a JSON los datos de las variantes
-  };
-
-  // Precargar las variantes
-  const variantContainer = document.getElementById('variantContainer');
-  variantContainer.innerHTML = ''; // Limpiar variantes previas
-  productData.variants.forEach(variant => {
-    const variantDiv = document.createElement('div');
-    variantDiv.classList.add('row', 'mb-3');
-    variantDiv.innerHTML = `
-      <div class="col">
-        <label for="Nombre">Variante</label>
-        <input type="text" class="form-control border border-1 p-2" value="${variant.size}" placeholder="Nombre" name="variantName[]">
+    const row = document.createElement('div');
+    row.className = 'border rounded p-3 new-variant-row';
+    row.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label">Variante</label>
+          <input type="text" class="form-control" data-new-size>
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label">Precio</label>
+          <input type="number" class="form-control" data-new-price step="0.01">
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label">Desc. %</label>
+          <input type="number" class="form-control" data-new-discount min="0" max="100" step="0.01" value="0">
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label">Stock</label>
+          <input type="number" class="form-control" data-new-stock>
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label">Código barras</label>
+          <input type="text" class="form-control" data-new-barcode>
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label">Imagen</label>
+          <input type="file" class="form-control new-variant-image" accept="image/*">
+        </div>
       </div>
-      <div class="col">
-        <label for="Precio">Precio USD</label>
-        <input type="number" class="form-control border border-1 p-2" value="${variant.price}" placeholder="Precio" name="variantPrice[]">
-      </div>
-      <div class="col">
-        <label for="Descuento">Desc. %</label>
-        <input type="number" class="form-control border border-1 p-2" value="${variant.discount_percentage || 0}" placeholder="Descuento %" name="variantDiscount[]" min="0" max="100" step="0.01">
-      </div>
-      <div class="col">
-        <label for="Stock">Stock</label>
-        <input type="number" class="form-control border border-1 p-2" value="${variant.stock}" placeholder="Stock" name="variantStock[]">
-      </div>
-      <div class="col pt-2">
-        <button type="button" class="btn btn-dark mt-4 editVariantBtn" data-id="${variant.id}">Editar</button>
+      <div class="d-flex justify-content-end mt-2">
+        <button type="button" class="btn btn-outline-danger btn-sm remove-new-variant-btn">Eliminar</button>
       </div>
     `;
-    variantContainer.appendChild(variantDiv);
-  });
 
-  // Agregar evento al botón "Editar"
-  document.querySelectorAll('.editVariantBtn').forEach(button => {
-    button.addEventListener('click', function () {
-      const variantId = this.getAttribute('data-id');
-      const variantRow = this.closest('.row');
-      const size = variantRow.querySelector('input[name="variantName[]"]').value;
-      const price = variantRow.querySelector('input[name="variantPrice[]"]').value;
-      const discount_percentage = variantRow.querySelector('input[name="variantDiscount[]"]').value;
-      const stock = variantRow.querySelector('input[name="variantStock[]"]').value;
+    row.querySelector('.remove-new-variant-btn')?.addEventListener('click', () => row.remove());
+    row.querySelector('.new-variant-image')?.addEventListener('change', async function () {
+      await optimizeProductImageInputForElement(this);
+    });
 
-      // Realizar una solicitud AJAX para actualizar la variante
-      fetch(`/api/variants/${variantId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        },
-        body: JSON.stringify({ size, price, discount_percentage, stock })
-      })
-        .then(async response => {
-          const payload = await response.json().catch(() => ({}));
-          if (response.ok) {
-            alert(payload.message || 'Variante actualizada exitosamente.');
-            window.location.reload()
-          } else {
-            throw new Error(payload.message || 'Error al actualizar la variante.');
-          }
-        })
-        .catch(error => {
-          console.error(error);
-          alert('Hubo un problema al actualizar la variante.');
-        });
+    container.appendChild(row);
+  }
+
+  async function optimizeProductImageInputForElement(inputEl) {
+    const file = inputEl?.files?.[0];
+    if (!file) return;
+
+    const optimized = await optimizeProductSingleImage(file);
+    if (optimized.changed) {
+      const dt = new DataTransfer();
+      dt.items.add(optimized.file);
+      inputEl.files = dt.files;
+    }
+  }
+
+  document.getElementById('addVariantBtn')?.addEventListener('click', createNewVariantRow);
+
+  document.querySelectorAll('.existing-variant-image-input').forEach((input) => {
+    input.addEventListener('change', async function () {
+      await optimizeProductImageInputForElement(this);
+      const variantId = this.getAttribute('data-existing-image');
+      const preview = document.getElementById(`variantPreview-${variantId}`);
+      const file = this.files?.[0];
+      if (preview && file) {
+        preview.src = URL.createObjectURL(file);
+      }
     });
   });
-}
+
+  document.getElementById('saveVariantsBtn')?.addEventListener('click', async function () {
+    if (!inlineProductId) return;
+
+    const variants = [];
+    const formData = new FormData();
+    formData.append('product_id', inlineProductId);
+
+    const rows = Array.from(document.querySelectorAll('#newVariantContainer .new-variant-row'));
+    rows.forEach((row, index) => {
+      const size = row.querySelector('[data-new-size]')?.value?.trim();
+      const price = row.querySelector('[data-new-price]')?.value;
+      const discount_percentage = row.querySelector('[data-new-discount]')?.value;
+      const stock = row.querySelector('[data-new-stock]')?.value;
+      const barcode = row.querySelector('[data-new-barcode]')?.value?.trim();
+
+      if (size && price && stock) {
+        variants.push({ size, price, discount_percentage: discount_percentage || 0, stock, barcode });
+        const imageInput = row.querySelector('.new-variant-image');
+        if (imageInput?.files?.[0]) {
+          formData.append(`variant_images[${index}]`, imageInput.files[0]);
+        }
+      }
+    });
+
+    if (!variants.length) {
+      alert('Agrega al menos una variante nueva válida.');
+      return;
+    }
+
+    formData.append('variants', JSON.stringify(variants));
+
+    try {
+      const response = await fetch('/api/variants/store', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'Accept': 'application/json',
+        },
+        body: formData,
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        const validationMessage = payload?.errors
+          ? Object.values(payload.errors).flat().join('\n')
+          : null;
+        throw new Error(validationMessage || payload.message || 'No se pudieron guardar las variantes nuevas.');
+      }
+
+      alert(payload.message || 'Variantes guardadas exitosamente.');
+      window.location.reload();
+    } catch (error) {
+      alert(error.message || 'Error al guardar variantes.');
+    }
+  });
+
+  document.getElementById('saveProductTaxesBtn')?.addEventListener('click', function () {
+    if (!inlineProductId) return;
+
+    const selectedTaxIds = [...document.querySelectorAll('.tax-checkbox:checked')].map(cb => cb.value);
+
+    fetch(`/products/${inlineProductId}/taxes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+      },
+      body: JSON.stringify({ taxes: selectedTaxIds }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert('Impuestos del producto actualizados.');
+          location.reload();
+        } else {
+          alert(data.message || 'Hubo un error al actualizar impuestos.');
+        }
+      })
+      .catch(() => alert('Hubo un error al actualizar impuestos.'));
+  });
+
+  document.querySelectorAll('.save-existing-variant-btn').forEach((button) => {
+    button.addEventListener('click', async function () {
+      const variantId = this.getAttribute('data-variant-id');
+      const row = document.querySelector(`[data-existing-variant-row="${variantId}"]`);
+      if (!variantId || !row) return;
+
+      const formData = new FormData();
+      formData.append('size', row.querySelector('[data-existing-size]')?.value || '');
+      formData.append('price', row.querySelector('[data-existing-price]')?.value || '0');
+      formData.append('discount_percentage', row.querySelector('[data-existing-discount]')?.value || '0');
+      formData.append('stock', row.querySelector('[data-existing-stock]')?.value || '0');
+      formData.append('barcode', row.querySelector('[data-existing-barcode]')?.value || '');
+
+      const imageInput = row.querySelector('.existing-variant-image-input');
+      if (imageInput?.files?.[0]) {
+        formData.append('image', imageInput.files[0]);
+      }
+
+      const originalText = this.textContent;
+      this.disabled = true;
+      this.textContent = 'Guardando...';
+
+      try {
+        const response = await fetch(`/api/variants/${variantId}`, {
+          method: 'POST',
+          headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            'Accept': 'application/json',
+          },
+          body: (() => {
+            formData.append('_method', 'PUT');
+            return formData;
+          })(),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+          const validationMessage = payload?.errors
+            ? Object.values(payload.errors).flat().join('\n')
+            : null;
+          throw new Error(validationMessage || payload.message || 'No se pudo actualizar la variante.');
+        }
+
+        const displayBarcode = document.getElementById(`variantBarcode-${variantId}`);
+        const barcodeInput = row.querySelector('[data-existing-barcode]');
+        if (displayBarcode) displayBarcode.textContent = payload?.variant?.barcode || barcodeInput?.value || '—';
+
+        alert(payload.message || 'Variante actualizada correctamente.');
+      } catch (error) {
+        alert(error.message || 'No se pudo actualizar la variante.');
+      } finally {
+        this.disabled = false;
+        this.textContent = originalText;
+      }
+    });
+  });
 function confirmRemoveImage(imageId) {
     if (confirm('¿Estás seguro de que deseas eliminar esta imagen?')) {
       fetch(`/api/product/remove-image/${imageId}`, {
@@ -1239,53 +1215,6 @@ document.addEventListener('DOMContentLoaded', () => {
       this.disabled = false;
       this.textContent = originalText;
     }
-  });
-
-  document.querySelectorAll('.save-variant-barcode-btn').forEach((button) => {
-    button.addEventListener('click', async function () {
-      const variantId = this.getAttribute('data-variant-id');
-      const input = document.querySelector(`[data-variant-barcode-input="${variantId}"]`);
-      if (!variantId || !input) {
-        return;
-      }
-
-      const barcode = String(input.value || '').trim();
-      const originalText = this.textContent;
-      this.disabled = true;
-      this.textContent = 'Guardando...';
-
-      try {
-        const response = await fetch(`/api/variants/${variantId}/barcode`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-CSRF-TOKEN': csrfToken,
-          },
-          body: JSON.stringify({ barcode }),
-        });
-
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || !payload.success) {
-          const validationMessage = payload?.errors
-            ? Object.values(payload.errors).flat().join('\n')
-            : null;
-          throw new Error(validationMessage || payload.message || 'No se pudo actualizar el código de barras.');
-        }
-
-        const resolvedBarcode = payload.barcode || '—';
-        const display = document.getElementById(`variantBarcode-${variantId}`);
-        if (display) {
-          display.textContent = resolvedBarcode;
-        }
-        input.value = payload.barcode || '';
-      } catch (error) {
-        alert(error.message || 'No se pudo actualizar el código de barras.');
-      } finally {
-        this.disabled = false;
-        this.textContent = originalText;
-      }
-    });
   });
 
   document.querySelectorAll('.generate-variant-codes-btn').forEach((button) => {

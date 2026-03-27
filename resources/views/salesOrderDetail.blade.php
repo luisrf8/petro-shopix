@@ -79,6 +79,112 @@
           </button>
         @endif
       </div>
+
+      @php
+        $documentIssueMode = (string) ($order->document_issue_mode ?? 'delivery_note');
+      @endphp
+      <div class="card mt-4">
+        <div class="card-body py-3">
+          <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
+            <div>
+              <strong>Tipo de documento de la venta:</strong>
+              <span class="badge {{ $documentIssueMode === 'electronic_invoice' ? 'bg-success' : 'bg-secondary' }} ms-2">
+                {{ $documentIssueMode === 'electronic_invoice' ? 'Facturación digital' : 'Nota de entrega' }}
+              </span>
+            </div>
+            <form method="POST" action="{{ route('sales.documentMode.update', $order->id) }}" class="d-flex gap-2 align-items-center">
+              @csrf
+              <select name="document_issue_mode" class="form-select form-select-sm border border-1 p-2" style="min-width: 220px;">
+                <option value="delivery_note" {{ $documentIssueMode === 'delivery_note' ? 'selected' : '' }}>Nota de entrega</option>
+                <option value="electronic_invoice" {{ $documentIssueMode === 'electronic_invoice' ? 'selected' : '' }} {{ (bool) ($order->tenant->electronic_invoicing_enabled ?? false) ? '' : 'disabled' }}>Facturación digital</option>
+              </select>
+              <button type="submit" class="btn btn-outline-dark btn-sm mb-0">Guardar</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      @if((bool) ($order->tenant->electronic_invoicing_enabled ?? false) && $documentIssueMode === 'electronic_invoice')
+      <div class="card mt-4">
+        <div class="card-header pb-0">
+          <h6 class="mb-0">Facturación electrónica (The Factory HKA)</h6>
+        </div>
+        <div class="card-body">
+          @php
+            $edoc = $order->latest_electronic_document;
+          @endphp
+
+          <div class="row g-2">
+            <div class="col-md-2">
+              <form method="POST" action="{{ route('sales.electronic.emit', $order->id) }}">
+                @csrf
+                <button type="submit" class="btn btn-dark btn-sm w-100 mb-0">Emitir</button>
+              </form>
+            </div>
+            <div class="col-md-2">
+              <form method="POST" action="{{ route('sales.electronic.status', $order->id) }}">
+                @csrf
+                <button type="submit" class="btn btn-outline-dark btn-sm w-100 mb-0">Consultar estado</button>
+              </form>
+            </div>
+            <div class="col-md-2">
+              <form method="POST" action="{{ route('sales.electronic.download', $order->id) }}">
+                @csrf
+                <input type="hidden" name="tipo_archivo" value="pdf">
+                <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mb-0">Descargar PDF</button>
+              </form>
+            </div>
+            <div class="col-md-2">
+              <form method="POST" action="{{ route('sales.electronic.sendEmail', $order->id) }}">
+                @csrf
+                <input type="hidden" name="emails" value="{{ $order->user->email ?? '' }}">
+                <button type="submit" class="btn btn-outline-success btn-sm w-100 mb-0">Enviar correo</button>
+              </form>
+            </div>
+            <div class="col-md-2">
+              <form method="POST" action="{{ route('sales.electronic.annul', $order->id) }}" onsubmit="return confirm('¿Confirmas la anulación del documento electrónico?');">
+                @csrf
+                <input type="hidden" name="motivo_anulacion" value="Anulación solicitada desde Shopix">
+                <button type="submit" class="btn btn-outline-danger btn-sm w-100 mb-0" {{ $edoc && $edoc->is_annulled ? 'disabled' : '' }}>Anular</button>
+              </form>
+            </div>
+            <div class="col-md-2">
+              <form method="POST" action="{{ route('sales.electronic.metadata', $order->id) }}">
+                @csrf
+                <button type="submit" class="btn btn-outline-primary btn-sm w-100 mb-0">Numeraciones</button>
+              </form>
+            </div>
+          </div>
+
+          <hr>
+          <div class="row">
+            <div class="col-md-6">
+              <p class="mb-1"><strong>Serie:</strong> {{ $edoc->serie ?? '-' }}</p>
+              <p class="mb-1"><strong>Tipo doc:</strong> {{ $edoc->tipo_documento ?? '-' }}</p>
+              <p class="mb-1"><strong>Número:</strong> {{ $edoc->numero_documento ?? '-' }}</p>
+              <p class="mb-1"><strong>Control:</strong> {{ $edoc->numero_control ?? '-' }}</p>
+            </div>
+            <div class="col-md-6">
+              <p class="mb-1"><strong>Transacción:</strong> {{ $edoc->transaccion_id ?? '-' }}</p>
+              <p class="mb-1"><strong>Estado:</strong> {{ $edoc->estado_documento ?? '-' }}</p>
+              <p class="mb-1"><strong>Mensaje:</strong> {{ $edoc->mensaje ?? '-' }}</p>
+              <p class="mb-1"><strong>Anulado:</strong> {{ ($edoc && $edoc->is_annulled) ? 'Sí' : 'No' }}</p>
+            </div>
+          </div>
+          @if($edoc && $edoc->url_consulta)
+            <a href="{{ $edoc->url_consulta }}" target="_blank" rel="noopener" class="btn btn-link btn-sm px-0">Abrir URL de consulta</a>
+          @endif
+        </div>
+      </div>
+      @else
+      <div class="alert alert-secondary mt-4 mb-0">
+        @if(!(bool) ($order->tenant->electronic_invoicing_enabled ?? false))
+          La facturación digital está desactivada para esta tienda. Un super administrador puede activarla desde Gestión de Tiendas.
+        @else
+          Esta orden está configurada para Nota de entrega. Si deseas factura digital, cambia el tipo de documento arriba.
+        @endif
+      </div>
+      @endif
       <!-- Tabla de Detalles de la Orden -->
       <div class="card">
         <div class="card-header">

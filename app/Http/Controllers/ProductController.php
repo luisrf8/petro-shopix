@@ -44,7 +44,7 @@ class ProductController extends Controller
             ->get();
         $taxes = Tax::all();
 
-        $productItems = Product::with(['category', 'images', 'variants'])
+        $productItems = Product::with(['category', 'images', 'variants.images'])
             ->where('tenant_id', $user->tenant_id)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -67,8 +67,11 @@ class ProductController extends Controller
 
     public function getProducts()
     {
-        $productItems = Product::with(['category', 'images', 'variants'])
-        ->orderBy('created_at', 'desc')->get();
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $productItems = Product::with(['category', 'images', 'variants.images'])
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->orderBy('created_at', 'desc')
+            ->get();
         return response()->json($productItems);
     }
     public function categoriesIndex()
@@ -145,8 +148,16 @@ class ProductController extends Controller
     
     public function showByProduct($id)
     {
-        $product = Product::with(['variants', 'images', 'category', 'taxes'])->findOrFail($id);
-        $categories = Category::all();
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $product = Product::with(['variants.images', 'images', 'category', 'taxes'])->findOrFail($id);
+
+        if ($tenantId > 0 && (int) $product->tenant_id !== $tenantId) {
+            abort(404);
+        }
+
+        $categories = Category::query()
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->get();
         $taxes = Tax::all();
         return view('productItem', compact('product', 'categories', 'taxes'));
     }
@@ -155,12 +166,25 @@ class ProductController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $tenantId = (int) (auth()->user()->tenant_id ?? $request->tenant_id ?? 0);
+
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'category_id' => 'required',
             'tenant_id' => 'required'
         ]);
+
+        $categoryExistsForTenant = Category::query()
+            ->where('id', $validatedData['category_id'])
+            ->where('tenant_id', $tenantId)
+            ->exists();
+
+        if (!$categoryExistsForTenant) {
+            throw ValidationException::withMessages([
+                'category_id' => ['La categoría seleccionada no pertenece a tu tenant.'],
+            ]);
+        }
 
         Product::create($validatedData);
         return response()->json(['success' => true, 'message' => 'Product created successfully'], 200);
@@ -178,6 +202,7 @@ class ProductController extends Controller
             'tax_ids' => 'nullable|array',
             'tax_ids.*' => 'exists:taxes,id',
             'images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
+            'variant_images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
         ]);
 
         $variants = $request->input('variants', []);
@@ -214,6 +239,17 @@ class ProductController extends Controller
             ]);
         }
 
+        $categoryExistsForTenant = Category::query()
+            ->where('id', $validated['category_id'])
+            ->where('tenant_id', $tenantId)
+            ->exists();
+
+        if (!$categoryExistsForTenant) {
+            throw ValidationException::withMessages([
+                'category_id' => ['La categoría seleccionada no pertenece a tu tenant.'],
+            ]);
+        }
+
         $storedImagePaths = [];
 
         try {
@@ -242,7 +278,9 @@ class ProductController extends Controller
                     }
                 }
 
-                foreach ($variants as $variant) {
+                $variantImageUploads = $request->file('variant_images', []);
+
+                foreach ($variants as $index => $variant) {
                     $productVariant = ProductVariant::create([
                         'product_id' => $product->id,
                         'size' => $variant['name'],
@@ -253,6 +291,17 @@ class ProductController extends Controller
                     ]);
 
                     $this->ensureVariantCodes($productVariant);
+
+                    if (isset($variantImageUploads[$index]) && $variantImageUploads[$index]) {
+                        $variantImagePath = ImageStorage::storeUploadedImageAsWebp($variantImageUploads[$index], 'products');
+                        $storedImagePaths[] = $variantImagePath;
+
+                        ProductImage::create([
+                            'product_id' => $product->id,
+                            'product_variant_id' => $productVariant->id,
+                            'path' => $variantImagePath,
+                        ]);
+                    }
                 }
             });
         } catch (\Throwable $exception) {
@@ -404,7 +453,18 @@ class ProductController extends Controller
 
         $request->validate([
             'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'variant_id' => 'nullable|exists:product_variants,id',
         ]);
+
+            $product = Product::findOrFail($productId);
+            $variantId = $request->input('variant_id');
+
+            if (!empty($variantId)) {
+                $variant = ProductVariant::where('id', $variantId)
+                    ->where('product_id', $product->id)
+                    ->firstOrFail();
+                $variantId = $variant->id;
+            }
     
             // Guardar la imagen en el almacenamiento
             $path = ImageStorage::storeUploadedImageAsWebp($request->file('image'), 'products');
@@ -412,6 +472,7 @@ class ProductController extends Controller
             // Asociar la imagen al producto
             ProductImage::create([
                 'product_id' => $productId,
+                'product_variant_id' => $variantId,
                 'path' => $path,
             ]);
     
@@ -1162,7 +1223,16 @@ class ProductController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+
         $product = Product::findOrFail($id);
+
+        if ($tenantId > 0 && (int) $product->tenant_id !== $tenantId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No autorizado.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -1171,6 +1241,18 @@ class ProductController extends Controller
             'is_active' => 'required|boolean',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
+
+        $categoryBelongsToTenant = Category::query()
+            ->where('id', $validated['category'])
+            ->where('tenant_id', (int) $product->tenant_id)
+            ->exists();
+
+        if (!$categoryBelongsToTenant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La categoría seleccionada no pertenece al tenant del producto.',
+            ], 422);
+        }
 
         $product->update([
             'name' => $validated['name'],

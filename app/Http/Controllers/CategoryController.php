@@ -14,11 +14,13 @@ class CategoryController extends Controller
 {
     public function index()
     {
-        $user = auth()->user();
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
 
-        $categories = Category::with(['products' => function ($query) use ($user) {
-            $query->where('is_active', true)->where('tenant_id', $user->tenant_id)->with(['variants']);
-        }])->get();
+        $categories = Category::with(['products' => function ($query) use ($tenantId) {
+            $query->where('is_active', true)->where('tenant_id', $tenantId)->with(['variants']);
+        }])
+            ->where('tenant_id', $tenantId)
+            ->get();
     
         // Calcular total de stock por categoría
         foreach ($categories as $category) {
@@ -37,7 +39,7 @@ class CategoryController extends Controller
     }
     public function getCategories(Request $request)
     {
-        $tenantId = $request->tenant_id; 
+        $tenantId = $this->resolveTenantId($request);
 
         if (!$tenantId || !is_numeric($tenantId)) {
             return response()->json(['error' => 'Tenant ID inválido o no enviado'], 400);
@@ -56,17 +58,24 @@ class CategoryController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $tenantId = $this->resolveTenantId($request);
+        if ($tenantId <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo identificar el tenant para crear la categoría.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'name' => [
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('categories', 'name')->where(function ($query) use ($request) {
-                    return $query->where('tenant_id', $request->input('tenant_id'));
+                Rule::unique('categories', 'name')->where(function ($query) use ($tenantId) {
+                    return $query->where('tenant_id', $tenantId);
                 }),
             ],
             'description' => 'nullable|string',
-            'tenant_id' => 'required',
             'image' => 'nullable|file|mimes:png,jpg,jpeg,gif,svg,webp|max:5120',
         ]);
 
@@ -80,7 +89,7 @@ class CategoryController extends Controller
             $category = Category::create([
                 'name' => $validated['name'],
                 'description' => $validated['description'] ?? null,
-                'tenant_id' => $validated['tenant_id'],
+                'tenant_id' => $tenantId,
                 'image' => $imagePath,
             ]);
 
@@ -95,7 +104,7 @@ class CategoryController extends Controller
             }
 
             Log::error('Error al crear categoria', [
-                'tenant_id' => $validated['tenant_id'] ?? null,
+                'tenant_id' => $tenantId,
                 'name' => $validated['name'] ?? null,
                 'error' => $exception->getMessage(),
             ]);
@@ -109,17 +118,27 @@ class CategoryController extends Controller
 
     public function show(Category $category)
     {
+        $this->abortIfCategoryOutOfTenant($category);
         return view('categories.show', compact('category')); // Vista para mostrar una categoría específica.
     }
 
     public function edit(Category $category)
     {
+        $this->abortIfCategoryOutOfTenant($category);
         return view('categories.edit', compact('category')); // Vista para editar una categoría.
     }
 
     public function update(Request $request, Category $category)
     {
         DB::raw("SET @user_id = " . auth()->id());
+
+        $tenantId = $this->resolveTenantId($request);
+        if ($tenantId <= 0 || (int) $category->tenant_id !== $tenantId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No autorizado para editar esta categoría.',
+            ], 403);
+        }
 
         $validated = $request->validate([
             'name' => [
@@ -128,8 +147,8 @@ class CategoryController extends Controller
                 'max:255',
                 Rule::unique('categories', 'name')
                     ->ignore($category->id)
-                    ->where(function ($query) use ($category) {
-                        return $query->where('tenant_id', $category->tenant_id);
+                    ->where(function ($query) use ($tenantId) {
+                        return $query->where('tenant_id', $tenantId);
                     }),
             ],
             'description' => 'nullable|string',
@@ -163,11 +182,19 @@ class CategoryController extends Controller
         ], 200);
     }
 
-    public function toggleStatus($id)
+    public function toggleStatus(Request $request, $id)
     {
         DB::raw("SET @user_id = " . auth()->id());
-        // Buscar la categoría
-        $category = Category::findOrFail($id);
+
+        $tenantId = $this->resolveTenantId($request);
+        if ($tenantId <= 0) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No se pudo identificar el tenant.',
+            ], 422);
+        }
+
+        $category = Category::where('tenant_id', $tenantId)->findOrFail($id);
     
         // Cambiar el estado de la categoría
         $category->is_active = !$category->is_active;
@@ -175,7 +202,9 @@ class CategoryController extends Controller
     
         // Si la categoría se desactiva, desactivar también sus productos
         if ($category->is_active == 0) {
-            Product::where('category_id', $category->id)->update(['is_active' => 0]);
+            Product::where('tenant_id', $tenantId)
+                ->where('category_id', $category->id)
+                ->update(['is_active' => 0]);
         }
     
         return response()->json([
@@ -189,6 +218,8 @@ class CategoryController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $this->abortIfCategoryOutOfTenant($category);
+
         // Eliminar imagen si existe
         if ($category->image && ImageStorage::exists($category->image)) {
             ImageStorage::delete($category->image);
@@ -199,6 +230,24 @@ class CategoryController extends Controller
         return redirect()
             ->route('categories.index')
             ->with('success', 'Categoría eliminada con éxito.');
+    }
+
+    private function resolveTenantId(Request $request): int
+    {
+        $authTenantId = (int) (auth()->user()->tenant_id ?? 0);
+        if ($authTenantId > 0) {
+            return $authTenantId;
+        }
+
+        return (int) $request->input('tenant_id', 0);
+    }
+
+    private function abortIfCategoryOutOfTenant(Category $category): void
+    {
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        if ($tenantId <= 0 || (int) $category->tenant_id !== $tenantId) {
+            abort(403, 'No autorizado para operar esta categoría.');
+        }
     }
 
 }

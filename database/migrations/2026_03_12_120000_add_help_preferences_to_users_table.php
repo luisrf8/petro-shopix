@@ -13,6 +13,10 @@ class AddHelpPreferencesToUsersTable extends Migration
      */
     public function up()
     {
+        if (!Schema::hasTable('users')) {
+            return;
+        }
+
         Schema::table('users', function (Blueprint $table) {
             if (!Schema::hasColumn('users', 'help_disable_global')) {
                 $table->boolean('help_disable_global')->default(false);
@@ -31,6 +35,10 @@ class AddHelpPreferencesToUsersTable extends Migration
      */
     public function down()
     {
+        if (!Schema::hasTable('users')) {
+            return;
+        }
+
         Schema::table('users', function (Blueprint $table) {
             if (Schema::hasColumn('users', 'help_disabled_routes')) {
                 $table->dropColumn('help_disabled_routes');

@@ -34,6 +34,7 @@
                         <th>Usuario</th>
                         <th>Entrega</th>
                         <th># Productos</th>
+                        <th>Documento</th>
                         <th>Estado</th>
                         <th>Devolución</th>
                         <th>Acciones</th>
@@ -50,6 +51,14 @@
                             </span>
                           </td>
                           <td>{{ $order->total_items }}</td>
+                          <td>
+                            @php
+                              $mode = (string) ($order->document_issue_mode ?? 'delivery_note');
+                            @endphp
+                            <span class="badge badge-sm {{ $mode === 'electronic_invoice' ? 'bg-gradient-success' : 'bg-gradient-secondary' }}">
+                              {{ $mode === 'electronic_invoice' ? 'Factura digital' : 'Nota de entrega' }}
+                            </span>
+                          </td>
                           <td class="text-center">
                             <span class="badge badge-sm
                               {{ $order->status == '0' ? 'bg-gradient-warning' :

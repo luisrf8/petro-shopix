@@ -149,6 +149,7 @@
                   <th>Email</th>
                   <th>Tipo</th>
                   <th>Rubro</th>
+                  <th>Facturación digital</th>
                   <th>Plan</th>
                   <th>Editar</th>
                   <th>Eliminar</th>
@@ -170,6 +171,13 @@
                     <td>{{ $tenant->email }}</td>
                     <td>{{ $tenant->business_type ?? 'No definido' }}</td>
                     <td>{{ $tenant->economic_activity ?? 'No definido' }}</td>
+                    <td>
+                      @if((bool) ($tenant->electronic_invoicing_enabled ?? false))
+                        <span class="badge bg-success">Activa</span>
+                      @else
+                        <span class="badge bg-secondary">Inactiva</span>
+                      @endif
+                    </td>
 
                     <td>
                       @php
@@ -274,6 +282,7 @@
                         data-owner-name="{{ $owner?->name }}"
                         data-owner-email="{{ $owner?->email }}"
                         data-plan-id="{{ $latestPayment?->plan_id }}"
+                        data-electronic-invoicing-enabled="{{ (int) (($tenant->electronic_invoicing_enabled ?? false) ? 1 : 0) }}"
                         data-active="{{ $tenant->is_active }}">
                         Editar
                       </a>
@@ -381,6 +390,15 @@
                 <option value="0">Inactivo</option>
               </select>
             </div>
+
+            <div class="mb-3">
+              <label for="editTenantElectronicInvoicingEnabled" class="form-label">Facturación digital</label>
+              <select class="form-select border border-1 p-2" id="editTenantElectronicInvoicingEnabled" name="electronic_invoicing_enabled" required>
+                <option value="1">Activa</option>
+                <option value="0">Inactiva</option>
+              </select>
+              <small class="text-muted">Controla si la tienda usa integración de facturación electrónica.</small>
+            </div>
             <div class="d-flex flex-row-reverse">
               <button type="submit" class="btn btn-info">Guardar</button>
             </div>
@@ -477,6 +495,7 @@
       document.getElementById('editOwnerPassword').value = '';
       document.getElementById('editTenantPlan').value = this.dataset.planId || '';
       document.getElementById('editTenantStatus').value = this.dataset.active || '1';
+      document.getElementById('editTenantElectronicInvoicingEnabled').value = this.dataset.electronicInvoicingEnabled || '0';
 
       // 👇 Aquí actualizamos la vista previa del logo dinámicamente
       const logoPreview = document.getElementById('editTenantLogoPreview');

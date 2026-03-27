@@ -63,7 +63,7 @@
     }
 
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: 'SF Pro Text', 'Google Sans', 'Inter', sans-serif;
       background-color: #f3f4f6;
       color: #111827;
     }
@@ -269,7 +269,7 @@
     }
 
     .main-image {
-      max-height: 500px;
+      max-height: 560px;
       width: 100%;
       object-fit: cover;
       border-radius: 12px;
@@ -376,6 +376,116 @@
         border-color: #eee;
         color: #999;
         cursor: not-allowed;
+    }
+
+    .variant-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.55rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .variant-button {
+      position: relative;
+      min-width: 0;
+      margin-right: 0;
+      margin-bottom: 0;
+      border: 1px solid #d8e1ee;
+      border-radius: 12px;
+      padding: 0.45rem;
+      background: linear-gradient(165deg, #ffffff 0%, #f8fbff 100%);
+      box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+    }
+
+    .variant-button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(var(--tenant-accent-rgb), 0.48);
+      box-shadow: 0 12px 22px rgba(15, 23, 42, 0.1);
+    }
+
+    .variant-chip-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .variant-media {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid #d5dbe5;
+      background: #fff;
+      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .variant-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .variant-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.1rem;
+      line-height: 1.2;
+    }
+
+    .variant-price-row {
+      margin-top: 0.18rem;
+      display: flex;
+      align-items: baseline;
+      gap: 0.25rem;
+      font-size: 0.84rem;
+    }
+
+    .variant-button.selected {
+      border-color: rgba(var(--tenant-primary-rgb), 0.68);
+      background: linear-gradient(145deg, rgba(var(--tenant-primary-rgb), 0.95), rgba(var(--tenant-secondary-rgb), 0.95));
+      box-shadow: 0 14px 22px rgba(var(--tenant-primary-rgb), 0.28);
+      color: #fff;
+    }
+
+    .variant-button.selected .variant-media {
+      border-color: rgba(255, 255, 255, 0.7);
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+    }
+
+    .variant-button.selected .text-muted,
+    .variant-button.selected .variant-discount {
+      color: rgba(255, 255, 255, 0.85) !important;
+    }
+
+    .variant-discount {
+      color: #0f8a49;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .variant-preview-pill {
+      border: 1px solid #dbe4f0;
+      border-radius: 999px;
+      background: #fff;
+      color: #334155;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.35rem 0.72rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-bottom: 0.65rem;
+    }
+
+    .variant-preview-pill strong {
+      color: var(--tenant-primary);
     }
 
     .product-gallery-thumbs {
@@ -587,12 +697,19 @@
               <h5 class="fw-semibold mb-0">Selecciona una variante</h5>
               <small class="text-muted">Elige talla o presentación</small>
             </div>
-            <div id="variants-container" class="d-flex flex-wrap gap-2 mb-2">
+            <div id="selected-variant-indicator" class="variant-preview-pill d-none">
+              <i class="bi bi-stars"></i>
+              <span>Seleccionado: <strong id="selected-variant-label">-</strong></span>
+            </div>
+
+            <div id="variants-container" class="variant-grid">
                 @forelse ($product->variants as $variant)
                 @php
                   $productDiscount = (float) ($product->discount_percentage ?? 0);
                   $variantDiscount = (float) ($variant->discount_percentage ?? 0);
                   $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+                  $variantImage = optional($variant->images->first())->path;
+                  $variantImageUrl = $variantImage ? (\App\Support\ImageStorage::url($variantImage) ?? asset('assets/img/shopix5.png')) : (isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'));
                 @endphp
                     <div 
                         class="variant-button"
@@ -601,16 +718,29 @@
                   data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}"
                         data-stock="{{ $variant->stock }}"
                         data-product-name="{{ $product->name }}"
+                        data-image-src="{{ $variantImageUrl }}"
                         {{ $variant->stock <= 0 ? 'disabled' : '' }}
                     >
-                        <span class="fw-semibold">{{ $variant->size }}</span>
-                  <span class="text-muted small">/ {{ number_format($effectiveVariantPrice, 2) }} $</span>
+                        <div class="variant-chip-top">
+                          <div class="variant-media">
+                            <img src="{{ $variantImageUrl }}" alt="Variante {{ $variant->size }}">
+                          </div>
+                          @if ($variant->stock <= 0)
+                            <span class="badge bg-danger">Agotado</span>
+                          @else
+                            <span class="badge text-bg-light border">{{ $variant->stock }} disp.</span>
+                          @endif
+                        </div>
+                        <div class="variant-meta">
+                          <span class="fw-semibold">{{ $variant->size }}</span>
+                          <div class="variant-price-row">
+                            <span>{{ number_format($effectiveVariantPrice, 2) }}</span>
+                            <span class="text-muted small">$</span>
+                          </div>
+                        </div>
                   @if($productDiscount > 0 || $variantDiscount > 0)
-                    <small class="text-success d-block">Desc: {{ number_format($productDiscount + $variantDiscount, 2) }}%</small>
+                    <small class="variant-discount d-block mt-1">Desc: {{ number_format($productDiscount + $variantDiscount, 2) }}%</small>
                   @endif
-                        @if ($variant->stock <= 0)
-                            <span class="badge bg-danger ms-1">Agotado</span>
-                        @endif
                     </div>
                 @empty
                     <p class="text-muted">No hay variantes disponibles.</p>
@@ -725,6 +855,8 @@
         const addToCartButton = document.getElementById('add-to-cart-button');
         const openCartButton = document.getElementById('open-cart-button');
         const whatsappButton = document.getElementById('whatsapp-button');
+        const selectedVariantIndicator = document.getElementById('selected-variant-indicator');
+        const selectedVariantLabel = document.getElementById('selected-variant-label');
         let selectedVariant = null;
         const tenantSlug = @json($tenant->slug);
 
@@ -763,8 +895,23 @@
                     size: button.dataset.size,
                     price: button.dataset.price,
                   productName: button.dataset.productName,
-                  productId: @json($product->id)
+                  productId: @json($product->id),
+                  imageSrc: button.dataset.imageSrc || null,
                 };
+
+                if (mainImage && selectedVariant.imageSrc) {
+                  mainImage.src = selectedVariant.imageSrc;
+                  const matchingThumb = Array.from(thumbnails).find(t => t.dataset.mainSrc === selectedVariant.imageSrc);
+                  thumbnails.forEach(t => t.classList.remove('active'));
+                  if (matchingThumb) {
+                    matchingThumb.classList.add('active');
+                  }
+                }
+
+                if (selectedVariantIndicator && selectedVariantLabel) {
+                  selectedVariantLabel.textContent = `${selectedVariant.size} (${selectedVariant.price} $)`;
+                  selectedVariantIndicator.classList.remove('d-none');
+                }
 
                 cartDebug('variant:selected', selectedVariant);
 

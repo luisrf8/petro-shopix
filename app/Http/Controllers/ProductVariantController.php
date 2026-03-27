@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ProductImage;
 use App\Models\ProductVariant;
+use App\Support\ImageStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -25,6 +27,16 @@ class ProductVariantController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $variants = $request->input('variants', []);
+        if (is_string($variants)) {
+            $variants = json_decode($variants, true);
+        }
+        if (!is_array($variants)) {
+            $variants = [];
+        }
+
+        $request->merge(['variants' => $variants]);
+
         $request->validate([
             'product_id' => 'required|integer|exists:products,id',
             'variants' => 'required|array',
@@ -33,9 +45,12 @@ class ProductVariantController extends Controller
             'variants.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
             'variants.*.stock' => 'required|integer',
             'variants.*.barcode' => 'nullable|string|max:100',
+            'variant_images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
         ]);
-    
-        foreach ($request->variants as $variant) {
+
+        $variantImages = $request->file('variant_images', []);
+
+        foreach ($request->variants as $index => $variant) {
             $barcode = $this->sanitizeVariantCode($variant['barcode'] ?? null);
             $this->assertVariantCodeAvailable($barcode);
 
@@ -57,6 +72,15 @@ class ProductVariantController extends Controller
             }
 
             $createdVariant->save();
+
+            if (isset($variantImages[$index]) && $variantImages[$index]) {
+                $path = ImageStorage::storeUploadedImageAsWebp($variantImages[$index], 'products');
+                ProductImage::create([
+                    'product_id' => $request->product_id,
+                    'product_variant_id' => $createdVariant->id,
+                    'path' => $path,
+                ]);
+            }
         }
     
         return response()->json(['success' => true, 'message' => 'Variantes guardadas exitosamente.']);
@@ -77,6 +101,7 @@ class ProductVariantController extends Controller
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'stock' => 'required|integer',
             'barcode' => 'nullable|string|max:100',
+            'image' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
         ]);
 
         $barcode = $this->sanitizeVariantCode($request->input('barcode'));
@@ -94,6 +119,21 @@ class ProductVariantController extends Controller
         if (empty($productVariant->barcode)) {
             $productVariant->barcode = $this->generateUniqueVariantCode('BCV');
             $productVariant->save();
+        }
+
+        if ($request->hasFile('image')) {
+            $existingImage = $productVariant->images()->first();
+            if ($existingImage) {
+                ImageStorage::delete($existingImage->path);
+                $existingImage->delete();
+            }
+
+            $path = ImageStorage::storeUploadedImageAsWebp($request->file('image'), 'products');
+            ProductImage::create([
+                'product_id' => $productVariant->product_id,
+                'product_variant_id' => $productVariant->id,
+                'path' => $path,
+            ]);
         }
     
         // Responder con JSON para las solicitudes AJAX

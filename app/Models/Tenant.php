@@ -48,6 +48,7 @@ class Tenant extends Model
         'tiktok',
         'instagram',
         'facebook',
+        'electronic_invoicing_enabled',
     ];
 
     // Relaciones

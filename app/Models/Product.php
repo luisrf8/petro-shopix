@@ -31,6 +31,11 @@ class Product extends Model
 
     public function images()
     {
+        return $this->hasMany(ProductImage::class)->whereNull('product_variant_id');
+    }
+
+    public function allImages()
+    {
         return $this->hasMany(ProductImage::class);
     }
     public function category()

@@ -946,6 +946,7 @@ class TenantController extends Controller
             'owner_password'  => 'nullable|string|min:8',
             'plan_id' => 'nullable|exists:plans,id',
             'is_active' => 'nullable|boolean',
+            'electronic_invoicing_enabled' => 'nullable|boolean',
         ]);
 
         if (array_key_exists('economic_activity', $validated)) {
@@ -1068,6 +1069,7 @@ class TenantController extends Controller
             'instagram' => $validated['instagram'] ?? $tenant->instagram,
             'facebook' => $validated['facebook'] ?? $tenant->facebook,
             'is_active' => $validated['is_active'] ?? $tenant->is_active,
+            'electronic_invoicing_enabled' => $validated['electronic_invoicing_enabled'] ?? $tenant->electronic_invoicing_enabled,
         ];
 
         $tenant->fill($tenantData);
@@ -1394,7 +1396,7 @@ class TenantController extends Controller
         }
 
         // Cargar cualquier relación necesaria (ej: category, variants, images)
-        $product->load(['category', 'variants', 'images']);
+        $product->load(['category', 'variants.images', 'images']);
 
         $cartEnabled = $this->tenantHasProPlan($tenant);
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);

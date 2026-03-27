@@ -35,14 +35,17 @@ use App\Models\Tax;
 use App\Models\Tenant;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\ElectronicDocument;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
+use Illuminate\Support\Arr;
 use App\Support\WorkflowNotifier;
 use App\Support\ImageStorage;
+use App\Services\TheFactoryHkaService;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class SaleController extends Controller
@@ -67,6 +70,7 @@ class SaleController extends Controller
             ->get();
         $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
         $taxes = Tax::all();
+        $tenant = Tenant::find($user->tenant_id);
 
         // Traer todas las categorías
         $categories = Category::where('tenant_id', $user->tenant_id)
@@ -78,7 +82,7 @@ class SaleController extends Controller
                 ->with('warning', 'Debes crear al menos una categoría antes de registrar ventas.');
         }
 
-        return view('sales', compact('categories', 'paymentMethods', 'productItems', 'materialPackages', 'dollarRate', 'customerId', 'taxes'));
+        return view('sales', compact('categories', 'paymentMethods', 'productItems', 'materialPackages', 'dollarRate', 'customerId', 'taxes', 'tenant'));
     }
     
     public function store(Request $request)
@@ -86,6 +90,7 @@ class SaleController extends Controller
         $validated = $request->validate([
             'delivery_type' => 'nullable|in:pickup,shipping',
             'delivery_address' => 'nullable|string|max:500',
+            'sale_document_mode' => 'nullable|in:delivery_note,electronic_invoice',
             'create_new_customer' => 'nullable|boolean',
             'customer_new' => 'nullable|array',
             'customer_new.name' => 'required_if:create_new_customer,1|string|max:255',
@@ -137,6 +142,7 @@ class SaleController extends Controller
         $markDelivered = (bool) ($validated['mark_delivered'] ?? false);
         $markPaymentsPaid = (bool) ($validated['mark_payments_paid'] ?? false);
         $markSaleCompleted = (bool) ($validated['mark_sale_completed'] ?? false);
+        $requestedDocumentMode = (string) ($validated['sale_document_mode'] ?? 'delivery_note');
 
         if ($deliveryType === 'shipping' && $deliveryAddress === '') {
             return response()->json(['error' => 'La dirección es obligatoria para entregas por envío.'], 422);
@@ -153,6 +159,13 @@ class SaleController extends Controller
             return response()->json(['error' => 'No se enviaron productos válidos.'], 400);
         }
         $tienda = Tenant::find($tenantId);
+
+        if ($requestedDocumentMode === 'electronic_invoice' && !(bool) ($tienda?->electronic_invoicing_enabled ?? false)) {
+            return response()->json(['error' => 'La facturacion digital esta desactivada para esta tienda.'], 422);
+        }
+
+        $documentIssueMode = $requestedDocumentMode === 'electronic_invoice' ? 'electronic_invoice' : 'delivery_note';
+
         // Crear orden de venta
         $salesOrder = SalesOrder::create([
             'user_id' => $customerId,
@@ -162,6 +175,7 @@ class SaleController extends Controller
             'preference' => $preference,
             'deliver_status' => $markDelivered ? 1 : 0,
             'tenant_id' => $tenantId,
+            'document_issue_mode' => $documentIssueMode,
         ]);
 
         // Crear detalles y actualizar stock
@@ -691,6 +705,7 @@ class SaleController extends Controller
                     'date' => $order->date,
                     'status' => (int) $order->status,
                     'deliver_status' => (int) ($order->deliver_status ?? 0),
+                    'document_issue_mode' => (string) ($order->document_issue_mode ?? 'delivery_note'),
                     'preference' => $order->preference,
                     'address' => $order->address,
                     'tenant_name' => $order->tenant->name ?? 'Tienda',
@@ -710,7 +725,7 @@ class SaleController extends Controller
 
     public function showByOrder($id)
     {
-        $order = SalesOrder::with(['user', 'tenant', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment', 'payments.images'])->find($id);
+        $order = SalesOrder::with(['user', 'tenant', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment', 'payments.images', 'electronicDocuments'])->find($id);
         // Calcular el total de la orden
         $totalOrden = $order->details->sum(function ($detalle) {
             return $detalle->amount;
@@ -731,6 +746,7 @@ class SaleController extends Controller
         $order->total_pagado = $totalPagado; // Agregar total pagado al objeto de la orden
         $order->total_orden = $totalOrden; // Agregar total de la orden al objeto de la orden
         $order->has_returns = $order->returns->isNotEmpty(); // Verificar si tiene devoluciones
+        $order->latest_electronic_document = $order->electronicDocuments->sortByDesc('id')->first();
         return view('salesOrderDetail', compact('order', 'totalOrden', 'totalPagado'));
     }
     public function showPublicOrder($id)
@@ -1047,6 +1063,8 @@ class SaleController extends Controller
                 'order_id' => $order->id,
                 'action' => 'prepare_delivery',
             ]);
+
+            $this->attemptElectronicEmission($order);
         }
     
         // Si el nuevo estado es 1, generar el PDF y enviar el correo
@@ -1120,6 +1138,33 @@ class SaleController extends Controller
             'message' => 'Orden actualizada, pero no se generó PDF ni se envió correo.'
         ]);
     }
+
+    public function updateDocumentMode(SalesOrder $order, Request $request)
+    {
+        $user = auth()->user();
+        if ((int) ($order->tenant_id ?? 0) !== (int) ($user->tenant_id ?? 0)) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'document_issue_mode' => 'required|in:delivery_note,electronic_invoice',
+        ]);
+
+        $tenantElectronicEnabled = (bool) ($order->tenant?->electronic_invoicing_enabled ?? false);
+        if ($validated['document_issue_mode'] === 'electronic_invoice' && !$tenantElectronicEnabled) {
+            return back()->with('error', 'La facturación digital está desactivada para esta tienda.');
+        }
+
+        $order->document_issue_mode = $validated['document_issue_mode'];
+        $order->save();
+
+        if ($order->document_issue_mode === 'electronic_invoice') {
+            $this->attemptElectronicEmission($order);
+        }
+
+        return back()->with('success', 'Tipo de documento de la venta actualizado.');
+    }
+
     public function orderDeliverToggleStatus($id, Request $request)
     {
         DB::raw("SET @user_id = " . auth()->id());
@@ -1226,6 +1271,11 @@ class SaleController extends Controller
         // Enviar correo de confirmación si el pago es aprobado
         if ($payment->status == 1) {
             $userEmail = $payment->salesOrder?->user?->email;
+
+            if ($payment->salesOrder) {
+                $this->attemptElectronicEmission($payment->salesOrder);
+            }
+
             if (!empty($userEmail)) {
                 try {
                     Mail::to($userEmail)->send(new PaymentConfirmationMail($payment));
@@ -1251,6 +1301,69 @@ class SaleController extends Controller
             ]);
         }
     }
+
+    private function attemptElectronicEmission(SalesOrder $order): void
+    {
+        try {
+            $order->loadMissing(['payments', 'details', 'details.variant.product', 'details.taxes', 'tenant', 'user']);
+
+            if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
+                return;
+            }
+
+            if (!(bool) ($order->tenant?->electronic_invoicing_enabled ?? false)) {
+                return;
+            }
+
+            $alreadyIssued = ElectronicDocument::query()
+                ->where('sales_order_id', $order->id)
+                ->whereNotNull('issued_at')
+                ->where('is_annulled', false)
+                ->exists();
+
+            if ($alreadyIssued) {
+                return;
+            }
+
+            $hasApprovedPayments = $order->payments->contains(fn (Payment $payment) => (int) $payment->status === 1);
+            if (!$hasApprovedPayments && (int) $order->status !== 1) {
+                return;
+            }
+
+            $service = app(TheFactoryHkaService::class);
+            if (!$service->isConfigured()) {
+                return;
+            }
+
+            $payload = $service->buildInvoicePayloadFromOrder($order);
+            $response = $service->emitDocument($payload);
+
+            ElectronicDocument::create([
+                'tenant_id' => $order->tenant_id,
+                'sales_order_id' => $order->id,
+                'created_by' => auth()->id(),
+                'provider' => 'thefactoryhka',
+                'tipo_documento' => (string) Arr::get($payload, 'encabezado.identificacionDocumento.tipoDocumento', '01'),
+                'serie' => (string) Arr::get($payload, 'encabezado.identificacionDocumento.serie', ''),
+                'numero_documento' => (string) Arr::get($response, 'data.resultado.numeroDocumento', Arr::get($payload, 'encabezado.identificacionDocumento.numeroDocumento')),
+                'numero_control' => (string) Arr::get($response, 'data.resultado.numeroControl', ''),
+                'transaccion_id' => (string) Arr::get($response, 'data.resultado.transaccionId', Arr::get($payload, 'encabezado.identificacionDocumento.transaccionId')),
+                'estado_documento' => (string) Arr::get($response, 'data.resultado.autorizado', Arr::get($response, 'data.resultado.imprentaDigital', '')),
+                'codigo' => (string) Arr::get($response, 'data.codigo', ''),
+                'mensaje' => (string) ($response['message'] ?? ''),
+                'url_consulta' => (string) Arr::get($response, 'data.resultado.urlConsulta', ''),
+                'request_payload' => $payload,
+                'response_payload' => $response['data'] ?? null,
+                'issued_at' => ($response['ok'] ?? false) ? now() : null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo emitir factura electrónica automáticamente', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
     public function processReturn(Request $request, $orderId)
     {
         DB::raw("SET @user_id = " . auth()->id());

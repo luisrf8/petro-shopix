@@ -277,6 +277,12 @@
               <span class="nav-link-text ms-1">Ventas Realizadas</span>
             </a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/my-electronic-documents">
+              <i class="material-symbols-rounded opacity-5">receipt_long</i>
+              <span class="nav-link-text ms-1">Facturación Digital</span>
+            </a>
+          </li>
         @endif
 
         @if(($canSeeSalesOrders || $canInventoryEntries) && !$hasFreePlanRestriction && !$hasBasicPlanRestriction)
@@ -327,6 +333,12 @@
             <a class="nav-link text-dark" href="/tenants">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
               <span class="nav-link-text ms-1">Tiendas</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/electronic-documents">
+              <i class="material-symbols-rounded opacity-5">receipt_long</i>
+              <span class="nav-link-text ms-1">Facturación Digital</span>
             </a>
           </li>
                     <li class="nav-item">

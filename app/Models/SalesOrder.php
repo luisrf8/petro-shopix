@@ -9,7 +9,7 @@ class SalesOrder extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'date', 'address', 'status', 'preference', 'deliver_status', 'tenant_id'];
+    protected $fillable = ['user_id', 'date', 'address', 'status', 'preference', 'deliver_status', 'tenant_id', 'document_issue_mode'];
 
     public function details()
     {
@@ -32,5 +32,10 @@ class SalesOrder extends Model
     public function returns()
     {
         return $this->hasMany(SalesReturn::class);
+    }
+
+    public function electronicDocuments()
+    {
+        return $this->hasMany(ElectronicDocument::class);
     }
 }

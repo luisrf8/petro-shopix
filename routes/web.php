@@ -24,7 +24,8 @@ use App\Http\Controllers\{
     NotificationController,
     HelpPreferenceController,
     GoogleDriveController,
-    ReportController
+    ReportController,
+    ElectronicInvoicingController
 };
 
 // RUTAS DE INVITADOS
@@ -97,6 +98,16 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/sales-orders', [SaleController::class, 'viewOrders'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.orders');
     Route::get('/sales-orders/pending-delivery', [SaleController::class, 'viewPendingDeliveryOrders'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.orders.pendingDelivery');
     Route::get('/sales/{id}', [SaleController::class, 'showByOrder'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.showByOrder');
+    Route::post('/sales-orders/{order}/electronic/emit', [ElectronicInvoicingController::class, 'emit'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.emit');
+    Route::post('/sales-orders/{order}/electronic/status', [ElectronicInvoicingController::class, 'status'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.electronic.status');
+    Route::post('/sales-orders/{order}/electronic/download', [ElectronicInvoicingController::class, 'download'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.electronic.download');
+    Route::post('/sales-orders/{order}/electronic/send-email', [ElectronicInvoicingController::class, 'sendEmail'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.sendEmail');
+    Route::post('/sales-orders/{order}/electronic/annul', [ElectronicInvoicingController::class, 'annul'])->middleware('role.name:owner,admin,administrador')->name('sales.electronic.annul');
+    Route::post('/sales-orders/{order}/electronic/metadata', [ElectronicInvoicingController::class, 'metadata'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.metadata');
+    Route::post('/sales-orders/{order}/document-mode', [SaleController::class, 'updateDocumentMode'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.documentMode.update');
+    Route::get('/my-electronic-documents', [ElectronicInvoicingController::class, 'tenantIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.electronic.documents.tenant');
+    Route::get('/electronic-documents', [ElectronicInvoicingController::class, 'index'])->middleware('role.name:4')->name('electronic.documents.index');
+    Route::post('/electronic-documents/{electronicDocument}/retry', [ElectronicInvoicingController::class, 'retry'])->middleware('role.name:4')->name('electronic.documents.retry');
     Route::post('/sales/{id}/return', [SaleController::class, 'processReturn'])->middleware('role.name:owner,admin,administrador')->name('sales.return');
     Route::post('/create-sale', [SaleController::class, 'store'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller');
     Route::post('/sales/scan-code', [SaleController::class, 'resolveScanCode'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.resolveScanCode');

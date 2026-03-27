@@ -504,6 +504,23 @@
                     </div>
 
                     <div class="card p-3 mb-3">
+                        <h6 class="mb-3">Documento de la venta</h6>
+                        <div class="d-flex gap-4 flex-wrap">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="sale_document_mode" id="sale_document_delivery" value="delivery_note" {{ (bool) ($tenant->electronic_invoicing_enabled ?? false) ? '' : 'checked' }}>
+                                <label class="form-check-label" for="sale_document_delivery">Nota de entrega</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="sale_document_mode" id="sale_document_electronic" value="electronic_invoice" {{ (bool) ($tenant->electronic_invoicing_enabled ?? false) ? 'checked' : '' }} {{ (bool) ($tenant->electronic_invoicing_enabled ?? false) ? '' : 'disabled' }}>
+                                <label class="form-check-label" for="sale_document_electronic">Facturación digital</label>
+                            </div>
+                        </div>
+                        @if(!(bool) ($tenant->electronic_invoicing_enabled ?? false))
+                            <small class="text-muted d-block mt-2">La facturación digital está desactivada para esta tienda. Solo se permite nota de entrega.</small>
+                        @endif
+                    </div>
+
+                    <div class="card p-3 mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="mb-0">Estado inicial de la venta</h6>
                             <div class="form-check m-0">
@@ -656,6 +673,7 @@
 
         const dollar = @json($dollarRate);
         const dollarRate = Number(dollar.rate);
+        const tenantElectronicInvoicingEnabled = @json((bool) ($tenant->electronic_invoicing_enabled ?? false));
         
         const authUser = @json($authUser);
         const customerId = Number(authUser?.id || 0);
@@ -1703,6 +1721,8 @@ function updateQuantity(id, newQty) {
             const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
             const deliveryAddressData = buildDeliveryAddress();
             const deliveryPreferenceLabel = deliveryType === 'shipping' ? 'Envío' : 'Retiro en tienda';
+            const saleDocumentMode = document.querySelector('input[name="sale_document_mode"]:checked')?.value || 'delivery_note';
+            const saleDocumentModeLabel = saleDocumentMode === 'electronic_invoice' ? 'Facturación digital' : 'Nota de entrega';
             const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
             const newCustomerName = (document.getElementById('newCustomerName')?.value || '').trim();
             const newCustomerEmail = (document.getElementById('newCustomerEmail')?.value || '').trim();
@@ -1750,6 +1770,10 @@ function updateQuantity(id, newQty) {
             const customerDiv = document.createElement('p');
             customerDiv.innerHTML = `<strong>Cliente:</strong> ${shouldCreateNewCustomer ? 'Nuevo cliente' : 'Cliente actual'}`;
             container.appendChild(customerDiv);
+
+            const documentModeDiv = document.createElement('p');
+            documentModeDiv.innerHTML = `<strong>Documento:</strong> ${saleDocumentModeLabel}`;
+            container.appendChild(documentModeDiv);
 
             if (shouldCreateNewCustomer) {
                 const customerDataDiv = document.createElement('p');
@@ -1953,6 +1977,14 @@ function updateQuantity(id, newQty) {
             input.addEventListener('change', updateDeliveryAddressVisibility);
         });
 
+        document.querySelectorAll('input[name="sale_document_mode"]').forEach(input => {
+            input.addEventListener('change', function () {
+                if (!document.getElementById('step3').classList.contains('d-none')) {
+                    renderSummary();
+                }
+            });
+        });
+
         document.getElementById('deliveryAddressDetail').addEventListener('input', function () {
             if (!document.getElementById('step3').classList.contains('d-none')) {
                 renderSummary();
@@ -2034,6 +2066,7 @@ function updateQuantity(id, newQty) {
 
     const tenantId = Number(authUser.tenant_id);
     const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
+    const saleDocumentMode = document.querySelector('input[name="sale_document_mode"]:checked')?.value || 'delivery_note';
     const deliveryAddressData = buildDeliveryAddress();
     const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
     const newCustomerName = (document.getElementById('newCustomerName')?.value || '').trim();
@@ -2043,6 +2076,13 @@ function updateQuantity(id, newQty) {
 
     if (deliveryType === 'shipping' && !deliveryAddressData.valid) {
         alert(deliveryAddressData.message || 'Debes indicar la dirección cuando la entrega es por envío.');
+        button.disabled = false;
+        button.innerHTML = originalText;
+        return;
+    }
+
+    if (saleDocumentMode === 'electronic_invoice' && !tenantElectronicInvoicingEnabled) {
+        alert('La facturación digital está desactivada para esta tienda.');
         button.disabled = false;
         button.innerHTML = originalText;
         return;
@@ -2087,6 +2127,7 @@ function updateQuantity(id, newQty) {
         mark_delivered: document.getElementById('markDelivered')?.checked || false,
         mark_payments_paid: document.getElementById('markPaymentsPaid')?.checked || false,
         mark_sale_completed: document.getElementById('markSaleCompleted')?.checked || false,
+        sale_document_mode: saleDocumentMode,
     };
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
