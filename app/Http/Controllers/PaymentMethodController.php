@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use App\Support\ImageStorage;
+use App\Support\AuditLogger;
 
 class PaymentMethodController extends Controller
 {
@@ -231,6 +232,7 @@ class PaymentMethodController extends Controller
         }
 
         $rate = DollarRate::where('tenant_id', $request->tenant_id)->first();
+        $previousRate = $rate ? (float) $rate->rate : null;
 
         if (!$rate) {
             $rate = new DollarRate();
@@ -240,6 +242,12 @@ class PaymentMethodController extends Controller
         $rate->rate = $request->rate;
         $rate->date = Carbon::now()->format('Y-m-d');
         $rate->save();
+
+        AuditLogger::logEvent('paymentMethods', 'DOLLAR_RATE_UPDATED', 'Actualización de tasa del dólar.', (int) (auth()->id() ?? 0), [
+            'tenant_id' => (int) $request->tenant_id,
+            'previous_rate' => $previousRate,
+            'new_rate' => (float) $rate->rate,
+        ]);
 
         return response()->json([
             'message' => 'Tasa del dólar actualizada exitosamente',
@@ -266,6 +274,7 @@ class PaymentMethodController extends Controller
         }
 
         $rate = EuroRate::where('tenant_id', $request->tenant_id)->first();
+        $previousRate = $rate ? (float) $rate->rate : null;
 
         if (!$rate) {
             $rate = new EuroRate();
@@ -275,6 +284,12 @@ class PaymentMethodController extends Controller
         $rate->rate = $request->rate;
         $rate->date = Carbon::now()->format('Y-m-d');
         $rate->save();
+
+        AuditLogger::logEvent('paymentMethods', 'EURO_RATE_UPDATED', 'Actualización de tasa del euro.', (int) (auth()->id() ?? 0), [
+            'tenant_id' => (int) $request->tenant_id,
+            'previous_rate' => $previousRate,
+            'new_rate' => (float) $rate->rate,
+        ]);
 
         return response()->json([
             'message' => 'Tasa del euro actualizada exitosamente',
@@ -292,8 +307,15 @@ class PaymentMethodController extends Controller
         ]);
 
         $tenant = Tenant::findOrFail((int) $validated['tenant_id']);
+        $previousBaseCurrency = strtoupper((string) ($tenant->base_currency ?? 'USD'));
         $tenant->base_currency = strtoupper((string) $validated['base_currency']);
         $tenant->save();
+
+        AuditLogger::logEvent('paymentMethods', 'BASE_CURRENCY_UPDATED', 'Actualización de moneda madre de la tienda.', (int) (auth()->id() ?? 0), [
+            'tenant_id' => (int) $tenant->id,
+            'previous_base_currency' => $previousBaseCurrency,
+            'new_base_currency' => (string) $tenant->base_currency,
+        ]);
 
         return response()->json([
             'message' => 'Moneda madre actualizada exitosamente',

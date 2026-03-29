@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Support\UserRedirector;
+use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -53,6 +54,10 @@ class AuthenticatedSessionController extends Controller
         $credentials = $request->only('email', 'password');
 
         if (!Auth::attempt($credentials)) {
+            AuditLogger::logEvent('auth', 'CUSTOMER_LOGIN_FAILED', 'Intento fallido de inicio de sesión cliente.', null, [
+                'email' => $credentials['email'] ?? null,
+            ]);
+
             return response()->json([
                 'message' => 'Credenciales incorrectas.',
             ], 422);
@@ -61,6 +66,11 @@ class AuthenticatedSessionController extends Controller
         $user = Auth::user();
 
         if (!UserRedirector::isCustomer($user)) {
+            AuditLogger::logEvent('auth', 'CUSTOMER_LOGIN_DENIED', 'Usuario no cliente intentó login de landing.', (int) ($user->id ?? 0), [
+                'email' => $user->email ?? null,
+                'role' => optional($user?->role)->name,
+            ]);
+
             Auth::guard('web')->logout();
 
             return response()->json([
@@ -69,6 +79,11 @@ class AuthenticatedSessionController extends Controller
         }
 
         $token = JWTAuth::fromUser($user);
+
+        AuditLogger::logEvent('auth', 'CUSTOMER_LOGIN_SUCCESS', 'Inicio de sesión cliente exitoso.', (int) ($user->id ?? 0), [
+            'email' => $user->email ?? null,
+            'role' => optional($user?->role)->name,
+        ]);
 
         Auth::guard('web')->logout();
     
@@ -91,6 +106,10 @@ class AuthenticatedSessionController extends Controller
         ]);
  
         if (!Auth::attempt($credentials)) {
+            AuditLogger::logEvent('auth', 'ADMIN_LOGIN_FAILED', 'Intento fallido de login admin.', null, [
+                'email' => $credentials['email'] ?? null,
+            ]);
+
             return response()->json([
                 'message' => 'Credenciales incorrectas.',
             ], 422);
@@ -100,6 +119,11 @@ class AuthenticatedSessionController extends Controller
         $user = Auth::user();
 
         if (!UserRedirector::canAccessBackoffice($user)) {
+            AuditLogger::logEvent('auth', 'ADMIN_LOGIN_DENIED', 'Acceso a panel administrativo denegado por rol.', (int) ($user->id ?? 0), [
+                'email' => $user->email ?? null,
+                'role' => optional($user?->role)->name,
+            ]);
+
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
@@ -109,6 +133,11 @@ class AuthenticatedSessionController extends Controller
                 'redirect_to' => '/',
             ], 403);
         }
+
+        AuditLogger::logEvent('auth', 'ADMIN_LOGIN_SUCCESS', 'Inicio de sesión administrativo exitoso.', (int) ($user->id ?? 0), [
+            'email' => $user->email ?? null,
+            'role' => optional($user?->role)->name,
+        ]);
 
         return response()->json([
             'user'  => $user,
@@ -123,6 +152,13 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request)
     {
+        $currentUser = Auth::guard('web')->user();
+        if ($currentUser) {
+            AuditLogger::logEvent('auth', 'LOGOUT', 'Cierre de sesión web.', (int) $currentUser->id, [
+                'role' => optional($currentUser->role)->name,
+            ]);
+        }
+
         Auth::guard('web')->logout();
 
         if ($request->hasSession()) {
@@ -139,6 +175,13 @@ class AuthenticatedSessionController extends Controller
 
     public function logout(Request $request)
     {
+        $currentUser = Auth::guard('web')->user();
+        if ($currentUser) {
+            AuditLogger::logEvent('auth', 'LOGOUT', 'Cierre de sesión administrativo.', (int) $currentUser->id, [
+                'role' => optional($currentUser->role)->name,
+            ]);
+        }
+
         Auth::guard('web')->logout();
 
         if ($request->hasSession()) {

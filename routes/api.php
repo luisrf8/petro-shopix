@@ -37,7 +37,7 @@ Route::get('/payment-methods/ecomm', [SaleController::class, 'getPaymentMethodsE
 
 // ---------------------- RUTAS AUTENTICADAS ------------------------
 
-Route::middleware('auth.jwt')->group(function () {
+Route::middleware(['auth.jwt'])->group(function () {
     Route::get('/user', [AuthenticatedSessionController::class, 'getUserFromToken']);
     Route::post('/user/update-profile', [AuthenticatedSessionController::class, 'updateEcommProfile']);
     Route::post('/user/change-password', [AuthenticatedSessionController::class, 'changeEcommPassword']);

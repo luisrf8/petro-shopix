@@ -21,6 +21,7 @@ use App\Models\TenantPlanPayment;
 use Carbon\Carbon;
 use App\Models\Log;
 use App\Models\SalesOrderDetail;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -324,10 +325,156 @@ class IndexController extends Controller
 
         return $country === 'venezuela' ? 'Otras zonas' : 'Internacional';
     }
-    public function indexLog()
+    public function indexLog(Request $request)
     {
-        $logs = Log::latest()->take(100)->get();        
-        return view('logs', compact('logs'));
+        $filters = [
+            'user_id' => trim((string) $request->query('user_id', '')),
+            'tenant_id' => trim((string) $request->query('tenant_id', '')),
+            'role' => trim((string) $request->query('role', '')),
+            'module' => trim((string) $request->query('module', '')),
+            'action' => trim((string) $request->query('action', '')),
+            'status' => trim((string) $request->query('status', '')),
+            'date_from' => trim((string) $request->query('date_from', '')),
+            'date_to' => trim((string) $request->query('date_to', '')),
+            'q' => trim((string) $request->query('q', '')),
+        ];
+
+        $query = Log::query()->orderByDesc('id');
+
+        if ($filters['user_id'] !== '' && ctype_digit($filters['user_id'])) {
+            $query->where('user_id', (int) $filters['user_id']);
+        }
+
+        if ($filters['action'] !== '') {
+            $query->where('action', 'like', '%' . $filters['action'] . '%');
+        }
+
+        if ($filters['date_from'] !== '') {
+            $query->whereDate('created_at', '>=', $filters['date_from']);
+        }
+
+        if ($filters['date_to'] !== '') {
+            $query->whereDate('created_at', '<=', $filters['date_to']);
+        }
+
+        $rawLogs = $query->limit(4000)->get();
+
+        $logsCollection = $rawLogs->map(function (Log $log) {
+            $payload = $this->decodeAuditPayload($log->description);
+            $log->audit_payload = $payload;
+            $log->audit_tenant_id = (string) ($payload['tenant_id'] ?? '');
+            $log->audit_role = (string) ($payload['role'] ?? '');
+            $log->audit_module = (string) ($payload['module'] ?? $log->table_name);
+            $log->audit_status = (string) ($payload['status'] ?? '');
+            $log->audit_route_name = (string) ($payload['route_name'] ?? '');
+            $log->audit_path = (string) ($payload['path'] ?? '');
+            $log->audit_message = (string) ($payload['message'] ?? '');
+
+            return $log;
+        });
+
+        if ($filters['tenant_id'] !== '') {
+            $logsCollection = $logsCollection->filter(function (Log $log) use ($filters) {
+                return (string) $log->audit_tenant_id === (string) $filters['tenant_id'];
+            });
+        }
+
+        if ($filters['role'] !== '') {
+            $needle = Str::lower($filters['role']);
+            $logsCollection = $logsCollection->filter(function (Log $log) use ($needle) {
+                return Str::contains(Str::lower((string) $log->audit_role), $needle);
+            });
+        }
+
+        if ($filters['module'] !== '') {
+            $needle = Str::lower($filters['module']);
+            $logsCollection = $logsCollection->filter(function (Log $log) use ($needle) {
+                return Str::contains(Str::lower((string) $log->audit_module), $needle)
+                    || Str::contains(Str::lower((string) $log->table_name), $needle);
+            });
+        }
+
+        if ($filters['status'] !== '') {
+            $logsCollection = $logsCollection->filter(function (Log $log) use ($filters) {
+                return (string) $log->audit_status === (string) $filters['status'];
+            });
+        }
+
+        if ($filters['q'] !== '') {
+            $needle = Str::lower($filters['q']);
+            $logsCollection = $logsCollection->filter(function (Log $log) use ($needle) {
+                return Str::contains(Str::lower((string) $log->description), $needle)
+                    || Str::contains(Str::lower((string) $log->action), $needle)
+                    || Str::contains(Str::lower((string) $log->table_name), $needle)
+                    || Str::contains(Str::lower((string) $log->audit_route_name), $needle)
+                    || Str::contains(Str::lower((string) $log->audit_path), $needle)
+                    || Str::contains(Str::lower((string) $log->audit_message), $needle);
+            });
+        }
+
+        $logsCollection = $logsCollection->values();
+
+        $perPage = 100;
+        $currentPage = max(1, (int) $request->query('page', 1));
+        $total = $logsCollection->count();
+        $items = $logsCollection->slice(($currentPage - 1) * $perPage, $perPage)->values();
+
+        $logs = new LengthAwarePaginator(
+            $items,
+            $total,
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
+        $filterOptions = [
+            'roles' => $rawLogs
+                ->map(fn (Log $log) => (string) ($this->decodeAuditPayload($log->description)['role'] ?? ''))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values(),
+            'modules' => $rawLogs
+                ->map(function (Log $log) {
+                    $payload = $this->decodeAuditPayload($log->description);
+                    return (string) ($payload['module'] ?? $log->table_name);
+                })
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values(),
+            'actions' => $rawLogs
+                ->pluck('action')
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values(),
+            'statuses' => $rawLogs
+                ->map(fn (Log $log) => (string) ($this->decodeAuditPayload($log->description)['status'] ?? ''))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values(),
+        ];
+
+        return view('logs', compact('logs', 'filters', 'filterOptions'));
+    }
+
+    private function decodeAuditPayload(?string $description): array
+    {
+        $value = trim((string) $description);
+        if ($value === '' || !Str::startsWith($value, ['{', '['])) {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+
+        return json_last_error() === JSON_ERROR_NONE && is_array($decoded)
+            ? $decoded
+            : [];
     }
 
     public function index()
