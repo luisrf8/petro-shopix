@@ -102,6 +102,15 @@
     box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
   }
 
+  .tenant-cart-item-thumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 1px solid #e2e8f0;
+    flex-shrink: 0;
+  }
+
   .tenant-cart-item-name {
     color: var(--tenant-primary);
     font-weight: 700;
@@ -505,6 +514,9 @@
                 <div class="col-12 col-md-4">
                   <input type="text" class="form-control" id="tenant-pro-register-dni" placeholder="DNI (opcional)">
                 </div>
+                <div class="col-12 col-md-4">
+                  <input type="text" class="form-control" id="tenant-pro-register-phone" placeholder="Teléfono (opcional)">
+                </div>
                 <div class="col-12">
                   <button type="submit" class="btn btn-dark">Crear cuenta</button>
                 </div>
@@ -514,25 +526,6 @@
         </div>
 
         <div id="tenant-pro-logged-user" class="alert alert-success d-none"></div>
-
-        <div id="tenant-pro-account-section" class="card border p-3 mb-3 d-none">
-          <h6 class="mb-2">Mi cuenta</h6>
-          <p class="small text-muted mb-3">Cambia tu contraseña desde la landing.</p>
-          <form id="tenant-pro-change-password-form" class="row g-2">
-            <div class="col-12 col-md-4">
-              <input type="password" class="form-control" id="tenant-pro-current-password" placeholder="Contraseña actual" minlength="8" required>
-            </div>
-            <div class="col-12 col-md-4">
-              <input type="password" class="form-control" id="tenant-pro-new-password" placeholder="Nueva contraseña" minlength="8" required>
-            </div>
-            <div class="col-12 col-md-4">
-              <input type="password" class="form-control" id="tenant-pro-new-password-confirmation" placeholder="Confirmar nueva contraseña" minlength="8" required>
-            </div>
-            <div class="col-12">
-              <button type="submit" class="btn btn-outline-dark btn-sm">Actualizar contraseña</button>
-            </div>
-          </form>
-        </div>
 
         <div id="tenant-pro-checkout-section" class="d-none">
           <div class="mb-3">
@@ -938,13 +931,17 @@
       }
 
       cartItemsElement.innerHTML = cart.map((item, index) => {
+        const imageSrc = item.imageSrc || '/assets/img/shopix5.png';
         return `
           <div class="tenant-cart-item-card">
             <div class="d-flex justify-content-between gap-2 align-items-start">
-              <div>
+              <div class="d-flex gap-2">
+                <img src="${imageSrc}" alt="${escapeHtml(item.productName || 'Producto')}" class="tenant-cart-item-thumb">
+                <div>
                 <div class="tenant-cart-item-name">${item.productName}</div>
                 <div class="tenant-cart-item-variant">Variante: ${item.variantSize}</div>
                 <div class="tenant-cart-item-price">${Number(item.price).toFixed(2)} ${getBaseCurrencySymbol()} c/u</div>
+                </div>
               </div>
               <button type="button" class="btn btn-sm btn-outline-danger tenant-cart-remove-btn" data-remove-index="${index}">
                 <i class="bi bi-trash"></i>
@@ -976,6 +973,7 @@
           productId: Number(item.productId),
           productName: item.productName,
           variantSize: item.variantSize,
+          imageSrc: item.imageSrc || null,
           price: Number(item.price),
           qty: Number(item.qty || 1)
         });
@@ -1411,7 +1409,6 @@
       }
 
       const authSection = document.getElementById('tenant-pro-auth-section');
-      const accountSection = document.getElementById('tenant-pro-account-section');
       const loggedUserBox = document.getElementById('tenant-pro-logged-user');
       const checkoutSection = document.getElementById('tenant-pro-checkout-section');
       const submitOrderButton = document.getElementById('tenant-pro-submit-order');
@@ -1436,13 +1433,9 @@
         }
       }
 
-      if (accountSection) {
-        accountSection.classList.toggle('d-none', !isLogged);
-      }
-
       if (authOnly && cart.length === 0) {
         if (modalTitle) {
-          modalTitle.textContent = isLogged ? 'Mi cuenta' : 'Iniciar sesión';
+          modalTitle.textContent = isLogged ? 'Checkout Pro' : 'Iniciar sesión';
         }
 
         if (isLogged) {
@@ -1615,6 +1608,7 @@
       const password = document.getElementById('tenant-pro-register-password').value;
       const password_confirmation = document.getElementById('tenant-pro-register-password-confirmation').value;
       const dni = document.getElementById('tenant-pro-register-dni').value.trim();
+      const phone_number = document.getElementById('tenant-pro-register-phone').value.trim();
 
       const response = await fetch('/api/registerEcomm', {
         method: 'POST',
@@ -1623,7 +1617,7 @@
           'Accept': 'application/json',
           'X-CSRF-TOKEN': csrfToken,
         },
-        body: JSON.stringify({ name, email, password, password_confirmation, dni })
+        body: JSON.stringify({ name, email, password, password_confirmation, dni, phone_number })
       });
 
       const data = await response.json();
@@ -1635,59 +1629,6 @@
       setAuthData(data.token, data.user);
       alert('Cuenta creada correctamente.');
       openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
-    }
-
-    async function changeProCustomerPassword(event) {
-      event.preventDefault();
-
-      const token = getAuthToken();
-      if (!token) {
-        alert('Debes iniciar sesión para cambiar tu contraseña.');
-        return;
-      }
-
-      const current_password = document.getElementById('tenant-pro-current-password')?.value || '';
-      const new_password = document.getElementById('tenant-pro-new-password')?.value || '';
-      const new_password_confirmation = document.getElementById('tenant-pro-new-password-confirmation')?.value || '';
-
-      if (!current_password || !new_password || !new_password_confirmation) {
-        alert('Completa los tres campos para actualizar la contraseña.');
-        return;
-      }
-
-      if (new_password.length < 8) {
-        alert('La nueva contraseña debe tener al menos 8 caracteres.');
-        return;
-      }
-
-      if (new_password !== new_password_confirmation) {
-        alert('La confirmación de la nueva contraseña no coincide.');
-        return;
-      }
-
-      const response = await fetch('/api/user/change-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-CSRF-TOKEN': csrfToken,
-        },
-        body: JSON.stringify({
-          current_password,
-          new_password,
-          new_password_confirmation,
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        alert(data.message || 'No se pudo actualizar la contraseña.');
-        return;
-      }
-
-      document.getElementById('tenant-pro-change-password-form')?.reset();
-      alert(data.message || 'Contraseña actualizada correctamente.');
     }
 
     async function submitProOrder() {
@@ -1912,7 +1853,6 @@
 
     document.getElementById('tenant-pro-login-form')?.addEventListener('submit', loginProCustomer);
     document.getElementById('tenant-pro-register-form')?.addEventListener('submit', registerProCustomer);
-    document.getElementById('tenant-pro-change-password-form')?.addEventListener('submit', changeProCustomerPassword);
 
     if (cartEnabled) {
       document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach(input => {

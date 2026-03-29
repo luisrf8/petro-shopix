@@ -398,7 +398,7 @@ class SaleController extends Controller
             ->all();
 
         if (empty($roleIds)) {
-            return [3];
+            return [(int) Role::query()->firstOrCreate(['name' => 'user'])->id];
         }
 
         return $roleIds;
@@ -406,9 +406,15 @@ class SaleController extends Controller
 
     private function resolveCustomerRoleId(): int
     {
-        return (int) (Role::query()
+        $roleId = Role::query()
             ->whereIn(DB::raw('LOWER(name)'), ['user', 'cliente', 'customer'])
-            ->value('id') ?? 3);
+            ->value('id');
+
+        if ($roleId) {
+            return (int) $roleId;
+        }
+
+        return (int) Role::query()->firstOrCreate(['name' => 'user'])->id;
     }
 
     public function downloadPdf($id)

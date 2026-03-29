@@ -1250,6 +1250,9 @@
             'variant_size' => $item->variant->size ?? '',
             'variant_price' => (float) $effectivePrice,
             'product_name' => $item->variant->product->name ?? 'Producto',
+            'image_src' => isset($item->variant->product->images[0])
+              ? (\App\Support\ImageStorage::url($item->variant->product->images[0]->path) ?? asset('assets/img/shopix5.png'))
+              : asset('assets/img/shopix5.png'),
             'quantity' => (float) ($item->quantity ?? 0),
           ];
         })->values()->toArray(),
@@ -1350,6 +1353,7 @@
           productId: Number(component.variant_id),
           productName: `${component.product_name} [${pkg.name}]`,
           variantSize: component.variant_size,
+              imageSrc: component.image_src || null,
           price: componentPrice,
           qty: quantity,
             }

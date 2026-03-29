@@ -229,8 +229,14 @@ class CustomerController extends Controller
 
     private function resolveCustomerRoleId(): int
     {
-        return (int) (Role::query()
-            ->whereRaw('LOWER(name) = ?', ['user'])
-            ->value('id') ?? 3);
+        $roleId = Role::query()
+            ->whereRaw('LOWER(name) IN (?, ?, ?)', ['user', 'cliente', 'customer'])
+            ->value('id');
+
+        if ($roleId) {
+            return (int) $roleId;
+        }
+
+        return (int) Role::query()->firstOrCreate(['name' => 'user'])->id;
     }
 }

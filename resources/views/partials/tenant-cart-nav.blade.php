@@ -190,6 +190,37 @@
     border-radius: 999px;
   }
 
+  .tenant-customer-info-shell {
+    border: 1px solid #dbe3ee;
+    border-radius: 12px;
+    background: #ffffff;
+    padding: 0.8rem;
+  }
+
+  .tenant-customer-info-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-bottom: 0.15rem;
+  }
+
+  .tenant-customer-info-value {
+    font-size: 0.95rem;
+    color: #0f172a;
+    font-weight: 600;
+    margin-bottom: 0;
+    word-break: break-word;
+  }
+
+  #tenantCustomerModal .form-control {
+    border-radius: 12px;
+    border-color: #cbd5e1;
+  }
+
+  #tenantCustomerModal .form-control:focus {
+    border-color: rgba(var(--tenant-accent-rgb), 0.75);
+    box-shadow: 0 0 0 0.2rem rgba(var(--tenant-accent-rgb), 0.18);
+  }
+
   .tenant-modern-modal .modal-content {
     border: 1px solid #dbe3ee;
     border-radius: 18px;
@@ -331,6 +362,12 @@
         <span>Listado de compras</span>
       </button>
     </li>
+    <li id="tenant-account-wrap">
+      <button type="button" id="tenant-account-btn" class="dropdown-item d-inline-flex align-items-center gap-2">
+        <i class="bi bi-person-gear"></i>
+        <span>Mi perfil</span>
+      </button>
+    </li>
     <li><hr class="dropdown-divider my-1"></li>
     <li id="tenant-session-logout-wrap">
       <button type="button" id="tenant-session-logout" class="dropdown-item text-danger d-inline-flex align-items-center gap-2">
@@ -347,6 +384,15 @@
           class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-bag-check"></i>
     <span>Listado de compras</span>
+  </button>
+</li>
+
+<li class="nav-item d-none d-lg-none" id="tenant-account-mobile-wrap">
+  <button type="button"
+          id="tenant-account-mobile-btn"
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
+    <i class="bi bi-person-gear"></i>
+    <span>Mi perfil</span>
   </button>
 </li>
 
@@ -464,11 +510,76 @@
                 <input type="text" class="form-control" id="tenant-public-register-dni" placeholder="DNI (opcional)">
               </div>
               <div class="col-12">
+                <input type="text" class="form-control" id="tenant-public-register-phone" placeholder="Teléfono (opcional)">
+              </div>
+              <div class="col-12">
                 <button type="submit" class="btn btn-dark w-100 tenant-auth-primary-btn">Crear cuenta</button>
               </div>
             </form>
           </div>
         </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade tenant-modern-modal" id="tenantCustomerModal" tabindex="-1" aria-labelledby="tenantCustomerModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="tenantCustomerModalLabel">Mi perfil</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body d-flex flex-column gap-3">
+        <div class="tenant-customer-info-shell">
+          <div class="row g-2">
+            <div class="col-12 col-md-6">
+              <p class="tenant-customer-info-label">Nombre</p>
+              <p class="tenant-customer-info-value" id="tenant-customer-name">-</p>
+            </div>
+            <div class="col-12 col-md-6">
+              <p class="tenant-customer-info-label">Email</p>
+              <p class="tenant-customer-info-value" id="tenant-customer-email">-</p>
+            </div>
+            <div class="col-12 col-md-6">
+              <p class="tenant-customer-info-label">DNI</p>
+              <p class="tenant-customer-info-value" id="tenant-customer-dni">No registrado</p>
+            </div>
+            <div class="col-12 col-md-6">
+              <p class="tenant-customer-info-label">Teléfono</p>
+              <p class="tenant-customer-info-value" id="tenant-customer-phone">No registrado</p>
+            </div>
+            <div class="col-12">
+              <form id="tenant-customer-phone-form" class="row g-2 align-items-end">
+                <div class="col-12 col-md-8">
+                  <label for="tenant-customer-phone-input" class="tenant-customer-info-label">Agregar / actualizar teléfono</label>
+                  <input type="text" class="form-control" id="tenant-customer-phone-input" placeholder="Ej: +58 412 0000000" maxlength="50">
+                </div>
+                <div class="col-12 col-md-4">
+                  <button type="submit" class="btn btn-outline-dark btn-sm w-100">Guardar teléfono</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="tenant-customer-info-shell">
+          <h6 class="mb-2">Cambiar contraseña</h6>
+          <form id="tenant-customer-change-password-form" class="row g-2">
+            <div class="col-12">
+              <input type="password" class="form-control" id="tenant-customer-current-password" placeholder="Contraseña actual" minlength="8" required>
+            </div>
+            <div class="col-12 col-md-6">
+              <input type="password" class="form-control" id="tenant-customer-new-password" placeholder="Nueva contraseña" minlength="8" required>
+            </div>
+            <div class="col-12 col-md-6">
+              <input type="password" class="form-control" id="tenant-customer-new-password-confirmation" placeholder="Confirmar nueva contraseña" minlength="8" required>
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-outline-dark btn-sm">Actualizar contraseña</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -492,10 +603,15 @@
     const ordersButton = document.getElementById('tenant-orders-btn');
     const ordersMobileWrap = document.getElementById('tenant-orders-mobile-wrap');
     const ordersMobileButton = document.getElementById('tenant-orders-mobile-btn');
+    const accountWrap = document.getElementById('tenant-account-wrap');
+    const accountButton = document.getElementById('tenant-account-btn');
+    const accountMobileWrap = document.getElementById('tenant-account-mobile-wrap');
+    const accountMobileButton = document.getElementById('tenant-account-mobile-btn');
     const ordersList = document.getElementById('tenant-orders-list');
     const ordersModal = document.getElementById('tenantOrdersModal');
     const authModal = document.getElementById('tenantAuthModal');
     const authModalLabel = document.getElementById('tenantAuthModalLabel');
+    const customerModal = document.getElementById('tenantCustomerModal');
     const notificationsWrap = document.getElementById('tenant-notifications-wrap');
     const notificationsCount = document.getElementById('tenant-notifications-count');
     const notificationsList = document.getElementById('tenant-notifications-list');
@@ -515,6 +631,10 @@
       document.body.appendChild(authModal);
     }
 
+    if (customerModal && customerModal.parentElement !== document.body) {
+      document.body.appendChild(customerModal);
+    }
+
     if (!tenantToastContainer) {
       tenantToastContainer = document.createElement('div');
       tenantToastContainer.id = 'tenant-toast-container';
@@ -525,9 +645,11 @@
       document.body.appendChild(tenantToastContainer);
     }
 
-    if (!loginWrap || !loginButton || !indicatorWrap || !indicatorText || !logoutWrap || !logoutButton || !ordersWrap || !ordersButton || !ordersList || !notificationsWrap || !notificationsCount || !notificationsList) {
+    if (!loginWrap || !loginButton || !indicatorWrap || !indicatorText || !logoutWrap || !logoutButton || !ordersWrap || !ordersButton || !ordersList || !notificationsWrap || !notificationsCount || !notificationsList || !accountWrap || !accountButton) {
       return;
     }
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     function openTenantAuthModal() {
       if (authModal && typeof bootstrap !== 'undefined' && bootstrap?.Modal) {
@@ -562,6 +684,129 @@
           user: user || null,
         },
       }));
+    }
+
+    function fillCustomerModalData(user) {
+      const nameEl = document.getElementById('tenant-customer-name');
+      const emailEl = document.getElementById('tenant-customer-email');
+      const dniEl = document.getElementById('tenant-customer-dni');
+      const phoneEl = document.getElementById('tenant-customer-phone');
+      const phoneInputEl = document.getElementById('tenant-customer-phone-input');
+
+      if (nameEl) nameEl.textContent = user?.name || '-';
+      if (emailEl) emailEl.textContent = user?.email || '-';
+      if (dniEl) dniEl.textContent = user?.dni || 'No registrado';
+      if (phoneEl) phoneEl.textContent = user?.phone || user?.phone_number || 'No registrado';
+      if (phoneInputEl) phoneInputEl.value = user?.phone || user?.phone_number || '';
+    }
+
+    function openTenantCustomerModal() {
+      const hasSession = !!currentToken && !!currentUser?.id;
+      if (!hasSession) {
+        return openTenantAuthModal();
+      }
+
+      fillCustomerModalData(currentUser);
+      document.getElementById('tenant-customer-change-password-form')?.reset();
+
+      if (customerModal && typeof bootstrap !== 'undefined' && bootstrap?.Modal) {
+        bootstrap.Modal.getOrCreateInstance(customerModal).show();
+        return true;
+      }
+
+      return false;
+    }
+
+    async function submitTenantCustomerPasswordChange(event) {
+      event.preventDefault();
+
+      if (!currentToken || !currentUser?.id) {
+        alert('Debes iniciar sesión para cambiar tu contraseña.');
+        return;
+      }
+
+      const current_password = document.getElementById('tenant-customer-current-password')?.value || '';
+      const new_password = document.getElementById('tenant-customer-new-password')?.value || '';
+      const new_password_confirmation = document.getElementById('tenant-customer-new-password-confirmation')?.value || '';
+
+      if (!current_password || !new_password || !new_password_confirmation) {
+        alert('Completa los tres campos para actualizar la contraseña.');
+        return;
+      }
+
+      if (new_password.length < 8) {
+        alert('La nueva contraseña debe tener al menos 8 caracteres.');
+        return;
+      }
+
+      if (new_password !== new_password_confirmation) {
+        alert('La confirmación de la nueva contraseña no coincide.');
+        return;
+      }
+
+      const response = await fetch('/api/user/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${currentToken}`,
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({
+          current_password,
+          new_password,
+          new_password_confirmation,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        alert(data.message || 'No se pudo actualizar la contraseña.');
+        return;
+      }
+
+      event.target.reset();
+      alert(data.message || 'Contraseña actualizada correctamente.');
+    }
+
+    async function submitTenantCustomerPhoneUpdate(event) {
+      event.preventDefault();
+
+      if (!currentToken || !currentUser?.id) {
+        alert('Debes iniciar sesión para actualizar tu perfil.');
+        return;
+      }
+
+      const phoneInput = document.getElementById('tenant-customer-phone-input');
+      const phoneNumber = (phoneInput?.value || '').trim();
+
+      const response = await fetch('/api/user/update-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${currentToken}`,
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({
+          phone_number: phoneNumber,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        alert(data.message || 'No se pudo actualizar el teléfono.');
+        return;
+      }
+
+      const updatedUser = data?.user || { ...currentUser, phone_number: phoneNumber || null };
+      persistTenantAuth(currentToken, updatedUser);
+      fillCustomerModalData(updatedUser);
+      if (phoneInput) {
+        phoneInput.value = updatedUser?.phone_number || updatedUser?.phone || '';
+      }
+
+      alert(data.message || 'Teléfono actualizado correctamente.');
     }
 
     async function submitTenantPublicLogin(event) {
@@ -599,6 +844,7 @@
         password: document.getElementById('tenant-public-register-password')?.value || '',
         password_confirmation: document.getElementById('tenant-public-register-password-confirmation')?.value || '',
         dni: document.getElementById('tenant-public-register-dni')?.value.trim() || '',
+        phone_number: document.getElementById('tenant-public-register-phone')?.value.trim() || '',
       };
 
       const response = await fetch('/api/registerEcomm', {
@@ -805,8 +1051,10 @@
       indicatorWrap.classList.toggle('d-none', !hasSession);
       logoutWrap.classList.toggle('d-none', !hasSession);
       ordersWrap.classList.toggle('d-none', !hasSession);
+      accountWrap.classList.toggle('d-none', !hasSession);
       logoutMobileWrap?.classList.toggle('d-none', !hasSession);
       ordersMobileWrap?.classList.toggle('d-none', !hasSession);
+      accountMobileWrap?.classList.toggle('d-none', !hasSession);
       notificationsWrap.classList.toggle('d-none', !hasSession);
 
       if (hasSession) {
@@ -929,6 +1177,18 @@
       ordersButton?.click();
     });
 
+    accountButton?.addEventListener('click', () => {
+      if (openTenantCustomerModal()) {
+        return;
+      }
+
+      alert('No se pudo abrir tu perfil en este momento.');
+    });
+
+    accountMobileButton?.addEventListener('click', () => {
+      accountButton?.click();
+    });
+
     loginButton.addEventListener('click', () => {
       if (openTenantAuthModal()) {
         return;
@@ -952,5 +1212,8 @@
     logoutMobileButton?.addEventListener('click', () => {
       logoutButton?.click();
     });
+
+    document.getElementById('tenant-customer-change-password-form')?.addEventListener('submit', submitTenantCustomerPasswordChange);
+    document.getElementById('tenant-customer-phone-form')?.addEventListener('submit', submitTenantCustomerPhoneUpdate);
   })();
 </script>

@@ -80,6 +80,7 @@
               <table class="table align-items-center mb-0">
                 <thead>
                   <tr>
+                    <th>Imagen</th>
                     <th>Paquete</th>
                     <th>Estado</th>
                     <th>Materiales</th>
@@ -88,7 +89,19 @@
                 </thead>
                 <tbody>
                   @foreach($packages as $package)
+                    @php
+                      $previewItem = $package->items->first();
+                      $previewImage = $previewItem && $previewItem->variant && $previewItem->variant->product && isset($previewItem->variant->product->images[0])
+                        ? (
+                            \App\Support\ImageStorage::url($previewItem->variant->product->images[0]->path)
+                            ?? asset('assets/img/shopix5.png')
+                          )
+                        : asset('assets/img/shopix5.png');
+                    @endphp
                     <tr>
+                      <td>
+                        <img src="{{ $previewImage }}" alt="{{ $package->name }}" style="width:56px; height:56px; object-fit:cover; border-radius:10px; border:1px solid #e2e8f0;">
+                      </td>
                       <td>
                         <div class="fw-semibold">{{ $package->name }}</div>
                         <div class="text-xs text-muted">{{ $package->description ?: 'Sin descripción' }}</div>
@@ -105,8 +118,14 @@
                       <td>
                         <ul class="mb-0 ps-3">
                           @foreach($package->items as $item)
-                            <li class="text-sm">
-                              {{ $item->variant?->product?->name ?? 'Producto' }} - {{ $item->variant?->size ?? 'Variante' }} (x{{ rtrim(rtrim(number_format($item->quantity, 2, '.', ''), '0'), '.') }})
+                            @php
+                              $itemImage = $item->variant && $item->variant->product && isset($item->variant->product->images[0])
+                                ? (\App\Support\ImageStorage::url($item->variant->product->images[0]->path) ?? asset('assets/img/shopix5.png'))
+                                : asset('assets/img/shopix5.png');
+                            @endphp
+                            <li class="text-sm d-flex align-items-center gap-2">
+                              <img src="{{ $itemImage }}" alt="{{ $item->variant?->product?->name ?? 'Producto' }}" style="width:28px; height:28px; object-fit:cover; border-radius:6px; border:1px solid #e2e8f0;">
+                              <span>{{ $item->variant?->product?->name ?? 'Producto' }} - {{ $item->variant?->size ?? 'Variante' }} (x{{ rtrim(rtrim(number_format($item->quantity, 2, '.', ''), '0'), '.') }})</span>
                             </li>
                           @endforeach
                         </ul>
@@ -137,6 +156,20 @@
   document.addEventListener('DOMContentLoaded', function () {
     const rowsContainer = document.getElementById('materialsRows');
     const addRowBtn = document.getElementById('addMaterialRow');
+    const fallbackImage = @json(asset('assets/img/shopix5.png'));
+
+    const variantMeta = {
+      @foreach($productItems as $product)
+        @foreach($product->variants as $variant)
+          "{{ $variant->id }}": {
+            name: @json($product->name),
+            size: @json($variant->size),
+            stock: @json($variant->stock),
+            image: @json((isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'))),
+          },
+        @endforeach
+      @endforeach
+    };
 
     const variantOptions = `
       <option value="">Selecciona variante...</option>
@@ -149,19 +182,46 @@
 
     let rowIndex = 0;
 
+    function refreshRowPreview(rowElement) {
+      if (!rowElement) return;
+
+      const select = rowElement.querySelector('.js-material-variant-select');
+      const image = rowElement.querySelector('.js-material-variant-image');
+      const label = rowElement.querySelector('.js-material-variant-label');
+
+      if (!select || !image || !label) return;
+
+      const meta = variantMeta[String(select.value)] || null;
+      if (!meta) {
+        image.src = fallbackImage;
+        label.textContent = 'Selecciona una variante para ver su imagen';
+        return;
+      }
+
+      image.src = meta.image || fallbackImage;
+      label.textContent = `${meta.name || 'Producto'} - ${meta.size || 'Variante'} (Stock: ${meta.stock ?? 0})`;
+    }
+
     function addRow() {
       rowIndex += 1;
       const row = document.createElement('div');
       row.className = 'border rounded p-2';
       row.innerHTML = `
         <div class="row g-2 align-items-end">
+          <div class="col-12 col-md-2">
+            <label class="form-label mb-1">Imagen</label>
+            <div class="border rounded d-flex align-items-center justify-content-center bg-white" style="height: 62px; overflow: hidden;">
+              <img src="${fallbackImage}" alt="Vista previa" class="js-material-variant-image" style="width: 100%; height: 100%; object-fit: cover;">
+            </div>
+          </div>
           <div class="col-12 col-md-8">
             <label class="form-label mb-1">Variante</label>
-            <select name="items[${rowIndex}][variant_id]" class="form-select border border-1 bg-white" required>
+            <select name="items[${rowIndex}][variant_id]" class="form-select border border-1 bg-white js-material-variant-select" required>
               ${variantOptions}
             </select>
+            <p class="text-xs text-muted mb-0 mt-1 js-material-variant-label">Selecciona una variante para ver su imagen</p>
           </div>
-          <div class="col-8 col-md-3">
+          <div class="col-8 col-md-1">
             <label class="form-label mb-1">Cantidad</label>
             <input type="number" name="items[${rowIndex}][quantity]" class="form-control border border-1 p-2 bg-white" min="0.01" step="0.01" placeholder="1" required>
           </div>
@@ -171,6 +231,7 @@
         </div>
       `;
       rowsContainer.appendChild(row);
+      refreshRowPreview(row);
     }
 
     addRow();
@@ -184,6 +245,12 @@
         return;
       }
       event.target.closest('.border.rounded.p-2')?.remove();
+    });
+
+    rowsContainer.addEventListener('change', function (event) {
+      if (!event.target.classList.contains('js-material-variant-select')) return;
+      const row = event.target.closest('.border.rounded.p-2');
+      refreshRowPreview(row);
     });
   });
 </script>

@@ -2240,7 +2240,7 @@ function updateQuantity(id, newQty) {
             let successMessage = data.message || 'Compra confirmada con éxito.';
             if (data.created_customer_temporary_password) {
                 successMessage += `\n\nCliente creado con contraseña temporal: ${data.created_customer_temporary_password}.`;
-                successMessage += '\nDebe iniciar sesión en la landing y cambiarla en Mi cuenta.';
+                successMessage += '\nDebe iniciar sesión en la landing y cambiarla en Mi perfil.';
             }
             alert(successMessage);
 

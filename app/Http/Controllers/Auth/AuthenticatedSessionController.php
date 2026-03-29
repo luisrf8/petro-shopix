@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
@@ -98,13 +99,13 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerate();
         $user = Auth::user();
 
-        if (UserRedirector::isCustomer($user)) {
+        if (!UserRedirector::canAccessBackoffice($user)) {
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
             return response()->json([
-                'message' => 'Los clientes solo pueden iniciar sesión desde las landings de tienda.',
+                'message' => 'Este acceso es exclusivo para usuarios de panel administrativo.',
                 'redirect_to' => '/',
             ], 403);
         }
@@ -177,6 +178,7 @@ class AuthenticatedSessionController extends Controller
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
             'dni' => 'nullable|string|max:100',
+            'phone_number' => 'nullable|string|max:50',
         ]);
 
         $dni = trim((string) $request->input('dni', ''));
@@ -189,8 +191,9 @@ class AuthenticatedSessionController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),  // Hashear la contraseña
-            'role_id' => 3,  // Puedes asignar un rol por defecto o según tus necesidades
+            'role_id' => $this->resolveCustomerRoleId(),
             'dni' => $dni,
+            'phone_number' => trim((string) $request->input('phone_number', '')) ?: null,
         ]);
     
         // Generar el token JWT para el usuario recién creado
@@ -235,6 +238,44 @@ class AuthenticatedSessionController extends Controller
         $user->save();
 
         return response()->json(['message' => 'Contraseña actualizada correctamente.'], 200);
+    }
+
+    public function updateEcommProfile(Request $request): JsonResponse
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+        } catch (JWTException $e) {
+            return response()->json(['message' => 'Token inválido o expirado.'], 401);
+        }
+
+        if (!$user) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        $validated = $request->validate([
+            'phone_number' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $user->phone_number = trim((string) ($validated['phone_number'] ?? '')) ?: null;
+        $user->save();
+
+        return response()->json([
+            'message' => 'Perfil actualizado correctamente.',
+            'user' => $user,
+        ], 200);
+    }
+
+    private function resolveCustomerRoleId(): int
+    {
+        $roleId = Role::query()
+            ->whereRaw('LOWER(name) IN (?, ?, ?)', ['user', 'cliente', 'customer'])
+            ->value('id');
+
+        if ($roleId) {
+            return (int) $roleId;
+        }
+
+        return (int) Role::query()->firstOrCreate(['name' => 'user'])->id;
     }
 
 }

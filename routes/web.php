@@ -71,7 +71,7 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::post('/help-preferences/global', [HelpPreferenceController::class, 'updateGlobal'])->name('help.preferences.global');
     Route::post('/help-preferences/route', [HelpPreferenceController::class, 'updateRoute'])->name('help.preferences.route');
 
-    Route::get('/categories', [ProductController::class, 'categoriesIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('categories.index');
+    Route::get('/categories', [ProductController::class, 'categoriesIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('categories.index');
 
     Route::get('/products', [ProductController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.index');
     Route::post('/products/import-catalog', [ProductController::class, 'importCatalog'])->middleware('role.name:owner,admin,administrador')->name('products.importCatalogWeb');
@@ -95,17 +95,17 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::post('/customers/{customer}/toggle-status', [CustomerController::class, 'toggleStatus'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('customers.toggleStatus');
     Route::get('/accounts-receivable', [SaleController::class, 'viewReceivables'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('accounts.receivable.index');
     Route::get('/paid-pending-deliveries', [SaleController::class, 'viewPaidPendingDelivery'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.paidPendingDeliveries.index');
-    Route::get('/sales-orders', [SaleController::class, 'viewOrders'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.orders');
-    Route::get('/sales-orders/pending-delivery', [SaleController::class, 'viewPendingDeliveryOrders'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.orders.pendingDelivery');
+    Route::get('/sales-orders', [SaleController::class, 'viewOrders'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.orders');
+    Route::get('/sales-orders/pending-delivery', [SaleController::class, 'viewPendingDeliveryOrders'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('sales.orders.pendingDelivery');
     Route::get('/sales/{id}', [SaleController::class, 'showByOrder'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.showByOrder');
     Route::post('/sales-orders/{order}/electronic/emit', [ElectronicInvoicingController::class, 'emit'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.emit');
-    Route::post('/sales-orders/{order}/electronic/status', [ElectronicInvoicingController::class, 'status'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.electronic.status');
-    Route::post('/sales-orders/{order}/electronic/download', [ElectronicInvoicingController::class, 'download'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.electronic.download');
+    Route::post('/sales-orders/{order}/electronic/status', [ElectronicInvoicingController::class, 'status'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.status');
+    Route::post('/sales-orders/{order}/electronic/download', [ElectronicInvoicingController::class, 'download'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.download');
     Route::post('/sales-orders/{order}/electronic/send-email', [ElectronicInvoicingController::class, 'sendEmail'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.sendEmail');
     Route::post('/sales-orders/{order}/electronic/annul', [ElectronicInvoicingController::class, 'annul'])->middleware('role.name:owner,admin,administrador')->name('sales.electronic.annul');
     Route::post('/sales-orders/{order}/electronic/metadata', [ElectronicInvoicingController::class, 'metadata'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.metadata');
     Route::post('/sales-orders/{order}/document-mode', [SaleController::class, 'updateDocumentMode'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.documentMode.update');
-    Route::get('/my-electronic-documents', [ElectronicInvoicingController::class, 'tenantIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.electronic.documents.tenant');
+    Route::get('/my-electronic-documents', [ElectronicInvoicingController::class, 'tenantIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.documents.tenant');
     Route::get('/electronic-documents', [ElectronicInvoicingController::class, 'index'])->middleware('role.name:4')->name('electronic.documents.index');
     Route::post('/electronic-documents/{electronicDocument}/retry', [ElectronicInvoicingController::class, 'retry'])->middleware('role.name:4')->name('electronic.documents.retry');
     Route::post('/sales/{id}/return', [SaleController::class, 'processReturn'])->middleware('role.name:owner,admin,administrador')->name('sales.return');
@@ -153,17 +153,17 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::put('/warehouses/movements/{movement}', [WarehouseController::class, 'updateMovement'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('warehouses.movements.update');
 
     // Lista de materiales / paquetes
-    Route::get('/materials', [MaterialPackageController::class, 'index'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('materials.index');
-    Route::post('/materials', [MaterialPackageController::class, 'store'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('materials.store');
-    Route::post('/materials/{id}/toggle-status', [MaterialPackageController::class, 'toggleStatus'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('materials.toggleStatus');
-    Route::post('/materials/{id}/generate-codes', [MaterialPackageController::class, 'generateCodes'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('materials.generateCodes');
+    Route::get('/materials', [MaterialPackageController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('materials.index');
+    Route::post('/materials', [MaterialPackageController::class, 'store'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('materials.store');
+    Route::post('/materials/{id}/toggle-status', [MaterialPackageController::class, 'toggleStatus'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('materials.toggleStatus');
+    Route::post('/materials/{id}/generate-codes', [MaterialPackageController::class, 'generateCodes'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('materials.generateCodes');
 
     // Tenants
     Route::get('/tenants', [TenantController::class, 'index'])->middleware('role.name:4')->name('tenant.index');
     Route::get('/tenant-payments', [TenantController::class, 'paymentsIndex'])->middleware('role.name:4')->name('tenant.payments.index');
     Route::get('/create-tenant', [TenantController::class, 'createIndex'])->middleware('role.name:4')->name('createTenant');
-    Route::get('/tenant-store', [TenantController::class, 'getTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.store');
-    Route::post('/tenant-update', [TenantController::class, 'updateTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.update');
+    Route::get('/tenant-store', [TenantController::class, 'getTenant'])->middleware('role.name:owner')->name('tenant.store');
+    Route::post('/tenant-update', [TenantController::class, 'updateTenant'])->middleware('role.name:owner')->name('tenant.update');
     Route::post('/tenant-store/plan-payment-request', [TenantController::class, 'submitPlanPaymentRequest'])->middleware('role.name:owner')->name('tenant.planPayment.request');
     Route::post('/tenants/{tenant}/plan-payments/{payment}/approve', [TenantController::class, 'approvePlanPayment'])->middleware('role.name:4')->name('tenant.planPayment.approve');
     Route::post('/tenants/{tenant}/plan-payments/{payment}/cutoff', [TenantController::class, 'updatePlanPaymentCutoffDate'])->middleware('role.name:4')->name('tenant.planPayment.cutoff.update');
