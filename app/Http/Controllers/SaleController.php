@@ -31,6 +31,7 @@ use Endroid\QrCode\Label\Label;
 use Endroid\QrCode\Logo\Logo;
 use Endroid\QrCode\RoundBlockSizeMode;
 use App\Models\DollarRate;
+use App\Models\EuroRate;
 use App\Models\Tax;
 use App\Models\Tenant;
 use App\Models\Role;
@@ -41,10 +42,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
-use Illuminate\Support\Str;
 use Illuminate\Support\Arr;
 use App\Support\WorkflowNotifier;
 use App\Support\ImageStorage;
+use App\Support\TenantCurrency;
 use App\Services\TheFactoryHkaService;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -69,20 +70,38 @@ class SaleController extends Controller
             ->active()
             ->get();
         $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
+        $euroRate = EuroRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
         $taxes = Tax::all();
         $tenant = Tenant::find($user->tenant_id);
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
+        $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
+
+        if ($baseRateToBs <= 0) {
+            $baseRateToBs = (float) ($baseCurrencyCode === 'EUR' ? ($euroRate?->rate ?? 0) : ($dollarRate?->rate ?? 0));
+        }
+
+        $ratePayload = (object) ['rate' => $baseRateToBs];
 
         // Traer todas las categorías
         $categories = Category::where('tenant_id', $user->tenant_id)
         ->where('is_active', true)
         ->get();
 
+        $customerRoleIds = $this->resolveCustomerRoleIds();
+        $existingCustomersForSale = User::query()
+            ->where('tenant_id', $user->tenant_id)
+            ->where('is_active', 1)
+            ->whereIn('role_id', $customerRoleIds)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'phone_number', 'dni']);
+
         if ($categories->isEmpty()) {
             return redirect()->route('categories.index')
                 ->with('warning', 'Debes crear al menos una categoría antes de registrar ventas.');
         }
 
-        return view('sales', compact('categories', 'paymentMethods', 'productItems', 'materialPackages', 'dollarRate', 'customerId', 'taxes', 'tenant'));
+        return view('sales', compact('categories', 'paymentMethods', 'productItems', 'materialPackages', 'dollarRate', 'euroRate', 'customerId', 'taxes', 'tenant', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs', 'ratePayload', 'existingCustomersForSale'));
     }
     
     public function store(Request $request)
@@ -92,6 +111,7 @@ class SaleController extends Controller
             'delivery_address' => 'nullable|string|max:500',
             'sale_document_mode' => 'nullable|in:delivery_note,electronic_invoice',
             'create_new_customer' => 'nullable|boolean',
+            'customer_existing_id' => 'nullable|integer|required_unless:create_new_customer,1',
             'customer_new' => 'nullable|array',
             'customer_new.name' => 'required_if:create_new_customer,1|string|max:255',
             'customer_new.email' => 'required_if:create_new_customer,1|email|unique:users,email',
@@ -102,36 +122,48 @@ class SaleController extends Controller
             'mark_sale_completed' => 'nullable|boolean',
         ]);
 
-        // dd($request->all());
-        // Decodificar customerId si viene como JSON string
-        $tenantId = $request->tenant_id;
+        $tenantId = (int) (optional(auth()->user())->tenant_id ?? $request->tenant_id);
         $createNewCustomer = (bool) ($validated['create_new_customer'] ?? false);
         $customerId = null;
+        $createdCustomerTemporaryPassword = null;
+
+        if ($tenantId <= 0) {
+            return response()->json(['error' => 'No se pudo determinar la tienda para registrar la venta.'], 422);
+        }
 
         if ($createNewCustomer) {
             $customerPayload = $validated['customer_new'] ?? [];
-            $customerRoleId = Role::query()
-                ->whereRaw('LOWER(name) = ?', ['user'])
-                ->value('id') ?? 3;
+            $customerRoleId = $this->resolveCustomerRoleId();
+            $defaultCustomerPassword = '12345678';
 
             $createdCustomer = User::create([
                 'name' => trim((string) ($customerPayload['name'] ?? 'Cliente')),
                 'email' => trim((string) ($customerPayload['email'] ?? '')),
                 'phone_number' => trim((string) ($customerPayload['phone_number'] ?? '')),
                 'dni' => trim((string) ($customerPayload['dni'] ?? '')),
-                'password' => Hash::make(Str::random(24)),
+                'password' => Hash::make($defaultCustomerPassword),
                 'tenant_id' => $tenantId,
                 'role_id' => $customerRoleId,
                 'is_active' => 1,
             ]);
 
             $customerId = (int) $createdCustomer->id;
+            $createdCustomerTemporaryPassword = $defaultCustomerPassword;
         } else {
-            $customer = is_string($request->customerId) ? json_decode($request->customerId, true) : $request->customerId;
-            $customerId = is_array($customer) ? ($customer['id'] ?? null) : null;
-            if (is_null($customerId)) {
-                $customerId = optional(auth()->user())->id;
+            $selectedCustomerId = (int) ($validated['customer_existing_id'] ?? 0);
+            $customerRoleIds = $this->resolveCustomerRoleIds();
+
+            $existingCustomer = User::query()
+                ->where('tenant_id', $tenantId)
+                ->where('is_active', 1)
+                ->whereIn('role_id', $customerRoleIds)
+                ->find($selectedCustomerId);
+
+            if (!$existingCustomer) {
+                return response()->json(['error' => 'Debes seleccionar un cliente existente válido.'], 422);
             }
+
+            $customerId = (int) $existingCustomer->id;
         }
 
         $itemsSelected = $request->items;
@@ -159,6 +191,7 @@ class SaleController extends Controller
             return response()->json(['error' => 'No se enviaron productos válidos.'], 400);
         }
         $tienda = Tenant::find($tenantId);
+        $saleCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tienda);
 
         if ($requestedDocumentMode === 'electronic_invoice' && !(bool) ($tienda?->electronic_invoicing_enabled ?? false)) {
             return response()->json(['error' => 'La facturacion digital esta desactivada para esta tienda.'], 422);
@@ -176,6 +209,7 @@ class SaleController extends Controller
             'deliver_status' => $markDelivered ? 1 : 0,
             'tenant_id' => $tenantId,
             'document_issue_mode' => $documentIssueMode,
+            'sale_currency_code' => $saleCurrencyCode,
         ]);
 
         // Crear detalles y actualizar stock
@@ -349,8 +383,32 @@ class SaleController extends Controller
                 ? 'Venta registrada exitosamente con pagos aprobados.'
                 : 'Venta registrada sin pagos aprobados (PDF no generado).',
                 'pdf_url' => $pdfUrl,
-                'nota_entrega_pdf_url' => $pdfUrlNota
+                'nota_entrega_pdf_url' => $pdfUrlNota,
+                'created_customer_temporary_password' => $createdCustomerTemporaryPassword,
         ], 200);
+    }
+
+    private function resolveCustomerRoleIds(): array
+    {
+        $roleIds = Role::query()
+            ->whereIn(DB::raw('LOWER(name)'), ['user', 'cliente', 'customer'])
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        if (empty($roleIds)) {
+            return [3];
+        }
+
+        return $roleIds;
+    }
+
+    private function resolveCustomerRoleId(): int
+    {
+        return (int) (Role::query()
+            ->whereIn(DB::raw('LOWER(name)'), ['user', 'cliente', 'customer'])
+            ->value('id') ?? 3);
     }
 
     public function downloadPdf($id)
@@ -426,6 +484,10 @@ class SaleController extends Controller
             ];
         }
     
+        $customer = User::find($customerId);
+        $tenantForSale = Tenant::find(optional($customer)->tenant_id);
+        $saleCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenantForSale);
+
         // Crear orden de venta con status en 0 (pendiente)
         $salesOrder = SalesOrder::create([
             'user_id' => $customerId,
@@ -433,6 +495,7 @@ class SaleController extends Controller
             'status' => 0, // Pendiente por defecto en eCommerce
             'address' => $address ?? 'Tienda',
             'preference' => $preference,
+            'sale_currency_code' => $saleCurrencyCode,
         ]);
     
         // Crear detalles de la venta y actualizar stock
@@ -747,7 +810,10 @@ class SaleController extends Controller
         $order->total_orden = $totalOrden; // Agregar total de la orden al objeto de la orden
         $order->has_returns = $order->returns->isNotEmpty(); // Verificar si tiene devoluciones
         $order->latest_electronic_document = $order->electronicDocuments->sortByDesc('id')->first();
-        return view('salesOrderDetail', compact('order', 'totalOrden', 'totalPagado'));
+        $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
+        $orderCurrencySymbol = TenantCurrency::resolveCurrencySymbol($orderCurrencyCode);
+
+        return view('salesOrderDetail', compact('order', 'totalOrden', 'totalPagado', 'orderCurrencyCode', 'orderCurrencySymbol'));
     }
     public function showPublicOrder($id)
     {
@@ -761,12 +827,50 @@ class SaleController extends Controller
             return $payment->amount;
         });
 
-        return view('orderInfoQr', compact('order', 'totalOrden', 'totalPagado'));
+        $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
+        $orderCurrencySymbol = TenantCurrency::resolveCurrencySymbol($orderCurrencyCode);
+
+        return view('orderInfoQr', compact('order', 'totalOrden', 'totalPagado', 'orderCurrencyCode', 'orderCurrencySymbol'));
     }
 
-    public function downloadStoredPdf(int $id, string $type)
+    private function resolveOrderCurrencyCode(SalesOrder $order): string
+    {
+        $paymentCurrencyCodes = $order->payments
+            ->map(function (Payment $payment) {
+                $raw = strtoupper(trim((string) ($payment->currency ?? $payment->payment?->currency?->code ?? '')));
+
+                if (in_array($raw, ['USD', 'EUR'], true)) {
+                    return $raw;
+                }
+
+                return null;
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($paymentCurrencyCodes->count() === 1) {
+            return (string) $paymentCurrencyCodes->first();
+        }
+
+        $stored = strtoupper(trim((string) ($order->sale_currency_code ?? '')));
+        if (in_array($stored, ['USD', 'EUR'], true)) {
+            return $stored;
+        }
+
+        return TenantCurrency::resolveBaseCurrencyCode($order->tenant);
+    }
+
+    public function downloadStoredPdf(Request $request, int $id, string $type)
     {
         $order = SalesOrder::with(['user', 'details', 'details.variant.product', 'details.taxes', 'payments.payment'])->findOrFail($id);
+
+        $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
+        $emissionCurrencyCode = $this->resolveEmissionCurrencyCode((string) $request->query('currency_code', ''), $orderCurrencyCode);
+
+        if ($request->has('currency_code')) {
+            return $this->downloadRenderedPdfByCurrency($order, $type, $emissionCurrencyCode);
+        }
 
         $assets = $this->ensureAssociatedPdfAssets($order);
         $filePath = $type === 'delivery' ? $assets['delivery_path'] : $assets['invoice_path'];
@@ -795,6 +899,8 @@ class SaleController extends Controller
     private function generateAssociatedPdfAssets(SalesOrder $order): array
     {
         $order->loadMissing(['details.taxes', 'details.variant.product', 'payments.payment', 'tenant']);
+        $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
+        $pdfCurrencyContext = $this->buildPdfCurrencyContext($order, $orderCurrencyCode);
 
         $serverIp = request()->getHost();
         $imagePath = storage_path('app/public/products/infblack.png');
@@ -827,7 +933,7 @@ class SaleController extends Controller
             'imageBase64',
             'qrCodeBase64',
             'dollarRate'
-        ))->render();
+        ))->with($pdfCurrencyContext)->render();
 
         $deliveryHtml = view('orderPdf', compact(
             'order',
@@ -839,7 +945,7 @@ class SaleController extends Controller
             'qrCodeBase64',
             'dollarRate',
             'tienda'
-        ))->render();
+        ))->with($pdfCurrencyContext)->render();
 
         $invoiceOutput = $this->renderPdfOutput($invoiceHtml);
         $deliveryOutput = $this->renderPdfOutput($deliveryHtml);
@@ -870,6 +976,139 @@ class SaleController extends Controller
         $dompdf->render();
 
         return $dompdf->output();
+    }
+
+    private function downloadRenderedPdfByCurrency(SalesOrder $order, string $type, string $emissionCurrencyCode)
+    {
+        $order->loadMissing(['details.taxes', 'details.variant.product', 'payments.payment', 'tenant']);
+
+        $serverIp = request()->getHost();
+        $imagePath = storage_path('app/public/products/infblack.png');
+        $imageData = file_exists($imagePath) ? base64_encode(file_get_contents($imagePath)) : '';
+        $imageBase64 = $imageData !== '' ? 'data:image/png;base64,' . $imageData : null;
+
+        $totalOrden = (float) $order->details->sum('amount');
+        $totalTaxes = (float) $order->details->flatMap->taxes->sum('tax_amount');
+        $totalPagado = (float) $order->payments->sum('amount');
+        $totalGeneral = $totalOrden + $totalTaxes;
+        $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $order->tenant_id)->first();
+        $tienda = $order->tenant;
+        $pdfCurrencyContext = $this->buildPdfCurrencyContext($order, $emissionCurrencyCode);
+
+        $qrUrl = "http://{$serverIp}:8000/publicOrder/{$order->id}";
+        $qrCode = QrCode::create($qrUrl)
+            ->setEncoding(new Encoding('UTF-8'))
+            ->setSize(250)
+            ->setMargin(10);
+
+        $writer = new PngWriter();
+        $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($writer->write($qrCode)->getString());
+
+        $viewName = $type === 'delivery' ? 'orderPdf' : 'fiscalOrderPdf';
+        $html = view($viewName, compact(
+            'order',
+            'totalOrden',
+            'totalTaxes',
+            'totalGeneral',
+            'totalPagado',
+            'imageBase64',
+            'qrCodeBase64',
+            'dollarRate',
+            'tienda'
+        ))->with($pdfCurrencyContext)->render();
+
+        $output = $this->renderPdfOutput($html);
+        $prefix = $type === 'delivery' ? 'NotaEntrega' : 'factura';
+        $fileName = $prefix . '-' . $order->id . '-' . strtolower($emissionCurrencyCode) . '.pdf';
+
+        return response($output, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ]);
+    }
+
+    private function resolveEmissionCurrencyCode(string $requestedCode, string $fallbackCode): string
+    {
+        $normalized = strtoupper(trim($requestedCode));
+
+        if (in_array($normalized, ['BS', 'VES'], true)) {
+            return 'VES';
+        }
+
+        if (in_array($normalized, ['USD', 'EUR'], true)) {
+            return $normalized;
+        }
+
+        return $fallbackCode;
+    }
+
+    private function buildPdfCurrencyContext(SalesOrder $order, string $emissionCurrencyCode): array
+    {
+        $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
+        $emissionCurrencyCode = $this->resolveEmissionCurrencyCode($emissionCurrencyCode, $orderCurrencyCode);
+
+        $dollarRate = (float) (DollarRate::latest('created_at')->where('tenant_id', $order->tenant_id)->value('rate') ?? 0);
+        $euroRate = (float) (EuroRate::latest('created_at')->where('tenant_id', $order->tenant_id)->value('rate') ?? 0);
+
+        $orderToBs = $this->resolveCurrencyToBsRate($orderCurrencyCode, $dollarRate, $euroRate);
+        $emissionToBs = $this->resolveCurrencyToBsRate($emissionCurrencyCode, $dollarRate, $euroRate);
+
+        $conversionFactor = 1.0;
+        if ($orderCurrencyCode !== $emissionCurrencyCode) {
+            if ($emissionCurrencyCode === 'VES') {
+                $conversionFactor = $orderToBs > 0 ? $orderToBs : 1.0;
+            } elseif ($orderCurrencyCode === 'VES') {
+                $conversionFactor = $emissionToBs > 0 ? (1 / $emissionToBs) : 1.0;
+            } else {
+                $conversionFactor = ($orderToBs > 0 && $emissionToBs > 0) ? ($orderToBs / $emissionToBs) : 1.0;
+            }
+        }
+
+        return [
+            'orderCurrencyCode' => $orderCurrencyCode,
+            'emissionCurrencyCode' => $emissionCurrencyCode,
+            'emissionCurrencySymbol' => $this->resolveCurrencySymbolForDisplay($emissionCurrencyCode),
+            'emissionConversionFactor' => $conversionFactor,
+            'emissionRateToBs' => $emissionToBs,
+        ];
+    }
+
+    private function resolveCurrencyToBsRate(string $currencyCode, float $dollarRate, float $euroRate): float
+    {
+        $normalized = strtoupper(trim($currencyCode));
+
+        if (in_array($normalized, ['VES', 'BS'], true)) {
+            return 1.0;
+        }
+
+        if ($normalized === 'EUR') {
+            return $euroRate > 0 ? $euroRate : 0;
+        }
+
+        if ($normalized === 'USD') {
+            return $dollarRate > 0 ? $dollarRate : 0;
+        }
+
+        return 0;
+    }
+
+    private function resolveCurrencySymbolForDisplay(string $currencyCode): string
+    {
+        $normalized = strtoupper(trim($currencyCode));
+
+        if ($normalized === 'EUR') {
+            return '€';
+        }
+
+        if ($normalized === 'USD') {
+            return '$';
+        }
+
+        if (in_array($normalized, ['VES', 'BS'], true)) {
+            return 'Bs';
+        }
+
+        return '';
     }
 
     public function getPaymentMethods()

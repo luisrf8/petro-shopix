@@ -242,6 +242,14 @@
           min-height: 30px;
         }
       }
+
+      .sidebar-full-height {
+        height: 100vh;
+        min-height: 100vh;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        border-radius: 0 !important;
+      }
     </style>
     @stack('styles')
 </head>
@@ -262,7 +270,7 @@
             'route' => route('help.preferences.route'),
         ];
     @endphp
-      <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-radius-lg fixed-start ms-2 d-lg-block bg-white my-2" id="sidenav-main">
+      <aside class="sidenav navbar navbar-vertical navbar-expand-xs fixed-start ms-0 d-lg-block bg-white sidebar-full-height" id="sidenav-main">
         @include('layouts.navbar')
       </aside>
     <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg ">

@@ -26,6 +26,13 @@
                             <small class="text-muted d-block">El rango aplica para ventas, entradas y reporte general.</small>
                         </div>
                         <div class="col-md-4">
+                            <label for="currency_code" class="form-label">Moneda de salida</label>
+                            <select id="currency_code" name="currency_code" class="form-control border border-1 p-2">
+                                <option value="USD" {{ request('currency_code', $selectedCurrencyCode ?? $baseCurrencyCode ?? 'USD') === 'USD' ? 'selected' : '' }}>USD</option>
+                                <option value="EUR" {{ request('currency_code', $selectedCurrencyCode ?? $baseCurrencyCode ?? 'USD') === 'EUR' ? 'selected' : '' }}>EUR</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
                             <label for="customer_status" class="form-label">Estado de cliente (reporte clientes)</label>
                             <select id="customer_status" name="customer_status" class="form-control border border-1 p-2">
                                 <option value="all" {{ request('customer_status', 'all') === 'all' ? 'selected' : '' }}>Todos</option>
@@ -59,6 +66,7 @@
                             'customer_status' => request('customer_status', 'all'),
                             'expense_category' => request('expense_category', ''),
                             'min_pending_balance' => request('min_pending_balance', '0'),
+                            'currency_code' => request('currency_code', $selectedCurrencyCode ?? $baseCurrencyCode ?? 'USD'),
                         ];
                     @endphp
 
@@ -108,8 +116,8 @@
                                     <h6 class="mb-2">Total del inventario</h6>
                                     <p class="text-sm text-muted mb-3">Stock y valor total por variante de producto.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.inventory.total.pdf') }}">PDF</a>
-                                        <a class="btn btn-outline-success btn-sm mb-0" href="{{ route('reports.inventory.total.excel') }}">Excel</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.inventory.total.pdf', $params) }}">PDF</a>
+                                        <a class="btn btn-outline-success btn-sm mb-0" href="{{ route('reports.inventory.total.excel', $params) }}">Excel</a>
                                     </div>
                                 </div>
                             </div>

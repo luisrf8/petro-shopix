@@ -19,8 +19,8 @@
     <div class="meta">
         Ordenes: <strong>{{ number_format($summary['orders']) }}</strong> |
         Items: <strong>{{ number_format($summary['total_items']) }}</strong> |
-        Total vendido: <strong>{{ number_format($summary['total_amount'], 2) }} USD</strong> |
-        Total cobrado: <strong>{{ number_format($summary['total_paid'], 2) }} USD</strong>
+        Total vendido: <strong>{{ number_format($summary['total_amount'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong> |
+        Total cobrado: <strong>{{ number_format($summary['total_paid'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong>
     </div>
 
     <table>
@@ -31,8 +31,8 @@
                 <th>Cliente</th>
                 <th>Estado</th>
                 <th class="num">Items</th>
-                <th class="num">Total (USD)</th>
-                <th class="num">Cobrado (USD)</th>
+                <th class="num">Total ({{ $summary['currency_code'] ?? 'USD' }})</th>
+                <th class="num">Cobrado ({{ $summary['currency_code'] ?? 'USD' }})</th>
             </tr>
         </thead>
         <tbody>
@@ -45,8 +45,8 @@
                         {{ $order->status == 0 ? 'En Proceso' : ($order->status == 1 ? 'Aprobado' : ($order->status == 2 ? 'Negado' : 'N/A')) }}
                     </td>
                     <td class="num">{{ number_format($order->details->sum('quantity')) }}</td>
-                    <td class="num">{{ number_format($order->details->sum('amount'), 2) }}</td>
-                    <td class="num">{{ number_format($order->payments->where('status', 1)->sum('amount'), 2) }}</td>
+                    <td class="num">{{ number_format((float) ($order->report_total_amount ?? 0), 2) }}</td>
+                    <td class="num">{{ number_format((float) ($order->report_total_paid ?? 0), 2) }}</td>
                 </tr>
             @empty
                 <tr>

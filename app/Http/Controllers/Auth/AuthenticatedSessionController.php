@@ -210,4 +210,31 @@ class AuthenticatedSessionController extends Controller
         ], 201);
     }
 
+    public function changeEcommPassword(Request $request): JsonResponse
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+        } catch (JWTException $e) {
+            return response()->json(['message' => 'Token inválido o expirado.'], 401);
+        }
+
+        if (!$user) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'new_password' => ['required', 'string', 'min:8', 'confirmed', 'different:current_password'],
+        ]);
+
+        if (!Hash::check((string) $validated['current_password'], (string) $user->password)) {
+            return response()->json(['message' => 'La contraseña actual no es correcta.'], 422);
+        }
+
+        $user->password = Hash::make((string) $validated['new_password']);
+        $user->save();
+
+        return response()->json(['message' => 'Contraseña actualizada correctamente.'], 200);
+    }
+
 }

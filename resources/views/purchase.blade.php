@@ -56,11 +56,27 @@
     <div class="mx-5">
                 <h1>Entrada de Inventario</h1>
 
+                <div class="card card-body mb-3">
+                    <label class="form-label mb-2">Tipo de entrada</label>
+                    <div class="d-flex flex-wrap gap-3" id="entryModeSwitch">
+                        <label class="d-flex align-items-center gap-2 mb-0">
+                            <input class="form-check-input" type="radio" name="entry_mode" value="purchase" checked>
+                            <span>Compra / pedido (con proveedor)</span>
+                        </label>
+                        <label class="d-flex align-items-center gap-2 mb-0">
+                            <input class="form-check-input" type="radio" name="entry_mode" value="production">
+                            <span>Producción interna (con consumibles)</span>
+                        </label>
+                    </div>
+                    <small class="text-muted mt-2" id="entryModeHelpText">Registra una compra normal con proveedor y costo unitario por variante.</small>
+                </div>
+
                 <div class="d-flex flex-wrap gap-2 mb-3">
+                    <div class="summary-pill" id="summary-entry-mode">Modo: Compra</div>
                     <div class="summary-pill" id="summary-selected-products">Productos: 0</div>
                     <div class="summary-pill" id="summary-selected-variants">Variantes: 0</div>
                     <div class="summary-pill" id="summary-total-units">Unidades: 0</div>
-                    <div class="summary-pill" id="summary-total-amount">Monto estimado: 0.00 USD</div>
+                    <div class="summary-pill" id="summary-total-amount">Monto estimado: 0.00 {{ $baseCurrencyCode ?? 'USD' }}</div>
                 </div>
 
                 <div class="d-flex flex-wrap gap-2 mb-4" id="purchase-steps-indicator">
@@ -117,7 +133,12 @@
                                                                                         data-product-image="{{ $itemImage }}"
                                                                                         data-default-price="{{ $variant->price }}"
                                                                                     >
-                                                                                    <span>{{ $variant->size }} | Stock: {{ $variant->stock }}</span>
+                                                                                    <span>
+                                                                                        {{ $variant->size }} | Stock: {{ $variant->stock }}
+                                                                                        @if(!(bool) ($item->is_active ?? true))
+                                                                                            <span class="badge bg-secondary ms-1">Inactivo</span>
+                                                                                        @endif
+                                                                                    </span>
                                                                                 </label>
                                                                             </div>
 
@@ -126,10 +147,26 @@
                                                                                     <input type="number" min="1" class="form-control purchase-qty border p-2" data-variant-id="{{ $variant->id }}" placeholder="Cantidad" disabled>
                                                                                 </div>
                                                                                 <div class="col-6">
-                                                                                    <input type="number" min="0.01" step="0.01" class="form-control purchase-price border p-2" data-variant-id="{{ $variant->id }}" placeholder="Costo USD" value="{{ number_format($variant->price, 2, '.', '') }}" disabled>
+                                                                                    <input type="number" min="0.01" step="0.01" class="form-control purchase-price border p-2" data-variant-id="{{ $variant->id }}" placeholder="Costo {{ $baseCurrencyCode ?? 'USD' }}" value="{{ number_format($variant->price, 2, '.', '') }}" disabled>
+                                                                                </div>
+                                                                                <div class="col-12">
+                                                                                    <select class="form-control purchase-currency border p-2" data-variant-id="{{ $variant->id }}" disabled>
+                                                                                        <option value="{{ $baseCurrencyCode ?? 'USD' }}">{{ $baseCurrencyCode ?? 'USD' }} (moneda madre)</option>
+                                                                                        <option value="USD">USD</option>
+                                                                                        <option value="EUR">EUR</option>
+                                                                                        <option value="BS">BS</option>
+                                                                                    </select>
                                                                                 </div>
                                                                             </div>
-                                                                            <div class="small text-end text-muted mt-1" data-line-total="{{ $variant->id }}">Subtotal: 0.00 USD</div>
+
+                                                                            <div class="card card-body mt-2 d-none production-consumables" data-production-wrapper="{{ $variant->id }}">
+                                                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                                                    <strong class="text-sm">Consumibles usados para esta producción</strong>
+                                                                                    <button type="button" class="btn btn-outline-dark btn-sm mb-0" data-add-consumption="{{ $variant->id }}">+ Agregar consumible</button>
+                                                                                </div>
+                                                                                <div data-consumption-list="{{ $variant->id }}" class="d-flex flex-column gap-2"></div>
+                                                                            </div>
+                                                                            <div class="small text-end text-muted mt-1" data-line-total="{{ $variant->id }}">Subtotal: 0.00 {{ $baseCurrencyCode ?? 'USD' }}</div>
                                                                         </div>
                                                                     @endforeach
                                 </div>
@@ -141,7 +178,7 @@
             </div>
 
                         <div id="step2" class="d-none card card-body">
-                                <h4>Paso 2: Proveedor y fecha de entrada</h4>
+                                <h4 id="step2Title">Paso 2: Proveedor y fecha de entrada</h4>
                             <div class="mb-3">
                                 <label for="warehouseId" class="form-label">Almacén destino</label>
                                 <select id="warehouseId" class="form-control border border-1 p-2" required>
@@ -153,7 +190,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                <div class="mb-3">
+                <div class="mb-3" id="providerBlock">
                     <label for="providerName" class="form-label">Proveedor</label>
                     <input type="text" id="providerName" list="purchaseProviderOptions" class="form-control border border-1 p-2" placeholder="Ej: Distribuidora ABC">
                     <small class="text-muted">Puedes seleccionar un proveedor registrado o escribir varios nombres separados por coma.</small>
@@ -190,12 +227,56 @@
 @push('scripts')
 <script src="{{ asset('assets/js/core/popper.min.js') }}"></script>
 <script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <!-- Github buttons -->
 <!-- <script async defer src="https://buttons.github.io/buttons.js"></script> -->
+@php
+    $consumableVariantsPayload = ($productItems ?? collect())->flatMap(function ($product) {
+        return ($product->variants ?? collect())->map(function ($variant) use ($product) {
+            $inactiveSuffix = !(bool) ($product->is_active ?? true) ? ' [INACTIVO]' : '';
+            return [
+                'id' => (int) $variant->id,
+                'label' => trim(($product->name ?? 'Producto') . ' - ' . ($variant->size ?? 'Sin variante') . $inactiveSuffix),
+                'default_price' => (float) ($variant->price ?? 0),
+                'stock' => (float) ($variant->stock ?? 0),
+            ];
+        });
+    })->values();
+@endphp
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            const baseCurrencyCode = @json($baseCurrencyCode ?? 'USD');
+            const baseRateToBs = Number(@json($baseRateToBs ?? 0));
+            const dollarRateToBs = Number(@json($dollarRateToBs ?? 0));
+            const euroRateToBs = Number(@json($euroRateToBs ?? 0));
+            const consumableVariants = @json($consumableVariantsPayload);
+
+            const toBaseCurrency = (amount, inputCurrency) => {
+                const currency = String(inputCurrency || baseCurrencyCode).toUpperCase();
+                const value = Number(amount || 0);
+
+                if (currency === baseCurrencyCode) {
+                    return value;
+                }
+
+                if (currency === 'BS' && baseRateToBs > 0) {
+                    return value / baseRateToBs;
+                }
+
+                if ((currency === 'USD' || currency === 'EUR') && currency !== baseCurrencyCode) {
+                    const fromRate = currency === 'EUR' ? euroRateToBs : dollarRateToBs;
+                    if (fromRate > 0 && baseRateToBs > 0) {
+                        return (value * fromRate) / baseRateToBs;
+                    }
+                }
+
+                return value;
+            };
+
             let itemsSelected = [];
+            let entryMode = 'purchase';
             const toStep2 = document.querySelector('.toStep2');
             const step1 = document.getElementById('step1');
             const step2 = document.getElementById('step2');
@@ -206,7 +287,12 @@
             const providerInput = document.getElementById("providerName");
             const purchaseDateInput = document.getElementById('purchaseDate');
             const warehouseIdInput = document.getElementById('warehouseId');
+            const entryModeSwitch = document.getElementById('entryModeSwitch');
+            const entryModeHelpText = document.getElementById('entryModeHelpText');
+            const providerBlock = document.getElementById('providerBlock');
+            const step2Title = document.getElementById('step2Title');
 
+            const summaryEntryMode = document.getElementById('summary-entry-mode');
             const summarySelectedProducts = document.getElementById('summary-selected-products');
             const summarySelectedVariants = document.getElementById('summary-selected-variants');
             const summaryTotalUnits = document.getElementById('summary-total-units');
@@ -222,6 +308,133 @@
                 });
             }
 
+            const getModeLabel = () => entryMode === 'production' ? 'Producción interna' : 'Compra';
+
+            function refreshModeUI() {
+                const isProduction = entryMode === 'production';
+
+                summaryEntryMode.textContent = `Modo: ${getModeLabel()}`;
+                entryModeHelpText.textContent = isProduction
+                    ? 'Registra una producción interna consumiendo insumos del inventario para generar productos terminados.'
+                    : 'Registra una compra normal con proveedor y costo unitario por variante.';
+
+                step2Title.textContent = isProduction
+                    ? 'Paso 2: Almacén y fecha de producción'
+                    : 'Paso 2: Proveedor y fecha de entrada';
+
+                providerBlock.classList.toggle('d-none', isProduction);
+
+                document.querySelectorAll('.purchase-price, .purchase-currency').forEach((el) => {
+                    const variantId = el.dataset.variantId;
+                    const checkbox = document.querySelector(`.purchase-variant-checkbox[data-variant-id="${variantId}"]`);
+                    const checked = !!checkbox?.checked;
+
+                    if (isProduction) {
+                        el.disabled = true;
+                    } else {
+                        el.disabled = !checked;
+                    }
+                });
+
+                document.querySelectorAll('.production-consumables').forEach((wrapper) => {
+                    const variantId = wrapper.dataset.productionWrapper;
+                    const checkbox = document.querySelector(`.purchase-variant-checkbox[data-variant-id="${variantId}"]`);
+                    const checked = !!checkbox?.checked;
+                    wrapper.classList.toggle('d-none', !(isProduction && checked));
+                });
+
+                toStep3.disabled = isProduction
+                    ? (!purchaseDateInput.value || !warehouseIdInput.value)
+                    : (providerInput.value.trim() === '' || !purchaseDateInput.value || !warehouseIdInput.value);
+            }
+
+            function buildConsumableOptions(selectedId = '') {
+                const options = ['<option value="">Selecciona consumible</option>'];
+                consumableVariants.forEach((variant) => {
+                    const isSelected = Number(selectedId) === Number(variant.id);
+                    options.push(`<option value="${variant.id}" ${isSelected ? 'selected' : ''}>${variant.label} (Stock: ${Number(variant.stock || 0)})</option>`);
+                });
+                return options.join('');
+            }
+
+            function initConsumableSelect2(selectElement) {
+                if (!selectElement || typeof window.jQuery === 'undefined' || !window.jQuery.fn || !window.jQuery.fn.select2) {
+                    return;
+                }
+
+                const $select = window.jQuery(selectElement);
+                if ($select.hasClass('select2-hidden-accessible')) {
+                    $select.select2('destroy');
+                }
+
+                $select.select2({
+                    width: '100%',
+                    dropdownAutoWidth: true,
+                    placeholder: 'Selecciona consumible',
+                    allowClear: true,
+                    language: {
+                        noResults: function () {
+                            return 'Sin coincidencias';
+                        }
+                    }
+                });
+
+                $select.on('change.select2', function () {
+                    const producedVariantId = this.dataset.producedVariantId;
+                    const selectedVariantId = Number(this.value || 0);
+                    const selectedVariant = consumableVariants.find((item) => Number(item.id) === selectedVariantId);
+                    const costInput = this.closest('[data-consumption-row]')?.querySelector('.production-consumed-cost');
+
+                    if (costInput && selectedVariant && Number(costInput.value || 0) <= 0) {
+                        costInput.value = Number(selectedVariant.default_price || 0).toFixed(2);
+                    }
+
+                    if (producedVariantId) {
+                        updateLineTotal(producedVariantId);
+                    }
+                    refreshSelectionState();
+                });
+            }
+
+            function addConsumptionRow(producedVariantId, values = {}) {
+                const list = document.querySelector(`[data-consumption-list="${producedVariantId}"]`);
+                if (!list) return;
+
+                const rowId = `${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+                const selectedId = Number(values.consumed_variant_id || 0);
+                const selectedVariant = consumableVariants.find((item) => Number(item.id) === selectedId);
+                const defaultCost = Number(values.unit_cost || selectedVariant?.default_price || 0).toFixed(2);
+                const defaultQty = Number(values.quantity || 1).toFixed(2);
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'row g-2 align-items-center border rounded p-2 m-0';
+                wrapper.dataset.consumptionRow = rowId;
+                wrapper.innerHTML = `
+                    <div class="col-12 col-md-6">
+                        <label class="form-label small mb-1">Consumible</label>
+                        <select class="form-control border p-2 production-consumed-variant js-consumable-select" data-produced-variant-id="${producedVariantId}">
+                            ${buildConsumableOptions(selectedId)}
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small mb-1">Cantidad</label>
+                        <input type="number" min="0.01" step="0.01" class="form-control border p-2 production-consumed-qty" value="${defaultQty}" data-produced-variant-id="${producedVariantId}" placeholder="Cant.">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small mb-1">Costo unitario</label>
+                        <input type="number" min="0.01" step="0.01" class="form-control border p-2 production-consumed-cost" value="${defaultCost}" data-produced-variant-id="${producedVariantId}" placeholder="Costo unitario ${baseCurrencyCode}">
+                    </div>
+                    <div class="col-12 col-md-1 text-end">
+                        <button type="button" class="btn btn-outline-danger btn-sm mb-0" data-remove-consumption="${rowId}">X</button>
+                    </div>
+                `;
+
+                list.appendChild(wrapper);
+
+                const selectElement = wrapper.querySelector('.js-consumable-select');
+                initConsumableSelect2(selectElement);
+            }
+
             function updateSummaryPills() {
                 const selectedProductIds = [...new Set(itemsSelected.map(item => item.product_id))];
                 const totalUnits = itemsSelected.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
@@ -230,7 +443,7 @@
                 summarySelectedProducts.textContent = `Productos: ${selectedProductIds.length}`;
                 summarySelectedVariants.textContent = `Variantes: ${itemsSelected.length}`;
                 summaryTotalUnits.textContent = `Unidades: ${totalUnits}`;
-                summaryTotalAmount.textContent = `Monto estimado: ${totalAmount.toFixed(2)} USD`;
+                summaryTotalAmount.textContent = `Monto estimado: ${totalAmount.toFixed(2)} ${baseCurrencyCode}`;
             }
 
             function collectSelectedItems() {
@@ -244,10 +457,13 @@
 
                     const qtyInput = document.querySelector(`.purchase-qty[data-variant-id="${variantId}"]`);
                     const priceInput = document.querySelector(`.purchase-price[data-variant-id="${variantId}"]`);
+                    const currencyInput = document.querySelector(`.purchase-currency[data-variant-id="${variantId}"]`);
                     const quantity = Number(qtyInput?.value || 0);
                     const price = Number(priceInput?.value || 0);
+                    const inputCurrency = (currencyInput?.value || baseCurrencyCode).toUpperCase();
+                    const basePrice = toBaseCurrency(price, inputCurrency);
 
-                    if (quantity > 0 && price > 0) {
+                    if (entryMode === 'purchase' && quantity > 0 && basePrice > 0) {
                         selected.push({
                             product_id: productId,
                             name: productName,
@@ -257,9 +473,52 @@
                                 product_image: productImage,
                             },
                             quantity,
-                            price,
+                            price: basePrice,
+                            currency: inputCurrency,
                             providers: [],
                         });
+                    }
+
+                    if (entryMode === 'production' && quantity > 0) {
+                        const rows = document.querySelectorAll(`[data-consumption-list="${variantId}"] [data-consumption-row]`);
+                        const consumptions = [];
+                        let lineCost = 0;
+
+                        rows.forEach((row) => {
+                            const consumedVariantInput = row.querySelector('.production-consumed-variant');
+                            const consumedQtyInput = row.querySelector('.production-consumed-qty');
+                            const consumedCostInput = row.querySelector('.production-consumed-cost');
+
+                            const consumedVariantId = Number(consumedVariantInput?.value || 0);
+                            const consumedQty = Number(consumedQtyInput?.value || 0);
+                            const consumedUnitCost = Number(consumedCostInput?.value || 0);
+
+                            if (consumedVariantId > 0 && consumedQty > 0 && consumedUnitCost > 0) {
+                                consumptions.push({
+                                    consumed_variant_id: consumedVariantId,
+                                    quantity: consumedQty,
+                                    unit_cost: consumedUnitCost,
+                                });
+                                lineCost += consumedQty * consumedUnitCost;
+                            }
+                        });
+
+                        if (consumptions.length > 0 && lineCost > 0) {
+                            selected.push({
+                                product_id: productId,
+                                name: productName,
+                                variant: {
+                                    id: variantId,
+                                    size: variantSize,
+                                    product_image: productImage,
+                                },
+                                quantity,
+                                price: lineCost / quantity,
+                                currency: baseCurrencyCode,
+                                providers: [],
+                                production_consumptions: consumptions,
+                            });
+                        }
                     }
                 });
 
@@ -269,11 +528,24 @@
             function updateLineTotal(variantId) {
                 const qtyInput = document.querySelector(`.purchase-qty[data-variant-id="${variantId}"]`);
                 const priceInput = document.querySelector(`.purchase-price[data-variant-id="${variantId}"]`);
+                const currencyInput = document.querySelector(`.purchase-currency[data-variant-id="${variantId}"]`);
                 const lineTotal = document.querySelector(`[data-line-total="${variantId}"]`);
                 if (!qtyInput || !priceInput || !lineTotal) return;
 
-                const subtotal = Number(qtyInput.value || 0) * Number(priceInput.value || 0);
-                lineTotal.textContent = `Subtotal: ${subtotal.toFixed(2)} USD`;
+                let subtotal = 0;
+                if (entryMode === 'production') {
+                    const rows = document.querySelectorAll(`[data-consumption-list="${variantId}"] [data-consumption-row]`);
+                    rows.forEach((row) => {
+                        const qty = Number(row.querySelector('.production-consumed-qty')?.value || 0);
+                        const unitCost = Number(row.querySelector('.production-consumed-cost')?.value || 0);
+                        subtotal += qty * unitCost;
+                    });
+                } else {
+                    const baseUnit = toBaseCurrency(Number(priceInput.value || 0), currencyInput?.value || baseCurrencyCode);
+                    subtotal = Number(qtyInput.value || 0) * baseUnit;
+                }
+
+                lineTotal.textContent = `Subtotal: ${subtotal.toFixed(2)} ${baseCurrencyCode}`;
             }
 
             function refreshSelectionState() {
@@ -287,10 +559,17 @@
                     const variantId = checkbox.dataset.variantId;
                     const qtyInput = document.querySelector(`.purchase-qty[data-variant-id="${variantId}"]`);
                     const priceInput = document.querySelector(`.purchase-price[data-variant-id="${variantId}"]`);
+                    const currencyInput = document.querySelector(`.purchase-currency[data-variant-id="${variantId}"]`);
 
                     const isChecked = checkbox.checked;
                     if (qtyInput) qtyInput.disabled = !isChecked;
-                    if (priceInput) priceInput.disabled = !isChecked;
+                    if (priceInput) priceInput.disabled = entryMode === 'production' ? true : !isChecked;
+                    if (currencyInput) currencyInput.disabled = entryMode === 'production' ? true : !isChecked;
+
+                    const productionWrapper = document.querySelector(`[data-production-wrapper="${variantId}"]`);
+                    if (productionWrapper) {
+                        productionWrapper.classList.toggle('d-none', !(entryMode === 'production' && isChecked));
+                    }
 
                     if (!isChecked) {
                         if (qtyInput) qtyInput.value = '';
@@ -301,12 +580,65 @@
                 });
             });
 
-            document.querySelectorAll('.purchase-qty, .purchase-price').forEach((input) => {
+            document.querySelectorAll('.purchase-qty, .purchase-price, .purchase-currency').forEach((input) => {
                 input.addEventListener('input', () => {
                     const variantId = input.dataset.variantId;
                     updateLineTotal(variantId);
                     refreshSelectionState();
                 });
+            });
+
+            document.addEventListener('click', (event) => {
+                const addButton = event.target.closest('[data-add-consumption]');
+                if (addButton) {
+                    const variantId = addButton.dataset.addConsumption;
+                    addConsumptionRow(variantId);
+                    updateLineTotal(variantId);
+                    refreshSelectionState();
+                    return;
+                }
+
+                const removeButton = event.target.closest('[data-remove-consumption]');
+                if (removeButton) {
+                    const rowId = removeButton.dataset.removeConsumption;
+                    const row = document.querySelector(`[data-consumption-row="${rowId}"]`);
+                    const variantId = row?.querySelector('.production-consumed-variant')?.dataset.producedVariantId;
+                    row?.remove();
+                    if (variantId) {
+                        updateLineTotal(variantId);
+                    }
+                    refreshSelectionState();
+                }
+            });
+
+            document.addEventListener('input', (event) => {
+                if (!event.target.classList.contains('production-consumed-variant')
+                    && !event.target.classList.contains('production-consumed-qty')
+                    && !event.target.classList.contains('production-consumed-cost')) {
+                    return;
+                }
+
+                const producedVariantId = event.target.dataset.producedVariantId;
+                if (event.target.classList.contains('production-consumed-variant')) {
+                    const variantId = Number(event.target.value || 0);
+                    const selectedVariant = consumableVariants.find((item) => Number(item.id) === variantId);
+                    const costInput = event.target.closest('[data-consumption-row]')?.querySelector('.production-consumed-cost');
+                    if (costInput && selectedVariant && Number(costInput.value || 0) <= 0) {
+                        costInput.value = Number(selectedVariant.default_price || 0).toFixed(2);
+                    }
+                }
+
+                if (producedVariantId) {
+                    updateLineTotal(producedVariantId);
+                }
+                refreshSelectionState();
+            });
+
+            entryModeSwitch.addEventListener('change', () => {
+                const selectedMode = document.querySelector('input[name="entry_mode"]:checked');
+                entryMode = selectedMode?.value || 'purchase';
+                refreshModeUI();
+                refreshSelectionState();
             });
 
             toStep2.addEventListener('click', function () {
@@ -320,15 +652,22 @@
                     const variantId = checkbox.dataset.variantId;
                     const qty = Number(document.querySelector(`.purchase-qty[data-variant-id="${variantId}"]`)?.value || 0);
                     const price = Number(document.querySelector(`.purchase-price[data-variant-id="${variantId}"]`)?.value || 0);
-                    if (qty <= 0 || price <= 0) {
+                    if (entryMode === 'purchase' && (qty <= 0 || price <= 0)) {
                         alert('Cada variante seleccionada debe tener cantidad y costo mayor a 0.');
+                        return;
+                    }
+
+                    if (entryMode === 'production' && qty <= 0) {
+                        alert('Cada variante seleccionada debe tener cantidad producida mayor a 0.');
                         return;
                     }
                 }
 
                 itemsSelected = collectSelectedItems();
                 if (itemsSelected.length === 0) {
-                    alert('No hay variantes válidas para continuar.');
+                    alert(entryMode === 'production'
+                        ? 'Debes cargar consumibles válidos para las variantes seleccionadas.'
+                        : 'No hay variantes válidas para continuar.');
                     return;
                 }
 
@@ -344,16 +683,21 @@
             });
 
             providerInput.addEventListener('input', function () {
-                const providerName = providerInput.value.trim();
-                toStep3.disabled = providerName === '' || !purchaseDateInput.value || !warehouseIdInput.value;
+                toStep3.disabled = entryMode === 'production'
+                    ? (!purchaseDateInput.value || !warehouseIdInput.value)
+                    : (providerInput.value.trim() === '' || !purchaseDateInput.value || !warehouseIdInput.value);
             });
 
             purchaseDateInput.addEventListener('change', function () {
-                toStep3.disabled = providerInput.value.trim() === '' || !purchaseDateInput.value || !warehouseIdInput.value;
+                toStep3.disabled = entryMode === 'production'
+                    ? (!purchaseDateInput.value || !warehouseIdInput.value)
+                    : (providerInput.value.trim() === '' || !purchaseDateInput.value || !warehouseIdInput.value);
             });
 
             warehouseIdInput.addEventListener('change', function () {
-                toStep3.disabled = providerInput.value.trim() === '' || !purchaseDateInput.value || !warehouseIdInput.value;
+                toStep3.disabled = entryMode === 'production'
+                    ? (!purchaseDateInput.value || !warehouseIdInput.value)
+                    : (providerInput.value.trim() === '' || !purchaseDateInput.value || !warehouseIdInput.value);
             });
 
             toStep3.addEventListener('click', function () {
@@ -362,7 +706,7 @@
                     .map(name => name.trim())
                     .filter(Boolean);
 
-                if (providers.length === 0) {
+                if (entryMode === 'purchase' && providers.length === 0) {
                     alert('Debes indicar al menos un proveedor.');
                     return;
                 }
@@ -378,7 +722,7 @@
                     return;
                 }
 
-                itemsSelected = itemsSelected.map(item => ({ ...item, providers }));
+                itemsSelected = itemsSelected.map(item => ({ ...item, providers: entryMode === 'purchase' ? providers : [] }));
 
                 const providerContainer = document.getElementById('providerContainer');
                 providerContainer.innerHTML = '';
@@ -415,8 +759,8 @@
                       <td>${data.name || 'Sin nombre'}</td>
                       <td>${data.variant?.size || 'Sin variante'}</td>
                       <td class="text-end">${data.quantity || 0}</td>
-                      <td class="text-end">${Number(data.price || 0).toFixed(2)} USD</td>
-                      <td class="text-end">${subtotal.toFixed(2)} USD</td>
+                      <td class="text-end">${Number(data.price || 0).toFixed(2)} ${baseCurrencyCode}</td>
+                      <td class="text-end">${subtotal.toFixed(2)} ${baseCurrencyCode}</td>
                     `;
                     tbody.appendChild(row);
                 });
@@ -425,7 +769,10 @@
 
                 const finalSummaryText = document.getElementById('finalSummaryText');
                 const warehouseText = warehouseIdInput.options[warehouseIdInput.selectedIndex]?.text || '';
-                finalSummaryText.textContent = `Almacén: ${warehouseText} | Proveedor(es): ${providers.join(', ')} | Fecha: ${purchaseDate} | Unidades: ${totalUnits} | Monto total: ${totalAmount.toFixed(2)} USD`;
+                finalSummaryText.textContent = `Almacén: ${warehouseText} | Proveedor(es): ${providers.join(', ')} | Fecha: ${purchaseDate} | Unidades: ${totalUnits} | Monto total: ${totalAmount.toFixed(2)} ${baseCurrencyCode}`;
+                if (entryMode === 'production') {
+                    finalSummaryText.textContent = `Almacén: ${warehouseText} | Modo: Producción interna | Fecha: ${purchaseDate} | Unidades producidas: ${totalUnits} | Costo total consumibles: ${totalAmount.toFixed(2)} ${baseCurrencyCode}`;
+                }
 
                 step3.classList.remove('d-none');
                 step2.classList.add('d-none');
@@ -446,7 +793,7 @@
                 }
 
                 const providerName = providerInput.value.trim();
-                if (!providerName) {
+                if (entryMode === 'purchase' && !providerName) {
                     alert('Debes indicar un proveedor válido.');
                     return;
                 }
@@ -473,6 +820,7 @@
                         },
                         body: JSON.stringify({
                             itemsSelected,
+                            entry_mode: entryMode,
                             purchase_date: purchaseDateInput.value,
                             warehouse_id: Number(warehouseIdInput.value)
                         }),
@@ -495,6 +843,7 @@
                 }
             })
 
+            refreshModeUI();
             updateSummaryPills();
         });
 

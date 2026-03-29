@@ -10,7 +10,9 @@ use App\Models\ProductVariant;
 use App\Models\PurchaseOrder;
 use App\Models\SalesOrder;
 use App\Models\StoreExpense;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Support\TenantCurrency;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -21,6 +23,9 @@ class ReportController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
+        $tenant = Tenant::find($user->tenant_id);
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $selectedCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) $request->query('currency_code', $baseCurrencyCode));
 
         $expenseCategories = StoreExpense::query()
             ->where('tenant_id', $user->tenant_id)
@@ -33,6 +38,8 @@ class ReportController extends Controller
 
         return view('reports.index', [
             'expenseCategories' => $expenseCategories,
+            'baseCurrencyCode' => $baseCurrencyCode,
+            'selectedCurrencyCode' => $selectedCurrencyCode,
         ]);
     }
 
@@ -40,6 +47,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
 
         $rows = ProductVariant::query()
             ->join('products', 'products.id', '=', 'product_variants.product_id')
@@ -53,11 +61,17 @@ class ReportController extends Controller
             ->limit(50)
             ->get();
 
+        $rows->transform(function ($row) use ($currency, $user) {
+            $row->total_amount = TenantCurrency::convertAmount((float) $row->total_amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            return $row;
+        });
+
         $summary = [
             'total_units' => (int) $rows->sum('total_quantity'),
             'total_amount' => (float) $rows->sum('total_amount'),
             'start_date' => $startDate,
             'end_date' => $endDate,
+            'currency_code' => $currency['code'],
         ];
 
         return $this->renderPdf(
@@ -71,6 +85,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
 
         $rows = ProductVariant::query()
             ->join('products', 'products.id', '=', 'product_variants.product_id')
@@ -84,6 +99,11 @@ class ReportController extends Controller
             ->limit(50)
             ->get();
 
+        $rows->transform(function ($row) use ($currency, $user) {
+            $row->total_amount = TenantCurrency::convertAmount((float) $row->total_amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            return $row;
+        });
+
         $csvRows = $rows->map(function ($row) {
             return [
                 $row->product_name,
@@ -95,7 +115,7 @@ class ReportController extends Controller
 
         return $this->downloadCsv(
             'reporte_productos_mas_vendidos',
-            ['Producto', 'Variante', 'Unidades', 'Monto_USD'],
+            ['Producto', 'Variante', 'Unidades', 'Monto_' . $currency['code']],
             $csvRows
         );
     }
@@ -104,6 +124,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
 
         $entries = PurchaseOrder::with(['warehouse', 'provider', 'detalles.productVariant.product'])
             ->where('tenant_id', $user->tenant_id)
@@ -112,12 +133,19 @@ class ReportController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        $entries->transform(function ($order) use ($currency, $user) {
+            $reportAmount = TenantCurrency::convertAmount((float) $order->detalles->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $order->report_total_amount = $reportAmount;
+            return $order;
+        });
+
         $summary = [
             'orders' => (int) $entries->count(),
             'total_items' => (int) $entries->sum(fn ($order) => $order->detalles->sum('quantity')),
-            'total_amount' => (float) $entries->sum(fn ($order) => $order->detalles->sum('amount')),
+            'total_amount' => (float) $entries->sum('report_total_amount'),
             'start_date' => $startDate,
             'end_date' => $endDate,
+            'currency_code' => $currency['code'],
         ];
 
         return $this->renderPdf(
@@ -131,6 +159,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
 
         $entries = PurchaseOrder::with(['warehouse', 'provider', 'detalles'])
             ->where('tenant_id', $user->tenant_id)
@@ -139,20 +168,20 @@ class ReportController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $csvRows = $entries->map(function ($order) {
+        $csvRows = $entries->map(function ($order) use ($currency, $user) {
             return [
                 (string) $order->id,
                 (string) $order->date,
                 (string) ($order->warehouse->name ?? 'N/A'),
                 (string) ($order->provider->name ?? $order->provider_name ?? 'N/A'),
                 (string) $order->detalles->sum('quantity'),
-                number_format((float) $order->detalles->sum('amount'), 2, '.', ''),
+                number_format(TenantCurrency::convertAmount((float) $order->detalles->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
             ];
         })->all();
 
         return $this->downloadCsv(
             'reporte_entradas_inventario',
-            ['Orden_ID', 'Fecha', 'Almacen', 'Proveedor', 'Items', 'Monto_USD'],
+            ['Orden_ID', 'Fecha', 'Almacen', 'Proveedor', 'Items', 'Monto_' . $currency['code']],
             $csvRows
         );
     }
@@ -161,6 +190,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
 
         $orders = SalesOrder::with(['user', 'details', 'payments'])
             ->where('tenant_id', $user->tenant_id)
@@ -169,13 +199,20 @@ class ReportController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        $orders->transform(function ($order) use ($currency, $user) {
+            $order->report_total_amount = TenantCurrency::convertAmount((float) $order->details->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $order->report_total_paid = TenantCurrency::convertAmount((float) $order->payments->where('status', 1)->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            return $order;
+        });
+
         $summary = [
             'orders' => (int) $orders->count(),
             'total_items' => (int) $orders->sum(fn ($order) => $order->details->sum('quantity')),
-            'total_amount' => (float) $orders->sum(fn ($order) => $order->details->sum('amount')),
-            'total_paid' => (float) $orders->sum(fn ($order) => $order->payments->where('status', 1)->sum('amount')),
+            'total_amount' => (float) $orders->sum('report_total_amount'),
+            'total_paid' => (float) $orders->sum('report_total_paid'),
             'start_date' => $startDate,
             'end_date' => $endDate,
+            'currency_code' => $currency['code'],
         ];
 
         return $this->renderPdf(
@@ -189,6 +226,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
 
         $orders = SalesOrder::with(['user', 'details', 'payments'])
             ->where('tenant_id', $user->tenant_id)
@@ -197,7 +235,7 @@ class ReportController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $csvRows = $orders->map(function ($order) {
+        $csvRows = $orders->map(function ($order) use ($currency, $user) {
             $status = $order->status == 0
                 ? 'En Proceso'
                 : ($order->status == 1 ? 'Aprobado' : ($order->status == 2 ? 'Negado' : 'N/A'));
@@ -208,14 +246,14 @@ class ReportController extends Controller
                 (string) ($order->user->name ?? 'N/A'),
                 $status,
                 (string) $order->details->sum('quantity'),
-                number_format((float) $order->details->sum('amount'), 2, '.', ''),
-                number_format((float) $order->payments->where('status', 1)->sum('amount'), 2, '.', ''),
+                number_format(TenantCurrency::convertAmount((float) $order->details->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
+                number_format(TenantCurrency::convertAmount((float) $order->payments->where('status', 1)->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
             ];
         })->all();
 
         return $this->downloadCsv(
             'reporte_gestion_ventas',
-            ['Orden_ID', 'Fecha', 'Cliente', 'Estado', 'Items', 'Total_USD', 'Cobrado_USD'],
+            ['Orden_ID', 'Fecha', 'Cliente', 'Estado', 'Items', 'Total_' . $currency['code'], 'Cobrado_' . $currency['code']],
             $csvRows
         );
     }
@@ -223,6 +261,7 @@ class ReportController extends Controller
     public function inventoryTotalPdf()
     {
         $user = auth()->user();
+        $currency = $this->resolveReportCurrencyContext(request(), (int) $user->tenant_id);
 
         $rows = ProductVariant::with(['product.category'])
             ->whereHas('product', function ($query) use ($user) {
@@ -231,13 +270,18 @@ class ReportController extends Controller
             ->orderByDesc('stock')
             ->get();
 
+        $rows->transform(function ($variant) use ($currency, $user) {
+            $variant->report_price = TenantCurrency::convertAmount((float) $variant->price, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $variant->report_value = TenantCurrency::convertAmount((float) $variant->stock * (float) $variant->price, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            return $variant;
+        });
+
         $summary = [
             'variants' => (int) $rows->count(),
             'total_stock' => (int) $rows->sum('stock'),
-            'inventory_value' => (float) $rows->sum(function ($variant) {
-                return (float) $variant->stock * (float) $variant->price;
-            }),
+            'inventory_value' => (float) $rows->sum('report_value'),
             'generated_at' => now(),
+            'currency_code' => $currency['code'],
         ];
 
         return $this->renderPdf(
@@ -250,6 +294,7 @@ class ReportController extends Controller
     public function inventoryTotalExcel()
     {
         $user = auth()->user();
+        $currency = $this->resolveReportCurrencyContext(request(), (int) $user->tenant_id);
 
         $rows = ProductVariant::with(['product.category'])
             ->whereHas('product', function ($query) use ($user) {
@@ -258,20 +303,20 @@ class ReportController extends Controller
             ->orderByDesc('stock')
             ->get();
 
-        $csvRows = $rows->map(function ($row) {
+        $csvRows = $rows->map(function ($row) use ($currency, $user) {
             return [
                 (string) ($row->product->name ?? 'N/A'),
                 (string) ($row->product->category->name ?? 'N/A'),
                 (string) ($row->size ?: 'N/A'),
                 (string) $row->stock,
-                number_format((float) $row->price, 2, '.', ''),
-                number_format((float) $row->stock * (float) $row->price, 2, '.', ''),
+                number_format(TenantCurrency::convertAmount((float) $row->price, $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
+                number_format(TenantCurrency::convertAmount((float) $row->stock * (float) $row->price, $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
             ];
         })->all();
 
         return $this->downloadCsv(
             'reporte_inventario_total',
-            ['Producto', 'Categoria', 'Variante', 'Stock', 'Precio_USD', 'Valor_USD'],
+            ['Producto', 'Categoria', 'Variante', 'Stock', 'Precio_' . $currency['code'], 'Valor_' . $currency['code']],
             $csvRows
         );
     }
@@ -280,6 +325,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
 
         $modules = [
             [
@@ -326,7 +372,10 @@ class ReportController extends Controller
             'start_date' => $startDate,
             'end_date' => $endDate,
             'generated_at' => now(),
+            'currency_code' => $currency['code'],
         ];
+
+        $modules = $this->convertModulesMoneyMetrics($modules, $currency, (int) $user->tenant_id);
 
         return $this->renderPdf(
             'reports.pdf.system-modules',
@@ -339,6 +388,7 @@ class ReportController extends Controller
     {
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
 
         $modules = [
             [
@@ -380,6 +430,8 @@ class ReportController extends Controller
                 ],
             ],
         ];
+
+        $modules = $this->convertModulesMoneyMetrics($modules, $currency, (int) $user->tenant_id);
 
         $csvRows = [];
         foreach ($modules as $module) {
@@ -412,7 +464,7 @@ class ReportController extends Controller
 
     public function customersExcel(Request $request)
     {
-        [$rows] = $this->buildCustomersReportData($request);
+        [$rows, $summary] = $this->buildCustomersReportData($request);
 
         $csvRows = $rows->map(function ($customer) {
             return [
@@ -429,7 +481,7 @@ class ReportController extends Controller
 
         return $this->downloadCsv(
             'reporte_clientes',
-            ['Cliente', 'Correo', 'Telefono', 'DNI', 'Compras', 'Cobrado_USD', 'Ultima_Compra', 'Estado'],
+            ['Cliente', 'Correo', 'Telefono', 'DNI', 'Compras', 'Cobrado_' . ($summary['currency_code'] ?? 'USD'), 'Ultima_Compra', 'Estado'],
             $csvRows
         );
     }
@@ -447,7 +499,7 @@ class ReportController extends Controller
 
     public function receivablesExcel(Request $request)
     {
-        [$rows] = $this->buildReceivablesReportData($request);
+        [$rows, $summary] = $this->buildReceivablesReportData($request);
 
         $csvRows = $rows->map(function ($order) {
             return [
@@ -464,7 +516,7 @@ class ReportController extends Controller
 
         return $this->downloadCsv(
             'reporte_cuentas_por_cobrar',
-            ['Orden_ID', 'Fecha', 'Cliente', 'Items', 'Total_USD', 'Cobrado_USD', 'Saldo_USD', 'Entrega'],
+            ['Orden_ID', 'Fecha', 'Cliente', 'Items', 'Total_' . ($summary['currency_code'] ?? 'USD'), 'Cobrado_' . ($summary['currency_code'] ?? 'USD'), 'Saldo_' . ($summary['currency_code'] ?? 'USD'), 'Entrega'],
             $csvRows
         );
     }
@@ -482,7 +534,7 @@ class ReportController extends Controller
 
     public function storeExpensesExcel(Request $request)
     {
-        [$rows] = $this->buildStoreExpensesReportData($request);
+        [$rows, $summary] = $this->buildStoreExpensesReportData($request);
 
         $csvRows = $rows->map(function ($expense) {
             return [
@@ -498,7 +550,7 @@ class ReportController extends Controller
 
         return $this->downloadCsv(
             'reporte_gastos_tienda',
-            ['Fecha', 'Concepto', 'Categoria', 'Proveedor', 'Metodo_Pago', 'Monto_USD', 'Estado'],
+            ['Fecha', 'Concepto', 'Categoria', 'Proveedor', 'Metodo_Pago', 'Monto_' . ($summary['currency_code'] ?? 'USD'), 'Estado'],
             $csvRows
         );
     }
@@ -560,6 +612,7 @@ class ReportController extends Controller
     private function buildCustomersReportData(Request $request): array
     {
         $user = auth()->user();
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
         [$startDate, $endDate] = $this->resolveDateRange($request);
         $customerStatus = strtolower(trim((string) $request->query('customer_status', 'all')));
 
@@ -594,6 +647,11 @@ class ReportController extends Controller
             ->orderBy('name')
             ->get();
 
+        $rows->transform(function ($customer) use ($currency, $user) {
+            $customer->total_paid_amount = TenantCurrency::convertAmount((float) ($customer->total_paid_amount ?? 0), $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            return $customer;
+        });
+
         $summary = [
             'start_date' => $startDate,
             'end_date' => $endDate,
@@ -601,6 +659,7 @@ class ReportController extends Controller
             'customers' => (int) $rows->count(),
             'orders' => (int) $rows->sum('orders_count'),
             'total_paid' => (float) $rows->sum(fn (User $customer) => (float) ($customer->total_paid_amount ?? 0)),
+            'currency_code' => $currency['code'],
         ];
 
         return [$rows, $summary];
@@ -609,8 +668,10 @@ class ReportController extends Controller
     private function buildReceivablesReportData(Request $request): array
     {
         $user = auth()->user();
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
         [$startDate, $endDate] = $this->resolveDateRange($request);
         $minPendingBalance = max(0, (float) $request->query('min_pending_balance', 0));
+        $minPendingBalanceBase = TenantCurrency::convertAmount($minPendingBalance, $currency['code'], $currency['base_code'], (int) $user->tenant_id);
 
         $rows = SalesOrder::with(['user', 'details', 'payments'])
             ->where('tenant_id', $user->tenant_id)
@@ -619,10 +680,14 @@ class ReportController extends Controller
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->get()
-            ->map(function (SalesOrder $order) {
+            ->map(function (SalesOrder $order) use ($currency, $user) {
                 $order->order_total_amount = (float) $order->details->sum('amount');
                 $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
                 $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount, 2));
+
+                $order->order_total_amount = TenantCurrency::convertAmount($order->order_total_amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+                $order->approved_paid_amount = TenantCurrency::convertAmount($order->approved_paid_amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+                $order->pending_amount = TenantCurrency::convertAmount($order->pending_amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
 
                 return $order;
             })
@@ -637,6 +702,7 @@ class ReportController extends Controller
             'total_amount' => (float) $rows->sum('order_total_amount'),
             'total_paid' => (float) $rows->sum('approved_paid_amount'),
             'total_pending' => (float) $rows->sum('pending_amount'),
+            'currency_code' => $currency['code'],
         ];
 
         return [$rows, $summary];
@@ -645,6 +711,7 @@ class ReportController extends Controller
     private function buildStoreExpensesReportData(Request $request): array
     {
         $user = auth()->user();
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
         [$startDate, $endDate] = $this->resolveDateRange($request);
         $expenseCategory = trim((string) $request->query('expense_category', ''));
 
@@ -658,14 +725,52 @@ class ReportController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        $rows->transform(function ($expense) use ($currency, $user) {
+            $expense->amount = TenantCurrency::convertAmount((float) $expense->amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            return $expense;
+        });
+
         $summary = [
             'start_date' => $startDate,
             'end_date' => $endDate,
             'expense_category' => $expenseCategory,
             'expenses' => (int) $rows->count(),
             'total_amount' => (float) $rows->sum('amount'),
+            'currency_code' => $currency['code'],
         ];
 
         return [$rows, $summary];
+    }
+
+    private function resolveReportCurrencyContext(Request $request, int $tenantId): array
+    {
+        $tenant = Tenant::find($tenantId);
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $reportCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) $request->query('currency_code', $baseCurrencyCode));
+
+        if (!in_array($reportCurrencyCode, ['USD', 'EUR'], true)) {
+            $reportCurrencyCode = $baseCurrencyCode;
+        }
+
+        return [
+            'base_code' => $baseCurrencyCode,
+            'code' => $reportCurrencyCode,
+        ];
+    }
+
+    private function convertModulesMoneyMetrics(array $modules, array $currency, int $tenantId): array
+    {
+        return collect($modules)->map(function ($module) use ($currency, $tenantId) {
+            foreach ($module['metrics'] as $metricName => $metricValue) {
+                $normalized = mb_strtolower((string) $metricName);
+                $isMoneyMetric = str_contains($normalized, 'monto') || str_contains($normalized, 'pagos') || str_contains($normalized, 'valor');
+
+                if ($isMoneyMetric && is_numeric($metricValue)) {
+                    $module['metrics'][$metricName] = TenantCurrency::convertAmount((float) $metricValue, $currency['base_code'], $currency['code'], $tenantId);
+                }
+            }
+
+            return $module;
+        })->values()->all();
     }
 }

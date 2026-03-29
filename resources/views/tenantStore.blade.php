@@ -292,7 +292,6 @@
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">Url de la Tienda</label>
-                                    <input type="text" class="form-control p-2 border border-radius-lg" id="storeSlugInput" name="slug" value="{{ $tenant->slug ?? '' }}">
                                     <div class="input-group mt-2">
                                         <input
                                             type="text"

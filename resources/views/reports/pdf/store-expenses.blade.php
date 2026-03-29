@@ -19,7 +19,7 @@
     <div class="meta">Categoría: <strong>{{ $summary['expense_category'] !== '' ? $summary['expense_category'] : 'Todas' }}</strong></div>
     <div class="meta">
         Gastos: <strong>{{ number_format($summary['expenses']) }}</strong> |
-        Total egresado: <strong>{{ number_format($summary['total_amount'], 2) }} USD</strong>
+        Total egresado: <strong>{{ number_format($summary['total_amount'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong>
     </div>
     <table>
         <thead>

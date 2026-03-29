@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\DollarRate;
 use App\Models\SalesOrder;
+use App\Support\TenantCurrency;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
@@ -165,8 +165,9 @@ class TheFactoryHkaService
         }
 
         $taxRate = (float) ($order->details->flatMap->taxes->first()->tax_rate ?? ($order->details->first()->tax_rate ?? 0));
+        $tenantBaseCurrency = $this->normalizeCurrency(TenantCurrency::resolveBaseCurrencyCode($order->tenant));
         $documentCurrency = $this->normalizeCurrency((string) ($options['moneda'] ?? config('services.thefactory_hka.default_currency', 'BSD')));
-        $foreignCurrency = $this->normalizeCurrency((string) ($options['otra_moneda'] ?? config('services.thefactory_hka.default_foreign_currency', 'USD')));
+        $foreignCurrency = $this->normalizeCurrency((string) ($options['otra_moneda'] ?? $tenantBaseCurrency));
         $exchangeRate = $this->resolveExchangeRate($order, $options);
         $saleType = (string) ($options['tipo_de_venta'] ?? config('services.thefactory_hka.default_sale_type', 'Interna'));
         $paymentType = (string) ($options['tipo_de_pago'] ?? config('services.thefactory_hka.default_payment_type', 'Inmediato'));
@@ -581,9 +582,15 @@ class TheFactoryHkaService
             return $explicitRate;
         }
 
-        $tenantRate = (float) optional(DollarRate::query()->where('tenant_id', $order->tenant_id)->latest('created_at')->first())->rate;
+        $targetCurrency = $this->normalizeCurrency((string) ($options['otra_moneda'] ?? TenantCurrency::resolveBaseCurrencyCode($order->tenant)));
+
+        if ($this->isBolivarCurrency($targetCurrency)) {
+            return 1;
+        }
+
+        $tenantRate = TenantCurrency::resolveRateToBs((int) $order->tenant_id, $targetCurrency);
         if ($tenantRate > 0) {
-            return $tenantRate;
+            return (float) $tenantRate;
         }
 
         return max((float) config('services.thefactory_hka.default_exchange_rate', 1), 1);

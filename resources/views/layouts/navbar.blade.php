@@ -1,6 +1,18 @@
 <style>
 #sidenav-main {
   transition: transform 0.3s ease-in-out;
+  height: 100vh;
+  min-height: 100vh;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border-radius: 0 !important;
+  overflow: hidden;
+}
+
+#sidenav-main #sidenav-collapse-main {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 #sidenav-main.closed {
@@ -81,10 +93,13 @@
       $canSeeProducts = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canSell = $isOwner || $isAdmin || $isSeller;
       $canSeeSalesOrders = $isOwner || $isAdmin || $isSeller || $isWarehouse;
+      $canSeePaidPendingDeliveries = $isOwner || $isAdmin || $isSeller || $isWarehouse;
+      $canSeeTenantElectronicDocuments = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canInventoryEntries = $isOwner || $isAdmin || $isWarehouse;
       $canSeeWarehouses = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canSeeMaterials = $isOwner || $isAdmin || $isWarehouse;
       $canManageStore = $isOwner || $isAdmin;
+      $canSeeReports = $canManageStore;
 
       $tenantLogo = null;
       $tenant = null;
@@ -213,6 +228,9 @@
           </a>
         </li>
 
+      @endif
+
+      @if($canSeePaidPendingDeliveries && !$hasFreePlanRestriction)
         <li class="nav-item">
           <a class="nav-link text-dark" href="/paid-pending-deliveries">
             <i class="material-symbols-rounded opacity-5">inventory</i>
@@ -261,7 +279,7 @@
           </li>
         @endif
 
-        @if($isWarehouse && !$hasFreePlanRestriction)
+        @if($canSeeSalesOrders && !$hasFreePlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/sales-orders/pending-delivery">
               <i class="material-symbols-rounded opacity-5">local_shipping</i>
@@ -270,13 +288,16 @@
           </li>
         @endif
 
-        @if($canSeeSalesOrders && !$isWarehouse && !$hasFreePlanRestriction)
+        @if($canSeeSalesOrders && !$hasFreePlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/sales-orders">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
               <span class="nav-link-text ms-1">Ventas Realizadas</span>
             </a>
           </li>
+        @endif
+
+        @if($canSeeTenantElectronicDocuments && !$hasFreePlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/my-electronic-documents">
               <i class="material-symbols-rounded opacity-5">receipt_long</i>
@@ -285,7 +306,7 @@
           </li>
         @endif
 
-        @if(($canSeeSalesOrders || $canInventoryEntries) && !$hasFreePlanRestriction && !$hasBasicPlanRestriction)
+        @if($canSeeReports && !$hasFreePlanRestriction && !$hasBasicPlanRestriction)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/reports">
               <i class="material-symbols-rounded opacity-5">summarize</i>
@@ -354,26 +375,6 @@
             </a>
           </li>
         @endif
-        <li class="nav-item d-flex" onclick="logOut()">
-          <a class="nav-link text-dark">
-            <!-- <i class="bi bi-person-circle"></i> -->
-            <i class="material-symbols-rounded opacity-5">supervised_user_circle</i>
-            <span class="nav-link-text ms-1">Cerrar Sesión</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link text-dark d-flex justify-content-between align-items-center" href="{{ route('notifications.index') }}">
-            <span>
-              <i class="material-symbols-rounded opacity-5">notifications</i>
-              <span class="nav-link-text ms-1">Notificaciones</span>
-            </span>
-            @if($unreadNotificationsCount > 0)
-              <span class="badge bg-danger" id="backoffice-notifications-count">{{ $unreadNotificationsCount }}</span>
-            @else
-              <span class="badge bg-danger d-none" id="backoffice-notifications-count">0</span>
-            @endif
-          </a>
-        </li>
       </ul>
     </div>
     <div class="sidenav-footer position-absolute w-100 bottom-0 ">
@@ -573,29 +574,6 @@
 
     });
 
-  function logOut() {
-    fetch("/api/logout", {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        },
-    })
-    .then(response => {
-        if (response.ok) {
-            return response.json();
-        } else {
-            throw new Error('Logout failed');
-        }
-    })
-    .then(data => {
-        window.location.href = '/login';
-    })
-    .catch(error => {
-        console.error("Error during logout:", error);
-        alert("Ocurrió un error al cerrar sesión.");
-    });
-}
 </script>
   <script async defer src="https://buttons.github.io/buttons.js"></script>
   <script src="{{ asset('assets/js/navbar.js') }}"></script>

@@ -9,7 +9,16 @@ class PurchaseOrder extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['provider_id', 'provider_name', 'warehouse_id', 'date', 'tenant_id'];
+    protected $fillable = [
+        'provider_id',
+        'provider_name',
+        'warehouse_id',
+        'date',
+        'tenant_id',
+        'entry_mode',
+        'production_cost_total',
+        'production_notes',
+    ];
 
     public function detalles()
     {
@@ -24,6 +33,11 @@ class PurchaseOrder extends Model
     public function warehouse()
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    public function consumptions()
+    {
+        return $this->hasMany(PurchaseOrderConsumption::class);
     }
 
     public function getProviderDisplayNameAttribute(): string

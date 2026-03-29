@@ -15,6 +15,18 @@
     @php
         $storePhone = preg_replace('/\D+/', '', (string) (($order->tenant->phone_code ?? '') . ($order->tenant->phone_number ?? '')));
         $customerPhone = preg_replace('/\D+/', '', (string) ($order->user->phone_number ?? ''));
+        $resolveCurrencySymbol = function (?string $code) {
+            $normalized = strtoupper(trim((string) $code));
+            if ($normalized === 'EUR') {
+                return '€';
+            }
+
+            if ($normalized === 'USD') {
+                return '$';
+            }
+
+            return '';
+        };
         $storeWhatsappUrl = $storePhone !== ''
             ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'tienda') . ', sobre la orden #' . $order->id . '.')
             : null;
@@ -30,6 +42,7 @@
         </div>
         
         <p><strong>Cliente:</strong> {{ $order->user->name }} | <strong>Teléfono:</strong> {{ $order->user->phone_number ?? 'No registrado' }}</p>
+        <p><strong>Moneda de la venta:</strong> {{ $orderCurrencyCode ?? 'USD' }}</p>
         <p><strong>Entrega:</strong> {{ $order->preference }} | <strong>Dirección:</strong> {{ $order->address }}</p>
         
         <div class="d-flex flex-wrap align-items-center gap-2">
@@ -51,8 +64,17 @@
 
         <div class="d-flex flex-wrap gap-2 mt-3">
             <button type="button" id="public-order-back" class="btn btn-outline-secondary mb-0">Volver</button>
-            <a href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
-            <a href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" class="btn btn-outline-dark mb-0">Descargar nota de entrega</a>
+            <div class="d-flex align-items-center gap-2">
+                <label for="public-order-download-currency" class="mb-0 text-sm fw-semibold">Moneda de emisión</label>
+                <select id="public-order-download-currency" class="form-select form-select-sm border border-1 p-2" style="min-width: 170px;">
+                    <option value="{{ $orderCurrencyCode ?? 'USD' }}">{{ $orderCurrencyCode ?? 'USD' }} (moneda de la venta)</option>
+                    @if(($orderCurrencyCode ?? 'USD') !== 'VES')
+                        <option value="VES">VES / Bolívares</option>
+                    @endif
+                </select>
+            </div>
+            <a id="publicDownloadInvoiceBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
+            <a id="publicDownloadDeliveryBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Descargar nota de entrega</a>
             @if($storeWhatsappUrl)
                 <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
             @endif
@@ -84,14 +106,14 @@
                                 <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
                                 <td>{{ $detalle->quantity }}</td>
                                 <td>{{ $detalle->variant->size ?? '' }}</td>
-                                <td>${{ number_format($detalle->price, 2) }}</td>
-                                <td>${{ number_format($detalle->amount, 2) }}</td>
+                                <td>{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</td>
+                                <td>{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->amount, 2) }}</td>
                             </tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
-                <p><strong>Total Orden:</strong> ${{ number_format($totalOrden, 2) }}</p>
+                <p><strong>Total Orden:</strong> {{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalOrden, 2) }}</p>
             </div>
         </div>
         
@@ -117,10 +139,14 @@
                         </thead>
                         <tbody>
                             @foreach($order->payments as $payment)
+                            @php
+                                $paymentCurrencyCode = strtoupper(trim((string) ($payment->currency ?? '')));
+                                $paymentSymbol = $resolveCurrencySymbol($paymentCurrencyCode);
+                            @endphp
                             <tr>
                                 <td>{{ $payment->currency }}</td>
                                 <td>{{ $payment->payment->name}}</td>
-                                <td>${{ number_format($payment->amount, 2) }}</td>
+                                <td>{{ $paymentSymbol }}{{ number_format($payment->amount, 2) }}{{ $paymentSymbol === '' && $paymentCurrencyCode !== '' ? ' ' . $paymentCurrencyCode : '' }}</td>
                                 <td>{{ $payment->payment->admin_name }}</td>
                                 <td>{{ $payment->payment->bank }}</td>
                                 <td>{{ $payment->reference ?? 'N/A' }}</td>
@@ -141,7 +167,7 @@
                         </tbody>
                     </table>
                 </div>
-                <p><strong>Total Pagado:</strong> ${{ number_format($totalPagado, 2) }}</p>
+                <p><strong>Total Pagado:</strong> {{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalPagado, 2) }}</p>
             </div>
         </div>
     </div>
@@ -159,6 +185,28 @@
 
                 window.location.href = '/';
             });
+
+            (() => {
+                const currencySelect = document.getElementById('public-order-download-currency');
+                const invoiceBtn = document.getElementById('publicDownloadInvoiceBtn');
+                const deliveryBtn = document.getElementById('publicDownloadDeliveryBtn');
+
+                if (!currencySelect || !invoiceBtn || !deliveryBtn) {
+                    return;
+                }
+
+                const syncDownloadUrls = () => {
+                    const currencyCode = encodeURIComponent(currencySelect.value || '{{ $orderCurrencyCode ?? 'USD' }}');
+                    const invoiceBase = invoiceBtn.dataset.baseUrl || invoiceBtn.getAttribute('href') || '';
+                    const deliveryBase = deliveryBtn.dataset.baseUrl || deliveryBtn.getAttribute('href') || '';
+
+                    invoiceBtn.href = `${invoiceBase}?currency_code=${currencyCode}`;
+                    deliveryBtn.href = `${deliveryBase}?currency_code=${currencyCode}`;
+                };
+
+                currencySelect.addEventListener('change', syncDownloadUrls);
+                syncDownloadUrls();
+            })();
         </script>
 </body>
 

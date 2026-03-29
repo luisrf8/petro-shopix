@@ -25,6 +25,8 @@ class PurchaseOrderDetail extends Model
         'quantity',
         'amount',
         'price',
+        'input_currency_code',
+        'input_exchange_rate',
         'tenant_id'
     ];
 

@@ -196,6 +196,7 @@
       background: linear-gradient(120deg, #dbeafe, #eff6ff);
       position: relative;
       overflow: hidden;
+      padding: 0.55rem;
     }
 
     .directory-tenant-media img {
@@ -203,6 +204,7 @@
       height: 100%;
       object-fit: cover;
       display: block;
+      border-radius: 14px;
     }
 
     .directory-tenant-media::after {

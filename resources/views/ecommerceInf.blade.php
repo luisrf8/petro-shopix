@@ -31,6 +31,9 @@
     $tenantColorPrimary = $normalizeTenantHex($tenant->color_primary ?? null, '#0F172A');
     $tenantColorSecondary = $normalizeTenantHex($tenant->color_secondary ?? null, '#334155');
     $tenantColorAccent = $normalizeTenantHex($tenant->color_accent ?? null, '#38BDF8');
+    $baseCurrencyCode = strtoupper((string) ($baseCurrencyCode ?? ($tenant->base_currency ?? 'USD')));
+    $baseCurrencyCode = in_array($baseCurrencyCode, ['USD', 'EUR'], true) ? $baseCurrencyCode : 'USD';
+    $baseCurrencySymbol = (string) ($baseCurrencySymbol ?? ($baseCurrencyCode === 'EUR' ? '€' : '$'));
 
     $countryName = $tenant->country_name ?? '';
     $stateName = $tenant->state_name ?? '';
@@ -199,11 +202,11 @@
     .hero-copy-shell {
       max-width: 980px;
       margin-inline: auto;
-      border: 1px solid rgba(255, 255, 255, 0.22);
+      border: 1px solid rgba(148, 163, 184, 0.42);
       border-radius: 18px;
-      background: rgba(2, 6, 23, 0.28);
-      backdrop-filter: blur(2px);
+      background: linear-gradient(180deg, rgba(31, 41, 55, 0.1) 0%, rgba(17, 24, 39, 0.14) 100%);
       padding: 1.25rem 1rem;
+      box-shadow: 0 18px 36px rgba(2, 6, 23, 0.34);
     }
 
     .hero-title {
@@ -240,8 +243,8 @@
     }
 
     .hero-badge {
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(226, 232, 240, 0.42);
+      background: rgba(30, 41, 59, 0.82);
       color: #fff;
       border-radius: 999px;
       padding: 0.35rem 0.8rem;
@@ -258,9 +261,9 @@
     }
 
     .hero-action-secondary {
-      border-color: rgba(255, 255, 255, 0.72);
+      border-color: rgba(255, 255, 255, 0.78);
       color: #ffffff;
-      background: rgba(15, 23, 42, 0.2);
+      background: rgba(15, 23, 42, 0.56);
     }
 
     .hero-action-secondary:hover,
@@ -358,6 +361,10 @@
       box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
       background-color: #fff;
+    }
+
+    .landing-media-image {
+      border-radius: 14px !important;
     }
 
     .card-product:hover {
@@ -623,6 +630,25 @@
       gap: 0.75rem;
       margin-bottom: 0.75rem;
       color: #334155;
+    }
+
+    .price-neo-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      border: 1px solid rgba(var(--tenant-accent-rgb), 0.38);
+      background: linear-gradient(135deg, #ffffff, #f8fafc);
+      color: #0f172a;
+      border-radius: 999px;
+      padding: 0.22rem 0.62rem;
+      font-size: 0.84rem;
+      font-weight: 700;
+      box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+    }
+
+    .price-neo-chip strong {
+      color: var(--tenant-primary);
+      font-weight: 800;
     }
 
     .empty-state {
@@ -1019,7 +1045,7 @@
         <div>
           <div class="products-summary">
             <span id="products-counter">Mostrando {{ $productItems->count() }} resultado{{ $productItems->count() == 1 ? '' : 's' }}</span>
-            <span class="badge text-bg-light border">Filtrado por categorías</span>
+            <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn">Ver todos los productos</a>
           </div>
 
           <div class="row" id="products-container">
@@ -1028,7 +1054,7 @@
                 <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="text-decoration-none d-block h-100">
                   <div class="card card-product h-100">
                     @if(isset($product->images[0]))
-                      <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top" style="height: 300px; object-fit: cover;">
+                      <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top landing-media-image" style="height: 300px; object-fit: cover;">
                     @else
                       <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
                         <i class="bi bi-image text-muted fs-1"></i>
@@ -1087,7 +1113,7 @@
           <div class="col-12 col-sm-6 col-lg-4 mb-4 package-item" data-name="{{ strtolower($package->name) }}">
             <div class="card card-product h-100">
               @if($firstImage)
-                <img src="{{ $firstImage }}" class="card-img-top" style="height: 260px; object-fit: cover;">
+                <img src="{{ $firstImage }}" class="card-img-top landing-media-image" style="height: 260px; object-fit: cover;">
               @else
                 <div class="d-flex align-items-center justify-content-center" style="height: 260px; background-color: #eee;">
                   <i class="bi bi-box-seam text-muted fs-1"></i>
@@ -1097,7 +1123,12 @@
                 <h5 class="fw-bold text-dark">{{ $package->name }}</h5>
                 <p class="text-muted mb-2">{{ $package->description ?: 'Paquete personalizado de productos.' }}</p>
                 <p class="small mb-2">Incluye {{ $package->items->count() }} material(es)</p>
-                <p class="fw-semibold mb-2">{{ number_format($packageTotal, 2) }} $</p>
+                <p class="mb-2">
+                  <span class="price-neo-chip">
+                    <strong>{{ number_format($packageTotal, 2) }}</strong>
+                    <span>{{ $baseCurrencySymbol }}</span>
+                  </span>
+                </p>
                 @if(!is_null($package->package_price))
                   <p class="text-dark small mb-2">Precio fijo combo</p>
                 @endif

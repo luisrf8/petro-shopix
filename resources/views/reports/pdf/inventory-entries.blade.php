@@ -19,7 +19,7 @@
     <div class="meta">
         Ordenes: <strong>{{ number_format($summary['orders']) }}</strong> |
         Items: <strong>{{ number_format($summary['total_items']) }}</strong> |
-        Monto: <strong>{{ number_format($summary['total_amount'], 2) }} USD</strong>
+        Monto: <strong>{{ number_format($summary['total_amount'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong>
     </div>
 
     <table>
@@ -30,7 +30,7 @@
                 <th>Almacen</th>
                 <th>Proveedor</th>
                 <th class="num">Items</th>
-                <th class="num">Monto (USD)</th>
+                <th class="num">Monto ({{ $summary['currency_code'] ?? 'USD' }})</th>
             </tr>
         </thead>
         <tbody>
@@ -41,7 +41,7 @@
                     <td>{{ $order->warehouse->name ?? 'N/A' }}</td>
                     <td>{{ $order->provider_display_name }}</td>
                     <td class="num">{{ number_format($order->detalles->sum('quantity')) }}</td>
-                    <td class="num">{{ number_format($order->detalles->sum('amount'), 2) }}</td>
+                    <td class="num">{{ number_format((float) ($order->report_total_amount ?? 0), 2) }}</td>
                 </tr>
             @empty
                 <tr>

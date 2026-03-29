@@ -19,7 +19,7 @@
     <div class="meta">
         Variantes: <strong>{{ number_format($summary['variants']) }}</strong> |
         Stock total: <strong>{{ number_format($summary['total_stock']) }}</strong> |
-        Valor inventario: <strong>{{ number_format($summary['inventory_value'], 2) }} USD</strong>
+        Valor inventario: <strong>{{ number_format($summary['inventory_value'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong>
     </div>
 
     <table>
@@ -29,8 +29,8 @@
                 <th>Categoria</th>
                 <th>Variante</th>
                 <th class="num">Stock</th>
-                <th class="num">Precio (USD)</th>
-                <th class="num">Valor (USD)</th>
+                <th class="num">Precio ({{ $summary['currency_code'] ?? 'USD' }})</th>
+                <th class="num">Valor ({{ $summary['currency_code'] ?? 'USD' }})</th>
             </tr>
         </thead>
         <tbody>
@@ -40,8 +40,8 @@
                     <td>{{ $row->product->category->name ?? 'N/A' }}</td>
                     <td>{{ $row->size ?: 'N/A' }}</td>
                     <td class="num">{{ number_format($row->stock) }}</td>
-                    <td class="num">{{ number_format($row->price, 2) }}</td>
-                    <td class="num">{{ number_format(((float) $row->stock * (float) $row->price), 2) }}</td>
+                    <td class="num">{{ number_format((float) ($row->report_price ?? 0), 2) }}</td>
+                    <td class="num">{{ number_format((float) ($row->report_value ?? 0), 2) }}</td>
                 </tr>
             @empty
                 <tr>

@@ -11,6 +11,94 @@
     gap: 0.75rem;
   }
 
+  .products-grid {
+    margin-top: 0.5rem;
+  }
+
+  .product-card-clean {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 1rem;
+    background: var(--bs-body-bg);
+    padding: 1rem;
+    height: 100%;
+    display: flex;
+    gap: 0.9rem;
+    align-items: flex-start;
+  }
+
+  .product-thumb-clean {
+    width: 92px;
+    height: 92px;
+    border-radius: 0.85rem;
+    overflow: hidden;
+    border: 1px solid var(--bs-border-color);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--bs-body-bg);
+  }
+
+  .product-thumb-clean img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .product-main-clean {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .product-title-clean {
+    font-size: 0.98rem;
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .product-desc-clean {
+    color: var(--bs-secondary-color);
+    font-size: 0.82rem;
+    margin: 0.2rem 0 0.55rem;
+    line-height: 1.35;
+  }
+
+  .variant-row-clean {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.65rem;
+    border-top: 1px solid var(--bs-border-color-translucent);
+    padding-top: 0.45rem;
+    margin-top: 0.45rem;
+    font-size: 0.84rem;
+  }
+
+  .variant-price-clean {
+    font-weight: 600;
+  }
+
+  .product-actions-clean {
+    align-self: flex-start;
+    margin-left: auto;
+  }
+
+  .edit-link-clean {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+    font-size: 0.84rem;
+    font-weight: 500;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .edit-link-clean:hover {
+    text-decoration: underline;
+    color: inherit;
+  }
+
   .products-categories-track .category-item,
   .products-categories-track > .flex-shrink-0 {
     width: 200px;
@@ -26,6 +114,24 @@
     .products-categories-track .category-item,
     .products-categories-track > .flex-shrink-0 {
       width: 170px;
+    }
+
+    .product-card-clean {
+      padding: 0.85rem;
+      gap: 0.65rem;
+    }
+
+    .product-thumb-clean {
+      width: 82px;
+      height: 82px;
+    }
+
+    .product-title-clean {
+      font-size: 0.92rem;
+    }
+
+    .variant-row-clean {
+      font-size: 0.8rem;
     }
   }
 </style>
@@ -203,8 +309,7 @@
     </div>
 
     <div class="px-3">
-      <div class="row">
-        <!-- Buscador -->
+      <div class="row products-grid">
       @foreach($productItems as $product)
         @php
           $variantImage = $product->variants->first()?->images->first();
@@ -212,36 +317,52 @@
             ? $product->images[0]
             : $variantImage;
         @endphp
-        <div class="product-item col-md-4 mb-4" data-name="{{ strtolower($product->name) }}">
-          <div class="card p-4 d-flex flex-row" style="min-height: 10rem;">
-              <a href="{{ route('productItem', $product->id) }}" class="icon icon-shape icon-xl shadow bg-transparent text-center border border-1 border-black text-info border-radius-lg" style="width: 100px; height: 100px;">
-                  @if($productCoverImage)
-                    <img src="{{ \App\Support\ImageStorage::url($productCoverImage->path) ?? asset('assets/img/shopix5.png') }}" alt="Imagen del producto" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
-                  @else
-                      <i class="material-symbols-rounded text-dark">photo_camera</i>
-                  @endif
+        <div class="product-item col-12 col-md-6 col-xl-4 mb-3" data-name="{{ strtolower($product->name) }}">
+          <div class="product-card-clean">
+              <a href="{{ route('productItem', $product->id) }}" class="product-thumb-clean" aria-label="Abrir producto {{ $product->name }}">
+                @if($productCoverImage)
+                  <img src="{{ \App\Support\ImageStorage::url($productCoverImage->path) ?? asset('assets/img/shopix5.png') }}" alt="Imagen del producto">
+                @else
+                  <i class="material-symbols-rounded text-dark">photo_camera</i>
+                @endif
               </a>
-              <div class="d-flex flex-column mx-3">
-                <h6 class="text-sm">{{ $product->name }}</h6>
-                <div class="text-sm d-flex flex-column">
-                  <span>
-                    {{ $product->description }}
-                  </span>
-                  @foreach ($product->variants as $variant)
-                    <span class="text-sm">
-                      {{ $variant->size }} - {{ $variant->price }} $ - 
-                    <span class="{{ $variant->stock < 1 ? 'text-danger' : ($variant->stock < 5 ? 'text-warning' : 'text-success') }}">{{ $variant->stock }} unidades</span>
+
+              <div class="product-main-clean">
+                <h6 class="product-title-clean text-truncate">{{ $product->name }}</h6>
+                <p class="product-desc-clean">{{ $product->description ?: 'Sin descripción' }}</p>
+
+                @foreach ($product->variants as $variant)
+                  <div class="variant-row-clean">
+                    <span>
+                      <strong>{{ $variant->size }}</strong>
                     </span>
-                  @endforeach
-                </div>
-                    <!-- Mostrar las tallas -->
+                    <span class="variant-price-clean">
+                      {{ number_format((float) $variant->price, 2) }} {{ $baseCurrencySymbol ?? '$' }}
+                    </span>
+                    <span class="{{ $variant->stock < 1 ? 'text-danger' : ($variant->stock < 5 ? 'text-warning' : 'text-success') }}">
+                      {{ $variant->stock }} unidades
+                    </span>
+                  </div>
+                @endforeach
               </div>
-              <div class="ms-auto text-end">
-                <a href="{{ route('productItem', $product->id) }}" class="btn btn-link text-dark" ><i class="material-symbols-rounded text-sm">edit</i>Editar</a>
+
+              <div class="product-actions-clean">
+                <a href="{{ route('productItem', $product->id) }}" class="edit-link-clean">
+                  <i class="material-symbols-rounded text-sm">edit</i>Editar
+                </a>
               </div>
           </div>
         </div>
       @endforeach
+
+      @if(($productItems ?? collect())->isEmpty())
+        <div class="col-12">
+          <div class="card border-0 shadow-sm p-4 text-center">
+            <h6 class="mb-1">No hay productos para mostrar</h6>
+            <p class="text-sm text-muted mb-0">Agrega un producto o cambia el filtro de categoría.</p>
+          </div>
+        </div>
+      @endif
     </div>
   </div>
 </div>

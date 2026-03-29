@@ -15,6 +15,7 @@ class Provider extends Model
         'contact_name',
         'email',
         'phone_number',
+        'payment_currency_code',
         'notes',
         'is_active',
     ];

@@ -38,6 +38,7 @@
             <tr>
               <th>Proveedor</th>
               <th>Contacto</th>
+              <th>Moneda pago</th>
               <th>Notas</th>
               <th>Estado</th>
               <th>Acciones</th>
@@ -53,6 +54,7 @@
                     <span class="text-xs text-secondary">{{ $provider->email ?: '-' }} | {{ $provider->phone_number ?: '-' }}</span>
                   </div>
                 </td>
+                <td>{{ strtoupper((string) ($provider->payment_currency_code ?: ($baseCurrencyCode ?? 'USD'))) }}</td>
                 <td>{{ $provider->notes ?: '-' }}</td>
                 <td><span class="badge {{ $provider->is_active ? 'bg-success' : 'bg-secondary' }}">{{ $provider->is_active ? 'Activo' : 'Inactivo' }}</span></td>
                 <td>
@@ -63,6 +65,7 @@
                       data-provider-contact="{{ $provider->contact_name }}"
                       data-provider-email="{{ $provider->email }}"
                       data-provider-phone="{{ $provider->phone_number }}"
+                      data-provider-payment-currency="{{ strtoupper((string) ($provider->payment_currency_code ?: ($baseCurrencyCode ?? 'USD'))) }}"
                       data-provider-notes="{{ $provider->notes }}"
                       data-provider-active="{{ (int) $provider->is_active }}">Editar</button>
                     <form method="POST" action="{{ route('providers.toggleStatus', $provider) }}">
@@ -74,7 +77,7 @@
               </tr>
             @empty
               <tr>
-                <td colspan="5" class="text-center text-muted py-4">No hay proveedores registrados.</td>
+                <td colspan="6" class="text-center text-muted py-4">No hay proveedores registrados.</td>
               </tr>
             @endforelse
           </tbody>
@@ -92,6 +95,15 @@
       <div class="mb-3"><label class="form-label">Contacto</label><input type="text" name="contact_name" class="form-control border border-1 p-2"></div>
       <div class="mb-3"><label class="form-label">Correo</label><input type="email" name="email" class="form-control border border-1 p-2"></div>
       <div class="mb-3"><label class="form-label">Teléfono</label><input type="text" name="phone_number" class="form-control border border-1 p-2"></div>
+      <div class="mb-3">
+        <label class="form-label">Moneda de pago preferida</label>
+        <select name="payment_currency_code" class="form-control border border-1 p-2">
+          <option value="{{ $baseCurrencyCode ?? 'USD' }}">{{ $baseCurrencyCode ?? 'USD' }} (moneda madre)</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="BS">BS</option>
+        </select>
+      </div>
       <div class="mb-3"><label class="form-label">Notas</label><textarea name="notes" class="form-control border border-1 p-2" rows="3"></textarea></div>
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="providerActive" name="is_active" value="1" checked><label class="form-check-label" for="providerActive">Activo</label></div>
     </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-dark mb-0">Guardar</button></div></form>
@@ -105,6 +117,14 @@
       <div class="mb-3"><label class="form-label">Contacto</label><input type="text" name="contact_name" id="editProviderContact" class="form-control border border-1 p-2"></div>
       <div class="mb-3"><label class="form-label">Correo</label><input type="email" name="email" id="editProviderEmail" class="form-control border border-1 p-2"></div>
       <div class="mb-3"><label class="form-label">Teléfono</label><input type="text" name="phone_number" id="editProviderPhone" class="form-control border border-1 p-2"></div>
+      <div class="mb-3">
+        <label class="form-label">Moneda de pago preferida</label>
+        <select name="payment_currency_code" id="editProviderPaymentCurrency" class="form-control border border-1 p-2">
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="BS">BS</option>
+        </select>
+      </div>
       <div class="mb-3"><label class="form-label">Notas</label><textarea name="notes" id="editProviderNotes" class="form-control border border-1 p-2" rows="3"></textarea></div>
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="editProviderActive" name="is_active" value="1"><label class="form-check-label" for="editProviderActive">Activo</label></div>
     </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-dark mb-0">Guardar cambios</button></div></form>
@@ -130,6 +150,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('editProviderContact').value = button.getAttribute('data-provider-contact') || '';
     document.getElementById('editProviderEmail').value = button.getAttribute('data-provider-email') || '';
     document.getElementById('editProviderPhone').value = button.getAttribute('data-provider-phone') || '';
+    document.getElementById('editProviderPaymentCurrency').value = button.getAttribute('data-provider-payment-currency') || 'USD';
     document.getElementById('editProviderNotes').value = button.getAttribute('data-provider-notes') || '';
     document.getElementById('editProviderActive').checked = button.getAttribute('data-provider-active') === '1';
   });

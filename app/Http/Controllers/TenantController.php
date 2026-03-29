@@ -25,6 +25,8 @@ use App\Models\SalesOrder;
 use App\Models\SalesOrderDetail;
 use App\Models\Payment;
 use App\Models\DollarRate;
+use App\Models\EuroRate;
+use App\Models\Tax;
 use App\Support\ImageStorage;
 use App\Services\GeminiImageService;
 use Illuminate\Database\QueryException;
@@ -561,8 +563,10 @@ class TenantController extends Controller
 
         $cartEnabled = $this->tenantHasProPlan($tenant);
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+        $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
+        $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
 
-        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName'));
+        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol'));
     }
 
     public function store(Request $request)
@@ -1376,6 +1380,8 @@ class TenantController extends Controller
 
         $cartEnabled = $this->tenantHasProPlan($tenant);
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+        $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
+        $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
 
         return view('ecommerceCategory', compact(
             'tenant',
@@ -1383,7 +1389,9 @@ class TenantController extends Controller
             'products',
             'materialPackages',
             'cartEnabled',
-            'cartPlanName'
+            'cartPlanName',
+            'baseCurrencyCode',
+            'baseCurrencySymbol'
         ));
     }
     public function publicTenantProduct(Tenant $tenant, Product $product)
@@ -1400,8 +1408,10 @@ class TenantController extends Controller
 
         $cartEnabled = $this->tenantHasProPlan($tenant);
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+        $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
+        $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
 
-        return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'cartPlanName'));
+        return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol'));
     }
 
     public function publicTenantPaymentMethods(Tenant $tenant)
@@ -1434,11 +1444,59 @@ class TenantController extends Controller
             ->latest('created_at')
             ->value('rate');
 
+        $euroRate = EuroRate::where('tenant_id', $tenant->id)
+            ->latest('created_at')
+            ->value('rate');
+
+        $baseCurrency = $this->resolveTenantBaseCurrencyCode($tenant);
+        $baseRate = $baseCurrency === 'EUR'
+            ? (float) ($euroRate ?: 0)
+            : (float) ($dollarRate ?: 0);
+        $tenantElectronicInvoicingEnabled = (bool) ($tenant->electronic_invoicing_enabled ?? false);
+        $igtfRate = $tenantElectronicInvoicingEnabled ? $this->resolveIgtfRate() : 0;
+
         return response()->json([
             'success' => true,
             'methods' => $paymentMethods,
             'dollar_rate' => $dollarRate ? (float) $dollarRate : 0,
+            'euro_rate' => $euroRate ? (float) $euroRate : 0,
+            'base_currency' => $baseCurrency,
+            'base_rate' => $baseRate,
+            'electronic_invoicing_enabled' => $tenantElectronicInvoicingEnabled,
+            'igtf_rate' => (float) $igtfRate,
         ]);
+    }
+
+    private function resolveTenantBaseCurrencyCode(Tenant $tenant): string
+    {
+        $code = strtoupper(trim((string) ($tenant->base_currency ?? 'USD')));
+        return in_array($code, ['USD', 'EUR'], true) ? $code : 'USD';
+    }
+
+    private function resolveCurrencySymbol(string $code): string
+    {
+        return strtoupper(trim($code)) === 'EUR' ? '€' : '$';
+    }
+
+    private function resolveIgtfRate(): float
+    {
+        return (float) (Tax::query()
+            ->whereRaw('LOWER(name) = ?', ['igtf'])
+            ->where(function ($query) {
+                $query->whereNull('is_active')->orWhere('is_active', 1);
+            })
+            ->value('rate') ?? 0);
+    }
+
+    private function normalizeCheckoutCurrencyCode(?string $currencyCode): string
+    {
+        $code = strtoupper(trim((string) $currencyCode));
+
+        if (in_array($code, ['BS', 'VES', 'VED', 'VEF', 'BOLIVAR', 'BOLIVARES'], true)) {
+            return 'BS';
+        }
+
+        return $code;
     }
 
     public function publicTenantResolveScanCode(Request $request, Tenant $tenant)
@@ -1558,12 +1616,15 @@ class TenantController extends Controller
             $markDelivered = (bool) ($validated['mark_delivered'] ?? false);
             $markPaymentsPaid = (bool) ($validated['mark_payments_paid'] ?? false);
             $markSaleCompleted = (bool) ($validated['mark_sale_completed'] ?? false);
+            $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
+            $tenantElectronicInvoicingEnabled = (bool) ($tenant->electronic_invoicing_enabled ?? false);
+            $igtfRate = $tenantElectronicInvoicingEnabled ? $this->resolveIgtfRate() : 0;
 
             $preference = $validated['delivery_type'] === 'shipping'
                 ? 'Envío'
                 : 'Retiro en tienda';
 
-            $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted) {
+            $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted, $baseCurrencyCode, $tenantElectronicInvoicingEnabled, $igtfRate) {
                 $salesOrder = SalesOrder::create([
                     'user_id' => $validated['customer_id'],
                     'date' => now()->toDateString(),
@@ -1572,6 +1633,7 @@ class TenantController extends Controller
                     'preference' => $preference,
                     'deliver_status' => $markDelivered ? 1 : 0,
                     'tenant_id' => $tenant->id,
+                    'sale_currency_code' => $baseCurrencyCode,
                 ]);
 
                 $orderTotal = 0;
@@ -1607,6 +1669,7 @@ class TenantController extends Controller
                 }
 
                 $totalPaid = 0;
+                $directBaseCurrencyPayments = 0;
 
                 foreach ($validated['payments'] as $paymentData) {
                     $method = PaymentMethod::with('currency')
@@ -1620,6 +1683,14 @@ class TenantController extends Controller
                     $amount = (float) $paymentData['amount'];
                     $totalPaid += $amount;
 
+                    $methodCurrencyCode = $this->normalizeCheckoutCurrencyCode(
+                        (string) ($method->currency->code ?? $method->currency->name ?? '')
+                    );
+
+                    if ($methodCurrencyCode === $baseCurrencyCode) {
+                        $directBaseCurrencyPayments += $amount;
+                    }
+
                     $payment = Payment::create([
                         'sales_order_id' => $salesOrder->id,
                         'payment_method' => $method->id,
@@ -1632,7 +1703,13 @@ class TenantController extends Controller
                     $this->storePaymentReferenceImageFromPayload($payment, $paymentData['reference_image_data'] ?? null, $paymentData['reference_image_mime'] ?? null);
                 }
 
-                if ($totalPaid + 0.0001 < $orderTotal) {
+                $igtfAmount = ($tenantElectronicInvoicingEnabled && $igtfRate > 0)
+                    ? ($directBaseCurrencyPayments * ($igtfRate / 100))
+                    : 0;
+
+                $requiredTotal = $orderTotal + $igtfAmount;
+
+                if ($totalPaid + 0.0001 < $requiredTotal) {
                     throw new \RuntimeException('El total pagado es menor al total del pedido.');
                 }
 

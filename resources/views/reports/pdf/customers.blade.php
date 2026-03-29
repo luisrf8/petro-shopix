@@ -20,7 +20,7 @@
     <div class="meta">
         Clientes: <strong>{{ number_format($summary['customers']) }}</strong> |
         Compras: <strong>{{ number_format($summary['orders']) }}</strong> |
-        Cobrado: <strong>{{ number_format($summary['total_paid'], 2) }} USD</strong>
+        Cobrado: <strong>{{ number_format($summary['total_paid'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong>
     </div>
     <table>
         <thead>

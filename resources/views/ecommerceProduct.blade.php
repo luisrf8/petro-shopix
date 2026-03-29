@@ -31,6 +31,9 @@
     $tenantColorPrimary = $normalizeTenantHex($tenant->color_primary ?? null, '#0F172A');
     $tenantColorSecondary = $normalizeTenantHex($tenant->color_secondary ?? null, '#334155');
     $tenantColorAccent = $normalizeTenantHex($tenant->color_accent ?? null, '#38BDF8');
+    $baseCurrencyCode = strtoupper((string) ($baseCurrencyCode ?? ($tenant->base_currency ?? 'USD')));
+    $baseCurrencyCode = in_array($baseCurrencyCode, ['USD', 'EUR'], true) ? $baseCurrencyCode : 'USD';
+    $baseCurrencySymbol = (string) ($baseCurrencySymbol ?? ($baseCurrencyCode === 'EUR' ? '€' : '$'));
 
     $mapsUrl = null;
     if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
@@ -412,8 +415,8 @@
     }
 
     .variant-media {
-      width: 34px;
-      height: 34px;
+      width: 80px;
+      height: 80px;
       border-radius: 8px;
       border: 1px solid #d5dbe5;
       background: #fff;
@@ -713,9 +716,9 @@
                 @endphp
                     <div 
                         class="variant-button"
-                      data-variant-id="{{ $variant->id }}"
+                        data-variant-id="{{ $variant->id }}"
                         data-size="{{ $variant->size }}"
-                  data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}"
+                        data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}"
                         data-stock="{{ $variant->stock }}"
                         data-product-name="{{ $product->name }}"
                         data-image-src="{{ $variantImageUrl }}"
@@ -735,7 +738,7 @@
                           <span class="fw-semibold">{{ $variant->size }}</span>
                           <div class="variant-price-row">
                             <span>{{ number_format($effectiveVariantPrice, 2) }}</span>
-                            <span class="text-muted small">$</span>
+                            <span class="text-muted small">{{ $baseCurrencySymbol }}</span>
                           </div>
                         </div>
                   @if($productDiscount > 0 || $variantDiscount > 0)
@@ -859,6 +862,7 @@
         const selectedVariantLabel = document.getElementById('selected-variant-label');
         let selectedVariant = null;
         const tenantSlug = @json($tenant->slug);
+        const baseCurrencySymbol = @json($baseCurrencySymbol ?? '$');
 
         const tenantPhoneCode = @json($tenant->phone_code ?? '');
         const tenantPhoneNumber = @json($tenant->phone_number ?? '');
@@ -909,7 +913,7 @@
                 }
 
                 if (selectedVariantIndicator && selectedVariantLabel) {
-                  selectedVariantLabel.textContent = `${selectedVariant.size} (${selectedVariant.price} $)`;
+                  selectedVariantLabel.textContent = `${selectedVariant.size} (${selectedVariant.price} ${baseCurrencySymbol})`;
                   selectedVariantIndicator.classList.remove('d-none');
                 }
 
@@ -981,7 +985,7 @@
               return;
             }
 
-            const message = `Hola, estoy interesado en el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio de *${selectedVariant.price} $*. ¿Podrían darme más información?`;
+            const message = `Hola, estoy interesado en el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio de *${selectedVariant.price} ${baseCurrencySymbol}*. ¿Podrían darme más información?`;
             const whatsappLink = `https://wa.me/${fullPhoneNumber}?text=${encodeURIComponent(message)}`;
             window.open(whatsappLink, '_blank');
           });
