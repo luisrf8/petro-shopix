@@ -36,6 +36,10 @@
 </head>
 
 <body class="g-sidenav-show  bg-gray-100">
+@php
+  $headerUser = auth()->user();
+  $headerUnreadNotificationsCount = $headerUser ? $headerUser->unreadNotifications()->count() : 0;
+@endphp
 <nav class="navbar navbar-main navbar-expand-lg px-0  shadow-none border-radius-xl" id="navbarBlur" data-scroll="true">
       <div class="container-fluid py-1">
         <nav aria-label="breadcrumb">
@@ -85,6 +89,26 @@
             <!-- <button class="nav-link text-body p-0" id='toggleSidenav'>
                 <i class="material-symbols-rounded fixed-plugin-button-nav">menu</i>
               </button> -->
+            </li>
+            <li class="nav-item d-lg-none d-flex align-items-center me-2">
+              <a class="nav-link text-body p-0 position-relative" href="{{ route('notifications.index') }}" aria-label="Notificaciones">
+                <i class="material-symbols-rounded">notifications</i>
+                @if($headerUnreadNotificationsCount > 0)
+                  <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger backoffice-notifications-count">{{ $headerUnreadNotificationsCount }}</span>
+                @else
+                  <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none backoffice-notifications-count">0</span>
+                @endif
+              </a>
+            </li>
+            <li class="nav-item d-lg-none d-flex align-items-center me-2">
+              <a class="nav-link text-body p-0" href="/users" aria-label="Usuario">
+                <i class="material-symbols-rounded">account_circle</i>
+              </a>
+            </li>
+            <li class="nav-item d-lg-none d-flex align-items-center">
+              <button type="button" class="nav-link text-body p-0 border-0 bg-transparent" onclick="logOut()" aria-label="Cerrar sesión">
+                <i class="material-symbols-rounded">logout</i>
+              </button>
             </li>
             <!-- <li class="nav-item px-3 d-flex align-items-center">
               <a href="javascript:;" class="nav-link text-body p-0">

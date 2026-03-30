@@ -1,6 +1,8 @@
 <style>
 #sidenav-main {
   transition: transform 0.3s ease-in-out;
+  height: calc(100vh - 1rem);
+  overflow: hidden;
 }
 
 #sidenav-main.closed {
@@ -52,6 +54,23 @@
 
 /* Móvil y tablet */
 @media (max-width: 991px) {
+  #sidenav-main {
+    height: 100vh;
+    max-height: 100vh;
+  }
+
+  #sidenav-main #sidenav-collapse-main {
+    max-height: calc(100vh - 7.5rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 1rem;
+  }
+
+  #sidenav-main .sidenav-footer {
+    position: static !important;
+  }
+
   .sidenav.fixed-start + .main-content,
   .sidenav.fixed-end + .main-content {
     margin-left: 0 !important;
@@ -368,9 +387,9 @@
               <span class="nav-link-text ms-1">Notificaciones</span>
             </span>
             @if($unreadNotificationsCount > 0)
-              <span class="badge bg-danger" id="backoffice-notifications-count">{{ $unreadNotificationsCount }}</span>
+              <span class="badge bg-danger backoffice-notifications-count">{{ $unreadNotificationsCount }}</span>
             @else
-              <span class="badge bg-danger d-none" id="backoffice-notifications-count">0</span>
+              <span class="badge bg-danger d-none backoffice-notifications-count">0</span>
             @endif
           </a>
         </li>
@@ -407,14 +426,16 @@
       const userId = @json(optional(auth()->user())->id);
       if (!userId) return;
 
-      const badge = document.getElementById('backoffice-notifications-count');
+      const badges = Array.from(document.querySelectorAll('.backoffice-notifications-count'));
       const toastContainer = document.getElementById('backoffice-toast-container');
       function updateBadge(unread) {
-        if (!badge) return;
-        const current = Number(badge.textContent || 0);
+        if (!badges.length) return;
+        const current = Number(badges[0].textContent || 0);
         const count = typeof unread === 'number' ? unread : current + 1;
-        badge.textContent = String(count);
-        badge.classList.toggle('d-none', count <= 0);
+        badges.forEach((badgeEl) => {
+          badgeEl.textContent = String(count);
+          badgeEl.classList.toggle('d-none', count <= 0);
+        });
       }
 
       function showToast(title, message) {
