@@ -1770,6 +1770,7 @@ function updateQuantity(id, newQty) {
                 valid: true,
                 message: '',
                 address: parts.join(', '),
+                cityId: Number(cityId),
             };
         }
 
@@ -2200,6 +2201,7 @@ function updateQuantity(id, newQty) {
         dollarRate: baseRateToBs,
         delivery_type: deliveryType,
         delivery_address: deliveryType === 'shipping' ? deliveryAddressData.address : 'Tienda',
+        delivery_city_id: deliveryType === 'shipping' ? Number(deliveryAddressData.cityId || 0) : null,
         create_new_customer: shouldCreateNewCustomer,
         customer_new: shouldCreateNewCustomer
             ? {

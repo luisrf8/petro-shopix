@@ -34,6 +34,7 @@ use App\Models\DollarRate;
 use App\Models\EuroRate;
 use App\Models\Tax;
 use App\Models\Tenant;
+use App\Models\City;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\ElectronicDocument;
@@ -109,6 +110,7 @@ class SaleController extends Controller
         $validated = $request->validate([
             'delivery_type' => 'nullable|in:pickup,shipping',
             'delivery_address' => 'nullable|string|max:500',
+            'delivery_city_id' => 'nullable|integer|exists:cities,id',
             'sale_document_mode' => 'nullable|in:delivery_note,electronic_invoice',
             'create_new_customer' => 'nullable|boolean',
             'customer_existing_id' => 'nullable|integer|required_unless:create_new_customer,1',
@@ -180,6 +182,20 @@ class SaleController extends Controller
             return response()->json(['error' => 'La dirección es obligatoria para entregas por envío.'], 422);
         }
 
+        $tienda = Tenant::find($tenantId);
+        if (!$tienda) {
+            return response()->json(['error' => 'No se encontró la tienda asociada a la venta.'], 422);
+        }
+
+        if ($deliveryType === 'shipping' && (bool) ($tienda->restrict_delivery_city_to_tenant ?? true)) {
+            $deliveryCityId = (int) ($validated['delivery_city_id'] ?? 0);
+            $shippingCityValidation = $this->validateShippingCityAgainstTenant($tienda, $deliveryCityId);
+
+            if (!($shippingCityValidation['ok'] ?? false)) {
+                return response()->json(['error' => (string) ($shippingCityValidation['message'] ?? 'Solo se permiten envíos a la ciudad de la tienda.')], 422);
+            }
+        }
+
         $preference = $deliveryType === 'shipping' ? 'Envío' : 'Retiro en tienda';
         $address = $deliveryType === 'shipping' ? $deliveryAddress : 'Tienda';
 
@@ -190,7 +206,6 @@ class SaleController extends Controller
         if (empty($itemsSelected) || !is_array($itemsSelected)) {
             return response()->json(['error' => 'No se enviaron productos válidos.'], 400);
         }
-        $tienda = Tenant::find($tenantId);
         $saleCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tienda);
 
         if ($requestedDocumentMode === 'electronic_invoice' && !(bool) ($tienda?->electronic_invoicing_enabled ?? false)) {
@@ -492,6 +507,28 @@ class SaleController extends Controller
     
         $customer = User::find($customerId);
         $tenantForSale = Tenant::find(optional($customer)->tenant_id);
+        if (!$tenantForSale) {
+            return response()->json(['error' => 'No se encontró la tienda asociada al cliente.'], 422);
+        }
+
+        $deliveryType = strtolower(trim((string) $request->input('delivery_type', '')));
+        if (!in_array($deliveryType, ['pickup', 'shipping'], true)) {
+            $deliveryType = strtolower(trim((string) $preference)) === 'envío' ? 'shipping' : 'pickup';
+        }
+
+        if ($deliveryType === 'shipping' && empty(trim((string) $address))) {
+            return response()->json(['error' => 'La dirección es obligatoria para entregas por envío.'], 422);
+        }
+
+        if ($deliveryType === 'shipping' && (bool) ($tenantForSale->restrict_delivery_city_to_tenant ?? true)) {
+            $deliveryCityId = (int) $request->input('delivery_city_id', 0);
+            $shippingCityValidation = $this->validateShippingCityAgainstTenant($tenantForSale, $deliveryCityId);
+
+            if (!($shippingCityValidation['ok'] ?? false)) {
+                return response()->json(['error' => (string) ($shippingCityValidation['message'] ?? 'Solo se permiten envíos a la ciudad de la tienda.')], 422);
+            }
+        }
+
         $saleCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenantForSale);
 
         // Crear orden de venta con status en 0 (pendiente)
@@ -1273,8 +1310,8 @@ class SaleController extends Controller
 
     public function orderToggleStatus($id, Request $request)
     {
-        $roleName = strtolower((string) optional(auth()->user()?->role)->name);
-        if ($roleName === 'almacen') {
+        $user = auth()->user();
+        if (!$user?->hasStoreRole('owner', 'admin', 'seller')) {
             return response()->json(['message' => 'No autorizado para cambiar el estado de la orden.'], 403);
         }
 
@@ -1414,6 +1451,11 @@ class SaleController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $user = auth()->user();
+        if (!$user?->hasStoreRole('owner', 'admin', 'warehouse')) {
+            return response()->json(['message' => 'No autorizado para cambiar el estado de entrega.'], 403);
+        }
+
         // Recuperar la orden con sus relaciones
         $order = SalesOrder::with([
             'user', 
@@ -1465,8 +1507,8 @@ class SaleController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
-        $roleName = strtolower((string) optional(auth()->user()?->role)->name);
-        if ($roleName === 'almacen') {
+        $user = auth()->user();
+        if (!$user?->hasStoreRole('owner', 'admin', 'seller')) {
             return response()->json(['message' => 'No autorizado para cambiar el estado de pagos.'], 403);
         }
 
@@ -1609,12 +1651,57 @@ class SaleController extends Controller
         }
     }
 
+    private function validateShippingCityAgainstTenant(Tenant $tenant, int $deliveryCityId): array
+    {
+        if ($deliveryCityId <= 0) {
+            return [
+                'ok' => false,
+                'message' => 'Debes seleccionar la ciudad de entrega.',
+            ];
+        }
+
+        $tenantCityId = $this->resolveTenantCityId($tenant);
+        if ($tenantCityId <= 0) {
+            return [
+                'ok' => false,
+                'message' => 'La tienda no tiene una ciudad configurada para envíos.',
+            ];
+        }
+
+        if ($tenantCityId !== $deliveryCityId) {
+            $tenantCityName = City::query()->whereKey($tenantCityId)->value('name');
+
+            return [
+                'ok' => false,
+                'message' => 'Solo se permiten envíos para la ciudad de la tienda' . (!empty($tenantCityName) ? ': ' . $tenantCityName : '.') ,
+            ];
+        }
+
+        return ['ok' => true];
+    }
+
+    private function resolveTenantCityId(Tenant $tenant): int
+    {
+        $rawCity = trim((string) ($tenant->city ?? ''));
+        if ($rawCity === '') {
+            return 0;
+        }
+
+        if (ctype_digit($rawCity)) {
+            return (int) $rawCity;
+        }
+
+        return (int) (City::query()
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($rawCity)])
+            ->value('id') ?? 0);
+    }
+
     public function processReturn(Request $request, $orderId)
     {
         DB::raw("SET @user_id = " . auth()->id());
 
-        $roleName = strtolower((string) optional(auth()->user()?->role)->name);
-        if ($roleName === 'almacen') {
+        $user = auth()->user();
+        if (!$user?->hasStoreRole('owner', 'admin', 'seller')) {
             return response()->json(['message' => 'No autorizado para registrar devoluciones.'], 403);
         }
 

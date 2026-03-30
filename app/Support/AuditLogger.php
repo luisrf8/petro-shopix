@@ -89,6 +89,10 @@ class AuditLogger
     public static function logEvent(string $module, string $action, string $message, ?int $userId = null, array $extra = []): void
     {
         try {
+            if (Str::lower(trim($module)) === 'auth') {
+                return;
+            }
+
             $user = $userId ? null : Auth::user();
             $effectiveUserId = $userId ?: (int) ($user->id ?? 0);
 

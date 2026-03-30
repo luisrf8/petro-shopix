@@ -951,6 +951,7 @@ class TenantController extends Controller
             'plan_id' => 'nullable|exists:plans,id',
             'is_active' => 'nullable|boolean',
             'electronic_invoicing_enabled' => 'nullable|boolean',
+            'restrict_delivery_city_to_tenant' => 'nullable|boolean',
         ]);
 
         if (array_key_exists('economic_activity', $validated)) {
@@ -1074,6 +1075,7 @@ class TenantController extends Controller
             'facebook' => $validated['facebook'] ?? $tenant->facebook,
             'is_active' => $validated['is_active'] ?? $tenant->is_active,
             'electronic_invoicing_enabled' => $validated['electronic_invoicing_enabled'] ?? $tenant->electronic_invoicing_enabled,
+            'restrict_delivery_city_to_tenant' => $validated['restrict_delivery_city_to_tenant'] ?? $tenant->restrict_delivery_city_to_tenant,
         ];
 
         $tenant->fill($tenantData);
@@ -1183,6 +1185,7 @@ class TenantController extends Controller
                 'tiktok'         => 'nullable|string|max:255',
                 'instagram'         => 'nullable|string|max:255',
                 'facebook'         => 'nullable|string|max:255',
+                'restrict_delivery_city_to_tenant' => 'nullable|boolean',
             ]);
 
             $this->assertEconomicActivityAllowed(
@@ -1318,6 +1321,7 @@ class TenantController extends Controller
                 'tiktok'          => $validated['tiktok'] ?? $tenant->tiktok,
                 'instagram'      => $validated['instagram'] ?? $tenant->instagram,
                 'facebook'       => $validated['facebook'] ?? $tenant->facebook,
+                'restrict_delivery_city_to_tenant' => $validated['restrict_delivery_city_to_tenant'] ?? $tenant->restrict_delivery_city_to_tenant,
                 'background_image'=> $tenant->background_image, // 👈 clave
             ]);
 
@@ -1567,6 +1571,7 @@ class TenantController extends Controller
                 'customer_id' => 'required|exists:users,id',
                 'delivery_type' => 'required|in:pickup,shipping',
                 'delivery_address' => 'nullable|string|max:500',
+                'delivery_city_id' => 'nullable|integer|exists:cities,id',
                 'mark_delivered' => 'nullable|boolean',
                 'mark_payments_paid' => 'nullable|boolean',
                 'mark_sale_completed' => 'nullable|boolean',
@@ -1587,6 +1592,18 @@ class TenantController extends Controller
                     'success' => false,
                     'message' => 'La dirección es obligatoria para envío.',
                 ], 422);
+            }
+
+            if ($validated['delivery_type'] === 'shipping' && (bool) ($tenant->restrict_delivery_city_to_tenant ?? true)) {
+                $deliveryCityId = (int) ($validated['delivery_city_id'] ?? 0);
+                $shippingCityValidation = $this->validateShippingCityAgainstTenant($tenant, $deliveryCityId);
+
+                if (!($shippingCityValidation['ok'] ?? false)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => (string) ($shippingCityValidation['message'] ?? 'Solo se permiten envíos a la ciudad de la tienda.'),
+                    ], 422);
+                }
             }
 
             foreach ($validated['payments'] as $paymentIndex => $paymentData) {
@@ -2018,6 +2035,51 @@ class TenantController extends Controller
         }
 
         return null;
+    }
+
+    private function validateShippingCityAgainstTenant(Tenant $tenant, int $deliveryCityId): array
+    {
+        if ($deliveryCityId <= 0) {
+            return [
+                'ok' => false,
+                'message' => 'Debes seleccionar la ciudad de entrega.',
+            ];
+        }
+
+        $tenantCityId = $this->resolveTenantCityId($tenant);
+        if ($tenantCityId <= 0) {
+            return [
+                'ok' => false,
+                'message' => 'La tienda no tiene una ciudad configurada para envíos.',
+            ];
+        }
+
+        if ($tenantCityId !== $deliveryCityId) {
+            $tenantCityName = City::query()->whereKey($tenantCityId)->value('name');
+
+            return [
+                'ok' => false,
+                'message' => 'Solo se permiten envíos para la ciudad de la tienda' . (!empty($tenantCityName) ? ': ' . $tenantCityName : '.'),
+            ];
+        }
+
+        return ['ok' => true];
+    }
+
+    private function resolveTenantCityId(Tenant $tenant): int
+    {
+        $rawCity = trim((string) ($tenant->city ?? ''));
+        if ($rawCity === '') {
+            return 0;
+        }
+
+        if (ctype_digit($rawCity)) {
+            return (int) $rawCity;
+        }
+
+        return (int) (City::query()
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($rawCity)])
+            ->value('id') ?? 0);
     }
 
     private function getBusinessActivityCatalog(): array

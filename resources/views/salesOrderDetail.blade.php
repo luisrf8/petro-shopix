@@ -5,7 +5,13 @@
 @section('content')
     @php
       $roleName = strtolower((string) optional(auth()->user()->role)->name);
-      $isWarehouseRole = $roleName === 'almacen';
+      $currentUser = auth()->user();
+      $canApproveSale = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
+      $canApproveDelivery = $currentUser?->hasStoreRole('owner', 'admin', 'warehouse') ?? false;
+      $canRegisterReturn = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
+      $canApprovePayments = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
+      $canDownloadPdfs = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
+      $canCommunicateCustomer = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $resolveCurrencySymbol = function (?string $code) {
         $normalized = strtoupper(trim((string) $code));
         if ($normalized === 'EUR') {
@@ -41,6 +47,7 @@
         @if($order->has_returns)
           <span class="text-danger">Devolución Registrada</span>
         @else
+          @if($canApproveDelivery)
           <select id="deliver-status" class="btn btn-sm toggle-status-btn 
             {{ $order->deliver_status == 0 ? 'btn-outline-warning' : ($order->deliver_status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
             onchange="updateDeliverStatus(this, {{ $order->id }})">
@@ -48,6 +55,9 @@
               <option value="1" {{ $order->deliver_status == 1 ? 'selected' : '' }}>Entregado ↓</option>
               <option value="2" {{ $order->deliver_status == 2 ? 'selected' : '' }}>Cancelado ↓</option>
           </select>
+          @else
+            <span class="text-sm">{{ $order->deliver_status == 0 ? 'Pendiente' : ($order->deliver_status == 1 ? 'Entregado' : 'Cancelado') }}</span>
+          @endif
         @endif
       </div>
 
@@ -60,7 +70,7 @@
               @if($order->has_returns)
                 <span class="text-danger">Devolución Registrada</span>
               @else
-              @if(!$isWarehouseRole)
+              @if($canApproveSale)
               <select id="order-status" class="btn btn-sm toggle-status-btn 
                 {{ $order->status == 0 ? 'btn-outline-warning' : ($order->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
                 onchange="updateOrderStatus(this, {{ $order->id }})">
@@ -77,6 +87,7 @@
 
       <div class="w-100 d-flex justify-content-between mt-3 gap-4">
         <div class="d-flex flex-wrap gap-2">
+          @if($canDownloadPdfs)
           <div class="d-flex align-items-center gap-2">
             <label for="order-download-currency" class="mb-0 text-sm fw-semibold">Moneda de emisión</label>
             <select id="order-download-currency" class="form-select form-select-sm border border-1 p-2" style="min-width: 170px;">
@@ -88,14 +99,15 @@
           </div>
           <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
           <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Descargar nota de entrega</a>
-          @if($storeWhatsappUrl)
+          @endif
+          @if($canCommunicateCustomer && $storeWhatsappUrl)
             <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
           @endif
-          @if($customerWhatsappUrl)
+          @if($canCommunicateCustomer && $customerWhatsappUrl)
             <a href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0">WhatsApp cliente</a>
           @endif
         </div>
-        @if(!$isWarehouseRole)
+        @if($canRegisterReturn)
           <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">
               Registrar Devolución
           </button>
@@ -293,7 +305,7 @@
                     @endif
                 </td>
                 <td data-label="Estado">
-                    @if(!$isWarehouseRole)
+                    @if($canApprovePayments)
                       <select class="btn btn-sm toggle-status-btn 
                         {{ $payment->status == 0 ? 'btn-outline-warning' : ($payment->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
                         onchange="updatePaymentStatus(this, {{ $payment->id }})">
@@ -326,7 +338,7 @@
       </div>
 
       <!-- Modal para realizar devoluciones -->
-      @if(!$isWarehouseRole)
+      @if($canRegisterReturn)
       <div class="modal fade" id="returnModal" tabindex="-1" aria-labelledby="returnModalLabel" aria-hidden="true">
           <div class="modal-dialog modal-lg">
               <div class="modal-content">
@@ -597,7 +609,9 @@ function updatePaymentStatus(selectElement, paymentId) {
     });
 }
 
-document.getElementById('returnForm').addEventListener('submit', function (event) {
+const returnForm = document.getElementById('returnForm');
+if (returnForm) {
+  returnForm.addEventListener('submit', function (event) {
     event.preventDefault();
 
     const orderId = document.getElementById('orderId').value;
@@ -605,44 +619,45 @@ document.getElementById('returnForm').addEventListener('submit', function (event
     const items = [];
 
     document.querySelectorAll('.return-quantity').forEach(input => {
-        const quantity = parseInt(input.value);
-        const maxQuantity = parseInt(input.getAttribute('data-max'));
-        const id = input.getAttribute('data-id');
+      const quantity = parseInt(input.value);
+      const maxQuantity = parseInt(input.getAttribute('data-max'));
+      const id = input.getAttribute('data-id');
 
-        if (quantity > 0 && quantity <= maxQuantity) {
-            items.push({ id, quantity });
-        }
+      if (quantity > 0 && quantity <= maxQuantity) {
+        items.push({ id, quantity });
+      }
     });
 
     if (items.length === 0) {
-        alert('Debe especificar al menos un producto para devolver.');
-        return;
+      alert('Debe especificar al menos un producto para devolver.');
+      return;
     }
 
     fetch(`/sales/${orderId}/return`, {
-        method: 'POST',
-        headers: {
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ items, reason }),
+      method: 'POST',
+      headers: {
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items, reason }),
     })
     .then(response => {
-        if (response.ok) {
-            return response.json();
-        } else {
-            throw new Error('Error al registrar la devolución.');
-        }
+      if (response.ok) {
+        return response.json();
+      } else {
+        throw new Error('Error al registrar la devolución.');
+      }
     })
     .then(data => {
-        alert(data.message);
-        location.reload(); // Recargar la página para reflejar los cambios
+      alert(data.message);
+      location.reload();
     })
     .catch(error => {
-        console.error('Error:', error);
-        alert('Ocurrió un error al registrar la devolución.');
+      console.error('Error:', error);
+      alert('Ocurrió un error al registrar la devolución.');
     });
-});
+  });
+}
 
 (() => {
   const currencySelect = document.getElementById('order-download-currency');

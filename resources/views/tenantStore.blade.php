@@ -330,6 +330,25 @@
                                     <label class="form-label">Descripción</label>
                                     <textarea class="form-control p-2 border border-radius-lg" name="description" rows="3">{{ $tenant->description ?? '' }}</textarea>
                                 </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold d-block">Restricción de envíos por ciudad</label>
+                                    <input type="hidden" name="restrict_delivery_city_to_tenant" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
+                                            id="restrict_delivery_city_to_tenant"
+                                            name="restrict_delivery_city_to_tenant"
+                                            value="1"
+                                            {{ (bool) ($tenant->restrict_delivery_city_to_tenant ?? true) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="restrict_delivery_city_to_tenant">
+                                            Permitir envíos solo en la ciudad de la tienda
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Si se desactiva, la tienda puede registrar envíos a cualquier ciudad.</small>
+                                </div>
                             </div>
 
                             {{-- TAB 2 --}}

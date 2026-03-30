@@ -50,6 +50,12 @@ class Tenant extends Model
         'instagram',
         'facebook',
         'electronic_invoicing_enabled',
+        'restrict_delivery_city_to_tenant',
+    ];
+
+    protected $casts = [
+        'electronic_invoicing_enabled' => 'boolean',
+        'restrict_delivery_city_to_tenant' => 'boolean',
     ];
 
     // Relaciones

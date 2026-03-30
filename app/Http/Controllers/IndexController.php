@@ -373,6 +373,10 @@ class IndexController extends Controller
             return $log;
         });
 
+        $logsCollection = $logsCollection->filter(function (Log $log) {
+            return !$this->isAuthAuditLog($log);
+        });
+
         if ($filters['tenant_id'] !== '') {
             $logsCollection = $logsCollection->filter(function (Log $log) use ($filters) {
                 return (string) $log->audit_tenant_id === (string) $filters['tenant_id'];
@@ -432,12 +436,14 @@ class IndexController extends Controller
 
         $filterOptions = [
             'roles' => $rawLogs
+                ->filter(fn (Log $log) => !$this->isAuthAuditLog($log))
                 ->map(fn (Log $log) => (string) ($this->decodeAuditPayload($log->description)['role'] ?? ''))
                 ->filter()
                 ->unique()
                 ->sort()
                 ->values(),
             'modules' => $rawLogs
+                ->filter(fn (Log $log) => !$this->isAuthAuditLog($log))
                 ->map(function (Log $log) {
                     $payload = $this->decodeAuditPayload($log->description);
                     return (string) ($payload['module'] ?? $log->table_name);
@@ -447,12 +453,14 @@ class IndexController extends Controller
                 ->sort()
                 ->values(),
             'actions' => $rawLogs
+                ->filter(fn (Log $log) => !$this->isAuthAuditLog($log))
                 ->pluck('action')
                 ->filter()
                 ->unique()
                 ->sort()
                 ->values(),
             'statuses' => $rawLogs
+                ->filter(fn (Log $log) => !$this->isAuthAuditLog($log))
                 ->map(fn (Log $log) => (string) ($this->decodeAuditPayload($log->description)['status'] ?? ''))
                 ->filter()
                 ->unique()
@@ -475,6 +483,20 @@ class IndexController extends Controller
         return json_last_error() === JSON_ERROR_NONE && is_array($decoded)
             ? $decoded
             : [];
+    }
+
+    private function isAuthAuditLog(Log $log): bool
+    {
+        $payload = $this->decodeAuditPayload($log->description);
+
+        $module = Str::lower(trim((string) ($payload['module'] ?? $log->table_name ?? '')));
+        $action = Str::lower(trim((string) ($log->action ?? '')));
+
+        if ($module === 'auth') {
+            return true;
+        }
+
+        return Str::contains($action, ['login', 'logout', 'auth']);
     }
 
     public function index()

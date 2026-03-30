@@ -732,6 +732,7 @@
 
       return {
         valid: true,
+        cityId: Number(cityId),
         address: parts.join(', '),
       };
     }
@@ -1742,6 +1743,7 @@
             customer_id: Number(user.id),
             delivery_type: deliveryType,
             delivery_address: deliveryType === 'shipping' ? deliveryAddressResult.address : 'Tienda',
+            delivery_city_id: deliveryType === 'shipping' ? Number(deliveryAddressResult.cityId || 0) : null,
             items,
             payments,
             mark_delivered: false,
