@@ -41,6 +41,8 @@
   $authUserName = (string) ($authUser->name ?? 'Usuario');
   $authUserEmail = (string) ($authUser->email ?? 'Sin correo');
   $authUserRole = (string) (optional($authUser?->role)->name ?? 'Sin rol');
+  $headerUnreadNotificationsCount = $authUser ? $authUser->unreadNotifications()->count() : 0;
+  $dollarRateValue = isset($dollarRate) ? $dollarRate : null;
 @endphp
 <style>
   .header-session-user {
@@ -95,7 +97,7 @@
 
             <li class="breadcrumb-item text-sm d-flex align-items-center">
               <a class="opacity-5 text-dark" href="/paymentMethods">
-                <!-- Tasa Actual: {{ $dollarRate ? number_format($dollarRate->rate, 2) : 'No disponible' }} VES / USD -->
+                <!-- Tasa Actual: {{ $dollarRateValue ? number_format($dollarRateValue->rate, 2) : 'No disponible' }} VES / USD -->
               </a>
             </li>
 
@@ -131,7 +133,11 @@
             <li class="nav-item d-flex align-items-center me-2">
               <a href="{{ route('notifications.index') }}" class="nav-link text-body p-0 position-relative" aria-label="Notificaciones" title="Notificaciones">
                 <i class="material-symbols-rounded">notifications</i>
-                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="backoffice-notifications-count">0</span>
+                @if($headerUnreadNotificationsCount > 0)
+                  <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger backoffice-notifications-count">{{ $headerUnreadNotificationsCount }}</span>
+                @else
+                  <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none backoffice-notifications-count">0</span>
+                @endif
               </a>
             </li>
             <li class="nav-item d-flex align-items-center">
