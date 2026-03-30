@@ -10,9 +10,10 @@
 }
 
 #sidenav-main #sidenav-collapse-main {
-  height: auto !important;
-  max-height: none !important;
-  overflow: visible !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 #sidenav-main.closed {

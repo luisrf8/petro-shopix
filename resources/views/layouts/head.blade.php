@@ -72,7 +72,7 @@
 
   @media (max-width: 576px) {
     .header-session-user {
-      max-width: 200px;
+      max-width: 160px;
     }
 
     .header-session-user .session-name {
@@ -81,6 +81,21 @@
 
     .header-session-user .session-meta {
       font-size: 0.64rem;
+    }
+  }
+
+  @media (max-width: 991px) {
+    .header-session-user {
+      max-width: 130px;
+      margin-right: 0.5rem !important;
+    }
+
+    .header-session-user .session-meta {
+      display: none;
+    }
+
+    .header-session-user .session-name {
+      font-size: 0.72rem;
     }
   }
 </style>
@@ -115,7 +130,7 @@
           </ol>
         </nav>
 
-        <div class="collapse navbar-collapse mt-sm-0 mt-2 me-md-0 me-sm-4" id="navbar">
+        <div class="navbar-collapse mt-sm-0 mt-2 me-md-0 me-sm-4" id="navbar">
           <!-- <div class="ms-md-auto pe-md-3 d-flex align-items-center">
             <div class="input-group input-group-outline">
               <label class="form-label">Type here...</label>
@@ -125,6 +140,7 @@
           <ul class="navbar-nav ms-md-auto pe-md-3 d-flex align-items-center  justify-content-end">
             <li class="nav-item d-flex align-items-center me-3 header-session-user">
               <div class="d-flex text-end align-items-center gap-1">
+                <i class="material-symbols-rounded">account_circle</i>
                 <span class="session-name session-text">{{ $authUserName }}</span> / 
                 <span class="session-meta session-text">{{ $authUserEmail }}</span> / 
                 <span class="session-meta session-text">Rol: {{ $authUserRole }}</span>
@@ -152,26 +168,6 @@
                   <i class="material-symbols-rounded">logout</i>
                 </button>
               </form>
-            </li>
-            <li class="nav-item d-lg-none d-flex align-items-center me-2">
-              <a class="nav-link text-body p-0 position-relative" href="{{ route('notifications.index') }}" aria-label="Notificaciones">
-                <i class="material-symbols-rounded">notifications</i>
-                @if($headerUnreadNotificationsCount > 0)
-                  <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger backoffice-notifications-count">{{ $headerUnreadNotificationsCount }}</span>
-                @else
-                  <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none backoffice-notifications-count">0</span>
-                @endif
-              </a>
-            </li>
-            <li class="nav-item d-lg-none d-flex align-items-center me-2">
-              <a class="nav-link text-body p-0" href="/users" aria-label="Usuario">
-                <i class="material-symbols-rounded">account_circle</i>
-              </a>
-            </li>
-            <li class="nav-item d-lg-none d-flex align-items-center">
-              <button type="button" class="nav-link text-body p-0 border-0 bg-transparent" onclick="logOut()" aria-label="Cerrar sesión">
-                <i class="material-symbols-rounded">logout</i>
-              </button>
             </li>
             <!-- <li class="nav-item px-3 d-flex align-items-center">
               <a href="javascript:;" class="nav-link text-body p-0">
