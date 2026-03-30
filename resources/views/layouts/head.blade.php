@@ -45,6 +45,29 @@
   $dollarRateValue = isset($dollarRate) ? $dollarRate : null;
 @endphp
 <style>
+  #navbarBlur .container-fluid {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  #navbarBlur .header-actions-wrap {
+    margin-left: auto;
+    flex: 1 1 auto;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  #navbarBlur .header-actions-wrap .navbar-nav {
+    margin-left: auto;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    width: auto;
+  }
+
   .header-session-user {
     min-width: 0;
     max-width: 320px;
@@ -85,6 +108,15 @@
   }
 
   @media (max-width: 991px) {
+    #navbarBlur .header-actions-wrap {
+      width: auto;
+      min-width: 0;
+    }
+
+    #navbarBlur .header-actions-wrap .navbar-nav {
+      gap: 0.45rem;
+    }
+
     .header-session-user {
       max-width: 130px;
       margin-right: 0.5rem !important;
@@ -130,14 +162,14 @@
           </ol>
         </nav>
 
-        <div class="navbar-collapse mt-sm-0 mt-2 me-md-0 me-sm-4" id="navbar">
+        <div class="navbar-collapse mt-sm-0 mt-2 me-md-0 me-sm-4 header-actions-wrap" id="navbar">
           <!-- <div class="ms-md-auto pe-md-3 d-flex align-items-center">
             <div class="input-group input-group-outline">
               <label class="form-label">Type here...</label>
               <input type="text" class="form-control">
             </div>
           </div> -->
-          <ul class="navbar-nav ms-md-auto pe-md-3 d-flex align-items-center  justify-content-end">
+          <ul class="navbar-nav ms-auto pe-md-3 d-flex align-items-center justify-content-end">
             <li class="nav-item d-flex align-items-center me-3 header-session-user">
               <div class="d-flex text-end align-items-center gap-1">
                 <i class="material-symbols-rounded">account_circle</i>
