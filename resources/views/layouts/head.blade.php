@@ -37,9 +37,51 @@
 
 <body class="g-sidenav-show  bg-gray-100">
 @php
-  $headerUser = auth()->user();
-  $headerUnreadNotificationsCount = $headerUser ? $headerUser->unreadNotifications()->count() : 0;
+  $authUser = auth()->user();
+  $authUserName = (string) ($authUser->name ?? 'Usuario');
+  $authUserEmail = (string) ($authUser->email ?? 'Sin correo');
+  $authUserRole = (string) (optional($authUser?->role)->name ?? 'Sin rol');
 @endphp
+<style>
+  .header-session-user {
+    min-width: 0;
+    max-width: 320px;
+  }
+
+  .header-session-user .session-name {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1.1;
+  }
+
+  .header-session-user .session-meta {
+    font-size: 0.68rem;
+    color: #6b7280;
+    line-height: 1.1;
+  }
+
+  .header-session-user .session-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+  }
+
+  @media (max-width: 576px) {
+    .header-session-user {
+      max-width: 200px;
+    }
+
+    .header-session-user .session-name {
+      font-size: 0.72rem;
+    }
+
+    .header-session-user .session-meta {
+      font-size: 0.64rem;
+    }
+  }
+</style>
 <nav class="navbar navbar-main navbar-expand-lg px-0  shadow-none border-radius-xl" id="navbarBlur" data-scroll="true">
       <div class="container-fluid py-1">
         <nav aria-label="breadcrumb">
@@ -79,16 +121,31 @@
             </div>
           </div> -->
           <ul class="navbar-nav ms-md-auto pe-md-3 d-flex align-items-center  justify-content-end">
-            <!-- <li class="nav-item d-flex align-items-center">
-              <a class="btn btn-outline-primary btn-sm mb-0 me-3" target="_blank" href="https://www.creative-tim.com/builder?ref=navbar-material-dashboard">Online Builder</a>
-            </li> -->
-            <!-- <li class="mt-1">
-              <a class="github-button" href="https://github.com/creativetimofficial/material-dashboard" data-icon="octicon-star" data-size="large" data-show-count="true" aria-label="Star creativetimofficial/material-dashboard on GitHub">Star</a>
-            </li> -->
-            <li class="nav-item d-xl-none ps-3 d-flex align-items-center">
-            <!-- <button class="nav-link text-body p-0" id='toggleSidenav'>
-                <i class="material-symbols-rounded fixed-plugin-button-nav">menu</i>
-              </button> -->
+            <li class="nav-item d-flex align-items-center me-3 header-session-user">
+              <div class="d-flex text-end align-items-center gap-1">
+                <span class="session-name session-text">{{ $authUserName }}</span> / 
+                <span class="session-meta session-text">{{ $authUserEmail }}</span> / 
+                <span class="session-meta session-text">Rol: {{ $authUserRole }}</span>
+              </div>
+            </li>
+            <li class="nav-item d-flex align-items-center me-2">
+              <a href="{{ route('notifications.index') }}" class="nav-link text-body p-0 position-relative" aria-label="Notificaciones" title="Notificaciones">
+                <i class="material-symbols-rounded">notifications</i>
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="backoffice-notifications-count">0</span>
+              </a>
+            </li>
+            <li class="nav-item d-flex align-items-center">
+              <form method="POST" action="{{ route('logout') }}" class="m-0 p-0">
+                @csrf
+                <button
+                  type="submit"
+                  class="nav-link text-body p-0 border-0 bg-transparent"
+                  aria-label="Cerrar sesión"
+                  title="Cerrar sesión"
+                >
+                  <i class="material-symbols-rounded">logout</i>
+                </button>
+              </form>
             </li>
             <li class="nav-item d-lg-none d-flex align-items-center me-2">
               <a class="nav-link text-body p-0 position-relative" href="{{ route('notifications.index') }}" aria-label="Notificaciones">

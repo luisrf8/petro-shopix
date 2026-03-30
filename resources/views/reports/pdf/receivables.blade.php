@@ -16,12 +16,12 @@
 <body>
     <h2>Reporte de Cuentas por Cobrar</h2>
     <div class="meta">Rango: {{ $summary['start_date']->format('d/m/Y') }} al {{ $summary['end_date']->format('d/m/Y') }}</div>
-    <div class="meta">Saldo pendiente mínimo: <strong>{{ number_format((float) ($summary['min_pending_balance'] ?? 0), 2) }} USD</strong></div>
+    <div class="meta">Saldo pendiente mínimo: <strong>{{ number_format((float) ($summary['min_pending_balance'] ?? 0), 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong></div>
     <div class="meta">
         Ordenes: <strong>{{ number_format($summary['orders']) }}</strong> |
-        Total: <strong>{{ number_format($summary['total_amount'], 2) }} USD</strong> |
-        Cobrado: <strong>{{ number_format($summary['total_paid'], 2) }} USD</strong> |
-        Pendiente: <strong>{{ number_format($summary['total_pending'], 2) }} USD</strong>
+        Total: <strong>{{ number_format($summary['total_amount'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong> |
+        Cobrado: <strong>{{ number_format($summary['total_paid'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong> |
+        Pendiente: <strong>{{ number_format($summary['total_pending'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong>
     </div>
     <table>
         <thead>

@@ -18,8 +18,16 @@
                 <div class="col-12 col-md-3">
                     <div class="card h-100">
                         <div class="card-body p-3">
-                            <p class="text-xs text-secondary mb-1">Proveedor</p>
+                            <p class="text-xs text-secondary mb-1">Origen</p>
                             <h6 class="mb-0">{{ $order->provider_display_name }}</h6>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 col-md-3">
+                    <div class="card h-100">
+                        <div class="card-body p-3">
+                            <p class="text-xs text-secondary mb-1">Tipo de entrada</p>
+                            <h6 class="mb-0">{{ $order->entry_mode_label ?? 'Compra' }}</h6>
                         </div>
                     </div>
                 </div>
@@ -31,7 +39,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-12 col-md-3">
+                <div class="col-12 col-md-2">
                     <div class="card h-100">
                         <div class="card-body p-3">
                             <p class="text-xs text-secondary mb-1">Fecha de compra</p>
@@ -59,11 +67,55 @@
                     <div class="card h-100">
                         <div class="card-body p-3">
                             <p class="text-xs text-secondary mb-1">Monto total</p>
-                            <h6 class="mb-0">{{ number_format($order->total_amount, 2) }} USD</h6>
+                            <h6 class="mb-0">{{ number_format($order->total_amount, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</h6>
                         </div>
                     </div>
                 </div>
             </div>
+
+            @if(($order->entry_mode ?? 'purchase') === 'production')
+            <div class="card mb-3">
+                <div class="card-header p-3 pb-0">
+                    <h6 class="mb-0">Consumibles usados en producción</h6>
+                </div>
+                <div class="card-body p-3">
+                    <div class="table-responsive">
+                        <table class="table align-items-center mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Producto terminado</th>
+                                    <th>Consumible</th>
+                                    <th class="text-end">Cantidad consumida</th>
+                                    <th class="text-end">Costo unitario</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($order->consumptions as $consumption)
+                                    <tr>
+                                        <td>{{ $consumption->producedVariant?->product?->name ?? 'N/A' }} {{ $consumption->producedVariant?->size ? ('(' . $consumption->producedVariant?->size . ')') : '' }}</td>
+                                        <td>{{ $consumption->consumedVariant?->product?->name ?? 'N/A' }} {{ $consumption->consumedVariant?->size ? ('(' . $consumption->consumedVariant?->size . ')') : '' }}</td>
+                                        <td class="text-end">{{ number_format((float) $consumption->quantity, 2) }}</td>
+                                        <td class="text-end">{{ number_format((float) $consumption->unit_cost, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</td>
+                                        <td class="text-end">{{ number_format((float) $consumption->amount, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="5">No hay consumibles registrados para esta entrada.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="4" class="text-end">Costo total consumibles:</th>
+                                    <th class="text-end">{{ number_format((float) ($order->consumption_total ?? 0), 2) }} {{ $baseCurrencyCode ?? 'USD' }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            @endif
 
             <div class="card">
                 <div class="card-header p-3 pb-0">
@@ -97,8 +149,8 @@
                                         <td>{{ $product?->name ?? 'Sin nombre' }}</td>
                                         <td>{{ $detalle->productVariant?->size ?? 'Sin variante' }}</td>
                                         <td class="text-end">{{ $detalle->quantity }}</td>
-                                        <td class="text-end">{{ number_format($detalle->price, 2) }} USD</td>
-                                        <td class="text-end">{{ number_format($detalle->amount, 2) }} USD</td>
+                                        <td class="text-end">{{ number_format($detalle->price, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</td>
+                                        <td class="text-end">{{ number_format($detalle->amount, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -107,7 +159,7 @@
                                     <th colspan="3" class="text-end">Totales:</th>
                                     <th class="text-end">{{ $order->total_items }}</th>
                                     <th></th>
-                                    <th class="text-end">{{ number_format($order->total_amount, 2) }} USD</th>
+                                    <th class="text-end">{{ number_format($order->total_amount, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</th>
                                 </tr>
                             </tfoot>
                         </table>

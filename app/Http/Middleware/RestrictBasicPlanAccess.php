@@ -28,7 +28,7 @@ class RestrictBasicPlanAccess
         }
 
         if ($this->isBlockedRouteForBasicPlan($request)) {
-            $message = 'El plan Básico no permite esta acción (reportes, crear almacenes o crear lista de materiales).';
+            $message = 'El plan Básico solo permite: Categorías, Productos, Gestión de Tienda, Realizar Venta, Entrada de Inventario, Proveedores, Lista de Materiales, Ventas Realizadas e Historial de Entradas.';
 
             if ($request->expectsJson() || $request->wantsJson()) {
                 return response()->json([
@@ -65,25 +65,57 @@ class RestrictBasicPlanAccess
     {
         $routeName = (string) ($request->route()?->getName() ?? '');
 
-        $blockedExact = [
+        $blockedByName = [
             'dashboard',
-            'warehouses.store',
-            'materials.store',
-            'reports.index',
+            'paymentMethods.index',
+            'customers.index',
+            'customers.store',
+            'customers.update',
+            'customers.toggleStatus',
+            'accounts.receivable.index',
+            'sales.paidPendingDeliveries.index',
+            'sales.orders.pendingDelivery',
+            'sales.electronic.documents.tenant',
+            'store-expenses.index',
+            'store-expenses.store',
+            'store-expenses.update',
         ];
 
-        if (in_array($routeName, $blockedExact, true)) {
+        if (in_array($routeName, $blockedByName, true)) {
             return true;
         }
 
-        if (Str::startsWith($routeName, 'reports.')) {
+        if (Str::startsWith($routeName, 'reports.')
+            || Str::startsWith($routeName, 'sales.electronic.')
+            || Str::startsWith($routeName, 'electronic.documents.')
+        ) {
             return true;
         }
 
         $path = trim((string) $request->path(), '/');
 
-        return $path === 'dashboard'
-            || $path === 'reports'
-            || str_starts_with($path, 'reports/');
+        $blockedPrefixes = [
+            'dashboard',
+            'paymentMethods',
+            'customers',
+            'accounts-receivable',
+            'paid-pending-deliveries',
+            'my-electronic-documents',
+            'electronic-documents',
+            'store-expenses',
+            'reports',
+        ];
+
+        foreach ($blockedPrefixes as $prefix) {
+            if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+                return true;
+            }
+        }
+
+        if ($path === 'sales-orders/pending-delivery' || str_starts_with($path, 'sales-orders/pending-delivery/')) {
+            return true;
+        }
+
+        return str_contains($path, '/electronic/');
     }
 }

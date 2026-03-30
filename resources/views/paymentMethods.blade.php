@@ -5,12 +5,16 @@
 @section('content')
     <div class="container-fluid py-2">
       <div class="row align-items-center">
-        <div class="col-6 d-flex align-items-center">
-          <h6 class="mb-0">Tasa actual: <span id="currentDollarRate">{{$dollarRate ? number_format($dollarRate->rate, 2) : 'N/A'}}</span> VES / USD</h6>
+        <div class="col-md-6 d-flex flex-column align-items-start">
+          <h6 class="mb-1">Tasa USD: <span id="currentDollarRate">{{$dollarRate ? number_format($dollarRate->rate, 2) : 'N/A'}}</span> VES / USD</h6>
+          <h6 class="mb-0">Tasa EUR: <span id="currentEuroRate">{{$euroRate ? number_format($euroRate->rate, 2) : 'N/A'}}</span> VES / EUR</h6>
         </div>
-        <div class="col-6 text-end">
+        <div class="col-md-6 text-md-end mt-2 mt-md-0 d-flex flex-column align-items-md-end gap-2">
           <button class="btn bg-gradient-success mb-0" data-bs-toggle="modal" data-bs-target="#updateDollarRateModal">
             <i class="material-symbols-rounded text-sm">currency_exchange</i>&nbsp;&nbsp;Actualizar Tasa del Dólar
+          </button>
+          <button class="btn bg-gradient-info mb-0" data-bs-toggle="modal" data-bs-target="#updateEuroRateModal">
+            <i class="material-symbols-rounded text-sm">currency_exchange</i>&nbsp;&nbsp;Actualizar Tasa del Euro
           </button>
         </div>
       </div>
@@ -34,7 +38,7 @@
             <div class="row d-flex flex-wrap">
               @foreach($currencies as $currency)
                 <div class="col-6">
-                  <div class="card card-body border card-plain border-radius-lg d-flex justify-content-between align-items-center flex-row py-4">
+                  <div class="card card-body border card-plain border-radius-lg d-flex justify-content-between align-items-center flex-row py-4 mb-4">
                     <h6 class="mb-0">{{ $currency->name }} / {{$currency->code}}</h6>
                     <!-- <button class="btn btn-sm toggle-status-currency-btn pt-4 {{ $currency->status ? 'text-success' : 'text-danger'}}" 
                         data-id="{{ $currency->id }}" 
@@ -52,8 +56,41 @@
                 </div>
               @endforeach
             </div>
+                      <form id="updateBaseCurrencyForm" class="d-flex align-items-center gap-2 justify-content-md-end">
+            @csrf
+            <label for="baseCurrency" class="mb-0 fw-semibold">Moneda madre:</label>
+            <select class="form-select border border-1 p-2" id="baseCurrency" name="base_currency" style="max-width: 180px;">
+              <option value="USD" {{ ($baseCurrencyCode ?? 'USD') === 'USD' ? 'selected' : '' }}>Dólar (USD)</option>
+              <option value="EUR" {{ ($baseCurrencyCode ?? 'USD') === 'EUR' ? 'selected' : '' }}>Euro (EUR)</option>
+            </select>
+            <button type="submit" class="btn btn-outline-dark mb-0">Guardar</button>
+          </form>
           </div>
 
+        </div>
+      </div>
+
+      <!-- Modal: Actualizar Tasa del Precio del Euro -->
+      <div class="modal fade" id="updateEuroRateModal" tabindex="-1" aria-labelledby="updateEuroRateModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="updateEuroRateModalLabel">Actualizar Tasa del Euro</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <form id="updateEuroRateForm" enctype="multipart/form-data">
+                @csrf
+                <div class="mb-3">
+                  <label for="euroRate" class="form-label">Tasa de Cambio</label>
+                  <input type="number" step="0.01" class="form-control border border-1 p-2" id="euroRate" name="rate" required>
+                </div>
+                <div class="d-flex flex-row-reverse">
+                  <button type="submit" class="btn btn-info">Actualizar</button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -315,6 +352,7 @@
   <script>
     const authUser = @json($authUser);
     const tenantId = Number(authUser.tenant_id);
+    const baseCurrencyLabel = document.getElementById('baseCurrency');
     document.getElementById('createCurrencyForm').addEventListener('submit', function(event) {
       event.preventDefault(); // Evita el envío normal del formulario
       let formData = new FormData(this); // Crear un FormData con los datos del formulario
@@ -396,6 +434,60 @@
           alert('Hubo un error inesperado. Intente nuevamente');
         })
       });
+
+    document.getElementById('updateEuroRateForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+      let formData = new FormData(this);
+      formData.append('tenant_id', tenantId);
+
+      fetch('api/euro-rate/update', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+        },
+        body: formData
+      })
+        .then(response => {
+          if (response.status === 201) {
+            alert('Tasa del euro actualizada exitosamente');
+            location.reload();
+          } else {
+            alert('Hubo un error al actualizar la tasa del euro');
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('Hubo un error inesperado. Intente nuevamente');
+        });
+    });
+
+    document.getElementById('updateBaseCurrencyForm').addEventListener('submit', function(event) {
+      event.preventDefault();
+
+      let formData = new FormData(this);
+      formData.append('tenant_id', tenantId);
+
+      fetch('api/tenant-base-currency/update', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+        },
+        body: formData
+      })
+      .then(response => {
+        if (response.status === 200) {
+          const selectedCurrency = baseCurrencyLabel ? baseCurrencyLabel.value : 'USD';
+          alert(`Moneda madre actualizada a ${selectedCurrency}`);
+          location.reload();
+        } else {
+          alert('Hubo un error al actualizar la moneda madre');
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Hubo un error inesperado. Intente nuevamente');
+      });
+    });
       // Evento para llenar el modal con los datos de la categoría seleccionada
       document.querySelectorAll('.btn-edit-method').forEach(button => {
         button.addEventListener('click', function () {

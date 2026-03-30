@@ -8,7 +8,9 @@ use App\Models\Category;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\Tax;
+use App\Models\Tenant;
 use App\Support\ImageStorage;
+use App\Support\TenantCurrency;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +35,9 @@ class ProductController extends Controller
     public function index()
     {
         $user = auth()->user();
+        $tenant = Tenant::find($user->tenant_id);
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
 
         $categories = Category::with(['products' => function ($query) use ($user) {
                 $query->where('is_active', true)
@@ -48,7 +53,7 @@ class ProductController extends Controller
             ->where('tenant_id', $user->tenant_id)
             ->orderBy('created_at', 'desc')
             ->get();
-        return view('products', compact('categories', 'productItems', 'taxes'));
+        return view('products', compact('categories', 'productItems', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol'));
     }
 
     public function indexCreateProduct()
@@ -106,6 +111,9 @@ class ProductController extends Controller
     public function showByCategory($categoryId)
     {
         $user = auth()->user();
+        $tenant = Tenant::find($user->tenant_id);
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
 
         $category = Category::where('tenant_id', $user->tenant_id)->findOrFail($categoryId);
         $categories = Category::where('tenant_id', $user->tenant_id)
@@ -116,7 +124,7 @@ class ProductController extends Controller
         ->get();
         $taxes = Tax::all();
     
-        return view('products', compact('productItems', 'category', 'categories', 'taxes'));
+        return view('products', compact('productItems', 'category', 'categories', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol'));
     }
     public function showByCategoryEcomm($categoryId)
     {

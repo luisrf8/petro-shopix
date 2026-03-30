@@ -25,6 +25,8 @@ use App\Models\SalesOrder;
 use App\Models\SalesOrderDetail;
 use App\Models\Payment;
 use App\Models\DollarRate;
+use App\Models\EuroRate;
+use App\Models\Tax;
 use App\Support\ImageStorage;
 use App\Services\GeminiImageService;
 use Illuminate\Database\QueryException;
@@ -561,8 +563,10 @@ class TenantController extends Controller
 
         $cartEnabled = $this->tenantHasProPlan($tenant);
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+        $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
+        $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
 
-        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName'));
+        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol'));
     }
 
     public function store(Request $request)
@@ -947,6 +951,7 @@ class TenantController extends Controller
             'plan_id' => 'nullable|exists:plans,id',
             'is_active' => 'nullable|boolean',
             'electronic_invoicing_enabled' => 'nullable|boolean',
+            'restrict_delivery_city_to_tenant' => 'nullable|boolean',
         ]);
 
         if (array_key_exists('economic_activity', $validated)) {
@@ -1070,6 +1075,7 @@ class TenantController extends Controller
             'facebook' => $validated['facebook'] ?? $tenant->facebook,
             'is_active' => $validated['is_active'] ?? $tenant->is_active,
             'electronic_invoicing_enabled' => $validated['electronic_invoicing_enabled'] ?? $tenant->electronic_invoicing_enabled,
+            'restrict_delivery_city_to_tenant' => $validated['restrict_delivery_city_to_tenant'] ?? $tenant->restrict_delivery_city_to_tenant,
         ];
 
         $tenant->fill($tenantData);
@@ -1179,6 +1185,7 @@ class TenantController extends Controller
                 'tiktok'         => 'nullable|string|max:255',
                 'instagram'         => 'nullable|string|max:255',
                 'facebook'         => 'nullable|string|max:255',
+                'restrict_delivery_city_to_tenant' => 'nullable|boolean',
             ]);
 
             $this->assertEconomicActivityAllowed(
@@ -1314,6 +1321,7 @@ class TenantController extends Controller
                 'tiktok'          => $validated['tiktok'] ?? $tenant->tiktok,
                 'instagram'      => $validated['instagram'] ?? $tenant->instagram,
                 'facebook'       => $validated['facebook'] ?? $tenant->facebook,
+                'restrict_delivery_city_to_tenant' => $validated['restrict_delivery_city_to_tenant'] ?? $tenant->restrict_delivery_city_to_tenant,
                 'background_image'=> $tenant->background_image, // 👈 clave
             ]);
 
@@ -1376,6 +1384,8 @@ class TenantController extends Controller
 
         $cartEnabled = $this->tenantHasProPlan($tenant);
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+        $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
+        $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
 
         return view('ecommerceCategory', compact(
             'tenant',
@@ -1383,7 +1393,9 @@ class TenantController extends Controller
             'products',
             'materialPackages',
             'cartEnabled',
-            'cartPlanName'
+            'cartPlanName',
+            'baseCurrencyCode',
+            'baseCurrencySymbol'
         ));
     }
     public function publicTenantProduct(Tenant $tenant, Product $product)
@@ -1400,8 +1412,10 @@ class TenantController extends Controller
 
         $cartEnabled = $this->tenantHasProPlan($tenant);
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+        $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
+        $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
 
-        return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'cartPlanName'));
+        return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol'));
     }
 
     public function publicTenantPaymentMethods(Tenant $tenant)
@@ -1434,11 +1448,59 @@ class TenantController extends Controller
             ->latest('created_at')
             ->value('rate');
 
+        $euroRate = EuroRate::where('tenant_id', $tenant->id)
+            ->latest('created_at')
+            ->value('rate');
+
+        $baseCurrency = $this->resolveTenantBaseCurrencyCode($tenant);
+        $baseRate = $baseCurrency === 'EUR'
+            ? (float) ($euroRate ?: 0)
+            : (float) ($dollarRate ?: 0);
+        $tenantElectronicInvoicingEnabled = (bool) ($tenant->electronic_invoicing_enabled ?? false);
+        $igtfRate = $tenantElectronicInvoicingEnabled ? $this->resolveIgtfRate() : 0;
+
         return response()->json([
             'success' => true,
             'methods' => $paymentMethods,
             'dollar_rate' => $dollarRate ? (float) $dollarRate : 0,
+            'euro_rate' => $euroRate ? (float) $euroRate : 0,
+            'base_currency' => $baseCurrency,
+            'base_rate' => $baseRate,
+            'electronic_invoicing_enabled' => $tenantElectronicInvoicingEnabled,
+            'igtf_rate' => (float) $igtfRate,
         ]);
+    }
+
+    private function resolveTenantBaseCurrencyCode(Tenant $tenant): string
+    {
+        $code = strtoupper(trim((string) ($tenant->base_currency ?? 'USD')));
+        return in_array($code, ['USD', 'EUR'], true) ? $code : 'USD';
+    }
+
+    private function resolveCurrencySymbol(string $code): string
+    {
+        return strtoupper(trim($code)) === 'EUR' ? '€' : '$';
+    }
+
+    private function resolveIgtfRate(): float
+    {
+        return (float) (Tax::query()
+            ->whereRaw('LOWER(name) = ?', ['igtf'])
+            ->where(function ($query) {
+                $query->whereNull('is_active')->orWhere('is_active', 1);
+            })
+            ->value('rate') ?? 0);
+    }
+
+    private function normalizeCheckoutCurrencyCode(?string $currencyCode): string
+    {
+        $code = strtoupper(trim((string) $currencyCode));
+
+        if (in_array($code, ['BS', 'VES', 'VED', 'VEF', 'BOLIVAR', 'BOLIVARES'], true)) {
+            return 'BS';
+        }
+
+        return $code;
     }
 
     public function publicTenantResolveScanCode(Request $request, Tenant $tenant)
@@ -1509,6 +1571,7 @@ class TenantController extends Controller
                 'customer_id' => 'required|exists:users,id',
                 'delivery_type' => 'required|in:pickup,shipping',
                 'delivery_address' => 'nullable|string|max:500',
+                'delivery_city_id' => 'nullable|integer|exists:cities,id',
                 'mark_delivered' => 'nullable|boolean',
                 'mark_payments_paid' => 'nullable|boolean',
                 'mark_sale_completed' => 'nullable|boolean',
@@ -1529,6 +1592,18 @@ class TenantController extends Controller
                     'success' => false,
                     'message' => 'La dirección es obligatoria para envío.',
                 ], 422);
+            }
+
+            if ($validated['delivery_type'] === 'shipping' && (bool) ($tenant->restrict_delivery_city_to_tenant ?? true)) {
+                $deliveryCityId = (int) ($validated['delivery_city_id'] ?? 0);
+                $shippingCityValidation = $this->validateShippingCityAgainstTenant($tenant, $deliveryCityId);
+
+                if (!($shippingCityValidation['ok'] ?? false)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => (string) ($shippingCityValidation['message'] ?? 'Solo se permiten envíos a la ciudad de la tienda.'),
+                    ], 422);
+                }
             }
 
             foreach ($validated['payments'] as $paymentIndex => $paymentData) {
@@ -1558,12 +1633,15 @@ class TenantController extends Controller
             $markDelivered = (bool) ($validated['mark_delivered'] ?? false);
             $markPaymentsPaid = (bool) ($validated['mark_payments_paid'] ?? false);
             $markSaleCompleted = (bool) ($validated['mark_sale_completed'] ?? false);
+            $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
+            $tenantElectronicInvoicingEnabled = (bool) ($tenant->electronic_invoicing_enabled ?? false);
+            $igtfRate = $tenantElectronicInvoicingEnabled ? $this->resolveIgtfRate() : 0;
 
             $preference = $validated['delivery_type'] === 'shipping'
                 ? 'Envío'
                 : 'Retiro en tienda';
 
-            $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted) {
+            $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted, $baseCurrencyCode, $tenantElectronicInvoicingEnabled, $igtfRate) {
                 $salesOrder = SalesOrder::create([
                     'user_id' => $validated['customer_id'],
                     'date' => now()->toDateString(),
@@ -1572,6 +1650,7 @@ class TenantController extends Controller
                     'preference' => $preference,
                     'deliver_status' => $markDelivered ? 1 : 0,
                     'tenant_id' => $tenant->id,
+                    'sale_currency_code' => $baseCurrencyCode,
                 ]);
 
                 $orderTotal = 0;
@@ -1607,6 +1686,7 @@ class TenantController extends Controller
                 }
 
                 $totalPaid = 0;
+                $directBaseCurrencyPayments = 0;
 
                 foreach ($validated['payments'] as $paymentData) {
                     $method = PaymentMethod::with('currency')
@@ -1620,6 +1700,14 @@ class TenantController extends Controller
                     $amount = (float) $paymentData['amount'];
                     $totalPaid += $amount;
 
+                    $methodCurrencyCode = $this->normalizeCheckoutCurrencyCode(
+                        (string) ($method->currency->code ?? $method->currency->name ?? '')
+                    );
+
+                    if ($methodCurrencyCode === $baseCurrencyCode) {
+                        $directBaseCurrencyPayments += $amount;
+                    }
+
                     $payment = Payment::create([
                         'sales_order_id' => $salesOrder->id,
                         'payment_method' => $method->id,
@@ -1632,7 +1720,13 @@ class TenantController extends Controller
                     $this->storePaymentReferenceImageFromPayload($payment, $paymentData['reference_image_data'] ?? null, $paymentData['reference_image_mime'] ?? null);
                 }
 
-                if ($totalPaid + 0.0001 < $orderTotal) {
+                $igtfAmount = ($tenantElectronicInvoicingEnabled && $igtfRate > 0)
+                    ? ($directBaseCurrencyPayments * ($igtfRate / 100))
+                    : 0;
+
+                $requiredTotal = $orderTotal + $igtfAmount;
+
+                if ($totalPaid + 0.0001 < $requiredTotal) {
                     throw new \RuntimeException('El total pagado es menor al total del pedido.');
                 }
 
@@ -1941,6 +2035,51 @@ class TenantController extends Controller
         }
 
         return null;
+    }
+
+    private function validateShippingCityAgainstTenant(Tenant $tenant, int $deliveryCityId): array
+    {
+        if ($deliveryCityId <= 0) {
+            return [
+                'ok' => false,
+                'message' => 'Debes seleccionar la ciudad de entrega.',
+            ];
+        }
+
+        $tenantCityId = $this->resolveTenantCityId($tenant);
+        if ($tenantCityId <= 0) {
+            return [
+                'ok' => false,
+                'message' => 'La tienda no tiene una ciudad configurada para envíos.',
+            ];
+        }
+
+        if ($tenantCityId !== $deliveryCityId) {
+            $tenantCityName = City::query()->whereKey($tenantCityId)->value('name');
+
+            return [
+                'ok' => false,
+                'message' => 'Solo se permiten envíos para la ciudad de la tienda' . (!empty($tenantCityName) ? ': ' . $tenantCityName : '.'),
+            ];
+        }
+
+        return ['ok' => true];
+    }
+
+    private function resolveTenantCityId(Tenant $tenant): int
+    {
+        $rawCity = trim((string) ($tenant->city ?? ''));
+        if ($rawCity === '') {
+            return 0;
+        }
+
+        if (ctype_digit($rawCity)) {
+            return (int) $rawCity;
+        }
+
+        return (int) (City::query()
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($rawCity)])
+            ->value('id') ?? 0);
     }
 
     private function getBusinessActivityCatalog(): array

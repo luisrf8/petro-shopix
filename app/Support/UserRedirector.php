@@ -34,7 +34,15 @@ class UserRedirector
             return false;
         }
 
-        return self::isSuperAdmin($user) || !self::isCustomer($user);
+        if (self::isSuperAdmin($user)) {
+            return true;
+        }
+
+        if (self::isCustomer($user)) {
+            return false;
+        }
+
+        return $user->hasStoreRole('owner', 'admin', 'seller', 'warehouse');
     }
 
     public static function resolveBackofficeRedirect(?User $user): string

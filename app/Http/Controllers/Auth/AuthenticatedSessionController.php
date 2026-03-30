@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Support\UserRedirector;
+use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
@@ -52,6 +54,10 @@ class AuthenticatedSessionController extends Controller
         $credentials = $request->only('email', 'password');
 
         if (!Auth::attempt($credentials)) {
+            AuditLogger::logEvent('auth', 'CUSTOMER_LOGIN_FAILED', 'Intento fallido de inicio de sesión cliente.', null, [
+                'email' => $credentials['email'] ?? null,
+            ]);
+
             return response()->json([
                 'message' => 'Credenciales incorrectas.',
             ], 422);
@@ -60,6 +66,11 @@ class AuthenticatedSessionController extends Controller
         $user = Auth::user();
 
         if (!UserRedirector::isCustomer($user)) {
+            AuditLogger::logEvent('auth', 'CUSTOMER_LOGIN_DENIED', 'Usuario no cliente intentó login de landing.', (int) ($user->id ?? 0), [
+                'email' => $user->email ?? null,
+                'role' => optional($user?->role)->name,
+            ]);
+
             Auth::guard('web')->logout();
 
             return response()->json([
@@ -68,6 +79,11 @@ class AuthenticatedSessionController extends Controller
         }
 
         $token = JWTAuth::fromUser($user);
+
+        AuditLogger::logEvent('auth', 'CUSTOMER_LOGIN_SUCCESS', 'Inicio de sesión cliente exitoso.', (int) ($user->id ?? 0), [
+            'email' => $user->email ?? null,
+            'role' => optional($user?->role)->name,
+        ]);
 
         Auth::guard('web')->logout();
     
@@ -90,6 +106,10 @@ class AuthenticatedSessionController extends Controller
         ]);
  
         if (!Auth::attempt($credentials)) {
+            AuditLogger::logEvent('auth', 'ADMIN_LOGIN_FAILED', 'Intento fallido de login admin.', null, [
+                'email' => $credentials['email'] ?? null,
+            ]);
+
             return response()->json([
                 'message' => 'Credenciales incorrectas.',
             ], 422);
@@ -98,16 +118,26 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerate();
         $user = Auth::user();
 
-        if (UserRedirector::isCustomer($user)) {
+        if (!UserRedirector::canAccessBackoffice($user)) {
+            AuditLogger::logEvent('auth', 'ADMIN_LOGIN_DENIED', 'Acceso a panel administrativo denegado por rol.', (int) ($user->id ?? 0), [
+                'email' => $user->email ?? null,
+                'role' => optional($user?->role)->name,
+            ]);
+
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
             return response()->json([
-                'message' => 'Los clientes solo pueden iniciar sesión desde las landings de tienda.',
+                'message' => 'Este acceso es exclusivo para usuarios de panel administrativo.',
                 'redirect_to' => '/',
             ], 403);
         }
+
+        AuditLogger::logEvent('auth', 'ADMIN_LOGIN_SUCCESS', 'Inicio de sesión administrativo exitoso.', (int) ($user->id ?? 0), [
+            'email' => $user->email ?? null,
+            'role' => optional($user?->role)->name,
+        ]);
 
         return response()->json([
             'user'  => $user,
@@ -122,6 +152,13 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request)
     {
+        $currentUser = Auth::guard('web')->user();
+        if ($currentUser) {
+            AuditLogger::logEvent('auth', 'LOGOUT', 'Cierre de sesión web.', (int) $currentUser->id, [
+                'role' => optional($currentUser->role)->name,
+            ]);
+        }
+
         Auth::guard('web')->logout();
 
         if ($request->hasSession()) {
@@ -138,6 +175,13 @@ class AuthenticatedSessionController extends Controller
 
     public function logout(Request $request)
     {
+        $currentUser = Auth::guard('web')->user();
+        if ($currentUser) {
+            AuditLogger::logEvent('auth', 'LOGOUT', 'Cierre de sesión administrativo.', (int) $currentUser->id, [
+                'role' => optional($currentUser->role)->name,
+            ]);
+        }
+
         Auth::guard('web')->logout();
 
         if ($request->hasSession()) {
@@ -177,6 +221,7 @@ class AuthenticatedSessionController extends Controller
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
             'dni' => 'nullable|string|max:100',
+            'phone_number' => 'nullable|string|max:50',
         ]);
 
         $dni = trim((string) $request->input('dni', ''));
@@ -189,8 +234,9 @@ class AuthenticatedSessionController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),  // Hashear la contraseña
-            'role_id' => 3,  // Puedes asignar un rol por defecto o según tus necesidades
+            'role_id' => $this->resolveCustomerRoleId(),
             'dni' => $dni,
+            'phone_number' => trim((string) $request->input('phone_number', '')) ?: null,
         ]);
     
         // Generar el token JWT para el usuario recién creado
@@ -208,6 +254,71 @@ class AuthenticatedSessionController extends Controller
             'user' => $user,
             'token' => $token,  // El token JWT generado
         ], 201);
+    }
+
+    public function changeEcommPassword(Request $request): JsonResponse
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+        } catch (JWTException $e) {
+            return response()->json(['message' => 'Token inválido o expirado.'], 401);
+        }
+
+        if (!$user) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'new_password' => ['required', 'string', 'min:8', 'confirmed', 'different:current_password'],
+        ]);
+
+        if (!Hash::check((string) $validated['current_password'], (string) $user->password)) {
+            return response()->json(['message' => 'La contraseña actual no es correcta.'], 422);
+        }
+
+        $user->password = Hash::make((string) $validated['new_password']);
+        $user->save();
+
+        return response()->json(['message' => 'Contraseña actualizada correctamente.'], 200);
+    }
+
+    public function updateEcommProfile(Request $request): JsonResponse
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+        } catch (JWTException $e) {
+            return response()->json(['message' => 'Token inválido o expirado.'], 401);
+        }
+
+        if (!$user) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        $validated = $request->validate([
+            'phone_number' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $user->phone_number = trim((string) ($validated['phone_number'] ?? '')) ?: null;
+        $user->save();
+
+        return response()->json([
+            'message' => 'Perfil actualizado correctamente.',
+            'user' => $user,
+        ], 200);
+    }
+
+    private function resolveCustomerRoleId(): int
+    {
+        $roleId = Role::query()
+            ->whereRaw('LOWER(name) IN (?, ?, ?)', ['user', 'cliente', 'customer'])
+            ->value('id');
+
+        if ($roleId) {
+            return (int) $roleId;
+        }
+
+        return (int) Role::query()->firstOrCreate(['name' => 'user'])->id;
     }
 
 }

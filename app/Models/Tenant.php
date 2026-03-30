@@ -37,6 +37,7 @@ class Tenant extends Model
         'city',
         'phone_code',
         'phone_number',
+        'base_currency',
         'slogan',
         'description',
         'business_type',
@@ -49,6 +50,12 @@ class Tenant extends Model
         'instagram',
         'facebook',
         'electronic_invoicing_enabled',
+        'restrict_delivery_city_to_tenant',
+    ];
+
+    protected $casts = [
+        'electronic_invoicing_enabled' => 'boolean',
+        'restrict_delivery_city_to_tenant' => 'boolean',
     ];
 
     // Relaciones
@@ -135,6 +142,11 @@ class Tenant extends Model
     public function dollarRates()
     {
         return $this->hasMany(DollarRate::class);
+    }
+
+    public function euroRates()
+    {
+        return $this->hasMany(EuroRate::class);
     }
 
     public function orderStatuses()

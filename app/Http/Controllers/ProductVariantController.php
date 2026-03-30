@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
+use App\Support\AuditLogger;
 use App\Support\ImageStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -95,6 +96,16 @@ class ProductVariantController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $oldValues = [
+            'variant_id' => (int) $productVariant->id,
+            'product_id' => (int) $productVariant->product_id,
+            'size' => (string) $productVariant->size,
+            'price' => (float) $productVariant->price,
+            'discount_percentage' => (float) ($productVariant->discount_percentage ?? 0),
+            'stock' => (int) $productVariant->stock,
+            'barcode' => (string) ($productVariant->barcode ?? ''),
+        ];
+
         $request->validate([
             'size' => 'required|string|max:10',
             'price' => 'required|numeric',
@@ -115,6 +126,30 @@ class ProductVariantController extends Controller
             'stock' => $request->input('stock'),
             'barcode' => $barcode,
         ]);
+
+        $productVariant->refresh();
+
+        AuditLogger::logEvent(
+            'product_variants',
+            'VARIANT_UPDATED',
+            'Variante actualizada',
+            (int) (auth()->id() ?? 0),
+            [
+                'route_name' => (string) ($request->route()?->getName() ?? ''),
+                'path' => '/' . trim((string) $request->path(), '/'),
+                'method' => strtoupper((string) $request->method()),
+                'old' => $oldValues,
+                'new' => [
+                    'variant_id' => (int) $productVariant->id,
+                    'product_id' => (int) $productVariant->product_id,
+                    'size' => (string) $productVariant->size,
+                    'price' => (float) $productVariant->price,
+                    'discount_percentage' => (float) ($productVariant->discount_percentage ?? 0),
+                    'stock' => (int) $productVariant->stock,
+                    'barcode' => (string) ($productVariant->barcode ?? ''),
+                ],
+            ]
+        );
 
         if (empty($productVariant->barcode)) {
             $productVariant->barcode = $this->generateUniqueVariantCode('BCV');

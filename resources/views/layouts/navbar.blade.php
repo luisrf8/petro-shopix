@@ -1,8 +1,18 @@
 <style>
 #sidenav-main {
   transition: transform 0.3s ease-in-out;
-  height: calc(100vh - 1rem);
+  height: 100vh;
+  min-height: 100vh;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border-radius: 0 !important;
   overflow: hidden;
+}
+
+#sidenav-main #sidenav-collapse-main {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 #sidenav-main.closed {
@@ -96,14 +106,21 @@
       $isSeller = (bool) ($user?->hasStoreRole('seller') ?? false);
       $isWarehouse = (bool) ($user?->hasStoreRole('warehouse') ?? false);
 
-      $canSeeCategories = $isOwner || $isAdmin || $isSeller;
+      $canSeeCategories = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canSeeProducts = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canSell = $isOwner || $isAdmin || $isSeller;
-      $canSeeSalesOrders = $isOwner || $isAdmin || $isSeller || $isWarehouse;
+      $canSeeSalesOrders = $isOwner || $isAdmin || $isSeller;
+      $canSeePendingOrders = $isOwner || $isAdmin || $isWarehouse;
+      $canSeePaidPendingDeliveries = $isOwner || $isAdmin || $isSeller || $isWarehouse;
+      $canSeeTenantElectronicDocuments = $isOwner || $isAdmin || $isSeller;
+      $canSeeCustomers = $isOwner || $isAdmin || $isSeller;
+      $canSeeAccountsReceivable = $isOwner || $isAdmin;
       $canInventoryEntries = $isOwner || $isAdmin || $isWarehouse;
       $canSeeWarehouses = $isOwner || $isAdmin || $isSeller || $isWarehouse;
-      $canSeeMaterials = $isOwner || $isAdmin || $isWarehouse;
-      $canManageStore = $isOwner || $isAdmin;
+      $canSeeMaterials = $isOwner || $isAdmin || $isSeller || $isWarehouse;
+      $canManageStore = $isOwner;
+      $canSeeReports = $isOwner || $isAdmin;
+      $canSeeStoreExpenses = $isOwner || $isAdmin;
 
       $tenantLogo = null;
       $tenant = null;
@@ -133,7 +150,28 @@
         }
 
         $hasFreePlanRestriction = !$isSuperAdmin && $isFreePlanTenant;
-          $hasBasicPlanRestriction = !$isSuperAdmin && $isBasicPlanTenant;
+        $hasBasicPlanRestriction = !$isSuperAdmin && $isBasicPlanTenant;
+        $isProPlanTenant = !$isSuperAdmin && !$isFreePlanTenant && !$isBasicPlanTenant;
+
+        $planCanDashboard = $isSuperAdmin || $isProPlanTenant;
+        $planCanCategories = $isSuperAdmin || $isFreePlanTenant || $isBasicPlanTenant || $isProPlanTenant;
+        $planCanProducts = $planCanCategories;
+        $planCanStoreManagement = $isSuperAdmin || $isFreePlanTenant || $isBasicPlanTenant || $isProPlanTenant;
+        $planCanPaymentMethods = $isSuperAdmin || $isProPlanTenant;
+        $planCanSales = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
+        $planCanCustomers = $isSuperAdmin || $isProPlanTenant;
+        $planCanAccountsReceivable = $isSuperAdmin || $isProPlanTenant;
+        $planCanPaidPendingDeliveries = $isSuperAdmin || $isProPlanTenant;
+        $planCanInventoryEntries = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
+        $planCanProviders = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
+        $planCanWarehouses = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
+        $planCanMaterials = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
+        $planCanPurchaseHistory = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
+        $planCanPendingOrders = $isSuperAdmin || $isProPlanTenant;
+        $planCanSalesOrders = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
+        $planCanElectronicDocuments = $isSuperAdmin || $isProPlanTenant;
+        $planCanReports = $isSuperAdmin || $isProPlanTenant;
+        $planCanStoreExpenses = $isSuperAdmin || $isProPlanTenant;
     @endphp
     <div class="sidenav-header m-0 p-0 h-15 d-flex align-items-center justify-content-between px-2">
       <a class="navbar-brand d-flex justify-content-center align-items-center m-0" href="/dashboard">
@@ -168,7 +206,7 @@
     <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main">
       <ul class="navbar-nav">
       @if($canSeeCategories || $canSeeProducts || $canManageStore)
-        @if(!$hasFreePlanRestriction && !$hasBasicPlanRestriction)
+        @if($planCanDashboard)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/dashboard">
               <i class="material-symbols-rounded opacity-5">dashboard</i>
@@ -176,7 +214,7 @@
             </a>
           </li>
         @endif
-        @if($canSeeCategories)
+        @if($canSeeCategories && $planCanCategories)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/categories">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
@@ -184,7 +222,7 @@
             </a>
           </li>
         @endif
-        @if($canSeeProducts)
+        @if($canSeeProducts && $planCanProducts)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/products">
               <i class="material-symbols-rounded opacity-5">table_view</i>
@@ -192,7 +230,7 @@
             </a>
           </li>
         @endif
-        @if($isOwner || $isAdmin)
+        @if(($isOwner || $isAdmin) && $planCanPaymentMethods)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/paymentMethods">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
@@ -200,7 +238,7 @@
             </a>
           </li>
         @endif
-        @if($canManageStore)
+        @if($canManageStore && $planCanStoreManagement)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/tenant-store">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
@@ -209,7 +247,7 @@
           </li>
         @endif
       @endif
-        @if($canSell && !$hasFreePlanRestriction)
+        @if($canSell && $planCanSales)
 
         <li class="nav-item">
           <a class="nav-link text-dark" href="/sales">
@@ -218,20 +256,27 @@
           </a>
         </li>
 
-        <li class="nav-item">
-          <a class="nav-link text-dark" href="/customers">
-            <i class="material-symbols-rounded opacity-5">groups</i>
-            <span class="nav-link-text ms-1">Clientes</span>
-          </a>
-        </li>
+        @if($canSeeCustomers && $planCanCustomers)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/customers">
+              <i class="material-symbols-rounded opacity-5">groups</i>
+              <span class="nav-link-text ms-1">Clientes</span>
+            </a>
+          </li>
+        @endif
 
-        <li class="nav-item">
-          <a class="nav-link text-dark" href="/accounts-receivable">
-            <i class="material-symbols-rounded opacity-5">request_quote</i>
-            <span class="nav-link-text ms-1">Cuentas por Cobrar</span>
-          </a>
-        </li>
+        @if($canSeeAccountsReceivable && $planCanAccountsReceivable)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/accounts-receivable">
+              <i class="material-symbols-rounded opacity-5">request_quote</i>
+              <span class="nav-link-text ms-1">Cuentas por Cobrar</span>
+            </a>
+          </li>
+        @endif
 
+      @endif
+
+      @if($canSeePaidPendingDeliveries && $planCanPaidPendingDeliveries)
         <li class="nav-item">
           <a class="nav-link text-dark" href="/paid-pending-deliveries">
             <i class="material-symbols-rounded opacity-5">inventory</i>
@@ -239,13 +284,15 @@
           </a>
         </li>
       @endif
-        @if($canInventoryEntries && !$hasFreePlanRestriction)
+        @if($canInventoryEntries && $planCanInventoryEntries)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
               <span class="nav-link-text ms-1">Entrada de Inventario</span>
             </a>
           </li>
+        @endif
+        @if($canInventoryEntries && $planCanProviders)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/providers">
               <i class="material-symbols-rounded opacity-5">local_shipping</i>
@@ -254,7 +301,7 @@
           </li>
         @endif
 
-        @if($canSeeWarehouses && !$hasFreePlanRestriction)
+        @if($canSeeWarehouses && $planCanWarehouses)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/warehouses">
               <i class="material-symbols-rounded opacity-5">warehouse</i>
@@ -262,7 +309,7 @@
             </a>
           </li>
         @endif
-        @if($canSeeMaterials && !$hasFreePlanRestriction)
+        @if($canSeeMaterials && $planCanMaterials)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/materials">
               <i class="material-symbols-rounded opacity-5">inventory_2</i>
@@ -271,7 +318,7 @@
           </li>
         @endif
 
-        @if($canInventoryEntries && !$hasFreePlanRestriction)
+        @if($canInventoryEntries && $planCanPurchaseHistory)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase-orders">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
@@ -280,7 +327,7 @@
           </li>
         @endif
 
-        @if($isWarehouse && !$hasFreePlanRestriction)
+        @if($canSeePendingOrders && $planCanPendingOrders)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/sales-orders/pending-delivery">
               <i class="material-symbols-rounded opacity-5">local_shipping</i>
@@ -289,13 +336,16 @@
           </li>
         @endif
 
-        @if($canSeeSalesOrders && !$isWarehouse && !$hasFreePlanRestriction)
+        @if($canSeeSalesOrders && $planCanSalesOrders)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/sales-orders">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
               <span class="nav-link-text ms-1">Ventas Realizadas</span>
             </a>
           </li>
+        @endif
+
+        @if($canSeeTenantElectronicDocuments && $planCanElectronicDocuments)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/my-electronic-documents">
               <i class="material-symbols-rounded opacity-5">receipt_long</i>
@@ -304,7 +354,7 @@
           </li>
         @endif
 
-        @if(($canSeeSalesOrders || $canInventoryEntries) && !$hasFreePlanRestriction && !$hasBasicPlanRestriction)
+        @if($canSeeReports && $planCanReports)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/reports">
               <i class="material-symbols-rounded opacity-5">summarize</i>
@@ -313,7 +363,7 @@
           </li>
         @endif
 
-        @if($canManageStore && !$hasFreePlanRestriction)
+        @if($canSeeStoreExpenses && $planCanStoreExpenses)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/store-expenses">
               <i class="material-symbols-rounded opacity-5">account_balance_wallet</i>
@@ -594,29 +644,6 @@
 
     });
 
-  function logOut() {
-    fetch("/api/logout", {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        },
-    })
-    .then(response => {
-        if (response.ok) {
-            return response.json();
-        } else {
-            throw new Error('Logout failed');
-        }
-    })
-    .then(data => {
-        window.location.href = '/login';
-    })
-    .catch(error => {
-        console.error("Error during logout:", error);
-        alert("Ocurrió un error al cerrar sesión.");
-    });
-}
 </script>
   <script async defer src="https://buttons.github.io/buttons.js"></script>
   <script src="{{ asset('assets/js/navbar.js') }}"></script>

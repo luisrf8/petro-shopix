@@ -31,6 +31,9 @@
     $tenantColorPrimary = $normalizeTenantHex($tenant->color_primary ?? null, '#0F172A');
     $tenantColorSecondary = $normalizeTenantHex($tenant->color_secondary ?? null, '#334155');
     $tenantColorAccent = $normalizeTenantHex($tenant->color_accent ?? null, '#38BDF8');
+    $baseCurrencyCode = strtoupper((string) ($baseCurrencyCode ?? ($tenant->base_currency ?? 'USD')));
+    $baseCurrencyCode = in_array($baseCurrencyCode, ['USD', 'EUR'], true) ? $baseCurrencyCode : 'USD';
+    $baseCurrencySymbol = (string) ($baseCurrencySymbol ?? ($baseCurrencyCode === 'EUR' ? '€' : '$'));
 
     $mapsUrl = null;
     if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
@@ -241,6 +244,10 @@
       box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
       background-color: #fff;
+    }
+
+    .landing-media-image {
+      border-radius: 14px !important;
     }
 
     .card-product:hover {
@@ -489,6 +496,25 @@
       color: #334155;
     }
 
+    .price-neo-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      border: 1px solid rgba(var(--tenant-accent-rgb), 0.38);
+      background: linear-gradient(135deg, #ffffff, #f8fafc);
+      color: #0f172a;
+      border-radius: 999px;
+      padding: 0.22rem 0.62rem;
+      font-size: 0.84rem;
+      font-weight: 700;
+      box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+    }
+
+    .price-neo-chip strong {
+      color: var(--tenant-primary);
+      font-weight: 800;
+    }
+
     .empty-state {
       border: 1px dashed #cbd5e1;
       border-radius: 14px;
@@ -729,7 +755,6 @@
         <div>
           <div class="products-summary">
             <span id="products-counter">Mostrando {{ $products->count() }} resultado{{ $products->count() == 1 ? '' : 's' }}</span>
-            <span class="badge text-bg-light border">Filtrado por categorías</span>
           </div>
 
           <div class="row" id="products-container">
@@ -741,7 +766,7 @@
                   ]) }}" class="text-decoration-none d-block h-100">
                   <div class="card card-product h-100">
                     @if(isset($product->images[0]))
-                      <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top" style="height: 300px; object-fit: cover;">
+                      <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top landing-media-image" style="height: 300px; object-fit: cover;">
                     @else
                       <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
                         <i class="bi bi-image text-muted fs-1"></i>
@@ -757,10 +782,12 @@
                             $variantDiscount = (float) ($variant->discount_percentage ?? 0);
                             $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
                           @endphp
-                          <div class="small btn btn-outline-secondary p-2 rounded-3">
+                          <div class="small btn btn-outline-secondary p-2 rounded-3 d-inline-flex align-items-center gap-1">
                             <span class="fw-semibold">{{ $variant->size }}</span>
-                            /
-                            <span class="fw-semibold">{{ number_format($effectiveVariantPrice, 2) }} $</span>
+                            <span class="price-neo-chip">
+                              <strong>{{ number_format($effectiveVariantPrice, 2) }}</strong>
+                              <span>{{ $baseCurrencySymbol }}</span>
+                            </span>
                           </div>
                         @endforeach
                       </div>
@@ -814,7 +841,7 @@
           <div class="col-12 col-sm-6 col-md-4 col-lg-3 mb-4 package-item" data-name="{{ strtolower($package->name) }}">
             <div class="card card-product h-100">
               @if($firstImage)
-                <img src="{{ $firstImage }}" class="card-img-top" style="height: 300px; object-fit: cover;">
+                <img src="{{ $firstImage }}" class="card-img-top landing-media-image" style="height: 300px; object-fit: cover;">
               @else
                 <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
                   <i class="bi bi-box-seam text-muted fs-1"></i>
@@ -824,7 +851,12 @@
                 <h5 class="fw-bold text-dark">{{ $package->name }}</h5>
                 <p class="text-muted mb-1">{{ $package->description ?: 'Paquete personalizado.' }}</p>
                 <p class="small mb-1">{{ $package->items->count() }} material(es)</p>
-                <p class="fw-semibold mb-2">{{ number_format($packageTotal, 2) }} $</p>
+                <p class="mb-2">
+                  <span class="price-neo-chip">
+                    <strong>{{ number_format($packageTotal, 2) }}</strong>
+                    <span>{{ $baseCurrencySymbol }}</span>
+                  </span>
+                </p>
                 @if(!is_null($package->package_price))
                   <p class="text-dark small mb-2">Precio fijo combo</p>
                 @endif
@@ -920,6 +952,9 @@
             'variant_size' => $item->variant->size ?? '',
             'variant_price' => (float) $effectivePrice,
             'product_name' => $item->variant->product->name ?? 'Producto',
+            'image_src' => isset($item->variant->product->images[0])
+              ? (\App\Support\ImageStorage::url($item->variant->product->images[0]->path) ?? asset('assets/img/shopix5.png'))
+              : asset('assets/img/shopix5.png'),
             'quantity' => (float) ($item->quantity ?? 0),
           ];
         })->values()->toArray(),
@@ -971,6 +1006,7 @@
           productId: Number(component.variant_id),
           productName: `${component.product_name} [${pkg.name}]`,
           variantSize: component.variant_size,
+          imageSrc: component.image_src || null,
           price: componentPrice,
           qty: quantity,
         }

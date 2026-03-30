@@ -37,12 +37,14 @@ class Kernel extends HttpKernel
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\AuditTrailMiddleware::class,
         ],
 
         'api' => [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'throttle:api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\AuditTrailMiddleware::class,
         ],
     ];
 
@@ -69,6 +71,7 @@ class Kernel extends HttpKernel
         'basic.plan.access' => \App\Http\Middleware\RestrictBasicPlanAccess::class,
         'backoffice.access' => \App\Http\Middleware\EnsureBackofficeAccess::class,
         'verify.access.token' => \App\Http\Middleware\VerifyAccessToken::class,
+        'audit.trail' => \App\Http\Middleware\AuditTrailMiddleware::class,
         // 'auth.jwt' => \Tymon\JWTAuth\Middleware\Authenticate::class,
         'auth.jwt' => \Tymon\JWTAuth\Http\Middleware\Authenticate::class,
     ];

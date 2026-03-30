@@ -102,6 +102,15 @@
     box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
   }
 
+  .tenant-cart-item-thumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    object-fit: cover;
+    border: 1px solid #e2e8f0;
+    flex-shrink: 0;
+  }
+
   .tenant-cart-item-name {
     color: var(--tenant-primary);
     font-weight: 700;
@@ -505,6 +514,9 @@
                 <div class="col-12 col-md-4">
                   <input type="text" class="form-control" id="tenant-pro-register-dni" placeholder="DNI (opcional)">
                 </div>
+                <div class="col-12 col-md-4">
+                  <input type="text" class="form-control" id="tenant-pro-register-phone" placeholder="Teléfono (opcional)">
+                </div>
                 <div class="col-12">
                   <button type="submit" class="btn btn-dark">Crear cuenta</button>
                 </div>
@@ -566,15 +578,23 @@
               <strong class="highlight" id="tenant-pro-total-amount">0.00 $</strong>
             </div>
             <div class="tenant-pro-summary-row">
-              <span class="text-muted">Total carrito (Bs)</span>
+              <span class="text-muted" id="tenant-pro-total-bs-label">Total carrito (Bs)</span>
               <span id="tenant-pro-total-amount-bs" class="text-muted">0.00 Bs</span>
+            </div>
+            <div class="tenant-pro-summary-row mt-2 d-none" id="tenant-pro-igtf-base-payments-row">
+              <span class="text-muted">Pagado en <span id="tenant-pro-igtf-base-code">USD</span> (base IGTF)</span>
+              <span id="tenant-pro-igtf-base-payments" class="text-muted">0.00 $</span>
+            </div>
+            <div class="tenant-pro-summary-row d-none" id="tenant-pro-igtf-row">
+              <span class="text-danger fw-semibold">IGTF</span>
+              <span id="tenant-pro-igtf-amount" class="text-danger fw-semibold">0.00 $</span>
             </div>
             <div class="tenant-pro-summary-row mt-2">
               <span class="fw-semibold">Pagado</span>
               <span id="tenant-pro-paid-amount">0.00 $</span>
             </div>
             <div class="tenant-pro-summary-row">
-              <span class="text-muted">Pagado (Bs)</span>
+              <span class="text-muted" id="tenant-pro-paid-bs-label">Pagado (Bs)</span>
               <span id="tenant-pro-paid-amount-bs" class="text-muted">0.00 Bs</span>
             </div>
             <div class="tenant-pro-summary-row mt-2">
@@ -582,10 +602,10 @@
               <strong class="highlight" id="tenant-pro-remaining-amount">0.00 $</strong>
             </div>
             <div class="tenant-pro-summary-row">
-              <span class="text-muted">Restante (Bs)</span>
+              <span class="text-muted" id="tenant-pro-remaining-bs-label">Restante (Bs)</span>
               <span id="tenant-pro-remaining-amount-bs" class="text-muted">0.00 Bs</span>
             </div>
-            <div class="tenant-pro-note">Tasa referencial: <span id="tenant-pro-dollar-rate">0.00</span> Bs por USD</div>
+            <div class="tenant-pro-note">Tasa referencial: <span id="tenant-pro-dollar-rate">0.00</span> Bs por <span id="tenant-pro-base-currency">USD</span></div>
           </div>
         </div>
       </div>
@@ -712,6 +732,7 @@
 
       return {
         valid: true,
+        cityId: Number(cityId),
         address: parts.join(', '),
       };
     }
@@ -900,7 +921,7 @@
       cartCountElements.forEach(el => {
         el.textContent = totalQty;
       });
-      cartSubtotalElement.textContent = `${subtotal.toFixed(2)} $`;
+      cartSubtotalElement.textContent = `${subtotal.toFixed(2)} ${getBaseCurrencySymbol()}`;
 
       checkoutButton.disabled = cart.length === 0;
 
@@ -911,13 +932,17 @@
       }
 
       cartItemsElement.innerHTML = cart.map((item, index) => {
+        const imageSrc = item.imageSrc || '/assets/img/shopix5.png';
         return `
           <div class="tenant-cart-item-card">
             <div class="d-flex justify-content-between gap-2 align-items-start">
-              <div>
+              <div class="d-flex gap-2">
+                <img src="${imageSrc}" alt="${escapeHtml(item.productName || 'Producto')}" class="tenant-cart-item-thumb">
+                <div>
                 <div class="tenant-cart-item-name">${item.productName}</div>
                 <div class="tenant-cart-item-variant">Variante: ${item.variantSize}</div>
-                <div class="tenant-cart-item-price">${Number(item.price).toFixed(2)} $ c/u</div>
+                <div class="tenant-cart-item-price">${Number(item.price).toFixed(2)} ${getBaseCurrencySymbol()} c/u</div>
+                </div>
               </div>
               <button type="button" class="btn btn-sm btn-outline-danger tenant-cart-remove-btn" data-remove-index="${index}">
                 <i class="bi bi-trash"></i>
@@ -949,6 +974,7 @@
           productId: Number(item.productId),
           productName: item.productName,
           variantSize: item.variantSize,
+          imageSrc: item.imageSrc || null,
           price: Number(item.price),
           qty: Number(item.qty || 1)
         });
@@ -1021,11 +1047,11 @@
 
       cart.forEach((item, idx) => {
         const lineTotal = Number(item.qty) * Number(item.price);
-        lines.push(`${idx + 1}. ${item.productName} (${item.variantSize}) x${item.qty} - ${lineTotal.toFixed(2)} $`);
+        lines.push(`${idx + 1}. ${item.productName} (${item.variantSize}) x${item.qty} - ${lineTotal.toFixed(2)} ${getBaseCurrencySymbol()}`);
       });
 
       lines.push('');
-      lines.push(`Subtotal: ${getSubtotal(cart).toFixed(2)} $`);
+      lines.push(`Subtotal: ${getSubtotal(cart).toFixed(2)} ${getBaseCurrencySymbol()}`);
       lines.push(`Entrega: ${isShipping ? 'Envío' : 'Retiro en tienda'}`);
       if (isShipping) {
         lines.push(`Dirección de envío: ${shippingAddressResult.address}`);
@@ -1040,6 +1066,15 @@
     const authUserKey = 'shopix_ecomm_user';
     let proPaymentMethods = [];
     let proDollarRate = 0;
+    let proEuroRate = 0;
+    let proBaseRate = 0;
+    let proBaseCurrency = 'USD';
+    let proIgtfRate = 0;
+    let proElectronicInvoicingEnabled = false;
+
+    function getBaseCurrencySymbol() {
+      return String(proBaseCurrency).toUpperCase() === 'EUR' ? '€' : '$';
+    }
 
     function getAuthToken() {
       return localStorage.getItem(authTokenKey) || '';
@@ -1076,7 +1111,7 @@
 
     function createPaymentRowHtml(methods, rowId) {
       const options = methods.map(method => `
-        <option value="${method.id}" data-currency-code="${method.currency?.code || ''}" data-currency-name="${method.currency?.name || ''}">${method.name} (${method.currency?.code || method.currency?.name || 'USD'})</option>
+        <option value="${method.id}" data-currency-code="${method.currency?.code || ''}" data-currency-name="${method.currency?.name || ''}">${method.name} (${method.currency?.code || method.currency?.name || proBaseCurrency})</option>
       `).join('');
 
       return `
@@ -1123,12 +1158,39 @@
       return code === 'BS' || code === 'VES' || name.includes('BOL') || name === 'BS' || name === 'VES';
     }
 
-    function toUsdFromMethodAmount(method, amount) {
-      if (!amount || amount <= 0) return 0;
-      if (isBsCurrency(method)) {
-        if (!proDollarRate || proDollarRate <= 0) return 0;
-        return amount / proDollarRate;
+    function normalizePaymentCurrencyCode(currencyCode) {
+      const normalized = String(currencyCode || '').toUpperCase().trim();
+      if (['BS', 'VES', 'VED', 'VEF', 'BOLIVAR', 'BOLIVARES'].includes(normalized)) {
+        return 'BS';
       }
+      return normalized;
+    }
+
+    function toBaseFromMethodAmount(method, amount) {
+      if (!amount || amount <= 0) return 0;
+
+      const methodCurrencyCode = normalizePaymentCurrencyCode(method?.currency?.code || method?.currency?.name || '');
+      const normalizedBaseCurrency = normalizePaymentCurrencyCode(proBaseCurrency || 'USD');
+
+      if (methodCurrencyCode === normalizedBaseCurrency) {
+        return amount;
+      }
+
+      if (isBsCurrency(method)) {
+        if (!proBaseRate || proBaseRate <= 0) return 0;
+        return amount / proBaseRate;
+      }
+
+      if (methodCurrencyCode === 'USD' && normalizedBaseCurrency === 'EUR') {
+        if (proDollarRate <= 0 || proEuroRate <= 0) return 0;
+        return (amount * proDollarRate) / proEuroRate;
+      }
+
+      if (methodCurrencyCode === 'EUR' && normalizedBaseCurrency === 'USD') {
+        if (proEuroRate <= 0 || proDollarRate <= 0) return 0;
+        return (amount * proEuroRate) / proDollarRate;
+      }
+
       return amount;
     }
 
@@ -1239,29 +1301,88 @@
       return `${(Number(bytes || 0) / (1024 * 1024)).toFixed(1)} MB`;
     }
 
+    function calculateProIgtfTotals(paymentRows, totalBaseWithoutIgtf) {
+      const normalizedBaseCurrency = normalizePaymentCurrencyCode(proBaseCurrency || 'USD');
+      const directBasePaymentsTotal = paymentRows.reduce((sum, row) => {
+        const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
+        const method = getMethodById(methodId);
+        const amountRaw = Number(row.querySelector('.pro-payment-amount')?.value || 0);
+        const methodCurrencyCode = normalizePaymentCurrencyCode(method?.currency?.code || method?.currency?.name || '');
+
+        if (amountRaw <= 0 || methodCurrencyCode !== normalizedBaseCurrency) {
+          return sum;
+        }
+
+        return sum + amountRaw;
+      }, 0);
+
+      const shouldApplyIgtf = proElectronicInvoicingEnabled && Number(proIgtfRate || 0) > 0;
+      const igtfAmount = shouldApplyIgtf ? (directBasePaymentsTotal * (Number(proIgtfRate || 0) / 100)) : 0;
+
+      return {
+        shouldApplyIgtf,
+        directBasePaymentsTotal,
+        igtfAmount,
+        totalWithIgtf: totalBaseWithoutIgtf + igtfAmount,
+      };
+    }
+
     function updateProPaymentSummary() {
-      const totalUsd = getSubtotal(getCart());
-      const totalBs = totalUsd * proDollarRate;
+      const baseSymbol = getBaseCurrencySymbol();
+      const totalBaseWithoutIgtf = getSubtotal(getCart());
 
       const paymentRows = Array.from(document.querySelectorAll('[data-pro-payment-row]'));
-      const paidUsd = paymentRows.reduce((sum, row) => {
+      const paidBase = paymentRows.reduce((sum, row) => {
         const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
         const amount = Number(row.querySelector('.pro-payment-amount')?.value || 0);
         const method = getMethodById(methodId);
-        return sum + toUsdFromMethodAmount(method, amount);
+        return sum + toBaseFromMethodAmount(method, amount);
       }, 0);
 
-      const remainingUsd = Math.max(totalUsd - paidUsd, 0);
-      const paidBs = paidUsd * proDollarRate;
-      const remainingBs = remainingUsd * proDollarRate;
+      const igtfTotals = calculateProIgtfTotals(paymentRows, totalBaseWithoutIgtf);
+      const totalBase = igtfTotals.totalWithIgtf;
+      const totalBs = totalBase * proBaseRate;
 
-      document.getElementById('tenant-pro-total-amount').textContent = `${totalUsd.toFixed(2)} $`;
+      const remainingBase = Math.max(totalBase - paidBase, 0);
+      const paidBs = paidBase * proBaseRate;
+      const remainingBs = remainingBase * proBaseRate;
+
+      document.getElementById('tenant-pro-total-amount').textContent = `${totalBase.toFixed(2)} ${baseSymbol}`;
       document.getElementById('tenant-pro-total-amount-bs').textContent = `${totalBs.toFixed(2)} Bs`;
-      document.getElementById('tenant-pro-paid-amount').textContent = `${paidUsd.toFixed(2)} $`;
+      document.getElementById('tenant-pro-paid-amount').textContent = `${paidBase.toFixed(2)} ${baseSymbol}`;
       document.getElementById('tenant-pro-paid-amount-bs').textContent = `${paidBs.toFixed(2)} Bs`;
-      document.getElementById('tenant-pro-remaining-amount').textContent = `${remainingUsd.toFixed(2)} $`;
+      document.getElementById('tenant-pro-remaining-amount').textContent = `${remainingBase.toFixed(2)} ${baseSymbol}`;
       document.getElementById('tenant-pro-remaining-amount-bs').textContent = `${remainingBs.toFixed(2)} Bs`;
-      document.getElementById('tenant-pro-dollar-rate').textContent = `${(proDollarRate || 0).toFixed(2)}`;
+      document.getElementById('tenant-pro-dollar-rate').textContent = `${(proBaseRate || 0).toFixed(2)}`;
+      document.getElementById('tenant-pro-base-currency').textContent = String(proBaseCurrency || 'USD').toUpperCase();
+
+      const igtfRow = document.getElementById('tenant-pro-igtf-row');
+      const igtfBasePaymentsRow = document.getElementById('tenant-pro-igtf-base-payments-row');
+      const igtfBaseCode = document.getElementById('tenant-pro-igtf-base-code');
+      const igtfBasePayments = document.getElementById('tenant-pro-igtf-base-payments');
+      const igtfAmount = document.getElementById('tenant-pro-igtf-amount');
+
+      if (igtfBaseCode) {
+        igtfBaseCode.textContent = String(proBaseCurrency || 'USD').toUpperCase();
+      }
+
+      if (igtfBasePayments) {
+        igtfBasePayments.textContent = `${igtfTotals.directBasePaymentsTotal.toFixed(2)} ${baseSymbol}`;
+      }
+
+      if (igtfAmount) {
+        igtfAmount.textContent = `${igtfTotals.igtfAmount.toFixed(2)} ${baseSymbol}`;
+      }
+
+      if (igtfRow && igtfBasePaymentsRow) {
+        if (igtfTotals.shouldApplyIgtf && igtfTotals.directBasePaymentsTotal > 0) {
+          igtfRow.classList.remove('d-none');
+          igtfBasePaymentsRow.classList.remove('d-none');
+        } else {
+          igtfRow.classList.add('d-none');
+          igtfBasePaymentsRow.classList.add('d-none');
+        }
+      }
     }
 
     function syncTenantProStatusAll() {
@@ -1289,6 +1410,7 @@
       }
 
       const authSection = document.getElementById('tenant-pro-auth-section');
+      const loggedUserBox = document.getElementById('tenant-pro-logged-user');
       const checkoutSection = document.getElementById('tenant-pro-checkout-section');
       const submitOrderButton = document.getElementById('tenant-pro-submit-order');
       const totalAmountElement = document.getElementById('tenant-pro-total-amount');
@@ -1300,9 +1422,21 @@
       const user = getAuthUser();
       const isLogged = !!token && !!user?.id;
 
+      if (loggedUserBox) {
+        if (isLogged) {
+          const safeName = escapeHtml(user?.name || 'Cliente');
+          const safeEmail = escapeHtml(user?.email || '');
+          loggedUserBox.classList.remove('d-none');
+          loggedUserBox.innerHTML = `<strong>Sesión activa:</strong> ${safeName}${safeEmail ? ` (${safeEmail})` : ''}`;
+        } else {
+          loggedUserBox.classList.add('d-none');
+          loggedUserBox.textContent = '';
+        }
+      }
+
       if (authOnly && cart.length === 0) {
         if (modalTitle) {
-          modalTitle.textContent = isLogged ? 'Mi cuenta' : 'Iniciar sesión';
+          modalTitle.textContent = isLogged ? 'Checkout Pro' : 'Iniciar sesión';
         }
 
         if (isLogged) {
@@ -1318,7 +1452,7 @@
         }
 
         paymentRowsContainer.innerHTML = '<p class="tenant-cart-empty">Inicia sesión para consultar tu cuenta o agrega productos al carrito para continuar con el checkout.</p>';
-        totalAmountElement.textContent = '0.00 $';
+        totalAmountElement.textContent = `0.00 ${getBaseCurrencySymbol()}`;
         submitOrderButton.disabled = true;
 
         const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
@@ -1349,14 +1483,19 @@
       const methods = Array.isArray(methodsData.methods) ? methodsData.methods : [];
       proPaymentMethods = methods;
       proDollarRate = Number(methodsData.dollar_rate || 0);
+      proEuroRate = Number(methodsData.euro_rate || 0);
+      proBaseCurrency = String(methodsData.base_currency || 'USD').toUpperCase();
+      proBaseRate = Number(methodsData.base_rate || 0);
+      proIgtfRate = Number(methodsData.igtf_rate || 0);
+      proElectronicInvoicingEnabled = !!methodsData.electronic_invoicing_enabled;
 
       if (methods.length === 0) {
         alert('Esta tienda no tiene métodos de pago activos para checkout.');
         return;
       }
 
-      if (!proDollarRate || proDollarRate <= 0) {
-        alert('La tienda no tiene tasa de dólar configurada. Contacta al comercio.');
+      if (!proBaseRate || proBaseRate <= 0) {
+        alert(`La tienda no tiene tasa configurada para ${proBaseCurrency}. Contacta al comercio.`);
         return;
       }
 
@@ -1413,7 +1552,7 @@
         updateProPaymentSummary();
       };
 
-      totalAmountElement.textContent = `${getSubtotal(cart).toFixed(2)} $`;
+      totalAmountElement.textContent = `${getSubtotal(cart).toFixed(2)} ${getBaseCurrencySymbol()}`;
       updateProPaymentSummary();
 
       if (isLogged) {
@@ -1470,6 +1609,7 @@
       const password = document.getElementById('tenant-pro-register-password').value;
       const password_confirmation = document.getElementById('tenant-pro-register-password-confirmation').value;
       const dni = document.getElementById('tenant-pro-register-dni').value.trim();
+      const phone_number = document.getElementById('tenant-pro-register-phone').value.trim();
 
       const response = await fetch('/api/registerEcomm', {
         method: 'POST',
@@ -1478,7 +1618,7 @@
           'Accept': 'application/json',
           'X-CSRF-TOKEN': csrfToken,
         },
-        body: JSON.stringify({ name, email, password, password_confirmation, dni })
+        body: JSON.stringify({ name, email, password, password_confirmation, dni, phone_number })
       });
 
       const data = await response.json();
@@ -1541,7 +1681,7 @@
         const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
         const amountRaw = Number(row.querySelector('.pro-payment-amount')?.value || 0);
         const method = getMethodById(methodId);
-        const amount = toUsdFromMethodAmount(method, amountRaw);
+        const amount = toBaseFromMethodAmount(method, amountRaw);
         const reference = (row.querySelector('.pro-payment-reference')?.value || '').trim();
         const imageFile = row.querySelector('.pro-payment-reference-image')?.files?.[0] || null;
         const referenceImageData = imageFile ? await fileToDataUrl(imageFile) : null;
@@ -1572,11 +1712,13 @@
         return;
       }
 
-      const totalPaidUsd = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-      const totalOrderUsd = getSubtotal(cart);
-      if (totalPaidUsd + 0.0001 < totalOrderUsd) {
-        const remainingUsd = totalOrderUsd - totalPaidUsd;
-        alert(`Falta por pagar: ${remainingUsd.toFixed(2)} $ / ${(remainingUsd * proDollarRate).toFixed(2)} Bs`);
+      const totalPaidBase = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      const totalOrderBaseWithoutIgtf = getSubtotal(cart);
+      const igtfTotals = calculateProIgtfTotals(paymentRows, totalOrderBaseWithoutIgtf);
+      const totalOrderBase = igtfTotals.totalWithIgtf;
+      if (totalPaidBase + 0.0001 < totalOrderBase) {
+        const remainingBase = totalOrderBase - totalPaidBase;
+        alert(`Falta por pagar: ${remainingBase.toFixed(2)} ${getBaseCurrencySymbol()} / ${(remainingBase * proBaseRate).toFixed(2)} Bs`);
         return;
       }
 
@@ -1601,6 +1743,7 @@
             customer_id: Number(user.id),
             delivery_type: deliveryType,
             delivery_address: deliveryType === 'shipping' ? deliveryAddressResult.address : 'Tienda',
+            delivery_city_id: deliveryType === 'shipping' ? Number(deliveryAddressResult.cityId || 0) : null,
             items,
             payments,
             mark_delivered: false,

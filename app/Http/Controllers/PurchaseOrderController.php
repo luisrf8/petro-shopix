@@ -9,8 +9,11 @@ use App\Models\ProductVariant;
 use App\Models\ProductVariantWarehouseStock;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderDetail;
+use App\Models\PurchaseOrderConsumption;
 use App\Models\Warehouse;
+use App\Models\Tenant;
 use App\Support\ImageStorage;
+use App\Support\TenantCurrency;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -30,7 +33,6 @@ class PurchaseOrderController extends Controller
 
         $productItems = Product::with(['images', 'variants'])
             ->where('tenant_id', $user->tenant_id)
-            ->where('is_active', true)
             ->orderBy('name')
             ->get();
 
@@ -47,7 +49,14 @@ class PurchaseOrderController extends Controller
                 ->get()
             : collect();
 
-        return view('purchase', compact('categories', 'productItems', 'warehouses', 'providers')); // Asegúrate de tener una vista para mostrar las categorías.
+        $tenant = auth()->user()?->tenant;
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
+        $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
+        $dollarRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, 'USD');
+        $euroRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, 'EUR');
+
+        return view('purchase', compact('categories', 'productItems', 'warehouses', 'providers', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs', 'dollarRateToBs', 'euroRateToBs')); // Asegúrate de tener una vista para mostrar las categorías.
     }
 
     public function getVariants(Request $request)
@@ -115,8 +124,13 @@ class PurchaseOrderController extends Controller
     {
         $user = auth()->user();
         $itemsSelected = $request->input('itemsSelected');
+        $entryMode = in_array((string) $request->input('entry_mode'), ['purchase', 'production'], true)
+            ? (string) $request->input('entry_mode')
+            : 'purchase';
         $purchaseDate = $request->input('purchase_date');
         $warehouseId = (int) $request->input('warehouse_id');
+        $tenant = Tenant::query()->find((int) $user->tenant_id);
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
 
         $warehouse = Warehouse::where('tenant_id', $user->tenant_id)
             ->where('is_active', true)
@@ -141,15 +155,23 @@ class PurchaseOrderController extends Controller
             return response()->json(['error' => 'No se enviaron productos válidos.'], 400);
         }
 
+        if ($entryMode === 'production') {
+            return $this->storeProductionEntry($itemsSelected, $user, $warehouse, $purchaseDate, $baseCurrencyCode);
+        }
+
         $groupedData = [];
 
         foreach ($itemsSelected as $item) {
             $variantId = (int) data_get($item, 'variant.id', 0);
             $quantity = (int) data_get($item, 'quantity', 0);
             $price = (float) data_get($item, 'price', 0);
+            $inputCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) data_get($item, 'currency', $baseCurrencyCode));
             $providers = data_get($item, 'providers', []);
 
-            if ($variantId <= 0 || $quantity <= 0 || $price <= 0 || !is_array($providers) || empty($providers)) {
+            $normalizedPriceInBase = (float) TenantCurrency::convertAmount($price, $inputCurrencyCode, $baseCurrencyCode, (int) $user->tenant_id);
+            $inputRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $inputCurrencyCode);
+
+            if ($variantId <= 0 || $quantity <= 0 || $normalizedPriceInBase <= 0 || !is_array($providers) || empty($providers)) {
                 return response()->json(['error' => 'Hay productos con datos incompletos (variante, cantidad, precio o proveedor).'], 422);
             }
 
@@ -194,7 +216,9 @@ class PurchaseOrderController extends Controller
                 $groupedData[$providerName]['details'][] = [
                     'product_variant_id' => $variantId,
                     'quantity' => $quantity,
-                    'price' => $price,
+                    'price' => $normalizedPriceInBase,
+                    'input_currency_code' => $inputCurrencyCode,
+                    'input_exchange_rate' => $inputRateToBs > 0 ? $inputRateToBs : null,
                 ];
             }
         }
@@ -212,6 +236,7 @@ class PurchaseOrderController extends Controller
                     'provider_name' => $orderData['provider_name'] ?? null,
                     'warehouse_id' => $warehouse->id,
                     'date' => $purchaseDate,
+                    'entry_mode' => 'purchase',
                 ];
 
                 if (Schema::hasColumn('purchase_orders', 'tenant_id')) {
@@ -233,6 +258,8 @@ class PurchaseOrderController extends Controller
                         'quantity' => $detail['quantity'],
                         'price' => $detail['price'],
                         'amount' => $detail['price'] * $detail['quantity'],
+                        'input_currency_code' => $detail['input_currency_code'] ?? null,
+                        'input_exchange_rate' => $detail['input_exchange_rate'] ?? null,
                     ];
 
                     if (Schema::hasColumn('purchase_order_detail', 'tenant_id')) {
@@ -269,7 +296,9 @@ class PurchaseOrderController extends Controller
     public function viewOrders()
     {
         $user = auth()->user();
-        $purchaseOrders = PurchaseOrder::with(['warehouse', 'provider', 'detalles', 'detalles.productVariant.product.images'])
+        $tenant = Tenant::query()->find((int) $user->tenant_id);
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $purchaseOrders = PurchaseOrder::with(['warehouse', 'provider', 'detalles', 'detalles.productVariant.product.images', 'consumptions'])
         ->where('tenant_id', $user->tenant_id)
         ->orderBy('date', 'desc')
         ->get();
@@ -278,6 +307,9 @@ class PurchaseOrderController extends Controller
             $order->total_items = $order->detalles->sum('quantity');
             $order->total_amount = $order->detalles->sum('amount');
             $order->total_variants = $order->detalles->count();
+            $order->entry_mode = $order->entry_mode ?: 'purchase';
+            $order->entry_mode_label = $order->entry_mode === 'production' ? 'Producción interna' : 'Compra';
+            $order->consumption_total = (float) $order->consumptions->sum('amount');
             $firstDetail = $order->detalles->first();
             $order->preview_image = $firstDetail
                 && $firstDetail->productVariant
@@ -287,20 +319,212 @@ class PurchaseOrderController extends Controller
                     : asset('assets/img/shopix5.png');
         }
 
-        return view('purchaseOrders', compact('purchaseOrders'));
+        return view('purchaseOrders', compact('purchaseOrders', 'baseCurrencyCode'));
     }
     
     public function showByOrder($id)
     {
         $user = auth()->user();
-        $order = PurchaseOrder::with(['warehouse', 'provider', 'detalles', 'detalles.productVariant', 'detalles.productVariant.product.images'])
+        $tenant = Tenant::query()->find((int) $user->tenant_id);
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $order = PurchaseOrder::with([
+            'warehouse',
+            'provider',
+            'detalles',
+            'detalles.productVariant',
+            'detalles.productVariant.product.images',
+            'consumptions',
+            'consumptions.consumedVariant.product',
+            'consumptions.producedVariant.product',
+        ])
             ->where('tenant_id', $user->tenant_id)
             ->findOrFail($id);
 
         $order->total_items = $order->detalles->sum('quantity');
         $order->total_amount = $order->detalles->sum('amount');
         $order->total_variants = $order->detalles->count();
+        $order->entry_mode = $order->entry_mode ?: 'purchase';
+        $order->entry_mode_label = $order->entry_mode === 'production' ? 'Producción interna' : 'Compra';
+        $order->consumption_total = (float) $order->consumptions->sum('amount');
 
-        return view('orderDetail', compact('order'));
+        return view('orderDetail', compact('order', 'baseCurrencyCode'));
+    }
+
+    private function storeProductionEntry(array $itemsSelected, $user, Warehouse $warehouse, string $purchaseDate, string $baseCurrencyCode)
+    {
+        $productionLines = [];
+        $consumptionByVariant = [];
+
+        foreach ($itemsSelected as $line) {
+            $outputVariantId = (int) data_get($line, 'variant.id', 0);
+            $outputQuantity = (float) data_get($line, 'quantity', 0);
+            $consumptions = data_get($line, 'production_consumptions', []);
+
+            if ($outputVariantId <= 0 || $outputQuantity <= 0 || !is_array($consumptions) || empty($consumptions)) {
+                return response()->json(['error' => 'Cada línea de producción debe tener variante, cantidad y consumibles.'], 422);
+            }
+
+            $outputVariant = ProductVariant::with('product')->find($outputVariantId);
+            if (!$outputVariant || !$outputVariant->product || (int) $outputVariant->product->tenant_id !== (int) $user->tenant_id) {
+                return response()->json(['error' => 'Hay variantes de producto terminado no válidas para esta tienda.'], 422);
+            }
+
+            $lineConsumptions = [];
+            $lineTotalCost = 0.0;
+
+            foreach ($consumptions as $consumption) {
+                $consumedVariantId = (int) data_get($consumption, 'consumed_variant_id', 0);
+                $consumedQty = (float) data_get($consumption, 'quantity', 0);
+                $unitCost = (float) data_get($consumption, 'unit_cost', 0);
+
+                if ($consumedVariantId <= 0 || $consumedQty <= 0 || $unitCost <= 0) {
+                    return response()->json(['error' => 'Cada consumible debe tener variante, cantidad y costo unitario válidos.'], 422);
+                }
+
+                $consumedVariant = ProductVariant::with('product')->find($consumedVariantId);
+                if (!$consumedVariant || !$consumedVariant->product || (int) $consumedVariant->product->tenant_id !== (int) $user->tenant_id) {
+                    return response()->json(['error' => 'Hay consumibles no válidos para esta tienda.'], 422);
+                }
+
+                $consumedAmount = round($consumedQty * $unitCost, 4);
+                $lineTotalCost += $consumedAmount;
+
+                $lineConsumptions[] = [
+                    'produced_variant_id' => $outputVariantId,
+                    'consumed_variant_id' => $consumedVariantId,
+                    'quantity' => $consumedQty,
+                    'unit_cost' => $unitCost,
+                    'amount' => $consumedAmount,
+                ];
+
+                if (!isset($consumptionByVariant[$consumedVariantId])) {
+                    $consumptionByVariant[$consumedVariantId] = 0;
+                }
+                $consumptionByVariant[$consumedVariantId] += $consumedQty;
+            }
+
+            $unitCostOutput = $outputQuantity > 0 ? round($lineTotalCost / $outputQuantity, 4) : 0;
+            if ($unitCostOutput <= 0) {
+                return response()->json(['error' => 'No se pudo calcular el costo unitario del producto terminado.'], 422);
+            }
+
+            $productionLines[] = [
+                'output_variant_id' => $outputVariantId,
+                'output_quantity' => $outputQuantity,
+                'line_total_cost' => round($lineTotalCost, 4),
+                'line_unit_cost' => $unitCostOutput,
+                'consumptions' => $lineConsumptions,
+            ];
+        }
+
+        foreach ($consumptionByVariant as $consumedVariantId => $requiredQty) {
+            $variant = ProductVariant::find($consumedVariantId);
+            if (!$variant || (float) $variant->stock < (float) $requiredQty) {
+                return response()->json([
+                    'error' => 'No hay stock suficiente para los consumibles seleccionados.',
+                    'detail' => 'Variante #' . $consumedVariantId . ' requiere ' . $requiredQty . ' y tiene ' . (float) ($variant->stock ?? 0),
+                ], 422);
+            }
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $productionTotal = round(collect($productionLines)->sum('line_total_cost'), 4);
+
+            $orderPayload = [
+                'provider_id' => null,
+                'provider_name' => 'PRODUCCIÓN INTERNA',
+                'warehouse_id' => $warehouse->id,
+                'date' => $purchaseDate,
+                'entry_mode' => 'production',
+                'production_cost_total' => $productionTotal,
+                'production_notes' => 'Entrada generada por producción interna usando consumibles.',
+            ];
+
+            if (Schema::hasColumn('purchase_orders', 'tenant_id')) {
+                $orderPayload['tenant_id'] = $user->tenant_id;
+            }
+
+            $purchaseOrder = PurchaseOrder::create($orderPayload);
+
+            foreach ($productionLines as $line) {
+                $detailPayload = [
+                    'purchase_order_id' => $purchaseOrder->id,
+                    'product_variant_id' => $line['output_variant_id'],
+                    'quantity' => $line['output_quantity'],
+                    'price' => $line['line_unit_cost'],
+                    'amount' => $line['line_total_cost'],
+                ];
+
+                if (Schema::hasColumn('purchase_order_detail', 'input_currency_code')) {
+                    $detailPayload['input_currency_code'] = $baseCurrencyCode;
+                }
+
+                if (Schema::hasColumn('purchase_order_detail', 'input_exchange_rate')) {
+                    $detailPayload['input_exchange_rate'] = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
+                }
+
+                if (Schema::hasColumn('purchase_order_detail', 'tenant_id')) {
+                    $detailPayload['tenant_id'] = $user->tenant_id;
+                }
+
+                PurchaseOrderDetail::create($detailPayload);
+
+                $outputVariant = ProductVariant::findOrFail($line['output_variant_id']);
+                $outputVariant->stock = (float) $outputVariant->stock + (float) $line['output_quantity'];
+                $outputVariant->save();
+
+                $outputWarehouseStock = ProductVariantWarehouseStock::firstOrNew([
+                    'tenant_id' => $user->tenant_id,
+                    'warehouse_id' => $warehouse->id,
+                    'product_variant_id' => $line['output_variant_id'],
+                ]);
+                $outputWarehouseStock->quantity = (float) ($outputWarehouseStock->quantity ?? 0) + (float) $line['output_quantity'];
+                $outputWarehouseStock->save();
+
+                foreach ($line['consumptions'] as $consumption) {
+                    PurchaseOrderConsumption::create([
+                        'purchase_order_id' => $purchaseOrder->id,
+                        'produced_variant_id' => $consumption['produced_variant_id'],
+                        'consumed_variant_id' => $consumption['consumed_variant_id'],
+                        'quantity' => $consumption['quantity'],
+                        'unit_cost' => $consumption['unit_cost'],
+                        'amount' => $consumption['amount'],
+                        'tenant_id' => $user->tenant_id,
+                    ]);
+
+                    $consumedVariant = ProductVariant::findOrFail($consumption['consumed_variant_id']);
+                    $consumedVariant->stock = (float) $consumedVariant->stock - (float) $consumption['quantity'];
+                    if ((float) $consumedVariant->stock < 0) {
+                        throw new \RuntimeException('El stock del consumible no puede quedar negativo.');
+                    }
+                    $consumedVariant->save();
+
+                    $consumedWarehouseStock = ProductVariantWarehouseStock::firstOrNew([
+                        'tenant_id' => $user->tenant_id,
+                        'warehouse_id' => $warehouse->id,
+                        'product_variant_id' => $consumption['consumed_variant_id'],
+                    ]);
+                    $currentWarehouseQty = (float) ($consumedWarehouseStock->quantity ?? 0);
+                    $nextWarehouseQty = $currentWarehouseQty - (float) $consumption['quantity'];
+                    if ($nextWarehouseQty < 0) {
+                        throw new \RuntimeException('No hay stock suficiente en el almacén seleccionado para los consumibles.');
+                    }
+                    $consumedWarehouseStock->quantity = $nextWarehouseQty;
+                    $consumedWarehouseStock->save();
+                }
+            }
+
+            DB::commit();
+            return response()->json(['message' => 'Entrada por producción registrada correctamente.'], 200);
+        } catch (\Throwable $exception) {
+            DB::rollBack();
+
+            return response()->json([
+                'error' => 'No se pudo registrar la entrada por producción.',
+                'detail' => $exception->getMessage(),
+            ], 500);
+        }
     }
 }

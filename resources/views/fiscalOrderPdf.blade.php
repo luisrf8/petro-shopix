@@ -30,6 +30,18 @@
     </style>
 </head>
 <body>
+@php
+    $orderCurrencyCode = strtoupper(trim((string) ($orderCurrencyCode ?? $order->sale_currency_code ?? ($order->tenant->base_currency ?? 'USD'))));
+    $orderCurrencyCode = in_array($orderCurrencyCode, ['USD', 'EUR', 'VES'], true) ? $orderCurrencyCode : 'USD';
+    $emissionCurrencyCode = strtoupper(trim((string) ($emissionCurrencyCode ?? $orderCurrencyCode)));
+    $emissionCurrencyCode = in_array($emissionCurrencyCode, ['USD', 'EUR', 'VES'], true) ? $emissionCurrencyCode : $orderCurrencyCode;
+    $emissionCurrencySymbol = (string) ($emissionCurrencySymbol ?? ($emissionCurrencyCode === 'EUR' ? '€' : ($emissionCurrencyCode === 'VES' ? 'Bs' : '$')));
+    $emissionConversionFactor = (float) ($emissionConversionFactor ?? 1);
+    $emissionRateToBs = (float) ($emissionRateToBs ?? 0);
+    $displayAmount = function ($value) use ($emissionConversionFactor) {
+        return (float) $value * $emissionConversionFactor;
+    };
+@endphp
 <table width="100%" style="border-collapse: collapse; border: none;">
     <tr>
         <td style="text-align: left; padding: 0; border: none;">
@@ -42,6 +54,7 @@
     <h2>Factura Nro {{ $order->id }}</h2>
     <p><strong>Cliente:</strong> {{ $order->user->name }} | <strong>Teléfono:</strong> {{ $order->user->phone_number ?? 'No registrado' }}</p>
     <p><strong>Dirección:</strong> {{ $order->address }}</p>
+    <p><strong>Moneda de la venta:</strong> {{ $orderCurrencyCode }} | <strong>Moneda de emisión:</strong> {{ $emissionCurrencyCode }}</p>
     <p><strong>Fecha:</strong> {{ $order->date }} | <strong>Estado:</strong> {{ $order->status == 0 ? 'En Proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado') }}</p>
 
     <!-- Detalles de productos -->
@@ -62,8 +75,8 @@
                 <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }} | {{ $detalle->taxes->count() > 0 ? '(G)' : '(E)' }}</td>
                 <td>{{ $detalle->quantity }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
-                <td>${{ number_format($detalle->price, 2) }}</td>
-                <td>${{ number_format($detalle->amount, 2) }}</td>
+                <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($detalle->price), 2) }}</td>
+                <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($detalle->amount), 2) }}</td>
             </tr>
             @endforeach
             <tr>
@@ -71,7 +84,7 @@
                     <td></td>
                     <td></td>
                     <td><strong>Sub Total</strong></td>
-                    <td>${{ number_format($totalOrden, 2) }}</td>
+                    <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($totalOrden), 2) }}</td>
                 </tr>
             @foreach($order->details as $detalle)
                 @foreach($detalle->taxes as $tax)
@@ -80,7 +93,7 @@
                     <td></td>
                     <td>{{ $tax->tax_name }}</td>
                     <td>{{ number_format($tax->tax_rate, 2) }}%</td>
-                    <td>${{ number_format($tax->tax_amount, 2) }}</td>
+                    <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($tax->tax_amount), 2) }}</td>
                 </tr>
             @endforeach
 
@@ -90,7 +103,7 @@
                     <td></td>
                     <td></td>
                     <td><strong>Total</strong></td>
-                    <td>${{ number_format($totalGeneral, 2) }}</td>
+                    <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($totalGeneral), 2) }}</td>
                 </tr>
         </tbody>
     </table>
@@ -104,17 +117,20 @@
 
 
     @php
-        $rateValue = is_object($dollarRate)
-            ? (float) ($dollarRate->rate ?? 0)
-            : (float) $dollarRate;
-        $totalBs = (float) $totalGeneral * $rateValue;
+        $displayTotalGeneral = $displayAmount($totalGeneral);
     @endphp
-
-    <p>
-        Equivalente a {{ number_format($totalBs, 2, ',', '.') }} Bolívares calculados a tasa BCV 
-        ( {{ number_format($rateValue, 2, ',', '.') }} ) del día 
-        {{ \Carbon\Carbon::parse($order->date)->format('d/m/Y') }}
-    </p>
+    @if($emissionCurrencyCode === 'VES')
+        <p>Monto expresado en bolívares (VES).</p>
+    @elseif($emissionRateToBs > 0)
+        @php
+            $totalBs = $displayTotalGeneral * $emissionRateToBs;
+        @endphp
+        <p>
+            Equivalente a {{ number_format($totalBs, 2, ',', '.') }} Bolívares calculados a tasa BCV
+            ( {{ number_format($emissionRateToBs, 2, ',', '.') }} ) del día
+            {{ \Carbon\Carbon::parse($order->date)->format('d/m/Y') }}
+        </p>
+    @endif
 
 
 </body>

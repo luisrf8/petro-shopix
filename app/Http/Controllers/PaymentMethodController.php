@@ -5,11 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\PaymentMethod;
 use App\Models\Currency;
 use App\Models\DollarRate;
+use App\Models\EuroRate;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use App\Support\ImageStorage;
+use App\Support\AuditLogger;
 
 class PaymentMethodController extends Controller
 {
@@ -17,20 +20,25 @@ class PaymentMethodController extends Controller
     {
         $user = auth()->user();
 
-        $currencies = Currency::all();
+        Currency::firstOrCreate(['code' => 'USD'], ['name' => 'Dólar', 'status' => true]);
+        Currency::firstOrCreate(['code' => 'EUR'], ['name' => 'Euro', 'status' => true]);
+
+        $currencies = Currency::orderBy('name')->get();
         $paymentMethods = PaymentMethod::with('currency')
             ->where('tenant_id', $user->tenant_id)
             ->get();
 
         // Obtener el último valor de la tasa del dólar
         $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
+        $euroRate = EuroRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
+        $baseCurrencyCode = strtoupper((string) optional(Tenant::find($user->tenant_id))->base_currency ?: 'USD');
 
         // Agrupar métodos de pago por moneda
         $groupedPaymentMethods = $paymentMethods->groupBy(function ($paymentMethod) {
             return $paymentMethod->currency->name; // Agrupar por el nombre de la moneda
         });
 
-        return view('paymentMethods', compact('currencies', 'groupedPaymentMethods', 'dollarRate'));
+        return view('paymentMethods', compact('currencies', 'groupedPaymentMethods', 'dollarRate', 'euroRate', 'baseCurrencyCode'));
     }
     // Crear un nuevo método de pago
     public function create(Request $request)
@@ -224,6 +232,7 @@ class PaymentMethodController extends Controller
         }
 
         $rate = DollarRate::where('tenant_id', $request->tenant_id)->first();
+        $previousRate = $rate ? (float) $rate->rate : null;
 
         if (!$rate) {
             $rate = new DollarRate();
@@ -233,6 +242,12 @@ class PaymentMethodController extends Controller
         $rate->rate = $request->rate;
         $rate->date = Carbon::now()->format('Y-m-d');
         $rate->save();
+
+        AuditLogger::logEvent('paymentMethods', 'DOLLAR_RATE_UPDATED', 'Actualización de tasa del dólar.', (int) (auth()->id() ?? 0), [
+            'tenant_id' => (int) $request->tenant_id,
+            'previous_rate' => $previousRate,
+            'new_rate' => (float) $rate->rate,
+        ]);
 
         return response()->json([
             'message' => 'Tasa del dólar actualizada exitosamente',
@@ -244,6 +259,70 @@ class PaymentMethodController extends Controller
     {
         $dollarRate = DollarRate::latest('created_at')->first();
         return response()->json(['message' => 'Tasa del dólar obtenida exitosamente', 'data' => $dollarRate], 201);
+    }
+
+    public function updateEuroRate(Request $request)
+    {
+        DB::raw("SET @user_id = " . auth()->id());
+
+        $validator = Validator::make($request->all(), [
+            'rate' => 'required|numeric',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 400);
+        }
+
+        $rate = EuroRate::where('tenant_id', $request->tenant_id)->first();
+        $previousRate = $rate ? (float) $rate->rate : null;
+
+        if (!$rate) {
+            $rate = new EuroRate();
+            $rate->tenant_id = $request->tenant_id;
+        }
+
+        $rate->rate = $request->rate;
+        $rate->date = Carbon::now()->format('Y-m-d');
+        $rate->save();
+
+        AuditLogger::logEvent('paymentMethods', 'EURO_RATE_UPDATED', 'Actualización de tasa del euro.', (int) (auth()->id() ?? 0), [
+            'tenant_id' => (int) $request->tenant_id,
+            'previous_rate' => $previousRate,
+            'new_rate' => (float) $rate->rate,
+        ]);
+
+        return response()->json([
+            'message' => 'Tasa del euro actualizada exitosamente',
+            'data' => $rate
+        ], 201);
+    }
+
+    public function updateTenantBaseCurrency(Request $request)
+    {
+        DB::raw("SET @user_id = " . auth()->id());
+
+        $validated = $request->validate([
+            'tenant_id' => 'required|integer|exists:tenants,id',
+            'base_currency' => 'required|string|in:USD,EUR',
+        ]);
+
+        $tenant = Tenant::findOrFail((int) $validated['tenant_id']);
+        $previousBaseCurrency = strtoupper((string) ($tenant->base_currency ?? 'USD'));
+        $tenant->base_currency = strtoupper((string) $validated['base_currency']);
+        $tenant->save();
+
+        AuditLogger::logEvent('paymentMethods', 'BASE_CURRENCY_UPDATED', 'Actualización de moneda madre de la tienda.', (int) (auth()->id() ?? 0), [
+            'tenant_id' => (int) $tenant->id,
+            'previous_base_currency' => $previousBaseCurrency,
+            'new_base_currency' => (string) $tenant->base_currency,
+        ]);
+
+        return response()->json([
+            'message' => 'Moneda madre actualizada exitosamente',
+            'data' => [
+                'base_currency' => $tenant->base_currency,
+            ],
+        ], 200);
     }
     // Función para eliminar una imagen
     public function removeQrImage($methodId)

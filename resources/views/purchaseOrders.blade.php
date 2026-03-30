@@ -29,10 +29,11 @@
                         <th># Orden</th>
                         <th>Fecha</th>
                         <th>Almacén</th>
+                        <th>Tipo</th>
                         <th>Proveedor</th>
                         <th># Variantes</th>
                         <th># Productos</th>
-                        <th>Total (USD)</th>
+                        <th>Total ({{ $baseCurrencyCode ?? 'USD' }})</th>
                         <th>Acciones</th>
                       </tr>
                     </thead>
@@ -45,6 +46,7 @@
                           <td>{{ $order->id }}</td>
                           <td>{{ $order->date }}</td>
                           <td>{{ $order->warehouse->name ?? 'N/A' }}</td>
+                          <td>{{ $order->entry_mode_label ?? 'Compra' }}</td>
                           <td>{{ $order->provider_display_name }}</td>
                           <td>{{ $order->total_variants }}</td>
                           <td>{{ $order->total_items }}</td>

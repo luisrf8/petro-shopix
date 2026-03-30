@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Provider;
 use Illuminate\Http\Request;
+use App\Models\Tenant;
+use App\Support\TenantCurrency;
 
 class ProviderController extends Controller
 {
@@ -11,6 +13,8 @@ class ProviderController extends Controller
     {
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if($tenantId <= 0, 403);
+        $tenant = Tenant::query()->find($tenantId);
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
 
         $search = trim((string) $request->query('search', ''));
         $status = trim((string) $request->query('status', 'active'));
@@ -33,7 +37,7 @@ class ProviderController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        return view('providers.index', compact('providers', 'search', 'status'));
+        return view('providers.index', compact('providers', 'search', 'status', 'baseCurrencyCode'));
     }
 
     public function store(Request $request)
@@ -46,6 +50,7 @@ class ProviderController extends Controller
             'contact_name' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone_number' => 'nullable|string|max:30',
+            'payment_currency_code' => 'nullable|string|in:USD,EUR,BS,VES',
             'notes' => 'nullable|string|max:1000',
             'is_active' => 'nullable|boolean',
         ]);
@@ -59,6 +64,7 @@ class ProviderController extends Controller
                 'contact_name' => $validated['contact_name'] ?? null,
                 'email' => $validated['email'] ?? null,
                 'phone_number' => $validated['phone_number'] ?? null,
+                'payment_currency_code' => TenantCurrency::normalizeCurrencyCode((string) ($validated['payment_currency_code'] ?? 'USD')),
                 'notes' => $validated['notes'] ?? null,
                 'is_active' => (bool) ($validated['is_active'] ?? true),
             ]
@@ -77,6 +83,7 @@ class ProviderController extends Controller
             'contact_name' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone_number' => 'nullable|string|max:30',
+            'payment_currency_code' => 'nullable|string|in:USD,EUR,BS,VES',
             'notes' => 'nullable|string|max:1000',
             'is_active' => 'nullable|boolean',
         ]);
@@ -86,6 +93,7 @@ class ProviderController extends Controller
             'contact_name' => $validated['contact_name'] ?? null,
             'email' => $validated['email'] ?? null,
             'phone_number' => $validated['phone_number'] ?? null,
+            'payment_currency_code' => TenantCurrency::normalizeCurrencyCode((string) ($validated['payment_currency_code'] ?? ($provider->payment_currency_code ?? 'USD'))),
             'notes' => $validated['notes'] ?? null,
             'is_active' => (bool) ($validated['is_active'] ?? false),
         ]);

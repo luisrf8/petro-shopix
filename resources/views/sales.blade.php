@@ -111,7 +111,7 @@
         <div class="row g-4">
         <div class="col-12 col-xl-8">
             <h1>Flujo de Venta</h1>
-            <span id="dollarRate" data-rate="{{ $dollarRate}}"></span>
+            <span id="baseRate" data-rate="{{ number_format($baseRateToBs ?? 0, 2, '.', '') }}"></span>
             <span id="customerId" data-rate="{{ $customerId}}"></span>
             <form id="purchaseForm">
                 @csrf
@@ -237,7 +237,7 @@
                                                                     <div class="flex-grow-1">
                                                                         <h6 class="mb-1">{{ $package->name }}</h6>
                                                                         <p class="text-sm text-muted mb-0">{{ $package->items->count() }} materiales</p>
-                                                                        <p class="text-sm fw-bold mb-0">{{ number_format($packageTotal, 2) }} USD</p>
+                                                                        <p class="text-sm fw-bold mb-0">{{ number_format($packageTotal, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</p>
                                                                         @if(!is_null($package->package_price))
                                                                             <p class="text-xs text-dark mb-0">Precio fijo combo</p>
                                                                         @endif
@@ -300,11 +300,11 @@
                                                     <span>
                                                         {{$variant->size}} |
                                                         @if($productDiscount > 0 || $variantDiscount > 0)
-                                                            <span class="text-decoration-line-through text-muted">{{ number_format((float) $variant->price, 2) }} USD</span>
-                                                            <span class="fw-semibold">{{ number_format($effectiveVariantPrice, 2) }} USD</span>
+                                                            <span class="text-decoration-line-through text-muted">{{ number_format((float) $variant->price, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</span>
+                                                            <span class="fw-semibold">{{ number_format($effectiveVariantPrice, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</span>
                                                             <small class="text-success">(-{{ number_format($productDiscount + $variantDiscount, 2) }}%)</small>
                                                         @else
-                                                            {{ number_format((float) $variant->price, 2) }} USD
+                                                            {{ number_format((float) $variant->price, 2) }} {{ $baseCurrencyCode ?? 'USD' }}
                                                         @endif
                                                         | Stock: {{ $variant->stock }}
                                                     </span>
@@ -326,10 +326,10 @@
                 <div id="step2" class="step d-none">
                     <h4>Paso 2: Selecciona Métodos de Pago</h4>
                     <div id="totalAmountDisplay" class="mt-3">
-                        <strong>Total a pagar: </strong><span id="totalAmountValue">0.00</span>$
+                        <strong>Total a pagar: </strong><span id="totalAmountValue">0.00</span>{{ $baseCurrencySymbol ?? '$' }}
                     </div>
                     <div class="">
-                        <strong>Tasa BCV: </strong><span id="dollarRate" data-rate="{{ number_format($dollarRate->rate, 2, '.', '') }}">{{ number_format($dollarRate->rate, 2) }} Bs.</span>
+                        <strong>Tasa BCV: </strong><span id="baseRateDisplay" data-rate="{{ number_format($baseRateToBs ?? 0, 2, '.', '') }}">{{ number_format($baseRateToBs ?? 0, 2) }} Bs.</span>
                     </div>
                     <div class="">
                         <strong>Total a pagar: </strong><span id="totalAmountBsValue">0.00</span>Bs 
@@ -346,9 +346,13 @@
                             }
                         @endphp
 
-                        @if($igtfTax)
+                        @if($igtfTax && (bool) ($tenant->electronic_invoicing_enabled ?? false))
                             <strong>
-                                Si el método de pago seleccionado es dólares (USD) se aplicará el impuesto del IGTF del {{ $igtfTax->rate }}%
+                                Si el método de pago seleccionado es en {{ $baseCurrencyCode ?? 'USD' }} se aplicará el impuesto del IGTF del {{ $igtfTax->rate }}%
+                            </strong>
+                        @elseif($igtfTax)
+                            <strong>
+                                La facturación digital está desactivada en la tienda, por lo tanto no se aplica IGTF.
                             </strong>
                         @endif
                     </div>
@@ -413,7 +417,7 @@
                     </div>
 
                     <div id="paymentSummary" class="mt-3">
-                        <strong>Total ingresado: </strong> $ <span id="totalPaid">0.00</span><br>
+                        <strong>Total ingresado: </strong> {{ $baseCurrencySymbol ?? '$' }} <span id="totalPaid">0.00</span><br>
                         <span class="text-danger paymentMessage"></span>
                     </div>
                     <div id="paymentsContainer" class="mt-3">
@@ -437,11 +441,25 @@
                         <div class="d-flex gap-4 flex-wrap mb-2">
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="create_new_customer" id="create_customer_no" value="no" checked>
-                                <label class="form-check-label" for="create_customer_no">No, usar cliente actual</label>
+                                <label class="form-check-label" for="create_customer_no">No, usar cliente existente</label>
                             </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="create_new_customer" id="create_customer_yes" value="yes">
                                 <label class="form-check-label" for="create_customer_yes">Sí, crear nuevo cliente</label>
+                            </div>
+                        </div>
+
+                        <div id="existingCustomerForm" class="row g-2">
+                            <div class="col-12">
+                                <label for="existingCustomerSelect" class="form-label mb-1">Selecciona el cliente existente</label>
+                                <select id="existingCustomerSelect" class="form-control border border-1 p-2 bg-white">
+                                    <option value="">Selecciona un cliente</option>
+                                    @foreach(($existingCustomersForSale ?? collect()) as $customerOption)
+                                        <option value="{{ $customerOption->id }}">
+                                            {{ $customerOption->name }}{{ $customerOption->email ? ' - ' . $customerOption->email : '' }}
+                                        </option>
+                                    @endforeach
+                                </select>
                             </div>
                         </div>
 
@@ -461,6 +479,9 @@
                             <div class="col-12 col-md-6">
                                 <label for="newCustomerDni" class="form-label mb-1">DNI</label>
                                 <input type="text" id="newCustomerDni" class="form-control border border-1 p-2 bg-white" placeholder="Documento de identidad">
+                            </div>
+                            <div class="col-12">
+                                <small class="text-muted">Al crear cliente nuevo se asigna contraseña temporal <strong>12345678</strong> para que el cliente la cambie luego desde su cuenta en la landing.</small>
                             </div>
                         </div>
                     </div>
@@ -565,13 +586,13 @@
                 <div class="offcanvas-body p-3 p-xl-4">
                     <ul id="cartList" class="list-group gap-1"></ul>
                     <div class="mt-3">
-                        <strong>Sub Total:</strong> $<span id="cartSubTotal">0.00</span>
+                        <strong>Sub Total:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="cartSubTotal">0.00</span>
                     </div>
                     <div class="mt-3 igtf-class" style="display: none;">
-                        <strong>Total sin IGTF:</strong> $<span id="cartTotalIGTF">0.00</span>
+                        <strong>Total sin IGTF:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="cartTotalIGTF">0.00</span>
                     </div>
                     <div class="mt-3">
-                        <strong>Total:</strong> $<span id="cartTotal">0.00</span>
+                        <strong>Total:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="cartTotal">0.00</span>
                     </div>
                     <div class="mt-3">
                         <strong>Sub Total Bs:</strong>Bs<span id="cartSubTotalBs">0.00</span>
@@ -608,7 +629,7 @@
                     <div>
                         <h5 id="modalProductName"></h5>
                         <p id="modalProductDescription"></p>
-                        <p><strong>Precio:</strong> $<span id="modalProductPrice"></span></p>
+                        <p><strong>Precio:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="modalProductPrice"></span></p>
                         <p><strong>Stock:</strong> <span id="modalProductStock"></span></p>
                         <p><strong>Variante:</strong> <span id="modalProductSize"></span></p>
                     </div>
@@ -671,12 +692,17 @@
         let qrScannerCameraId = null;
         const igtfTax = @json($taxes->firstWhere('name', 'IGTF'));
 
-        const dollar = @json($dollarRate);
-        const dollarRate = Number(dollar.rate);
+        const baseCurrencyCode = @json($baseCurrencyCode ?? 'USD');
+        const normalizedBaseCurrencyCode = String(baseCurrencyCode || 'USD').toUpperCase();
+        const baseCurrencySymbol = @json($baseCurrencySymbol ?? '$');
+        const baseRateToBs = Number(@json($baseRateToBs ?? 0));
+        const dollarRateToBs = Number(@json($dollarRate->rate ?? 0));
+        const euroRateToBs = Number(@json($euroRate->rate ?? 0));
         const tenantElectronicInvoicingEnabled = @json((bool) ($tenant->electronic_invoicing_enabled ?? false));
+        const existingCustomersForSale = @json(($existingCustomersForSale ?? collect())->values());
         
         const authUser = @json($authUser);
-        const customerId = Number(authUser?.id || 0);
+        let selectedExistingCustomerId = Number(existingCustomersForSale?.[0]?.id || 0);
         @php
             $materialPackagesPayload = ($materialPackages ?? collect())->map(function ($package) {
                 return [
@@ -713,6 +739,38 @@
 
         function calculateTaxRateFromTaxes(taxes) {
             return (taxes || []).reduce((sum, tax) => sum + (parseFloat(tax.rate) || 0), 0);
+        }
+
+        function isBolivarCurrencyCode(currencyCode) {
+            const normalized = String(currencyCode || '').toUpperCase().trim();
+            return ['BS', 'VES', 'VED', 'VEF', 'BOLIVAR', 'BOLIVARES'].includes(normalized);
+        }
+
+        function convertAmountToBaseCurrency(amount, currency) {
+            const value = Number(amount || 0);
+            const sourceCurrency = String(currency || '').toUpperCase().trim();
+
+            if (!Number.isFinite(value) || value <= 0) {
+                return 0;
+            }
+
+            if (sourceCurrency === normalizedBaseCurrencyCode) {
+                return value;
+            }
+
+            if (isBolivarCurrencyCode(sourceCurrency)) {
+                return baseRateToBs > 0 ? value / baseRateToBs : 0;
+            }
+
+            if (sourceCurrency === 'USD' && normalizedBaseCurrencyCode === 'EUR') {
+                return (dollarRateToBs > 0 && euroRateToBs > 0) ? (value * dollarRateToBs) / euroRateToBs : 0;
+            }
+
+            if (sourceCurrency === 'EUR' && normalizedBaseCurrencyCode === 'USD') {
+                return (euroRateToBs > 0 && dollarRateToBs > 0) ? (value * euroRateToBs) / dollarRateToBs : 0;
+            }
+
+            return value;
         }
 
         function addMaterialPackageToSale(packageId) {
@@ -919,12 +977,12 @@ function updateQuantity(id, newQty) {
                 const textDiv = document.createElement('div');
                 textDiv.innerHTML = `
                     <strong>${item.productName} ${item.productSize}</strong><br>
-                    Subtotal: ${(item.price * item.quantity).toFixed(2)} USD
+                    Subtotal: ${(item.price * item.quantity).toFixed(2)} ${baseCurrencyCode}
                     <br>
                     Impuestos:<br>
                     ${item.taxes.map(tax => `• ${tax.name} (${parseFloat(tax.rate)}%)`).join('<br>')}
                     <br>
-                    <strong>Total con Impuestos: ${(item.totalPrice * item.quantity).toFixed(2)} USD</strong>
+                    <strong>Total con Impuestos: ${(item.totalPrice * item.quantity).toFixed(2)} ${baseCurrencyCode}</strong>
                 `;
 
 
@@ -972,20 +1030,16 @@ function updateQuantity(id, newQty) {
             if (adminCartCount) {
                 adminCartCount.textContent = cartTotalQty;
             }
-            // Obtener la tasa del dólar desde el DOM
-            const dollar = @json($dollarRate);
-            const dollarRate = Number(dollar.rate);
-
             const taxesContainer = document.getElementById('taxesContainer');
 
-            const { totalUsd, tax } = calculateUsdTax();
+            const { totalBaseCurrency, tax } = calculateIgtfTax();
 
             taxesContainer.innerHTML = `
                 <div class="mt-3 igtf-class" style="display: none;">
-                    <strong>Total Pagado en USD:</strong> $${totalUsd.toFixed(2)}
+                    <strong>Total Pagado en ${baseCurrencyCode}:</strong> ${baseCurrencySymbol}${totalBaseCurrency.toFixed(2)}
                 </div>
                 <div class="mt-1 text-danger igtf-class" style="display: none;">
-                    <strong>Impuesto 3% por pago en USD:</strong> $${tax.toFixed(2)}
+                    <strong>Impuesto IGTF:</strong> ${baseCurrencySymbol}${tax.toFixed(2)}
                 </div>
             `;
             
@@ -993,7 +1047,7 @@ function updateQuantity(id, newQty) {
                 return acc + (item.totalPrice * item.quantity);
             }, 0);
 
-            if(igtfTax && totalUsd > 0) {
+            if(isIgtfEnabledForSale() && totalBaseCurrency > 0) {
                 document.querySelectorAll('.igtf-class').forEach(el => el.style.display = 'block');
             } else {
                 document.querySelectorAll('.igtf-class').forEach(el => el.style.display = 'none');
@@ -1004,11 +1058,11 @@ function updateQuantity(id, newQty) {
             console.log("Total sin IGTF:", totalSinIGTF);
             cartTotal.textContent = totalAmount.toFixed(2); 
             cartSubTotal.textContent = subTotalAmount.toFixed(2);
-            cartTotalBs.textContent = (totalAmount * dollarRate ).toFixed(2); 
-            cartSubTotalBs.textContent = (subTotalAmount * dollarRate ).toFixed(2);
+            cartTotalBs.textContent = (totalAmount * baseRateToBs ).toFixed(2); 
+            cartSubTotalBs.textContent = (subTotalAmount * baseRateToBs ).toFixed(2);
             cartTotalIGTF.textContent = totalSinIGTF.toFixed(2);
             totalAmountValue.textContent = totalAmount.toFixed(2); // Asegúrate de mostrar un número válido
-            totalAmountBsValue.textContent = (totalAmount * dollarRate ).toFixed(2); // Asegúrate de mostrar un número válido
+            totalAmountBsValue.textContent = (totalAmount * baseRateToBs ).toFixed(2); // Asegúrate de mostrar un número válido
             toStep2Btn.disabled = selectedItems.length === 0;
         }
 
@@ -1594,18 +1648,10 @@ function updateQuantity(id, newQty) {
             const currency = input.dataset.currency;
             const payment = payments.find(payment => payment.methodId === String(methodId) && payment.entryId === entryId);
 
-            const dollar = @json($dollarRate);
-            const dollarRate = Number(dollar.rate);
-
             if (payment) {
                 if (input.classList.contains('payment-input')) {
-                    let amount = parseFloat(input.value) || 0;
-
-                    if (currency === 'BS') {
-                        amount = amount / dollarRate;
-                    }
-
-                    payment.amount = amount;
+                    const enteredAmount = parseFloat(input.value) || 0;
+                    payment.amount = convertAmountToBaseCurrency(enteredAmount, currency);
                 } else if (input.classList.contains('payment-reference-input')) {
                     payment.reference = input.value;
                 }
@@ -1615,23 +1661,34 @@ function updateQuantity(id, newQty) {
             validatePaymentDetails();
         }
 
-        function getUsdPaymentsTotal() {
-            let totalUsd = 0;
+        function getBaseCurrencyPaymentsTotal() {
+            let totalBaseCurrency = 0;
 
             payments.forEach(p => {
-                if (p.currency === 'USD') {
-                    totalUsd += Number(p.amount) || 0;
+                if (String(p.currency || '').toUpperCase().trim() === normalizedBaseCurrencyCode) {
+                    totalBaseCurrency += Number(p.amount) || 0;
                 }
             });
 
-            return totalUsd;
+            return totalBaseCurrency;
         }
 
-        function calculateUsdTax() {
-            const totalUsd = getUsdPaymentsTotal();
-            const tax = totalUsd * 0.03; // 3%
+        function isIgtfEnabledForSale() {
+            return tenantElectronicInvoicingEnabled && Number(igtfTax?.rate || 0) > 0;
+        }
+
+        function calculateIgtfTax() {
+            const totalBaseCurrency = getBaseCurrencyPaymentsTotal();
+            if (!isIgtfEnabledForSale()) {
+                return {
+                    totalBaseCurrency,
+                    tax: 0,
+                };
+            }
+            const igtfRate = Number(igtfTax?.rate || 0) / 100;
+            const tax = totalBaseCurrency * igtfRate;
             return {
-                totalUsd,
+                totalBaseCurrency,
                 tax
             };
         }
@@ -1713,6 +1770,7 @@ function updateQuantity(id, newQty) {
                 valid: true,
                 message: '',
                 address: parts.join(', '),
+                cityId: Number(cityId),
             };
         }
 
@@ -1724,14 +1782,14 @@ function updateQuantity(id, newQty) {
             const saleDocumentMode = document.querySelector('input[name="sale_document_mode"]:checked')?.value || 'delivery_note';
             const saleDocumentModeLabel = saleDocumentMode === 'electronic_invoice' ? 'Facturación digital' : 'Nota de entrega';
             const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
+            const existingCustomerSelect = document.getElementById('existingCustomerSelect');
+            const selectedCustomerOption = existingCustomerSelect?.options?.[existingCustomerSelect.selectedIndex] || null;
+            const selectedCustomerLabel = (selectedCustomerOption?.textContent || '').trim();
             const newCustomerName = (document.getElementById('newCustomerName')?.value || '').trim();
             const newCustomerEmail = (document.getElementById('newCustomerEmail')?.value || '').trim();
             const newCustomerPhone = (document.getElementById('newCustomerPhone')?.value || '').trim();
             const newCustomerDni = (document.getElementById('newCustomerDni')?.value || '').trim();
             
-            const dollar = @json($dollarRate);
-            const dollarRate = Number(dollar.rate);
-
             container.innerHTML = ''; // Limpiar resumen anterior
 
             // Resumen de items
@@ -1742,7 +1800,7 @@ function updateQuantity(id, newQty) {
             const itemList = document.createElement('ul');
             selectedItems.forEach(item => {
                 const li = document.createElement('li');
-                li.innerText = `${item.productName} - Variante: ${item.productSize} - Cantidad: ${item.quantity} - Subtotal: $${(item.price * item.quantity).toFixed(2)}`;
+                li.innerText = `${item.productName} - Variante: ${item.productSize} - Cantidad: ${item.quantity} - Subtotal: ${baseCurrencySymbol}${(item.price * item.quantity).toFixed(2)}`;
                 itemList.appendChild(li);
             });
             container.appendChild(itemList);
@@ -1750,13 +1808,13 @@ function updateQuantity(id, newQty) {
 
             // Total
             const totalDiv = document.createElement('p');
-            totalDiv.innerHTML = `<strong>Total a pagar:</strong> $${totalAmount.toFixed(2)}`;
+            totalDiv.innerHTML = `<strong>Total a pagar:</strong> ${baseCurrencySymbol}${totalAmount.toFixed(2)}`;
             container.appendChild(totalDiv);
 
             // Total BS
-            console.log("dollarRate", dollarRate)
+            console.log("baseRateToBs", baseRateToBs)
             const totalDivBs = document.createElement('p');
-            totalDivBs.innerHTML = `<strong>Total a pagar Bs:</strong> Bs${(totalAmount * dollarRate).toFixed(2)}`;
+            totalDivBs.innerHTML = `<strong>Total a pagar Bs:</strong> Bs${(totalAmount * baseRateToBs).toFixed(2)}`;
             container.appendChild(totalDivBs);
 
             const deliveryDiv = document.createElement('p');
@@ -1768,7 +1826,7 @@ function updateQuantity(id, newQty) {
             container.appendChild(addressDiv);
 
             const customerDiv = document.createElement('p');
-            customerDiv.innerHTML = `<strong>Cliente:</strong> ${shouldCreateNewCustomer ? 'Nuevo cliente' : 'Cliente actual'}`;
+            customerDiv.innerHTML = `<strong>Cliente:</strong> ${shouldCreateNewCustomer ? 'Nuevo cliente' : (selectedCustomerLabel || 'Cliente existente no seleccionado')}`;
             container.appendChild(customerDiv);
 
             const documentModeDiv = document.createElement('p');
@@ -1821,7 +1879,7 @@ function updateQuantity(id, newQty) {
                     }
 
                     const li = document.createElement('li');
-                    li.innerText = `${payment.methodName} (${payment.currency}) - Monto: $${amount.toFixed(2)} - Referencia: ${reference}`;
+                    li.innerText = `${payment.methodName} (${payment.currency}) - Monto: ${baseCurrencySymbol}${amount.toFixed(2)} - Referencia: ${reference}`;
                     paymentList.appendChild(li);
                 });
                 if (paymentList.children.length > 0) {
@@ -1851,7 +1909,7 @@ function updateQuantity(id, newQty) {
 
                 paymentDiv.innerHTML = `
                     <strong>Método:</strong> ${payment.methodName} (${payment.currency})<br>
-                    <strong>Monto:</strong> $${amount.toFixed(2)} <br>
+                    <strong>Monto:</strong> ${baseCurrencySymbol}${amount.toFixed(2)} <br>
                     <strong>Referencia:</strong> ${reference} <br>
                     <hr>
                 `;
@@ -1892,12 +1950,12 @@ function updateQuantity(id, newQty) {
                 disableStep3 = true;
             } else if (totalPaid < totalAmount) {
                 const remaining = (totalAmount - totalPaid).toFixed(2);
-                messageText = `Falta por pagar: $${remaining} / BS${(remaining * dollarRate).toFixed(2)}`;
+                messageText = `Falta por pagar: ${baseCurrencySymbol}${remaining} / BS${(remaining * baseRateToBs).toFixed(2)}`;
                 messageClass = 'text-danger';
                 disableStep3 = true;
             } else if (totalPaid > totalAmount) {
                 const change = (totalPaid - totalAmount).toFixed(2);
-                messageText = `Debe entregar vuelto: $${change} / BS${(change * dollarRate).toFixed(2)}`;
+                messageText = `Debe entregar vuelto: ${baseCurrencySymbol}${change} / BS${(change * baseRateToBs).toFixed(2)}`;
                 messageClass = 'text-warning';
                 disableStep3 = false;
             } else {
@@ -1963,10 +2021,17 @@ function updateQuantity(id, newQty) {
 
         function updateCreateCustomerVisibility() {
             const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
-            const form = document.getElementById('newCustomerForm');
-            if (!form) return;
+            const newCustomerForm = document.getElementById('newCustomerForm');
+            const existingCustomerForm = document.getElementById('existingCustomerForm');
+            if (!newCustomerForm || !existingCustomerForm) return;
 
-            form.classList.toggle('d-none', !shouldCreateNewCustomer);
+            newCustomerForm.classList.toggle('d-none', !shouldCreateNewCustomer);
+            existingCustomerForm.classList.toggle('d-none', shouldCreateNewCustomer);
+
+            if (!shouldCreateNewCustomer) {
+                const existingCustomerSelect = document.getElementById('existingCustomerSelect');
+                selectedExistingCustomerId = Number(existingCustomerSelect?.value || 0);
+            }
 
             if (!document.getElementById('step3').classList.contains('d-none')) {
                 renderSummary();
@@ -2051,6 +2116,21 @@ function updateQuantity(id, newQty) {
             });
         });
 
+        document.getElementById('existingCustomerSelect')?.addEventListener('change', function () {
+            selectedExistingCustomerId = Number(this.value || 0);
+            if (!document.getElementById('step3').classList.contains('d-none')) {
+                renderSummary();
+            }
+        });
+
+        if (document.getElementById('existingCustomerSelect') && existingCustomersForSale.length > 0) {
+            const existingCustomerSelect = document.getElementById('existingCustomerSelect');
+            if (existingCustomerSelect && !existingCustomerSelect.value) {
+                existingCustomerSelect.value = String(existingCustomersForSale[0].id);
+                selectedExistingCustomerId = Number(existingCustomersForSale[0].id || 0);
+            }
+        }
+
         updateCreateCustomerVisibility();
         
         document.getElementById('confirmPurchase').addEventListener('click', function () {
@@ -2103,18 +2183,25 @@ function updateQuantity(id, newQty) {
             button.innerHTML = originalText;
             return;
         }
+    } else if (!selectedExistingCustomerId) {
+        alert('Debes seleccionar un cliente existente para registrar la venta.');
+        button.disabled = false;
+        button.innerHTML = originalText;
+        return;
     }
 
     const validPayments = payments.filter(payment => Number(payment.amount || 0) > 0);
 
     const summary = {
-        customerId: shouldCreateNewCustomer ? null : customerId,
+        customerId: shouldCreateNewCustomer ? null : { id: selectedExistingCustomerId },
+        customer_existing_id: shouldCreateNewCustomer ? null : selectedExistingCustomerId,
         items: selectedItems,
         payments: validPayments,
         tenant_id: tenantId,
-        dollarRate: dollarRate,
+        dollarRate: baseRateToBs,
         delivery_type: deliveryType,
         delivery_address: deliveryType === 'shipping' ? deliveryAddressData.address : 'Tienda',
+        delivery_city_id: deliveryType === 'shipping' ? Number(deliveryAddressData.cityId || 0) : null,
         create_new_customer: shouldCreateNewCustomer,
         customer_new: shouldCreateNewCustomer
             ? {
@@ -2152,7 +2239,12 @@ function updateQuantity(id, newQty) {
             throw new Error(payload.message || payload.error || 'Error al confirmar la compra.');
         })
         .then(data => {
-            alert(data.message || 'Compra confirmada con éxito.');
+            let successMessage = data.message || 'Compra confirmada con éxito.';
+            if (data.created_customer_temporary_password) {
+                successMessage += `\n\nCliente creado con contraseña temporal: ${data.created_customer_temporary_password}.`;
+                successMessage += '\nDebe iniciar sesión en la landing y cambiarla en Mi perfil.';
+            }
+            alert(successMessage);
 
             if (data.pdf_url) {
                 const link = document.createElement('a');

@@ -19,7 +19,7 @@
     <div class="meta">Rango: {{ $summary['start_date']->format('d/m/Y') }} al {{ $summary['end_date']->format('d/m/Y') }}</div>
     <div class="summary">
         Total de unidades: <strong>{{ number_format($summary['total_units']) }}</strong> |
-        Total vendido: <strong>{{ number_format($summary['total_amount'], 2) }} USD</strong>
+        Total vendido: <strong>{{ number_format($summary['total_amount'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong>
     </div>
 
     <table>
@@ -29,7 +29,7 @@
                 <th>Producto</th>
                 <th>Variante</th>
                 <th class="num">Unidades</th>
-                <th class="num">Monto (USD)</th>
+                <th class="num">Monto ({{ $summary['currency_code'] ?? 'USD' }})</th>
             </tr>
         </thead>
         <tbody>

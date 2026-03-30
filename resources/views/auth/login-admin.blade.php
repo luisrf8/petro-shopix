@@ -149,6 +149,7 @@
                             <a href="/" class="text-decoration-none">
                                 <img src="{{ asset('assets/img/shopix5.png') }}" class="login-brand" alt="Shopix">
                             </a>
+                            <p class="login-subtitle">Version 1.0</p>
                         </div>
                         <h1 class="h3 login-title">Login administrativo</h1>
                         <p class="login-subtitle">Ingresa con una cuenta de administración para continuar.</p>

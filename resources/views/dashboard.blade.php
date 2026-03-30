@@ -38,15 +38,142 @@
             .dashboard-toast.error {
                 background: #842029;
             }
+
+            .chart-neo-surface {
+                background: linear-gradient(135deg, #ffffff 0%, #f3f6ff 45%, #eef2ff 100%);
+                border: 1px solid rgba(148, 163, 184, 0.24);
+                box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+                border-radius: 16px;
+                backdrop-filter: blur(4px);
+            }
+
+            .chart-canvas {
+                border-radius: 12px;
+            }
+
+            .dashboard-headline {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 1rem;
+                margin-bottom: 1.25rem;
+            }
+
+            .dashboard-title-wrap {
+                min-width: 0;
+            }
+
+            .dashboard-store-url-inline {
+                width: 100%;
+                max-width: 460px;
+            }
+
+            .dashboard-url-shell {
+                display: flex;
+                align-items: center;
+                gap: 0.15rem;
+                background: var(--bs-tertiary-bg);
+                border-radius: 0.75rem;
+                padding: 0.35rem 0.5rem;
+            }
+
+            .dashboard-url-input {
+                min-width: 0;
+                border: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                font-size: 0.9rem;
+                line-height: 1.3;
+            }
+
+            .dashboard-url-input:focus {
+                border: 0 !important;
+                box-shadow: none !important;
+            }
+
+            .dashboard-url-icon-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 2.15rem;
+                height: 2.15rem;
+                flex: 0 0 2.15rem;
+                border: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+                padding: 0;
+                color: inherit;
+                line-height: 1;
+            }
+
+            .dashboard-url-icon-btn .material-symbols-rounded {
+                display: block;
+                line-height: 1;
+            }
+
+            .dashboard-url-icon-btn:focus,
+            .dashboard-url-icon-btn:hover,
+            .dashboard-url-icon-btn:active {
+                border: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+                color: inherit;
+            }
+
+            @media (max-width: 992px) {
+                .dashboard-headline {
+                    flex-direction: column;
+                    align-items: stretch;
+                    gap: 0.75rem;
+                }
+
+                .dashboard-store-url-inline {
+                    max-width: 100%;
+                }
+            }
+
+            @media (max-width: 576px) {
+                .dashboard-url-input {
+                    font-size: 0.82rem;
+                }
+
+                .dashboard-url-shell {
+                    padding: 0.32rem 0.42rem;
+                    gap: 0.1rem;
+                }
+
+                .dashboard-url-icon-btn {
+                    width: 1.9rem;
+                    height: 1.9rem;
+                    flex: 0 0 1.9rem;
+                }
+            }
         </style>
         <div id="dashboardToastContainer" class="dashboard-toast-stack"></div>
     <div class="container-fluid py-2">
       <div class="row">
-        <div class="ms-3">
-          <h3 class="mb-0 h4 font-weight-bolder">{{ $user->name }}</h3>
-          <p class="mb-4">
-            Datos y Análisis.
-          </p>
+        <div class="col-12">
+            <div class="dashboard-headline ms-1 ms-md-3">
+                <div class="dashboard-title-wrap">
+                    <h3 class="mb-0 h4 font-weight-bolder">{{ $user->name }}</h3>
+                    <p class="mb-0">Datos y Análisis.</p>
+                </div>
+
+                @if(!empty($tenantPublicUrl))
+                <div class="dashboard-store-url-inline">
+                    <div class="dashboard-url-shell">
+                        <input type="text" class="form-control dashboard-url-input" id="dashboardStoreUrlInput" value="{{ $tenantPublicUrl }}" readonly>
+                        <a href="{{ $tenantPublicUrl }}" target="_blank" rel="noopener" class="btn dashboard-url-icon-btn" aria-label="Abrir tienda" title="Abrir tienda">
+                            <i class="material-symbols-rounded">open_in_new</i>
+                        </a>
+                        <button type="button" class="btn dashboard-url-icon-btn" id="dashboardCopyStoreUrlBtn" aria-label="Copiar enlace" title="Copiar enlace" data-icon-default="content_copy">
+                            <i class="material-symbols-rounded">content_copy</i>
+                        </button>
+                    </div>
+                </div>
+                @endif
+            </div>
         </div>
 
                                 @if(isset($currentPlanPayment) && $currentPlanPayment)
@@ -64,26 +191,6 @@
                                         @endif
                                 </div>
                                 @endif
-
-                @if(!empty($tenantPublicUrl))
-                <div class="col-12 mb-3">
-                    <div class="card">
-                        <div class="card-body py-3">
-                            <label class="form-label mb-2">URL pública de tu tienda</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control p-2 border border-radius-lg" id="dashboardStoreUrlInput" value="{{ $tenantPublicUrl }}" readonly>
-                                <a href="{{ $tenantPublicUrl }}" target="_blank" rel="noopener" class="btn btn-outline-dark url-icon-action-btn" aria-label="Abrir tienda" title="Abrir tienda">
-                                    <i class="material-symbols-rounded">open_in_new</i>
-                                </a>
-                                <button type="button" class="btn btn-outline-secondary url-icon-action-btn" id="dashboardCopyStoreUrlBtn" aria-label="Copiar enlace" title="Copiar enlace" data-icon-default="content_copy">
-                                    <i class="material-symbols-rounded">content_copy</i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
         @foreach($stats as $stat)
         <a href="{{ $stat['link'] }}" class="text-decoration-none col-xl-3 col-sm-6">
             <div class="card">
@@ -105,71 +212,11 @@
         </a>
         @endforeach
       </div>
-            <div class="row mt-4">
-                <div class="col-xl-3 col-sm-6 mb-4">
-                    <div class="card">
-                        <div class="card-body p-3">
-                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Ventas del mes</p>
-                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['sales'] ?? 0), 2) }}</h4>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-xl-3 col-sm-6 mb-4">
-                    <div class="card">
-                        <div class="card-body p-3">
-                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Cobrado del mes</p>
-                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['collected'] ?? 0), 2) }}</h4>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-xl-3 col-sm-6 mb-4">
-                    <div class="card">
-                        <div class="card-body p-3">
-                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Gastos del mes</p>
-                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['expenses'] ?? 0), 2) }}</h4>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-xl-3 col-sm-6 mb-4">
-                    <div class="card">
-                        <div class="card-body p-3">
-                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Cuentas por cobrar</p>
-                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['receivables'] ?? 0), 2) }}</h4>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-xl-3 col-sm-6 mb-4">
-                    <div class="card">
-                        <div class="card-body p-3">
-                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Utilidad estimada</p>
-                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['estimated_profit'] ?? 0), 2) }}</h4>
-                            <small class="text-muted">Margen: {{ number_format((float) ($financialSummary['estimated_margin'] ?? 0), 2) }}%</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-xl-3 col-sm-6 mb-4">
-                    <div class="card">
-                        <div class="card-body p-3">
-                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Tendencia mensual</p>
-                            <h4 class="mb-0 {{ (float) ($monthlyTrend['delta'] ?? 0) >= 0 ? 'text-success' : 'text-danger' }}">
-                                {{ (float) ($monthlyTrend['delta'] ?? 0) >= 0 ? '+' : '' }}${{ number_format((float) ($monthlyTrend['delta'] ?? 0), 2) }}
-                            </h4>
-                            <small class="text-muted">
-                                @if(!is_null($monthlyTrend['delta_percent'] ?? null))
-                                    {{ (float) ($monthlyTrend['delta_percent'] ?? 0) >= 0 ? '+' : '' }}{{ number_format((float) ($monthlyTrend['delta_percent'] ?? 0), 2) }}% vs mes anterior
-                                @else
-                                    Sin base comparativa
-                                @endif
-                            </small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="row mt-1 mb-4">
+            <div class="row mt-5 mb-4">
                 <div class="col-12">
                     <div class="card z-index-2">
                         <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2 bg-transparent">
-                            <div class="bg-gradient-dark shadow-dark border-radius-lg py-3 pe-1">
+                            <div class="chart-neo-surface py-3 pe-1 ps-1">
                                 <div class="chart">
                                     <canvas id="financial-chart" class="chart-canvas" height="110"></canvas>
                                 </div>
@@ -178,6 +225,34 @@
                         <div class="card-body">
                             <h6 class="mb-0">Resumen financiero avanzado</h6>
                             <p class="text-sm mb-0">Comparativa mensual de cobros, gastos y utilidad estimada.</p>
+                            <div class="d-flex justify-content-between mt-2 flex-wrap gap-3">
+                                <div>
+                                    <p class="text-sm mb-1 text-uppercase font-weight-bold">Utilidad estimada</p>
+                                    <h4 class="mb-0">${{ number_format((float) ($financialSummary['estimated_profit'] ?? 0), 2) }}</h4>
+                                    <small class="text-muted">Margen: {{ number_format((float) ($financialSummary['estimated_margin'] ?? 0), 2) }}%</small>
+                                </div>
+                                <div>
+                                    <p class="text-sm mb-1 text-uppercase font-weight-bold">Tendencia mensual</p>
+                                    <h4 class="mb-0 {{ (float) ($monthlyTrend['delta'] ?? 0) >= 0 ? 'text-success' : 'text-danger' }}">
+                                        {{ (float) ($monthlyTrend['delta'] ?? 0) >= 0 ? '+' : '' }}${{ number_format((float) ($monthlyTrend['delta'] ?? 0), 2) }}
+                                    </h4>
+                                    <small class="text-muted">
+                                        @if(!is_null($monthlyTrend['delta_percent'] ?? null))
+                                            {{ (float) ($monthlyTrend['delta_percent'] ?? 0) >= 0 ? '+' : '' }}{{ number_format((float) ($monthlyTrend['delta_percent'] ?? 0), 2) }}% vs mes anterior
+                                        @else
+                                            Sin base comparativa
+                                        @endif
+                                    </small>
+                                </div>
+                                <div>
+                                    <p class="text-sm mb-1 text-uppercase font-weight-bold">Cobrado del mes</p>
+                                    <h4 class="mb-0">${{ number_format((float) ($financialSummary['collected'] ?? 0), 2) }}</h4>
+                                </div>
+                                <div>
+                                    <p class="text-sm mb-1 text-uppercase font-weight-bold">Cuentas por cobrar</p>
+                                    <h4 class="mb-0">${{ number_format((float) ($financialSummary['receivables'] ?? 0), 2) }}</h4>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -219,7 +294,7 @@
                 <div class="col-lg-4 col-md-6 mt-4 mb-4">
                     <div class="card z-index-2  ">
                         <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2 bg-transparent">
-                            <div class="bg-gradient-dark shadow-dark border-radius-lg py-3 pe-1">
+                            <div class="chart-neo-surface py-3 pe-1 ps-1">
                                 <div class="chart">
                                     <canvas id="chart-line" class="chart-canvas" height="170"></canvas>
                                 </div>
@@ -229,14 +304,15 @@
                             <h6 class="mb-0 ">Ventas Mensuales</h6>
                             <p class="text-sm ">Ventas de los ultimos meses.</p>
                             <hr class="dark horizontal">
-
+                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Ventas del mes</p>
+                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['sales'] ?? 0), 2) }}</h4>
                         </div>
                     </div>
                 </div>
                 <div class="col-lg-4 mt-4 mb-3">
                     <div class="card z-index-2">
                         <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2 bg-transparent">
-                            <div class="bg-gradient-dark shadow-dark border-radius-lg py-3 pe-1">
+                            <div class="chart-neo-surface py-3 pe-1 ps-1">
                                 <div class="chart">
                                     <canvas id="chart-line-tasks" class="chart-canvas" height="170"></canvas>
                                 </div>
@@ -246,6 +322,8 @@
                             <h6 class="mb-0">Top gastos por categoría</h6>
                             <p class="text-sm">Categorías con mayor egreso acumulado.</p>
                             <hr class="horizontal">
+                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Gastos del mes</p>
+                            <h4 class="mb-0">${{ number_format((float) ($financialSummary['expenses'] ?? 0), 2) }}</h4>
                         </div>
                     </div>
                 </div>
@@ -388,6 +466,59 @@
         const dashboardCopyStoreUrlBtn = document.getElementById('dashboardCopyStoreUrlBtn');
         const dashboardPlanDaysRemaining = {{ isset($currentPlanDaysRemaining) && !is_null($currentPlanDaysRemaining) ? (int) $currentPlanDaysRemaining : 'null' }};
 
+        const chartTheme = {
+            text: '#334155',
+            mutedText: '#64748b',
+            grid: 'rgba(148, 163, 184, 0.24)',
+            tooltipBg: '#0f172a',
+            tooltipText: '#e2e8f0',
+            linePrimary: '#6366f1',
+            lineSecondary: '#06b6d4',
+            lineSuccess: '#22c55e',
+            lineWarning: '#f59e0b',
+            barA: '#8b5cf6',
+            barB: '#6366f1',
+            barC: '#06b6d4',
+            barD: '#22c55e',
+            barE: '#f59e0b'
+        };
+
+        const baseChartPlugins = {
+            legend: {
+                labels: {
+                    color: chartTheme.text,
+                    usePointStyle: true,
+                    pointStyle: 'circle',
+                    boxWidth: 8,
+                    boxHeight: 8,
+                    padding: 16,
+                    font: {
+                        size: 12,
+                        family: 'Inter, Roboto, sans-serif',
+                        weight: '600'
+                    }
+                }
+            },
+            tooltip: {
+                backgroundColor: chartTheme.tooltipBg,
+                titleColor: '#ffffff',
+                bodyColor: chartTheme.tooltipText,
+                borderColor: 'rgba(255,255,255,0.14)',
+                borderWidth: 1,
+                cornerRadius: 10,
+                padding: 12,
+                displayColors: true,
+                boxPadding: 5,
+            }
+        };
+
+        const makeAreaGradient = (ctx, from, to, alpha = 0.24) => {
+            const gradient = ctx.createLinearGradient(0, 0, 0, 240);
+            gradient.addColorStop(0, from.replace(')', `, ${alpha})`).replace('rgb', 'rgba'));
+            gradient.addColorStop(1, to.replace(')', ', 0)').replace('rgb', 'rgba'));
+            return gradient;
+        };
+
         const showDashboardToast = (message, type = 'warning') => {
             const container = document.getElementById('dashboardToastContainer');
             if (!container || !message) return;
@@ -455,6 +586,10 @@
         var financialCtx = document.getElementById("financial-chart")?.getContext("2d");
 
         if (financialCtx) {
+            const collectedFill = makeAreaGradient(financialCtx, 'rgb(99, 102, 241)', 'rgb(99, 102, 241)', 0.16);
+            const expensesFill = makeAreaGradient(financialCtx, 'rgb(6, 182, 212)', 'rgb(6, 182, 212)', 0.14);
+            const profitFill = makeAreaGradient(financialCtx, 'rgb(34, 197, 94)', 'rgb(34, 197, 94)', 0.12);
+
             new Chart(financialCtx, {
                 type: "line",
                 data: {
@@ -463,29 +598,35 @@
                         {
                             label: "Cobrado",
                             data: monthlyCollectedFormatted,
-                            borderColor: "rgba(255, 255, 255, .85)",
-                            backgroundColor: "transparent",
-                            borderWidth: 3,
-                            pointRadius: 3,
-                            tension: 0.25,
+                            borderColor: chartTheme.linePrimary,
+                            backgroundColor: collectedFill,
+                            borderWidth: 2.6,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            tension: 0.36,
+                            fill: true,
                         },
                         {
                             label: "Gastos",
                             data: monthlyExpensesFormatted,
-                            borderColor: "rgba(248, 113, 113, .95)",
-                            backgroundColor: "transparent",
-                            borderWidth: 3,
-                            pointRadius: 3,
-                            tension: 0.25,
+                            borderColor: chartTheme.lineSecondary,
+                            backgroundColor: expensesFill,
+                            borderWidth: 2.4,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            tension: 0.34,
+                            fill: true,
                         },
                         {
                             label: "Utilidad estimada",
                             data: monthlyProfitTrendFormatted,
-                            borderColor: "rgba(34, 197, 94, .95)",
-                            backgroundColor: "transparent",
-                            borderWidth: 3,
-                            pointRadius: 3,
-                            tension: 0.25,
+                            borderColor: chartTheme.lineSuccess,
+                            backgroundColor: profitFill,
+                            borderWidth: 2.4,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            tension: 0.35,
+                            fill: true,
                         }
                     ],
                 },
@@ -493,17 +634,17 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: {
-                            labels: { color: '#f8f9fa' }
-                        }
+                        ...baseChartPlugins
                     },
                     scales: {
                         y: {
                             grid: {
-                                color: 'rgba(255, 255, 255, .2)'
+                                color: chartTheme.grid,
+                                drawBorder: false
                             },
                             ticks: {
-                                color: '#f8f9fa'
+                                color: chartTheme.mutedText,
+                                padding: 8
                             }
                         },
                         x: {
@@ -511,7 +652,8 @@
                                 display: false
                             },
                             ticks: {
-                                color: '#f8f9fa'
+                                color: chartTheme.mutedText,
+                                padding: 8
                             }
                         }
                     }
@@ -522,21 +664,21 @@
         var ctx2 = document.getElementById("chart-line")?.getContext("2d");
 
         if (ctx2) {
+        const salesArea = makeAreaGradient(ctx2, 'rgb(99, 102, 241)', 'rgb(99, 102, 241)', 0.22);
         new Chart(ctx2, {
             type: "line",
             data: {
                 labels: months,
                 datasets: [{
                     label: "Ventas mensuales (USD)",
-                    tension: 0,
-                    borderWidth: 0,
-                    pointRadius: 5,
-                    pointBackgroundColor: "rgba(255, 255, 255, .8)",
+                    tension: 0.35,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    pointBackgroundColor: chartTheme.linePrimary,
                     pointBorderColor: "transparent",
-                    borderColor: "rgba(255, 255, 255, .8)",
-                    borderColor: "rgba(255, 255, 255, .8)",
-                    borderWidth: 4,
-                    backgroundColor: "transparent",
+                    borderColor: chartTheme.linePrimary,
+                    borderWidth: 2.8,
+                    backgroundColor: salesArea,
                     fill: true,
                     data: monthlySalesAmountFormatted,
                     maxBarThickness: 6
@@ -547,9 +689,10 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
+                    ...baseChartPlugins,
                     legend: {
                         display: false,
-                    }
+                    },
                 },
                 interaction: {
                     intersect: false,
@@ -562,19 +705,19 @@
                             display: true,
                             drawOnChartArea: true,
                             drawTicks: false,
-                            borderDash: [5, 5],
-                            color: 'rgba(255, 255, 255, .2)'
+                            borderDash: [4, 4],
+                            color: chartTheme.grid
                         },
                         ticks: {
                             display: true,
-                            color: '#f8f9fa',
+                            color: chartTheme.mutedText,
                             padding: 10,
                             font: {
-                                size: 14,
-                                weight: 300,
-                                family: "Roboto",
+                                size: 12,
+                                weight: 500,
+                                family: "Inter, Roboto, sans-serif",
                                 style: 'normal',
-                                lineHeight: 2
+                                lineHeight: 1.5
                             },
                         }
                     },
@@ -588,14 +731,14 @@
                         },
                         ticks: {
                             display: true,
-                            color: '#f8f9fa',
+                            color: chartTheme.mutedText,
                             padding: 10,
                             font: {
-                                size: 14,
-                                weight: 300,
-                                family: "Roboto",
+                                size: 12,
+                                weight: 500,
+                                family: "Inter, Roboto, sans-serif",
                                 style: 'normal',
-                                lineHeight: 2
+                                lineHeight: 1.5
                             },
                         }
                     },
@@ -618,6 +761,7 @@
         var expensesByCategory = topExpenseCategoryTotals;
 
         if (ctx3) {
+        const expensePalette = [chartTheme.barA, chartTheme.barB, chartTheme.barC, chartTheme.barD, chartTheme.barE];
         new Chart(ctx3, {
             type: "bar",
             data: {
@@ -625,32 +769,23 @@
                 datasets: [{
                     label: "Gastos",
                     data: expensesByCategory,
-                    backgroundColor: [
-                        "rgba(248, 113, 113, .9)",
-                        "rgba(251, 146, 60, .9)",
-                        "rgba(250, 204, 21, .9)",
-                        "rgba(45, 212, 191, .9)",
-                        "rgba(96, 165, 250, .9)"
-                    ],
-                    borderColor: [
-                        "rgba(248, 113, 113, 1)",
-                        "rgba(251, 146, 60, 1)",
-                        "rgba(250, 204, 21, 1)",
-                        "rgba(45, 212, 191, 1)",
-                        "rgba(96, 165, 250, 1)"
-                    ],
+                    backgroundColor: expensePalette,
+                    borderColor: expensePalette,
                     borderWidth: 1,
-                    maxBarThickness: 6
+                    borderRadius: 10,
+                    maxBarThickness: 16
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
+                    ...baseChartPlugins,
                     legend: {
                         display: false
                     },
                     tooltip: {
+                        ...baseChartPlugins.tooltip,
                         enabled: true,
                         callbacks: {
                             label: function (context) {
@@ -668,19 +803,19 @@
                             display: true,
                             drawOnChartArea: true,
                             drawTicks: false,
-                            borderDash: [5, 5],
-                            color: 'rgba(255, 255, 255, .2)'
+                            borderDash: [4, 4],
+                            color: chartTheme.grid
                         },
                         ticks: {
                             display: true,
-                            color: '#f8f9fa',
+                            color: chartTheme.mutedText,
                             padding: 10,
                             font: {
-                                size: 14,
-                                weight: 300,
-                                family: "Roboto",
+                                size: 12,
+                                weight: 500,
+                                family: "Inter, Roboto, sans-serif",
                                 style: 'normal',
-                                lineHeight: 2
+                                lineHeight: 1.5
                             }
                         }
                     },
@@ -694,14 +829,14 @@
                         },
                         ticks: {
                             display: true,
-                            color: '#f8f9fa',
+                            color: chartTheme.mutedText,
                             padding: 10,
                             font: {
-                                size: 14,
-                                weight: 300,
-                                family: "Roboto",
+                                size: 12,
+                                weight: 500,
+                                family: "Inter, Roboto, sans-serif",
                                 style: 'normal',
-                                lineHeight: 2
+                                lineHeight: 1.5
                             }
                         }
                     }

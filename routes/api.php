@@ -23,7 +23,7 @@ Route::post('/registerEcomm', [AuthenticatedSessionController::class, 'registerE
 
 // Endpoint para obtener el token CSRF
 Route::post('/create-user', [UserController::class, 'store']);
-Route::post('/user/{id}', [UserController::class, 'update']);
+Route::post('/user/{id}', [UserController::class, 'update'])->whereNumber('id');
 Route::post('users/{id}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggleStatus');
 
 // Rutas de productos y categorías
@@ -37,8 +37,10 @@ Route::get('/payment-methods/ecomm', [SaleController::class, 'getPaymentMethodsE
 
 // ---------------------- RUTAS AUTENTICADAS ------------------------
 
-Route::middleware('auth.jwt')->group(function () {
+Route::middleware(['auth.jwt'])->group(function () {
     Route::get('/user', [AuthenticatedSessionController::class, 'getUserFromToken']);
+    Route::post('/user/update-profile', [AuthenticatedSessionController::class, 'updateEcommProfile']);
+    Route::post('/user/change-password', [AuthenticatedSessionController::class, 'changeEcommPassword']);
     Route::get('/user/orders', [SaleController::class, 'viewMyOrders']);
     Route::post('/create-sale/ecomm', [SaleController::class, 'storeEcommerceSale']);
     Route::get('/notifications', [NotificationController::class, 'apiIndex']);
@@ -94,6 +96,10 @@ Route::prefix('currencies')->group(function () {
 Route::prefix('dollar-rate')->group(function () {
     Route::post('/update', [PaymentMethodController::class, 'updateDollarRate'])->name('paymentMethods.updateDollarRate');
 });
+Route::prefix('euro-rate')->group(function () {
+    Route::post('/update', [PaymentMethodController::class, 'updateEuroRate'])->name('paymentMethods.updateEuroRate');
+});
+Route::post('/tenant-base-currency/update', [PaymentMethodController::class, 'updateTenantBaseCurrency'])->name('paymentMethods.updateTenantBaseCurrency');
 Route::get('/dollarRate', [PaymentMethodController::class, 'getDollarRate']);
 
 // ------------------------ VENTAS ------------------------
