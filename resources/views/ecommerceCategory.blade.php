@@ -84,7 +84,7 @@
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(10px);
       border-bottom-color: rgba(var(--tenant-primary-rgb), 0.16);
-      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      box-shadow: none;
     }
 
     .landing-header .navbar-toggler {
@@ -147,7 +147,7 @@
       background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96)) !important;
       border-radius: 12px !important;
       transition: background 0.25s ease, border-color 0.25s ease;
-      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.22);
+      box-shadow: none;
     }
 
     .landing-header.is-scrolled .tenant-logo-chip {
@@ -159,7 +159,7 @@
       width: 100px;
       height: 50px;
       object-fit: contain;
-      filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 1px rgba(2, 6, 23, 0.9));
+      filter: none;
     }
 
     .landing-nav-link.category-link.active {

@@ -89,7 +89,7 @@
       background: rgba(255, 255, 255, 0.92);
       backdrop-filter: blur(10px);
       border-bottom-color: rgba(var(--tenant-primary-rgb), 0.16);
-      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      box-shadow: none;
     }
 
     .landing-nav-link {
@@ -149,7 +149,7 @@
       background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96)) !important;
       border-radius: 12px !important;
       transition: background 0.25s ease, border-color 0.25s ease;
-      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.22);
+      box-shadow: none;
     }
 
     .landing-header.is-scrolled .tenant-logo-chip {
@@ -161,7 +161,7 @@
       width: 100px;
       height: 50px;
       object-fit: contain;
-      filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 1px rgba(2, 6, 23, 0.9));
+      filter: none;
     }
 
     .hero {
@@ -187,11 +187,11 @@
     }
 
     .hero-overlay.hero-overlay-image {
-      background: linear-gradient(180deg, rgba(2, 6, 23, 0.66) 0%, rgba(2, 6, 23, 0.52) 36%, rgba(2, 6, 23, 0.38) 68%, rgba(2, 6, 23, 0.3) 100%);
+      background: rgba(2, 6, 23, 0.42);
     }
 
     .hero-overlay.hero-overlay-color {
-      background: linear-gradient(180deg, rgba(var(--tenant-primary-rgb), 0.68), rgba(var(--tenant-secondary-rgb), 0.86));
+      background: rgba(var(--tenant-primary-rgb), 0.62);
     }
 
     .hero .container {
@@ -202,11 +202,11 @@
     .hero-copy-shell {
       max-width: 980px;
       margin-inline: auto;
-      border: 1px solid rgba(148, 163, 184, 0.42);
-      border-radius: 18px;
-      background: linear-gradient(180deg, rgba(31, 41, 55, 0.1) 0%, rgba(17, 24, 39, 0.14) 100%);
-      padding: 1.25rem 1rem;
-      box-shadow: 0 18px 36px rgba(2, 6, 23, 0.34);
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
+      box-shadow: none;
     }
 
     .hero-title {
