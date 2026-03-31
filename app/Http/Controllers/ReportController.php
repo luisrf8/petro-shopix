@@ -54,7 +54,8 @@ class ReportController extends Controller
             ->join('sales_order_details', 'sales_order_details.product_variant_id', '=', 'product_variants.id')
             ->join('sales_orders', 'sales_orders.id', '=', 'sales_order_details.sales_order_id')
             ->where('sales_orders.tenant_id', $user->tenant_id)
-            ->whereBetween('sales_orders.date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->whereDate('sales_orders.date', '>=', $startDate->toDateString())
+            ->whereDate('sales_orders.date', '<=', $endDate->toDateString())
             ->groupBy('product_variants.id', 'products.name', 'product_variants.size')
             ->selectRaw('products.name as product_name, product_variants.size as variant_name, SUM(sales_order_details.quantity) as total_quantity, SUM(sales_order_details.amount) as total_amount')
             ->orderByDesc('total_quantity')
@@ -92,7 +93,8 @@ class ReportController extends Controller
             ->join('sales_order_details', 'sales_order_details.product_variant_id', '=', 'product_variants.id')
             ->join('sales_orders', 'sales_orders.id', '=', 'sales_order_details.sales_order_id')
             ->where('sales_orders.tenant_id', $user->tenant_id)
-            ->whereBetween('sales_orders.date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->whereDate('sales_orders.date', '>=', $startDate->toDateString())
+            ->whereDate('sales_orders.date', '<=', $endDate->toDateString())
             ->groupBy('product_variants.id', 'products.name', 'product_variants.size')
             ->selectRaw('products.name as product_name, product_variants.size as variant_name, SUM(sales_order_details.quantity) as total_quantity, SUM(sales_order_details.amount) as total_amount')
             ->orderByDesc('total_quantity')
@@ -128,7 +130,8 @@ class ReportController extends Controller
 
         $entries = PurchaseOrder::with(['warehouse', 'provider', 'detalles.productVariant.product'])
             ->where('tenant_id', $user->tenant_id)
-            ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->whereDate('date', '>=', $startDate->toDateString())
+            ->whereDate('date', '<=', $endDate->toDateString())
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->get();
@@ -163,7 +166,8 @@ class ReportController extends Controller
 
         $entries = PurchaseOrder::with(['warehouse', 'provider', 'detalles'])
             ->where('tenant_id', $user->tenant_id)
-            ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->whereDate('date', '>=', $startDate->toDateString())
+            ->whereDate('date', '<=', $endDate->toDateString())
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->get();
@@ -194,7 +198,8 @@ class ReportController extends Controller
 
         $orders = SalesOrder::with(['user', 'details', 'payments'])
             ->where('tenant_id', $user->tenant_id)
-            ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->whereDate('date', '>=', $startDate->toDateString())
+            ->whereDate('date', '<=', $endDate->toDateString())
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->get();
@@ -230,7 +235,8 @@ class ReportController extends Controller
 
         $orders = SalesOrder::with(['user', 'details', 'payments'])
             ->where('tenant_id', $user->tenant_id)
-            ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->whereDate('date', '>=', $startDate->toDateString())
+            ->whereDate('date', '<=', $endDate->toDateString())
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->get();
@@ -341,15 +347,15 @@ class ReportController extends Controller
             [
                 'name' => 'Ventas',
                 'metrics' => [
-                    'Ordenes en rango' => SalesOrder::where('tenant_id', $user->tenant_id)->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->count(),
-                    'Monto vendido' => SalesOrder::where('tenant_id', $user->tenant_id)->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->with('details')->get()->sum(fn ($order) => $order->details->sum('amount')),
-                    'Pagos aprobados' => SalesOrder::where('tenant_id', $user->tenant_id)->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->with('payments')->get()->sum(fn ($order) => $order->payments->where('status', 1)->sum('amount')),
+                    'Ordenes en rango' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->count(),
+                    'Monto vendido' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->with('details')->get()->sum(fn ($order) => $order->details->sum('amount')),
+                    'Pagos aprobados' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->with('payments')->get()->sum(fn ($order) => $order->payments->where('status', 1)->sum('amount')),
                 ],
             ],
             [
                 'name' => 'Inventario y Compras',
                 'metrics' => [
-                    'Entradas en rango' => PurchaseOrder::where('tenant_id', $user->tenant_id)->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->count(),
+                    'Entradas en rango' => PurchaseOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->count(),
                     'Stock total' => ProductVariant::whereHas('product', function ($query) use ($user) {
                         $query->where('tenant_id', $user->tenant_id);
                     })->sum('stock'),
@@ -404,15 +410,15 @@ class ReportController extends Controller
             [
                 'name' => 'Ventas',
                 'metrics' => [
-                    'Ordenes en rango' => SalesOrder::where('tenant_id', $user->tenant_id)->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->count(),
-                    'Monto vendido' => SalesOrder::where('tenant_id', $user->tenant_id)->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->with('details')->get()->sum(fn ($order) => $order->details->sum('amount')),
-                    'Pagos aprobados' => SalesOrder::where('tenant_id', $user->tenant_id)->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->with('payments')->get()->sum(fn ($order) => $order->payments->where('status', 1)->sum('amount')),
+                    'Ordenes en rango' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->count(),
+                    'Monto vendido' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->with('details')->get()->sum(fn ($order) => $order->details->sum('amount')),
+                    'Pagos aprobados' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->with('payments')->get()->sum(fn ($order) => $order->payments->where('status', 1)->sum('amount')),
                 ],
             ],
             [
                 'name' => 'Inventario y Compras',
                 'metrics' => [
-                    'Entradas en rango' => PurchaseOrder::where('tenant_id', $user->tenant_id)->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])->count(),
+                    'Entradas en rango' => PurchaseOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->count(),
                     'Stock total' => ProductVariant::whereHas('product', function ($query) use ($user) {
                         $query->where('tenant_id', $user->tenant_id);
                     })->sum('stock'),
@@ -626,21 +632,25 @@ class ReportController extends Controller
             })
             ->whereHas('salesOrders', function ($query) use ($user, $startDate, $endDate) {
                 $query->where('tenant_id', $user->tenant_id)
-                    ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
+                    ->whereDate('date', '>=', $startDate->toDateString())
+                    ->whereDate('date', '<=', $endDate->toDateString());
             })
             ->withCount(['salesOrders as orders_count' => function ($query) use ($user, $startDate, $endDate) {
                 $query->where('tenant_id', $user->tenant_id)
-                    ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
+                    ->whereDate('date', '>=', $startDate->toDateString())
+                    ->whereDate('date', '<=', $endDate->toDateString());
             }])
             ->withMax(['salesOrders as last_purchase_at' => function ($query) use ($user, $startDate, $endDate) {
                 $query->where('tenant_id', $user->tenant_id)
-                    ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
+                    ->whereDate('date', '>=', $startDate->toDateString())
+                    ->whereDate('date', '<=', $endDate->toDateString());
             }], 'date')
             ->withSum(['payments as total_paid_amount' => function ($query) use ($user, $startDate, $endDate) {
                 $query->where('payments.status', 1)
                     ->whereHas('salesOrder', function ($salesOrderQuery) use ($user, $startDate, $endDate) {
                         $salesOrderQuery->where('tenant_id', $user->tenant_id)
-                            ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()]);
+                            ->whereDate('date', '>=', $startDate->toDateString())
+                            ->whereDate('date', '<=', $endDate->toDateString());
                     });
             }], 'amount')
             ->orderByDesc('orders_count')
@@ -675,7 +685,8 @@ class ReportController extends Controller
 
         $rows = SalesOrder::with(['user', 'details', 'payments'])
             ->where('tenant_id', $user->tenant_id)
-            ->whereBetween('date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->whereDate('date', '>=', $startDate->toDateString())
+            ->whereDate('date', '<=', $endDate->toDateString())
             ->where('status', '!=', 2)
             ->orderByDesc('date')
             ->orderByDesc('id')
@@ -717,7 +728,8 @@ class ReportController extends Controller
 
         $rows = StoreExpense::query()
             ->where('tenant_id', $user->tenant_id)
-            ->whereBetween('spent_at', [$startDate->toDateString(), $endDate->toDateString()])
+            ->whereDate('spent_at', '>=', $startDate->toDateString())
+            ->whereDate('spent_at', '<=', $endDate->toDateString())
             ->when($expenseCategory !== '', function ($query) use ($expenseCategory) {
                 $query->where('category', $expenseCategory);
             })
