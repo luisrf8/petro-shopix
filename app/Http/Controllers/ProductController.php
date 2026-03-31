@@ -655,8 +655,8 @@ class ProductController extends Controller
                         $unitType = 'unidad';
                     }
 
-                    $price = is_numeric($variant['price'] ?? null) ? (float) $variant['price'] : 0;
-                    $stock = is_numeric($variant['stock'] ?? null) ? (int) $variant['stock'] : 0;
+                    $price = $this->parseLocalizedNumber($variant['price'] ?? null, 0.0);
+                    $stock = (int) round($this->parseLocalizedNumber($variant['stock'] ?? null, 0.0));
 
                     $variantLookup = [
                         'product_id' => $product->id,
@@ -1023,9 +1023,9 @@ class ProductController extends Controller
         $synonyms = [
             'category_name' => ['category_name', 'nombre_categoria', 'categoria_nombre', 'category', 'categoria'],
             'category_description' => ['category_description', 'descripcion_categoria', 'desc_categoria'],
-            'product_name' => ['product_name', 'nombre_producto', 'producto_nombre', 'name', 'nombre'],
+            'product_name' => ['product_name', 'nombre_producto', 'producto_nombre', 'producto_base', 'producto', 'name', 'nombre', 'item', 'articulo'],
             'product_description' => ['product_description', 'descripcion_producto', 'description', 'descripcion'],
-            'variant_size' => ['size', 'talla', 'variant_size'],
+            'variant_size' => ['size', 'talla', 'variant_size', 'variantes', 'variantes_especificaciones', 'especificaciones', 'presentacion'],
             'variant_price' => ['price', 'precio', 'variant_price', 'costo'],
             'variant_stock' => ['stock', 'existencia', 'inventario', 'variant_stock'],
             'variant_unit_type' => ['unit_type', 'unidad', 'tipo_unidad'],
@@ -1195,6 +1195,42 @@ class ProductController extends Controller
         }
 
         return $output;
+    }
+
+    private function parseLocalizedNumber($value, float $default = 0.0): float
+    {
+        if (is_int($value) || is_float($value)) {
+            return (float) $value;
+        }
+
+        $text = trim((string) $value);
+        if ($text === '') {
+            return $default;
+        }
+
+        $text = str_replace(["\xc2\xa0", ' '], '', $text);
+        $text = preg_replace('/[^\d,\.\-]/u', '', $text) ?? '';
+
+        if ($text === '' || $text === '-' || $text === ',' || $text === '.') {
+            return $default;
+        }
+
+        $commaPos = strrpos($text, ',');
+        $dotPos = strrpos($text, '.');
+
+        if ($commaPos !== false && $dotPos !== false) {
+            if ($commaPos > $dotPos) {
+                $text = str_replace('.', '', $text);
+                $text = str_replace(',', '.', $text);
+            } else {
+                $text = str_replace(',', '', $text);
+            }
+        } elseif ($commaPos !== false) {
+            $text = str_replace('.', '', $text);
+            $text = str_replace(',', '.', $text);
+        }
+
+        return is_numeric($text) ? (float) $text : $default;
     }
     
     public function storeGoogle(Request $request)
