@@ -581,6 +581,10 @@ class ProductController extends Controller
             DB::beginTransaction();
 
             $hasVariantUnitTypeColumn = Schema::hasColumn('product_variants', 'unit_type');
+            $variantSizeMaxLength = $this->resolveVarcharColumnMaxLength('product_variants', 'size', 255);
+            $variantUnitTypeMaxLength = $hasVariantUnitTypeColumn
+                ? $this->resolveVarcharColumnMaxLength('product_variants', 'unit_type', 50)
+                : 50;
 
             $createdCategories = 0;
             $createdProducts = 0;
@@ -649,11 +653,13 @@ class ProductController extends Controller
                     if ($size === '') {
                         $size = 'Única';
                     }
+                    $size = $this->clampStringToLength($size, $variantSizeMaxLength);
 
                     $unitType = trim((string) ($variant['unit_type'] ?? 'unidad'));
                     if ($unitType === '') {
                         $unitType = 'unidad';
                     }
+                    $unitType = $this->clampStringToLength($unitType, $variantUnitTypeMaxLength);
 
                     $price = $this->parseLocalizedNumber($variant['price'] ?? null, 0.0);
                     $stock = (int) round($this->parseLocalizedNumber($variant['stock'] ?? null, 0.0));
@@ -752,6 +758,8 @@ class ProductController extends Controller
 
     private function extractRowsFromCsvContent(string $content): array
     {
+        // Normaliza BOM UTF-8 para evitar que el primer header quede contaminado.
+        $content = preg_replace('/^\xEF\xBB\xBF/', '', $content) ?? $content;
         $lines = preg_split('/\r\n|\r|\n/', $content);
         $parsed = [];
 
@@ -759,7 +767,17 @@ class ProductController extends Controller
             if (trim($line) === '') {
                 continue;
             }
-            $parsed[] = str_getcsv($line);
+
+            $columns = str_getcsv($line);
+
+            // Algunos CSV vienen con TODA la fila encerrada en comillas.
+            // Ej: "col1,col2,col3" -> str_getcsv() retorna una sola columna.
+            if (count($columns) === 1 && str_contains((string) ($columns[0] ?? ''), ',')) {
+                $collapsed = trim((string) $columns[0]);
+                $columns = str_getcsv($collapsed);
+            }
+
+            $parsed[] = $columns;
         }
 
         if (empty($parsed)) {
@@ -770,6 +788,10 @@ class ProductController extends Controller
         $rows = [];
 
         foreach ($parsed as $row) {
+            if (count($row) === 1 && str_contains((string) ($row[0] ?? ''), ',')) {
+                $row = str_getcsv((string) $row[0]);
+            }
+
             $assoc = [];
             foreach ($headers as $index => $header) {
                 if ($header === '') {
@@ -790,6 +812,7 @@ class ProductController extends Controller
         $categoriesById = [];
         $productsById = [];
         $variantsByProductId = [];
+        $directRows = [];
         $categoryAutoId = 1;
         $productAutoId = 1;
 
@@ -810,6 +833,35 @@ class ProductController extends Controller
                 foreach ($columns as $index => $column) {
                     $value = $values[$index] ?? null;
                     $row[$column] = $this->decodeSqlValue($value);
+                }
+
+                $lowerRow = [];
+                foreach ($row as $key => $value) {
+                    $normalizedKey = Str::lower(Str::ascii((string) $key));
+                    $normalizedKey = preg_replace('/[^a-z0-9_]+/', '_', $normalizedKey);
+                    $lowerRow[(string) $normalizedKey] = $value;
+                }
+
+                $hasDirectCatalogShape = array_key_exists('category_name', $lowerRow)
+                    && array_key_exists('product_name', $lowerRow)
+                    && (
+                        array_key_exists('variant_size', $lowerRow)
+                        || array_key_exists('variant_price', $lowerRow)
+                        || array_key_exists('variant_stock', $lowerRow)
+                    );
+
+                if ($hasDirectCatalogShape) {
+                    $directRows[] = [
+                        'category_name' => $lowerRow['category_name'] ?? null,
+                        'category_description' => $lowerRow['category_description'] ?? null,
+                        'product_name' => $lowerRow['product_name'] ?? null,
+                        'product_description' => $lowerRow['product_description'] ?? null,
+                        'variant_size' => $lowerRow['variant_size'] ?? 'Única',
+                        'variant_price' => $lowerRow['variant_price'] ?? 0,
+                        'variant_stock' => $lowerRow['variant_stock'] ?? 0,
+                        'variant_unit_type' => $lowerRow['variant_unit_type'] ?? 'unidad',
+                    ];
+                    continue;
                 }
 
                 if ($isCategoryTable) {
@@ -847,6 +899,10 @@ class ProductController extends Controller
                     ];
                 }
             }
+        }
+
+        if (!empty($directRows)) {
+            return $directRows;
         }
 
         $rows = [];
@@ -1231,6 +1287,35 @@ class ProductController extends Controller
         }
 
         return is_numeric($text) ? (float) $text : $default;
+    }
+
+    private function clampStringToLength(string $value, int $maxLength): string
+    {
+        $trimmed = trim($value);
+        if ($maxLength <= 0) {
+            return $trimmed;
+        }
+
+        if (mb_strlen($trimmed) <= $maxLength) {
+            return $trimmed;
+        }
+
+        return rtrim(mb_substr($trimmed, 0, $maxLength));
+    }
+
+    private function resolveVarcharColumnMaxLength(string $table, string $column, int $fallback): int
+    {
+        try {
+            $row = DB::selectOne(
+                'SELECT CHARACTER_MAXIMUM_LENGTH AS max_length FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+                [$table, $column]
+            );
+
+            $maxLength = (int) ($row->max_length ?? 0);
+            return $maxLength > 0 ? $maxLength : $fallback;
+        } catch (\Throwable $exception) {
+            return $fallback;
+        }
     }
     
     public function storeGoogle(Request $request)
