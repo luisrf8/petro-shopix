@@ -173,6 +173,30 @@
         $planCanElectronicDocuments = $isSuperAdmin || $isProPlanTenant;
         $planCanReports = $isSuperAdmin || $isProPlanTenant;
         $planCanStoreExpenses = $isSuperAdmin || $isProPlanTenant;
+
+        $showCatalogSection = ($planCanDashboard)
+          || ($canSeeCategories && $planCanCategories)
+          || ($canSeeProducts && $planCanProducts)
+          || (($isOwner || $isAdmin) && $planCanPaymentMethods)
+          || ($canManageStore && $planCanStoreManagement);
+
+        $showSalesSection = ($canSell && $planCanSales)
+          || ($canSeeCustomers && $planCanCustomers)
+          || ($canSeeAccountsReceivable && $planCanAccountsReceivable)
+          || ($canSeePaidPendingDeliveries && $planCanPaidPendingDeliveries)
+          || ($canSeePendingOrders && $planCanPendingOrders)
+          || ($canSeeSalesOrders && $planCanSalesOrders);
+
+        $showInventorySection = ($canInventoryEntries && $planCanInventoryEntries)
+          || ($canInventoryEntries && $planCanProviders)
+          || ($canSeeWarehouses && $planCanWarehouses)
+          || ($canSeeMaterials && $planCanMaterials)
+          || ($canInventoryEntries && $planCanPurchaseHistory);
+
+        $showManagementSection = ($canSeeTenantElectronicDocuments && $planCanElectronicDocuments)
+          || ($canSeeReports && $planCanReports)
+          || ($canSeeStoreExpenses && $planCanStoreExpenses)
+          || $isSuperAdmin;
     @endphp
     <div class="sidenav-header m-0 p-0 h-15 d-flex align-items-center justify-content-between px-2">
       <a class="navbar-brand d-flex justify-content-center align-items-center m-0" href="/dashboard">
@@ -206,6 +230,11 @@
     </style>
     <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main">
       <ul class="navbar-nav">
+      @if($showCatalogSection)
+        <li class="nav-item px-3 mt-1 mb-1">
+          <span class="sidebar-section-title">Catálogo y Tienda</span>
+        </li>
+      @endif
       @if($canSeeCategories || $canSeeProducts || $canManageStore)
         @if($planCanDashboard)
           <li class="nav-item">
@@ -248,6 +277,13 @@
           </li>
         @endif
       @endif
+
+      @if($showSalesSection)
+        <li class="nav-item px-3 mt-2 mb-1">
+          <span class="sidebar-section-title">Ventas y Clientes</span>
+        </li>
+      @endif
+
         @if($canSell && $planCanSales)
 
         <li class="nav-item">
@@ -285,6 +321,13 @@
           </a>
         </li>
       @endif
+
+      @if($showInventorySection)
+        <li class="nav-item px-3 mt-2 mb-1">
+          <span class="sidebar-section-title">Inventario y Compras</span>
+        </li>
+      @endif
+
         @if($canInventoryEntries && $planCanInventoryEntries)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase">
@@ -345,6 +388,12 @@
             </a>
           </li>
         @endif
+
+      @if($showManagementSection)
+        <li class="nav-item px-3 mt-2 mb-1">
+          <span class="sidebar-section-title">Administración</span>
+        </li>
+      @endif
 
         @if($canSeeTenantElectronicDocuments && $planCanElectronicDocuments)
           <li class="nav-item">
@@ -424,26 +473,6 @@
             </a>
           </li>
         @endif
-        <li class="nav-item d-flex" onclick="logOut()">
-          <a class="nav-link text-dark">
-            <!-- <i class="bi bi-person-circle"></i> -->
-            <i class="material-symbols-rounded opacity-5">supervised_user_circle</i>
-            <span class="nav-link-text ms-1">Cerrar Sesión</span>
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link text-dark d-flex justify-content-between align-items-center" href="{{ route('notifications.index') }}">
-            <span>
-              <i class="material-symbols-rounded opacity-5">notifications</i>
-              <span class="nav-link-text ms-1">Notificaciones</span>
-            </span>
-            @if($unreadNotificationsCount > 0)
-              <span class="badge bg-danger backoffice-notifications-count">{{ $unreadNotificationsCount }}</span>
-            @else
-              <span class="badge bg-danger d-none backoffice-notifications-count">0</span>
-            @endif
-          </a>
-        </li>
       </ul>
     </div>
     <div class="sidenav-footer position-absolute w-100 bottom-0 ">
