@@ -202,6 +202,13 @@ class ProductController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        // Compatibilidad entre formularios antiguos (name/description) y nuevos (productName/productDescription).
+        $request->merge([
+            'productName' => $request->input('productName', $request->input('name')),
+            'productDescription' => $request->input('productDescription', $request->input('description')),
+            'productDiscount' => $request->input('productDiscount', $request->input('discount', 0)),
+        ]);
+
         $validated = $request->validate([
             'category_id' => 'required|exists:categories,id',
             'productName' => 'required|string|max:255',
@@ -260,12 +267,19 @@ class ProductController extends Controller
 
         $storedImagePaths = [];
 
+        if (!ImageStorage::usesGoogleDrive()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo crear el producto porque Google Drive no esta configurado para imagenes.',
+            ], 500);
+        }
+
         try {
             DB::transaction(function () use ($request, $validated, $variants, $tenantId, &$storedImagePaths) {
                 $product = Product::create([
                     'category_id' => $validated['category_id'],
                     'name' => $validated['productName'],
-                    'description' => $validated['productDescription'] ?? null,
+                    'description' => (string) ($validated['productDescription'] ?? ''),
                     'discount_percentage' => max(0, min(100, (float) ($validated['productDiscount'] ?? 0))),
                     'tenant_id' => $tenantId,
                 ]);
@@ -322,6 +336,7 @@ class ProductController extends Controller
                 'category_id' => $validated['category_id'] ?? null,
                 'product_name' => $validated['productName'] ?? null,
                 'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             return response()->json([
@@ -332,6 +347,7 @@ class ProductController extends Controller
 
         return response()->json(['success' => true, 'message' => 'Product created successfully']);
     }
+
     public function updateTaxes(Request $request, $id)
     {
         DB::raw("SET @user_id = " . auth()->id());
@@ -458,6 +474,10 @@ class ProductController extends Controller
     public function addImage(Request $request, $productId)
     {
         DB::raw("SET @user_id = " . auth()->id());
+
+        if (!ImageStorage::usesGoogleDrive()) {
+            return redirect()->back()->with('error', 'Google Drive no esta configurado para imagenes.');
+        }
 
         $request->validate([
             'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
