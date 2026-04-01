@@ -276,6 +276,8 @@ class ProductController extends Controller
 
         try {
             DB::transaction(function () use ($request, $validated, $variants, $tenantId, &$storedImagePaths) {
+                $variantSizeMaxLength = $this->resolveVarcharColumnMaxLength('product_variants', 'size', 255);
+
                 $product = Product::create([
                     'category_id' => $validated['category_id'],
                     'name' => $validated['productName'],
@@ -303,9 +305,18 @@ class ProductController extends Controller
                 $variantImageUploads = $request->file('variant_images', []);
 
                 foreach ($variants as $index => $variant) {
+                    $variantName = $this->clampStringToLength(
+                        trim((string) ($variant['name'] ?? '')),
+                        $variantSizeMaxLength
+                    );
+
+                    if ($variantName === '') {
+                        $variantName = 'Unica';
+                    }
+
                     $productVariant = ProductVariant::create([
                         'product_id' => $product->id,
-                        'size' => $variant['name'],
+                        'size' => $variantName,
                         'price' => $variant['price'],
                         'discount_percentage' => max(0, min(100, (float) ($variant['discount_percentage'] ?? 0))),
                         'stock' => $variant['stock'],
