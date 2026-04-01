@@ -74,6 +74,7 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/categories', [ProductController::class, 'categoriesIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('categories.index');
 
     Route::get('/products', [ProductController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.index');
+    Route::post('/create-product', [ProductController::class, 'create'])->middleware('role.name:owner,admin,administrador')->name('products.createWeb');
     Route::post('/products/import-catalog', [ProductController::class, 'importCatalog'])->middleware('role.name:owner,admin,administrador')->name('products.importCatalogWeb');
     Route::post('/products/{product}/generate-codes', [ProductController::class, 'generateCodes'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.generateCodesWeb');
     Route::get('/products/{category}', [ProductController::class, 'showByCategory'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.byCategory');

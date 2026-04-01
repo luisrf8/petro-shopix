@@ -375,6 +375,7 @@
 <script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
 
   <script>
+    const createProductEndpoint = @json(route('products.createWeb'));
     const importCatalogEndpoint = @json(route('products.importCatalogWeb'));
     const importCatalogForm = document.getElementById('importCatalogForm');
     if (importCatalogForm) {
@@ -437,12 +438,14 @@
 
       let formData = new FormData(this); // Crear un FormData con los datos del formulario
 
-      fetch('api/create-product', {
+      fetch(createProductEndpoint, {
         method: 'POST',
         headers: {
           'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
         },
+        credentials: 'same-origin',
         body: formData
       })
       .then(async response => {

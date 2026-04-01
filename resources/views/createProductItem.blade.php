@@ -261,7 +261,7 @@
 @push('scripts')
 <script>
     const PRODUCT_SAFE_IMAGE_BYTES = 1.2 * 1024 * 1024;
-    const PRODUCT_SAFE_TOTAL_UPLOAD_BYTES = 9 * 1024 * 1024;
+    const createProductEndpoint = @json(route('products.createWeb'));
 
     function showShopixToast(message, type = 'info') {
         let container = document.getElementById('shopixToastContainer');
@@ -544,12 +544,14 @@
         formData.append('variants', JSON.stringify(variants));
 
         try {
-            const response = await fetch('api/create-product', {
+            const response = await fetch(createProductEndpoint, {
                 method: 'POST',
                 headers: {
                     'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
                     'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
+                credentials: 'same-origin',
                 body: formData,
             });
 
