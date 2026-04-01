@@ -74,12 +74,12 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/categories', [ProductController::class, 'categoriesIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('categories.index');
 
     Route::get('/products', [ProductController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.index');
-    Route::post('/create-product', [ProductController::class, 'create'])->middleware('role.name:owner,admin,administrador')->name('products.createWeb');
+    Route::post('/create-product', [ProductController::class, 'create'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.createWeb');
     Route::post('/products/import-catalog', [ProductController::class, 'importCatalog'])->middleware('role.name:owner,admin,administrador')->name('products.importCatalogWeb');
     Route::post('/products/{product}/generate-codes', [ProductController::class, 'generateCodes'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.generateCodesWeb');
     Route::get('/products/{category}', [ProductController::class, 'showByCategory'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.byCategory');
     Route::get('/products/product/{id}', [ProductController::class, 'showByProduct'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('productItem');
-    Route::get('/createProduct', [ProductController::class, 'indexCreateProduct'])->middleware('role.name:owner,admin,administrador')->name('createProductItem');
+    Route::get('/createProduct', [ProductController::class, 'indexCreateProduct'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('createProductItem');
     Route::post('/products/{id}/taxes', [ProductController::class, 'updateTaxes'])->middleware('role.name:owner,admin,administrador');
     Route::post('/variants/{productVariant}/generate-codes', [ProductVariantController::class, 'generateCodes'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('variants.generateCodesWeb');
     Route::get('/variants/{productVariant}/qr-image', [ProductVariantController::class, 'qrImage'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('variants.qrImage');
@@ -163,8 +163,8 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/tenants', [TenantController::class, 'index'])->middleware('role.name:4')->name('tenant.index');
     Route::get('/tenant-payments', [TenantController::class, 'paymentsIndex'])->middleware('role.name:4')->name('tenant.payments.index');
     Route::get('/create-tenant', [TenantController::class, 'createIndex'])->middleware('role.name:4')->name('createTenant');
-    Route::get('/tenant-store', [TenantController::class, 'getTenant'])->middleware('role.name:owner')->name('tenant.store');
-    Route::post('/tenant-update', [TenantController::class, 'updateTenant'])->middleware('role.name:owner')->name('tenant.update');
+    Route::get('/tenant-store', [TenantController::class, 'getTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.store');
+    Route::post('/tenant-update', [TenantController::class, 'updateTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.update');
     Route::post('/tenant-store/plan-payment-request', [TenantController::class, 'submitPlanPaymentRequest'])->middleware('role.name:owner')->name('tenant.planPayment.request');
     Route::post('/tenants/{tenant}/plan-payments/{payment}/approve', [TenantController::class, 'approvePlanPayment'])->middleware('role.name:4')->name('tenant.planPayment.approve');
     Route::post('/tenants/{tenant}/plan-payments/{payment}/cutoff', [TenantController::class, 'updatePlanPaymentCutoffDate'])->middleware('role.name:4')->name('tenant.planPayment.cutoff.update');

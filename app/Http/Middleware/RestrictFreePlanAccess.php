@@ -67,7 +67,13 @@ class RestrictFreePlanAccess
 
         $allowedByName = [
             'categories.index',
+            'categories.store',
+            'categories.update',
+            'categories.toggleStatus',
             'products.index',
+            'products.createWeb',
+            'products.update',
+            'products.destroy',
             'products.importCatalogWeb',
             'products.generateCodesWeb',
             'products.byCategory',
@@ -91,6 +97,7 @@ class RestrictFreePlanAccess
         $allowedPrefixes = [
             'categories',
             'products',
+            'create-product',
             'createProduct',
             'variants',
             'tenant-store',

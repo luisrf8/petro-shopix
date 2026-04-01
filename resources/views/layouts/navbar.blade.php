@@ -119,7 +119,7 @@
       $canInventoryEntries = $isOwner || $isAdmin || $isWarehouse;
       $canSeeWarehouses = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canSeeMaterials = $isOwner || $isAdmin || $isSeller || $isWarehouse;
-      $canManageStore = $isOwner;
+      $canManageStore = $isOwner || $isAdmin;
       $canSeeReports = $isOwner || $isAdmin;
       $canSeeStoreExpenses = $isOwner || $isAdmin;
 
