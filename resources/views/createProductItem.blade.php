@@ -261,6 +261,7 @@
 @push('scripts')
 <script>
     const PRODUCT_SAFE_IMAGE_BYTES = 1.2 * 1024 * 1024;
+    const PRODUCT_SAFE_TOTAL_UPLOAD_BYTES = 8 * 1024 * 1024;
     const createProductEndpoint = @json(route('products.createWeb'));
 
     function showShopixToast(message, type = 'info') {
