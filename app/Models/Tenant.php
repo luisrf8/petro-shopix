@@ -28,6 +28,7 @@ class Tenant extends Model
         'name',
         'slug',
         'email',
+        'is_active',
         'logo',
         'color_primary',
         'color_secondary',
@@ -54,6 +55,7 @@ class Tenant extends Model
     ];
 
     protected $casts = [
+        'is_active' => 'boolean',
         'electronic_invoicing_enabled' => 'boolean',
         'restrict_delivery_city_to_tenant' => 'boolean',
     ];

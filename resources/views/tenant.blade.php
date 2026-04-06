@@ -8,6 +8,24 @@
     box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.55) !important;
     transition: box-shadow .25s ease;
   }
+
+  .tenant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .tenant-admin-table {
+    min-width: 1650px;
+  }
+
+  .tenant-admin-table th,
+  .tenant-admin-table td {
+    vertical-align: top;
+    white-space: normal;
+  }
+
+  .tenant-plan-cell {
+    min-width: 360px;
+  }
 </style>
 <div class="container-fluid py-2">
   @php
@@ -139,8 +157,8 @@
           </div>
         </div>
         <div class="card-body px-0 pb-2">
-          <div class="table-responsive p-0">
-            <table class="table align-items-center mb-0">
+          <div class="table-responsive p-0 tenant-table-wrapper">
+            <table class="table align-items-center mb-0 tenant-admin-table">
               <thead class="text-center">
                 <tr>
                   <th>Logo</th>
@@ -151,7 +169,8 @@
                   <th>Rubro</th>
                   <th>Facturación digital</th>
                   <th>Envío solo ciudad tienda</th>
-                  <th>Plan</th>
+                  <th>Estado</th>
+                  <th class="tenant-plan-cell">Plan</th>
                   <th>Editar</th>
                   <th>Eliminar</th>
                 </tr>
@@ -162,8 +181,8 @@
                     <td>
                       <img src="{{ $tenant->logo ? (\App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png') }}" alt="Logo"
                       class="navbar-brand-img"
-                      width="100"
-                      height="100"
+                      width="64"
+                      height="64"
                       alt="main_logo"
                       style="object-fit: contain;">
                     </td>
@@ -188,6 +207,14 @@
                     </td>
 
                     <td>
+                      @if((int) ($tenant->is_active ?? 1) === 1)
+                        <span class="badge bg-success">Activa</span>
+                      @else
+                        <span class="badge bg-danger">Inactiva</span>
+                      @endif
+                    </td>
+
+                    <td class="tenant-plan-cell">
                       @php
                         $owner = $tenant->users->first(function($user) {
                           return optional($user->role)->name === 'owner';
@@ -207,8 +234,8 @@
                           })
                           ->last();
                       @endphp
-                      <p>Dueño: {{ $owner?->name ?? 'Sin dueño' }}</p>
-                      <p>Usuarios: {{ $tenant->users->count() }}</p>
+                      <p class="mb-1">Dueño: {{ $owner?->name ?? 'Sin dueño' }}</p>
+                      <p class="mb-1">Usuarios: {{ $tenant->users->count() }}</p>
                       @if($latestPayment)
                         @php
                           $daysRemaining = null;
@@ -227,9 +254,9 @@
                                   : (-1 * $expires->diffInDays($now));
                           }
                         @endphp
-                        <p>Plan actual: {{ $latestPayment->plan->name }} - ${{ $latestPayment->amount }} - Estado: {{ $latestPayment->status }}</p>
-                        <p>Vence: {{ optional($resolvedCutoffDate)->format('d/m/Y H:i') ?? 'Sin fecha' }}</p>
-                        <p>
+                        <p class="mb-1">Plan actual: {{ $latestPayment->plan->name }} - ${{ $latestPayment->amount }} - Estado: {{ $latestPayment->status }}</p>
+                        <p class="mb-1">Vence: {{ optional($resolvedCutoffDate)->format('d/m/Y H:i') ?? 'Sin fecha' }}</p>
+                        <p class="mb-1">
                           Días restantes:
                           @if(is_null($daysRemaining))
                             Sin vigencia
@@ -240,8 +267,8 @@
                           @endif
                         </p>
                       @else
-                        <p>Plan actual: Sin plan</p>
-                        <p>Vence: Sin fecha</p>
+                        <p class="mb-1">Plan actual: Sin plan</p>
+                        <p class="mb-1">Vence: Sin fecha</p>
                       @endif
 
                       @if($latestPendingPayment)

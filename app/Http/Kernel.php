@@ -69,6 +69,7 @@ class Kernel extends HttpKernel
         'role.name' => \App\Http\Middleware\EnsureRoleName::class,
         'free.plan.access' => \App\Http\Middleware\RestrictFreePlanAccess::class,
         'basic.plan.access' => \App\Http\Middleware\RestrictBasicPlanAccess::class,
+        'inactive.tenant.restrict' => \App\Http\Middleware\RestrictInactiveTenantAccess::class,
         'backoffice.access' => \App\Http\Middleware\EnsureBackofficeAccess::class,
         'verify.access.token' => \App\Http\Middleware\VerifyAccessToken::class,
         'audit.trail' => \App\Http\Middleware\AuditTrailMiddleware::class,

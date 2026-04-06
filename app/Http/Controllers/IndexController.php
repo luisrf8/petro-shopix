@@ -31,7 +31,14 @@ class IndexController extends Controller
     public function landing()
     {
         $categories = Category::all()->take(3);
-        $tenants = Tenant::all();
+        $tenantsQuery = Tenant::query();
+        if (Schema::hasColumn('tenants', 'is_active')) {
+            $tenantsQuery->where(function ($query) {
+                $query->whereNull('is_active')->orWhere('is_active', 1);
+            });
+        }
+
+        $tenants = $tenantsQuery->get();
         $plans = Plan::all();
         
         // Asocia íconos por nombre o ID
@@ -67,7 +74,14 @@ class IndexController extends Controller
 
     private function buildTenantDirectoryData(): array
     {
-        $tenants = Tenant::with('categories:id,name,tenant_id')->get();
+        $tenantsQuery = Tenant::with('categories:id,name,tenant_id');
+        if (Schema::hasColumn('tenants', 'is_active')) {
+            $tenantsQuery->where(function ($query) {
+                $query->whereNull('is_active')->orWhere('is_active', 1);
+            });
+        }
+
+        $tenants = $tenantsQuery->get();
         $countryMap = Country::pluck('name', 'id')->mapWithKeys(fn ($name, $id) => [(string) $id => (string) $name]);
         $stateMap = State::pluck('name', 'id')->mapWithKeys(fn ($name, $id) => [(string) $id => (string) $name]);
         $cityMap = City::pluck('name', 'id')->mapWithKeys(fn ($name, $id) => [(string) $id => (string) $name]);

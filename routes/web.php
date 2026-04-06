@@ -57,7 +57,7 @@ Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
 Route::post('/tenant-ai-image', [TenantController::class, 'generateTenantImage'])->name('tenant.ai-image');
 
 // RUTAS CON AUTENTICACIÓN
-Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.access'])->group(function () {
+Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.access', 'inactive.tenant.restrict'])->group(function () {
     Route::get('/settings/google-drive/oauth', [GoogleDriveController::class, 'oauthStatus'])->name('google-drive.oauth.status');
     Route::get('/settings/google-drive/connect', [GoogleDriveController::class, 'redirectToGoogle'])->name('google-drive.connect');
     Route::get('/settings/google-drive/callback', [GoogleDriveController::class, 'handleGoogleCallback'])->name('google-drive.callback');

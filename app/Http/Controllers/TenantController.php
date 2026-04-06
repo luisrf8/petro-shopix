@@ -545,6 +545,8 @@ class TenantController extends Controller
 
     public function publicTenantindex(Tenant $tenant)
     {
+        $this->abortIfTenantInactiveForPublic($tenant);
+
         // Cargar categorías y productos del tenant
         $categories = Category::where('tenant_id', $tenant->id)
             ->where('is_active', true)
@@ -1362,6 +1364,8 @@ class TenantController extends Controller
     }
     public function publicTenantCategory(Tenant $tenant)
     {
+        $this->abortIfTenantInactiveForPublic($tenant);
+
         // Asegurarse que la categoría pertenece al tenant
         // if ($category->tenant_id !== $tenant->id) {
         //     abort(404);
@@ -1400,6 +1404,8 @@ class TenantController extends Controller
     }
     public function publicTenantProduct(Tenant $tenant, Product $product)
     {
+        $this->abortIfTenantInactiveForPublic($tenant);
+
         // $tenant y $product son inyectados automáticamente por el model binding de Laravel
         // gracias a la ruta '/{tenant:slug}/{product:slug}'
         
@@ -1420,6 +1426,8 @@ class TenantController extends Controller
 
     public function publicTenantPaymentMethods(Tenant $tenant)
     {
+        $this->abortIfTenantInactiveForPublic($tenant);
+
         $paymentMethods = PaymentMethod::with('currency')
             ->where('tenant_id', $tenant->id)
             ->where('status', 1)
@@ -1505,6 +1513,8 @@ class TenantController extends Controller
 
     public function publicTenantResolveScanCode(Request $request, Tenant $tenant)
     {
+        $this->abortIfTenantInactiveForPublic($tenant);
+
         $request->validate([
             'code' => 'required|string|max:150',
         ]);
@@ -1559,6 +1569,8 @@ class TenantController extends Controller
 
     public function publicTenantProCheckout(Request $request, Tenant $tenant)
     {
+        $this->abortIfTenantInactiveForPublic($tenant);
+
         if (!$this->tenantHasProPlan($tenant)) {
             return response()->json([
                 'success' => false,
@@ -1791,6 +1803,13 @@ class TenantController extends Controller
             'payment_id' => $payment->id,
             'image_path' => $path,
         ]);
+    }
+
+    private function abortIfTenantInactiveForPublic(Tenant $tenant): void
+    {
+        if ((int) ($tenant->is_active ?? 1) === 0) {
+            abort(404);
+        }
     }
 
     private function getVariantDiscountedUnitPrice(ProductVariant $variant): float
