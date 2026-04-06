@@ -9,7 +9,7 @@
       <div class="card mb-4">
         <div class="card-header p-3">
           <h5 class="mb-1">Crear paquete / lista de materiales</h5>
-          <p class="text-sm text-muted mb-0">Combina variantes de productos para crear combos, docenas u outfits.</p>
+          <p class="text-sm text-muted mb-0">Combina productos para crear combos. La selección de sabores/variantes se define al vender.</p>
         </div>
         <div class="card-body p-3">
           @if(session('success'))
@@ -158,25 +158,20 @@
     const addRowBtn = document.getElementById('addMaterialRow');
     const fallbackImage = @json(asset('assets/img/shopix5.png'));
 
-    const variantMeta = {
+    const productMeta = {
       @foreach($productItems as $product)
-        @foreach($product->variants as $variant)
-          "{{ $variant->id }}": {
-            name: @json($product->name),
-            size: @json($variant->size),
-            stock: @json($variant->stock),
-            image: @json((isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'))),
-          },
-        @endforeach
+        "{{ $product->id }}": {
+          name: @json($product->name),
+          stock: @json((float) $product->variants->sum('stock')),
+          image: @json((isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'))),
+        },
       @endforeach
     };
 
-    const variantOptions = `
-      <option value="">Selecciona variante...</option>
+    const productOptions = `
+      <option value="">Selecciona producto...</option>
       @foreach($productItems as $product)
-        @foreach($product->variants as $variant)
-          <option value="{{ $variant->id }}">{{ $product->name }} - {{ $variant->size }} (Stock: {{ $variant->stock }})</option>
-        @endforeach
+          <option value="{{ $product->id }}">{{ $product->name }} (Stock total: {{ number_format((float) $product->variants->sum('stock'), 2, '.', '') }})</option>
       @endforeach
     `;
 
@@ -185,21 +180,21 @@
     function refreshRowPreview(rowElement) {
       if (!rowElement) return;
 
-      const select = rowElement.querySelector('.js-material-variant-select');
-      const image = rowElement.querySelector('.js-material-variant-image');
-      const label = rowElement.querySelector('.js-material-variant-label');
+      const select = rowElement.querySelector('.js-material-product-select');
+      const image = rowElement.querySelector('.js-material-product-image');
+      const label = rowElement.querySelector('.js-material-product-label');
 
       if (!select || !image || !label) return;
 
-      const meta = variantMeta[String(select.value)] || null;
+      const meta = productMeta[String(select.value)] || null;
       if (!meta) {
         image.src = fallbackImage;
-        label.textContent = 'Selecciona una variante para ver su imagen';
+        label.textContent = 'Selecciona un producto para ver su imagen';
         return;
       }
 
       image.src = meta.image || fallbackImage;
-      label.textContent = `${meta.name || 'Producto'} - ${meta.size || 'Variante'} (Stock: ${meta.stock ?? 0})`;
+      label.textContent = `${meta.name || 'Producto'} (Stock total: ${meta.stock ?? 0})`;
     }
 
     function addRow() {
@@ -211,15 +206,15 @@
           <div class="col-12 col-md-2">
             <label class="form-label mb-1">Imagen</label>
             <div class="border rounded d-flex align-items-center justify-content-center bg-white" style="height: 62px; overflow: hidden;">
-              <img src="${fallbackImage}" alt="Vista previa" class="js-material-variant-image" style="width: 100%; height: 100%; object-fit: cover;">
+              <img src="${fallbackImage}" alt="Vista previa" class="js-material-product-image" style="width: 100%; height: 100%; object-fit: cover;">
             </div>
           </div>
           <div class="col-12 col-md-8">
-            <label class="form-label mb-1">Variante</label>
-            <select name="items[${rowIndex}][variant_id]" class="form-select border border-1 bg-white js-material-variant-select" required>
-              ${variantOptions}
+            <label class="form-label mb-1">Producto</label>
+            <select name="items[${rowIndex}][product_id]" class="form-select border border-1 bg-white js-material-product-select" required>
+              ${productOptions}
             </select>
-            <p class="text-xs text-muted mb-0 mt-1 js-material-variant-label">Selecciona una variante para ver su imagen</p>
+            <p class="text-xs text-muted mb-0 mt-1 js-material-product-label">Selecciona un producto para ver su imagen</p>
           </div>
           <div class="col-8 col-md-1">
             <label class="form-label mb-1">Cantidad</label>
@@ -248,7 +243,7 @@
     });
 
     rowsContainer.addEventListener('change', function (event) {
-      if (!event.target.classList.contains('js-material-variant-select')) return;
+      if (!event.target.classList.contains('js-material-product-select')) return;
       const row = event.target.closest('.border.rounded.p-2');
       refreshRowPreview(row);
     });

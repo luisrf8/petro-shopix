@@ -47,14 +47,41 @@ class MaterialPackageController extends Controller
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'package_price' => 'nullable|numeric|min:0.01',
             'items' => 'required|array|min:1',
-            'items.*.variant_id' => 'required|integer|exists:product_variants,id',
+            'items.*.variant_id' => 'nullable|integer|exists:product_variants,id',
+            'items.*.product_id' => 'nullable|integer|exists:products,id',
             'items.*.quantity' => 'required|numeric|min:0.01',
         ]);
 
         $itemRows = collect($validated['items'])
-            ->map(function ($row) {
+            ->map(function ($row, $index) use ($user) {
+                $variantId = isset($row['variant_id']) ? (int) $row['variant_id'] : 0;
+                $productId = isset($row['product_id']) ? (int) $row['product_id'] : 0;
+
+                if ($variantId <= 0 && $productId <= 0) {
+                    throw ValidationException::withMessages([
+                        "items.$index" => 'Debes seleccionar un producto o una variante en cada material.',
+                    ]);
+                }
+
+                if ($variantId <= 0 && $productId > 0) {
+                    $variantId = (int) ProductVariant::query()
+                        ->where('product_id', $productId)
+                        ->whereHas('product', function ($query) use ($user) {
+                            $query->where('tenant_id', $user->tenant_id);
+                        })
+                        ->orderByDesc('stock')
+                        ->orderBy('id')
+                        ->value('id');
+
+                    if ($variantId <= 0) {
+                        throw ValidationException::withMessages([
+                            "items.$index.product_id" => 'El producto seleccionado no tiene variantes disponibles para este tenant.',
+                        ]);
+                    }
+                }
+
                 return [
-                    'variant_id' => (int) $row['variant_id'],
+                    'variant_id' => $variantId,
                     'quantity' => (float) $row['quantity'],
                 ];
             })
