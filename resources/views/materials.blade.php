@@ -216,6 +216,25 @@
 @endsection
 
 @push('scripts')
+@php
+  $packageCatalogData = ($packages ?? collect())->map(function ($package) {
+    return [
+      'id' => (int) $package->id,
+      'name' => (string) $package->name,
+      'description' => (string) ($package->description ?? ''),
+      'discount_percentage' => (float) ($package->discount_percentage ?? 0),
+      'package_price' => !is_null($package->package_price) ? (float) $package->package_price : null,
+      'items' => ($package->items ?? collect())->map(function ($item) {
+        return [
+          'selection_mode' => (string) ($item->selection_mode ?? 'variant'),
+          'variant_id' => (int) ($item->product_variant_id ?? 0),
+          'product_id' => (int) ($item->variant->product_id ?? 0),
+          'quantity' => (float) ($item->quantity ?? 0),
+        ];
+      })->values()->toArray(),
+    ];
+  })->values()->toArray();
+@endphp
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const rowsContainer = document.getElementById('materialsRows');
@@ -230,23 +249,7 @@
     let editFormInitialState = '';
     const fallbackImage = @json(asset('assets/img/shopix5.png'));
 
-    const packageCatalog = @json(($packages ?? collect())->map(function ($package) {
-      return [
-        'id' => (int) $package->id,
-        'name' => (string) $package->name,
-        'description' => (string) ($package->description ?? ''),
-        'discount_percentage' => (float) ($package->discount_percentage ?? 0),
-        'package_price' => !is_null($package->package_price) ? (float) $package->package_price : null,
-        'items' => ($package->items ?? collect())->map(function ($item) {
-          return [
-            'selection_mode' => (string) ($item->selection_mode ?? 'variant'),
-            'variant_id' => (int) ($item->product_variant_id ?? 0),
-            'product_id' => (int) ($item->variant->product_id ?? 0),
-            'quantity' => (float) ($item->quantity ?? 0),
-          ];
-        })->values()->toArray(),
-      ];
-    })->values());
+    const packageCatalog = @json($packageCatalogData);
 
     const variantMeta = {
       @foreach($productItems as $product)
