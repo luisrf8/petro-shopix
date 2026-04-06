@@ -227,7 +227,18 @@ class MaterialPackageController extends Controller
                     ]);
                 }
 
-                if ($selectionMode === 'product' && $variantId <= 0 && $productId > 0) {
+                if ($selectionMode === 'product' && $productId > 0) {
+                    $validProductForTenant = Product::query()
+                        ->whereKey($productId)
+                        ->where('tenant_id', $tenantId)
+                        ->exists();
+
+                    if (!$validProductForTenant) {
+                        throw ValidationException::withMessages([
+                            "items.$index.product_id" => 'El producto seleccionado no pertenece a esta tienda.',
+                        ]);
+                    }
+
                     $variantId = (int) ProductVariant::query()
                         ->where('product_id', $productId)
                         ->whereHas('product', function ($query) use ($tenantId) {
@@ -260,13 +271,18 @@ class MaterialPackageController extends Controller
                 }
 
                 return [
+                    'product_id' => $productId,
                     'variant_id' => $variantId,
                     'quantity' => (float) $row['quantity'],
                     'selection_mode' => $selectionMode,
                 ];
             })
             ->groupBy(function ($row) {
-                return $row['selection_mode'] . ':' . $row['variant_id'];
+                if (($row['selection_mode'] ?? 'variant') === 'product') {
+                    return 'product:' . ((int) ($row['product_id'] ?? 0));
+                }
+
+                return 'variant:' . ((int) ($row['variant_id'] ?? 0));
             })
             ->map(function ($rows) {
                 $first = $rows->first();

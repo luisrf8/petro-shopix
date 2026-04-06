@@ -312,7 +312,10 @@
         variantWrap?.classList.remove('d-none');
         productWrap?.classList.add('d-none');
         variantSelect.required = true;
+        variantSelect.disabled = false;
         productSelect.required = false;
+        productSelect.disabled = true;
+        productSelect.value = '';
 
         const meta = variantMeta[String(variantSelect.value)] || null;
         if (!meta) {
@@ -329,7 +332,10 @@
       variantWrap?.classList.add('d-none');
       productWrap?.classList.remove('d-none');
       variantSelect.required = false;
+      variantSelect.disabled = true;
+      variantSelect.value = '';
       productSelect.required = true;
+      productSelect.disabled = false;
 
       const meta = productMeta[String(productSelect.value)] || null;
       if (!meta) {

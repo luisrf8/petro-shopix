@@ -735,21 +735,8 @@
                         $variantDiscount = (float) ($item->variant->discount_percentage ?? 0);
                         $effectivePrice = $basePrice * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
 
-                        $referenceSize = (string) ($item->variant->size ?? '');
-                        $candidateVariants = collect($item->variant->product->variants ?? [])
-                            ->where('stock', '>', 0);
-
-                        $sameSizeVariants = $candidateVariants
-                            ->filter(function ($variant) use ($referenceSize) {
-                                if ($referenceSize === '') {
-                                    return true;
-                                }
-
-                                return strtolower((string) ($variant->size ?? '')) === strtolower($referenceSize);
-                            })
-                            ->values();
-
-                        $selectableVariants = ($sameSizeVariants->isNotEmpty() ? $sameSizeVariants : $candidateVariants)
+                        $selectableVariants = collect($item->variant->product->variants ?? [])
+                            ->where('stock', '>', 0)
                             ->map(function ($variant) {
                                 $variantBasePrice = (float) ($variant->price ?? 0);
                                 $variantProductDiscount = (float) ($variant->product->discount_percentage ?? 0);
