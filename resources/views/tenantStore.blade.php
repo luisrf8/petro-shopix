@@ -290,6 +290,44 @@
                                         <input type="text" name="phone_number" id="phone_number" class="form-control form-control-lg border border-radius-lg" placeholder="Ej: 4121234567" value="{{ $tenant->phone_number ?? '' }}">
                                     </div>
                                 </div>
+
+                                @php
+                                    $workingDays = collect($tenant->working_days ?? [])->map(fn ($day) => strtolower((string) $day))->all();
+                                    $weekDays = [
+                                        'monday' => 'Lunes',
+                                        'tuesday' => 'Martes',
+                                        'wednesday' => 'Miércoles',
+                                        'thursday' => 'Jueves',
+                                        'friday' => 'Viernes',
+                                        'saturday' => 'Sábado',
+                                        'sunday' => 'Domingo',
+                                    ];
+                                @endphp
+
+                                <div class="mb-4" id="physicalStoreScheduleFields" style="display: {{ $tenantBusinessType === 'tienda' ? 'block' : 'none' }};">
+                                    <label class="form-label fw-bold d-block">Días laborales y horario (tienda física)</label>
+                                    <div class="row g-2 mb-3">
+                                        @foreach($weekDays as $dayKey => $dayLabel)
+                                            <div class="col-6 col-md-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" name="working_days[]" id="working_day_{{ $dayKey }}" value="{{ $dayKey }}" {{ in_array($dayKey, $workingDays, true) ? 'checked' : '' }}>
+                                                    <label class="form-check-label" for="working_day_{{ $dayKey }}">{{ $dayLabel }}</label>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-12 col-md-6">
+                                            <label for="opening_time" class="form-label">Hora de apertura</label>
+                                            <input type="time" class="form-control border border-1 p-2" id="opening_time" name="opening_time" value="{{ !empty($tenant->opening_time) ? \Illuminate\Support\Str::substr((string) $tenant->opening_time, 0, 5) : '' }}">
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label for="closing_time" class="form-label">Hora de cierre</label>
+                                            <input type="time" class="form-control border border-1 p-2" id="closing_time" name="closing_time" value="{{ !empty($tenant->closing_time) ? \Illuminate\Support\Str::substr((string) $tenant->closing_time, 0, 5) : '' }}">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted d-block mt-2">Estos campos son opcionales y solo se muestran en la landing si tienen datos.</small>
+                                </div>
                                 <div class="mb-3">
                                     <label class="form-label">Url de la Tienda</label>
                                     <div class="input-group mt-2">
@@ -1387,14 +1425,29 @@ function initMap() {
         updateStorePublicUrl();
     }
 
+    const syncPhysicalStoreScheduleVisibility = () => {
+        const scheduleBlock = document.getElementById('physicalStoreScheduleFields');
+        if (!scheduleBlock || !businessTypeSelect) {
+            return;
+        }
+
+        const isPhysicalStore = String(businessTypeSelect.value || '').toLowerCase() === 'tienda';
+        scheduleBlock.style.display = isPhysicalStore ? 'block' : 'none';
+    };
+
     if (businessTypeSelect) {
-        businessTypeSelect.addEventListener('change', () => refreshEconomicActivities(''));
+        businessTypeSelect.addEventListener('change', () => {
+            refreshEconomicActivities('');
+            syncPhysicalStoreScheduleVisibility();
+        });
     }
 
     if (economicActivitySelect) {
         economicActivitySelect.addEventListener('change', () => refreshEconomicActivities(economicActivitySelect.value));
         refreshEconomicActivities(economicActivitySelect.dataset.selected || '');
     }
+
+    syncPhysicalStoreScheduleVisibility();
 
     if (copyStoreUrlBtn && storePublicUrlInput) {
         copyStoreUrlBtn.addEventListener('click', async () => {

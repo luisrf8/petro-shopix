@@ -66,6 +66,43 @@
                                 <small id="economic_activity_help" class="text-muted d-block mt-1"></small>
                             </div>
                         </div>
+
+                        @php
+                            $weekDays = [
+                                'monday' => 'Lunes',
+                                'tuesday' => 'Martes',
+                                'wednesday' => 'Miércoles',
+                                'thursday' => 'Jueves',
+                                'friday' => 'Viernes',
+                                'saturday' => 'Sábado',
+                                'sunday' => 'Domingo',
+                            ];
+                            $oldWorkingDays = collect(old('working_days', []))->map(fn ($day) => strtolower((string) $day))->all();
+                        @endphp
+
+                        <div class="mb-3" id="createTenantScheduleFields" style="display: {{ strtolower((string) old('business_type', 'tienda')) === 'tienda' ? 'block' : 'none' }};">
+                            <label class="form-label">Días laborales y horario (opcional)</label>
+                            <div class="row g-2 mb-3">
+                                @foreach($weekDays as $dayKey => $dayLabel)
+                                    <div class="col-6 col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="working_days[]" id="create_working_day_{{ $dayKey }}" value="{{ $dayKey }}" {{ in_array($dayKey, $oldWorkingDays, true) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="create_working_day_{{ $dayKey }}">{{ $dayLabel }}</label>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-12 col-md-6">
+                                    <label for="opening_time" class="form-label">Hora de apertura</label>
+                                    <input type="time" name="opening_time" id="opening_time" class="form-control border border-radius-lg p-2" value="{{ old('opening_time') }}">
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="closing_time" class="form-label">Hora de cierre</label>
+                                    <input type="time" name="closing_time" id="closing_time" class="form-control border border-radius-lg p-2" value="{{ old('closing_time') }}">
+                                </div>
+                            </div>
+                        </div>
                         
                         <div class="row mb-3">
                             {{-- Logo --}}
@@ -358,7 +395,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     if (businessTypeSelect) {
-        businessTypeSelect.addEventListener('change', () => refreshEconomicActivities(''));
+        const syncCreateTenantScheduleVisibility = () => {
+            const scheduleBlock = document.getElementById('createTenantScheduleFields');
+            if (!scheduleBlock) {
+                return;
+            }
+
+            const isPhysicalStore = String(businessTypeSelect.value || '').toLowerCase() === 'tienda';
+            scheduleBlock.style.display = isPhysicalStore ? 'block' : 'none';
+        };
+
+        businessTypeSelect.addEventListener('change', () => {
+            refreshEconomicActivities('');
+            syncCreateTenantScheduleVisibility();
+        });
+
+        syncCreateTenantScheduleVisibility();
     }
 
     if (economicActivitySelect) {

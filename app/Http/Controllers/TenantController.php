@@ -590,6 +590,10 @@ class TenantController extends Controller
             'city'            => 'nullable|string|max:255',
             'phone_code'      => 'nullable|string|max:5',
             'phone_number'    => 'nullable|string|max:20',
+            'working_days'    => 'nullable|array',
+            'working_days.*'  => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
+            'opening_time'    => 'nullable|date_format:H:i',
+            'closing_time'    => 'nullable|date_format:H:i',
             'users'           => 'nullable|array',
             'users.*.name'    => 'nullable|string|max:255',
             'users.*.email'   => 'nullable|email|unique:users,email',
@@ -646,6 +650,9 @@ class TenantController extends Controller
                 'city'            => $validated['city'] ?? null,
                 'phone_code'      => $validated['phone_code'] ?? null,
                 'phone_number'    => $validated['phone_number'] ?? null,
+                'working_days'    => $this->normalizeWorkingDays($validated['working_days'] ?? null),
+                'opening_time'    => $validated['opening_time'] ?? null,
+                'closing_time'    => $validated['closing_time'] ?? null,
             ];
 
             $tenant = Tenant::create($this->filterDataByExistingColumns('tenants', $tenantData));
@@ -770,6 +777,10 @@ class TenantController extends Controller
             'city'                  => 'required|exists:cities,id',
             'phone_code'            => 'required|string|max:5',
             'phone_number'          => 'required|string|max:20',
+            'working_days'          => 'nullable|array',
+            'working_days.*'        => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
+            'opening_time'          => 'nullable|date_format:H:i',
+            'closing_time'          => 'nullable|date_format:H:i',
             'plan_id'               => 'required|exists:plans,id',
             'address'               => 'nullable|string|max:255',
             'latitude'              => 'nullable|numeric',
@@ -830,6 +841,9 @@ class TenantController extends Controller
                 'city'            => $validated['city'],
                 'phone_code'      => $validated['phone_code'],
                 'phone_number'    => $validated['phone_number'],
+                'working_days'    => $this->normalizeWorkingDays($validated['working_days'] ?? null),
+                'opening_time'    => $validated['opening_time'] ?? null,
+                'closing_time'    => $validated['closing_time'] ?? null,
                 'slogan'          => $validated['slogan'] ?? null,
                 'description'     => $validated['description'] ?? null,
                 'address'         => $validated['address'] ?? null,
@@ -936,6 +950,10 @@ class TenantController extends Controller
             'city'            => 'nullable|string|max:255',
             'phone_code'      => 'nullable|string|max:5',
             'phone_number'    => 'nullable|string|max:20',
+            'working_days'    => 'nullable|array',
+            'working_days.*'  => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
+            'opening_time'    => 'nullable|date_format:H:i',
+            'closing_time'    => 'nullable|date_format:H:i',
             'slogan'          => 'nullable|string|max:255',
             'description'     => 'nullable|string',
             'address'         => 'nullable|string|max:255',
@@ -1066,6 +1084,11 @@ class TenantController extends Controller
             'city' => $validated['city'] ?? $tenant->city,
             'phone_code' => $validated['phone_code'] ?? $tenant->phone_code,
             'phone_number' => $validated['phone_number'] ?? $tenant->phone_number,
+            'working_days' => array_key_exists('working_days', $validated)
+                ? $this->normalizeWorkingDays($validated['working_days'] ?? null)
+                : $tenant->working_days,
+            'opening_time' => $validated['opening_time'] ?? $tenant->opening_time,
+            'closing_time' => $validated['closing_time'] ?? $tenant->closing_time,
             'slogan' => $validated['slogan'] ?? $tenant->slogan,
             'description' => $validated['description'] ?? $tenant->description,
             'address' => $validated['address'] ?? $tenant->address,
@@ -1180,6 +1203,10 @@ class TenantController extends Controller
                 'city'            => 'nullable|exists:cities,id',
                 'phone_code'      => 'nullable|string|max:5',
                 'phone_number'    => 'nullable|string|max:20',
+                'working_days'    => 'nullable|array',
+                'working_days.*'  => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
+                'opening_time'    => 'nullable|date_format:H:i',
+                'closing_time'    => 'nullable|date_format:H:i',
                 'address'         => 'nullable|string|max:255',
                 'latitude'        => 'nullable|numeric',
                 'longitude'       => 'nullable|numeric',
@@ -1317,6 +1344,11 @@ class TenantController extends Controller
                 'city'            => $validated['city'] ?? $tenant->city,
                 'phone_code'      => $validated['phone_code'] ?? $tenant->phone_code,
                 'phone_number'    => $validated['phone_number'] ?? $tenant->phone_number,
+                'working_days'    => array_key_exists('working_days', $validated)
+                    ? $this->normalizeWorkingDays($validated['working_days'] ?? null)
+                    : $tenant->working_days,
+                'opening_time'    => $validated['opening_time'] ?? $tenant->opening_time,
+                'closing_time'    => $validated['closing_time'] ?? $tenant->closing_time,
                 'address'         => $validated['address'] ?? $tenant->address,
                 'latitude'        => $validated['latitude'] ?? $tenant->latitude,
                 'longitude'       => $validated['longitude'] ?? $tenant->longitude,
@@ -1810,6 +1842,22 @@ class TenantController extends Controller
         if ((int) ($tenant->is_active ?? 1) === 0) {
             abort(404);
         }
+    }
+
+    private function normalizeWorkingDays($days): ?array
+    {
+        if (!is_array($days)) {
+            return null;
+        }
+
+        $normalized = collect($days)
+            ->map(fn ($day) => strtolower(trim((string) $day)))
+            ->filter(fn ($day) => in_array($day, ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], true))
+            ->unique()
+            ->values()
+            ->all();
+
+        return empty($normalized) ? null : $normalized;
     }
 
     private function getVariantDiscountedUnitPrice(ProductVariant $variant): float

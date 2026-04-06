@@ -61,7 +61,7 @@ class SaleController extends Controller
         ->where('tenant_id', $user->tenant_id)
         ->where('is_active', true)
         ->orderBy('created_at', 'desc')->get();
-        $materialPackages = MaterialPackage::with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images', 'items.variant.product.taxes'])
+        $materialPackages = MaterialPackage::with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images', 'items.variant.product.taxes', 'items.variant.product.variants'])
             ->where('tenant_id', $user->tenant_id)
             ->where('is_active', true)
             ->orderBy('created_at', 'desc')

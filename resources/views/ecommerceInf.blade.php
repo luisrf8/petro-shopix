@@ -40,6 +40,25 @@
     $stateName = $tenant->state_name ?? '';
     $cityName = $tenant->city_name ?? '';
     $locationSummary = implode(' - ', array_filter([$countryName, $stateName, $cityName]));
+    $weekDayLabels = [
+      'monday' => 'Lunes',
+      'tuesday' => 'Martes',
+      'wednesday' => 'Miércoles',
+      'thursday' => 'Jueves',
+      'friday' => 'Viernes',
+      'saturday' => 'Sábado',
+      'sunday' => 'Domingo',
+    ];
+    $workingDaysText = collect($tenant->working_days ?? [])
+      ->map(fn ($day) => $weekDayLabels[strtolower((string) $day)] ?? null)
+      ->filter()
+      ->values()
+      ->implode(', ');
+    $openingTimeLabel = !empty($tenant->opening_time) ? \Illuminate\Support\Str::substr((string) $tenant->opening_time, 0, 5) : '';
+    $closingTimeLabel = !empty($tenant->closing_time) ? \Illuminate\Support\Str::substr((string) $tenant->closing_time, 0, 5) : '';
+    $workingHoursLabel = ($openingTimeLabel !== '' || $closingTimeLabel !== '')
+      ? trim(($openingTimeLabel !== '' ? $openingTimeLabel : '--:--') . ' - ' . ($closingTimeLabel !== '' ? $closingTimeLabel : '--:--'))
+      : '';
     $whatsapp = preg_replace('/\D/', '', (string) ($tenant->phone_code . $tenant->phone_number));
     $mapsUrl = null;
     if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
@@ -1164,6 +1183,12 @@
           @endif
           @if(!empty($tenant->address))
             <p class="mb-3">Ubicada en {{ $tenant->address }}.</p>
+          @endif
+          @if(!empty($workingDaysText))
+            <p class="mb-2"><strong>Días laborales:</strong> {{ $workingDaysText }}</p>
+          @endif
+          @if(!empty($workingHoursLabel))
+            <p class="mb-3"><strong>Horario:</strong> {{ $workingHoursLabel }}</p>
           @endif
           <div class="contact-actions">
             @if(!empty($whatsapp))

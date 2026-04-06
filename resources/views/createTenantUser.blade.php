@@ -335,6 +335,41 @@
                       <input type="text" name="phone_number" id="phone_number" class="form-control form-control-lg" placeholder="Ej: 4121234567" required>
                   </div>
                 </div>
+
+                @php
+                  $weekDays = [
+                    'monday' => 'Lunes',
+                    'tuesday' => 'Martes',
+                    'wednesday' => 'Miércoles',
+                    'thursday' => 'Jueves',
+                    'friday' => 'Viernes',
+                    'saturday' => 'Sábado',
+                    'sunday' => 'Domingo',
+                  ];
+                @endphp
+                <div class="mb-4" id="createTenantUserScheduleFields" style="display: {{ strtolower((string) old('business_type', 'tienda')) === 'tienda' ? 'block' : 'none' }};">
+                  <label class="form-label fw-bold d-block">Días laborales y horario (opcional)</label>
+                  <div class="row g-2 mb-3">
+                    @foreach($weekDays as $dayKey => $dayLabel)
+                      <div class="col-6 col-md-3">
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" name="working_days[]" id="register_working_day_{{ $dayKey }}" value="{{ $dayKey }}">
+                          <label class="form-check-label" for="register_working_day_{{ $dayKey }}">{{ $dayLabel }}</label>
+                        </div>
+                      </div>
+                    @endforeach
+                  </div>
+                  <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                      <label for="opening_time" class="form-label fw-bold">Hora de apertura</label>
+                      <input type="time" name="opening_time" id="opening_time" class="form-control form-control-lg" value="{{ old('opening_time') }}">
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <label for="closing_time" class="form-label fw-bold">Hora de cierre</label>
+                      <input type="time" name="closing_time" id="closing_time" class="form-control form-control-lg" value="{{ old('closing_time') }}">
+                    </div>
+                  </div>
+                </div>
                 <hr>
 
                 <h5 class="fw-bold text-center mb-3">Crea tu cuenta de acceso</h5>
@@ -1155,7 +1190,22 @@
       });
 
       if (businessTypeSelect) {
-        businessTypeSelect.addEventListener('change', () => refreshEconomicActivities(''));
+        const syncCreateTenantUserScheduleVisibility = () => {
+          const scheduleBlock = document.getElementById('createTenantUserScheduleFields');
+          if (!scheduleBlock) {
+            return;
+          }
+
+          const isPhysicalStore = String(businessTypeSelect.value || '').toLowerCase() === 'tienda';
+          scheduleBlock.style.display = isPhysicalStore ? 'block' : 'none';
+        };
+
+        businessTypeSelect.addEventListener('change', () => {
+          refreshEconomicActivities('');
+          syncCreateTenantUserScheduleVisibility();
+        });
+
+        syncCreateTenantUserScheduleVisibility();
       }
 
       if (economicActivitySelect) {

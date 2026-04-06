@@ -1444,10 +1444,12 @@ class ProductController extends Controller
 
         $variantIds = $product->variants->pluck('id')->filter()->all();
 
-        if ($this->productHasProtectedRelations($variantIds)) {
+        $protectionReasons = $this->productProtectionReasons($variantIds);
+
+        if (!empty($protectionReasons)) {
             return response()->json([
                 'success' => false,
-                'message' => 'No se puede eliminar el producto porque ya tiene movimientos o registros asociados. Puedes desactivarlo en su lugar.',
+                'message' => 'No se puede eliminar el producto porque ya tiene registros asociados en: ' . implode(', ', $protectionReasons) . '. Puedes desactivarlo en su lugar.',
             ], 409);
         }
 
@@ -1465,27 +1467,77 @@ class ProductController extends Controller
         ]);
     }
 
-    private function productHasProtectedRelations(array $variantIds): bool
+    private function productProtectionReasons(array $variantIds): array
     {
         if (empty($variantIds)) {
-            return false;
+            return [];
         }
 
-        $protectedTables = [
-            'sales_order_details',
-            'sales_return_items',
-            'purchase_order_detail',
-            'warehouse_movements',
-            'material_package_items',
+        $relationRules = [
+            [
+                'table' => 'sales_order_details',
+                'column' => 'product_variant_id',
+                'label' => 'ventas',
+            ],
+            [
+                'table' => 'sales_return_items',
+                'column' => 'product_variant_id',
+                'label' => 'devoluciones de ventas',
+            ],
+            [
+                'table' => 'purchase_order_detail',
+                'column' => 'product_variant_id',
+                'label' => 'compras',
+            ],
+            [
+                'table' => 'purchase_order_details',
+                'column' => 'product_variant_id',
+                'label' => 'compras',
+            ],
+            [
+                'table' => 'purchase_order_consumptions',
+                'column' => 'consumed_variant_id',
+                'label' => 'consumos de producción',
+            ],
+            [
+                'table' => 'purchase_order_consumptions',
+                'column' => 'produced_variant_id',
+                'label' => 'producción interna',
+            ],
+            [
+                'table' => 'warehouse_movements',
+                'column' => 'product_variant_id',
+                'label' => 'movimientos de almacén',
+            ],
+            [
+                'table' => 'product_variant_warehouse_stocks',
+                'column' => 'product_variant_id',
+                'label' => 'stock por almacén',
+            ],
+            [
+                'table' => 'material_package_items',
+                'column' => 'product_variant_id',
+                'label' => 'listas de materiales',
+            ],
         ];
 
-        foreach ($protectedTables as $table) {
-            if (Schema::hasTable($table) && DB::table($table)->whereIn('product_variant_id', $variantIds)->exists()) {
-                return true;
+        $reasons = [];
+
+        foreach ($relationRules as $rule) {
+            $table = (string) $rule['table'];
+            $column = (string) $rule['column'];
+            $label = (string) $rule['label'];
+
+            if (!Schema::hasTable($table) || !Schema::hasColumn($table, $column)) {
+                continue;
+            }
+
+            if (DB::table($table)->whereIn($column, $variantIds)->exists()) {
+                $reasons[] = $label;
             }
         }
 
-        return false;
+        return array_values(array_unique($reasons));
     }
 
     public function generateReport(Request $request)

@@ -669,6 +669,25 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="packageFlavorModal" tabindex="-1" aria-labelledby="packageFlavorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="packageFlavorModalLabel">Seleccionar sabores del combo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="packageFlavorSummary" class="mb-3"></div>
+                <div id="packageFlavorRows" class="d-flex flex-column gap-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-dark" id="confirmPackageFlavorBtn">Agregar al carrito</button>
+            </div>
+        </div>
+    </div>
+</div>
     @endsection
 
 @push('scripts')
@@ -716,12 +735,53 @@
                         $variantDiscount = (float) ($item->variant->discount_percentage ?? 0);
                         $effectivePrice = $basePrice * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
 
+                        $referenceSize = (string) ($item->variant->size ?? '');
+                        $candidateVariants = collect($item->variant->product->variants ?? [])
+                            ->where('stock', '>', 0);
+
+                        $sameSizeVariants = $candidateVariants
+                            ->filter(function ($variant) use ($referenceSize) {
+                                if ($referenceSize === '') {
+                                    return true;
+                                }
+
+                                return strtolower((string) ($variant->size ?? '')) === strtolower($referenceSize);
+                            })
+                            ->values();
+
+                        $selectableVariants = ($sameSizeVariants->isNotEmpty() ? $sameSizeVariants : $candidateVariants)
+                            ->map(function ($variant) {
+                                $variantBasePrice = (float) ($variant->price ?? 0);
+                                $variantProductDiscount = (float) ($variant->product->discount_percentage ?? 0);
+                                $variantOwnDiscount = (float) ($variant->discount_percentage ?? 0);
+
+                                return [
+                                    'variant_id' => (int) $variant->id,
+                                    'variant_size' => (string) ($variant->size ?? ''),
+                                    'variant_stock' => (float) ($variant->stock ?? 0),
+                                    'variant_price' => $variantBasePrice * ((100 - $variantProductDiscount) / 100) * ((100 - $variantOwnDiscount) / 100),
+                                    'product_name' => $variant->product->name ?? 'Producto',
+                                    'taxes' => ($variant->product && $variant->product->taxes)
+                                        ? $variant->product->taxes->map(function ($tax) {
+                                            return [
+                                                'name' => $tax->name,
+                                                'rate' => (float) $tax->rate,
+                                            ];
+                                        })->values()->toArray()
+                                        : [],
+                                ];
+                            })
+                            ->values()
+                            ->toArray();
+
                         return [
                             'variant_id' => $item->product_variant_id,
                             'variant_size' => $item->variant->size ?? '',
+                            'variant_stock' => (float) ($item->variant->stock ?? 0),
                             'variant_price' => (float) $effectivePrice,
                             'product_name' => $item->variant->product->name ?? 'Producto',
                             'quantity' => (float) ($item->quantity ?? 0),
+                            'selectable_variants' => $selectableVariants,
                             'taxes' => ($item->variant && $item->variant->product && $item->variant->product->taxes)
                                 ? $item->variant->product->taxes->map(function ($tax) {
                                     return [
@@ -736,6 +796,7 @@
             })->values();
         @endphp
         const materialPackages = @json($materialPackagesPayload);
+        let pendingPackageSelection = null;
 
         function calculateTaxRateFromTaxes(taxes) {
             return (taxes || []).reduce((sum, tax) => sum + (parseFloat(tax.rate) || 0), 0);
@@ -773,7 +834,23 @@
             return value;
         }
 
-        function addMaterialPackageToSale(packageId) {
+        function getSelectableVariantsForComponent(component) {
+            const selectableVariants = Array.isArray(component.selectable_variants) ? component.selectable_variants : [];
+            if (selectableVariants.length > 0) {
+                return selectableVariants;
+            }
+
+            return [{
+                variant_id: Number(component.variant_id),
+                variant_size: component.variant_size || '',
+                variant_stock: Number(component.variant_stock || 0),
+                variant_price: Number(component.variant_price || 0),
+                product_name: component.product_name || 'Producto',
+                taxes: Array.isArray(component.taxes) ? component.taxes : [],
+            }];
+        }
+
+        function openPackageFlavorModal(packageId) {
             const pkg = materialPackages.find(p => Number(p.id) === Number(packageId));
             if (!pkg) {
                 alert('No se encontró el paquete seleccionado.');
@@ -783,49 +860,205 @@
             const qtyInput = document.getElementById(`packageQty_${packageId}`);
             const packQty = Math.max(1, parseInt(qtyInput?.value || '1', 10));
 
-            pkg.items.forEach(component => {
-                const variantId = String(component.variant_id);
-                const componentQty = (parseFloat(component.quantity) || 0) * packQty;
-                if (componentQty <= 0) {
+            const components = (pkg.items || []).map((component, index) => {
+                const requiredQty = (parseFloat(component.quantity) || 0) * packQty;
+                const choices = getSelectableVariantsForComponent(component)
+                    .filter(choice => Number(choice.variant_stock || 0) > 0)
+                    .map(choice => ({
+                        variant_id: Number(choice.variant_id),
+                        variant_size: String(choice.variant_size || ''),
+                        variant_stock: Number(choice.variant_stock || 0),
+                        variant_price: Number(choice.variant_price || 0),
+                        product_name: choice.product_name || component.product_name || 'Producto',
+                        taxes: Array.isArray(choice.taxes) ? choice.taxes : [],
+                        quantity: 0,
+                    }));
+
+                if (choices.length > 0 && requiredQty > 0) {
+                    const preferredIndex = choices.findIndex(choice => Number(choice.variant_id) === Number(component.variant_id));
+                    if (preferredIndex >= 0) {
+                        choices[preferredIndex].quantity = requiredQty;
+                    } else {
+                        choices[0].quantity = requiredQty;
+                    }
+                }
+
+                return {
+                    component_id: `${pkg.id}_${index}`,
+                    product_name: component.product_name || 'Producto',
+                    required_qty: requiredQty,
+                    choices,
+                };
+            }).filter(component => component.required_qty > 0 && component.choices.length > 0);
+
+            if (components.length === 0) {
+                alert('Este paquete no tiene variantes disponibles con stock.');
+                return;
+            }
+
+            pendingPackageSelection = {
+                package: pkg,
+                packageQty: packQty,
+                components,
+            };
+
+            renderPackageFlavorModal();
+            const modalElement = document.getElementById('packageFlavorModal');
+            bootstrap.Modal.getOrCreateInstance(modalElement).show();
+        }
+
+        function renderPackageFlavorModal() {
+            if (!pendingPackageSelection) {
+                return;
+            }
+
+            const summary = document.getElementById('packageFlavorSummary');
+            const rows = document.getElementById('packageFlavorRows');
+            if (!summary || !rows) {
+                return;
+            }
+
+            const pkg = pendingPackageSelection.package;
+            summary.innerHTML = `
+                <div class="alert alert-light border mb-0">
+                    <strong>${pkg.name}</strong><br>
+                    Cantidad de paquetes: ${pendingPackageSelection.packageQty}
+                </div>
+            `;
+
+            rows.innerHTML = '';
+            pendingPackageSelection.components.forEach((component, componentIndex) => {
+                const choicesHtml = component.choices.map((choice, choiceIndex) => {
+                    return `
+                        <div class="row g-2 align-items-center mb-2">
+                            <div class="col-12 col-md-6">
+                                <small class="text-muted d-block">Variante</small>
+                                <strong>${choice.product_name} ${choice.variant_size || ''}</strong>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <small class="text-muted d-block">Stock</small>
+                                <span>${choice.variant_stock}</span>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <small class="text-muted d-block">Cantidad</small>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="${choice.variant_stock}"
+                                    step="0.01"
+                                    class="form-control form-control-sm"
+                                    value="${choice.quantity}"
+                                    data-package-component-index="${componentIndex}"
+                                    data-package-choice-index="${choiceIndex}"
+                                    oninput="updatePackageChoiceQty(this)">
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                rows.insertAdjacentHTML('beforeend', `
+                    <div class="card border">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">${component.product_name}</h6>
+                                <span class="badge bg-dark">Requerido: ${component.required_qty}</span>
+                            </div>
+                            ${choicesHtml}
+                        </div>
+                    </div>
+                `);
+            });
+        }
+
+        function updatePackageChoiceQty(input) {
+            if (!pendingPackageSelection) {
+                return;
+            }
+
+            const componentIndex = Number(input.dataset.packageComponentIndex);
+            const choiceIndex = Number(input.dataset.packageChoiceIndex);
+            const component = pendingPackageSelection.components[componentIndex];
+            const choice = component?.choices?.[choiceIndex];
+            if (!component || !choice) {
+                return;
+            }
+
+            const parsed = Math.max(0, Math.min(Number(choice.variant_stock || 0), Number.parseFloat(input.value || '0') || 0));
+            choice.quantity = parsed;
+            input.value = String(parsed);
+        }
+
+        function confirmPackageFlavorSelection() {
+            if (!pendingPackageSelection) {
+                return;
+            }
+
+            const pkg = pendingPackageSelection.package;
+            const packageDiscount = Math.max(0, Math.min(100, Number(pkg.discount_percentage || 0)));
+            const selectedRows = [];
+
+            for (const component of pendingPackageSelection.components) {
+                const totalSelectedQty = component.choices.reduce((sum, choice) => sum + (Number(choice.quantity || 0)), 0);
+                if (Math.round(totalSelectedQty * 1000) !== Math.round(Number(component.required_qty || 0) * 1000)) {
+                    alert(`Debes completar exactamente ${component.required_qty} unidades para ${component.product_name}.`);
                     return;
                 }
 
-                const taxes = component.taxes || [];
-                const taxRate = calculateTaxRateFromTaxes(taxes);
-                const packageDiscount = Math.max(0, Math.min(100, parseFloat(pkg.discount_percentage || 0)));
-                const priceBeforePackageDiscount = parseFloat(component.variant_price) || 0;
-                const baseLineMultiplier = ((100 - packageDiscount) / 100);
+                for (const choice of component.choices) {
+                    const qty = Number(choice.quantity || 0);
+                    if (qty <= 0) {
+                        continue;
+                    }
 
-                const packageBaseTotal = pkg.items.reduce((sum, row) => {
-                    const rowQty = parseFloat(row.quantity) || 0;
-                    const rowBasePrice = parseFloat(row.variant_price) || 0;
-                    return sum + (rowBasePrice * ((100 - packageDiscount) / 100) * rowQty);
-                }, 0);
+                    selectedRows.push({
+                        variant_id: Number(choice.variant_id),
+                        qty,
+                        stock: Number(choice.variant_stock || 0),
+                        product_name: choice.product_name,
+                        variant_size: choice.variant_size,
+                        variant_price: Number(choice.variant_price || 0),
+                        taxes: Array.isArray(choice.taxes) ? choice.taxes : [],
+                    });
+                }
+            }
 
-                const targetPackageTotal = (pkg.package_price !== null && pkg.package_price !== undefined)
-                    ? (parseFloat(pkg.package_price) || 0)
-                    : packageBaseTotal;
+            const packageBaseTotal = selectedRows.reduce((sum, row) => {
+                return sum + (row.variant_price * ((100 - packageDiscount) / 100) * row.qty);
+            }, 0);
 
-                const priceScale = packageBaseTotal > 0 ? (targetPackageTotal / packageBaseTotal) : 1;
-                const combinedLineMultiplier = baseLineMultiplier * priceScale;
-                const price = priceBeforePackageDiscount * combinedLineMultiplier;
+            const targetPackageTotal = (pkg.package_price !== null && pkg.package_price !== undefined)
+                ? (Number(pkg.package_price) || 0)
+                : packageBaseTotal;
+
+            const priceScale = packageBaseTotal > 0 ? (targetPackageTotal / packageBaseTotal) : 1;
+            const combinedLineMultiplier = ((100 - packageDiscount) / 100) * priceScale;
+            const combinedLineDiscount = (1 - combinedLineMultiplier) * 100;
+
+            for (const row of selectedRows) {
+                const variantId = String(row.variant_id);
+                const price = row.variant_price * combinedLineMultiplier;
+                const taxRate = calculateTaxRateFromTaxes(row.taxes || []);
                 const taxAmount = price * (taxRate / 100);
                 const totalPrice = price + taxAmount;
-                const combinedLineDiscount = (1 - combinedLineMultiplier) * 100;
 
                 const existing = selectedItems.find(item => String(item.id) === variantId);
                 if (existing) {
-                    existing.quantity = Number(existing.quantity || 0) + componentQty;
+                    const nextQty = Number(existing.quantity || 0) + row.qty;
+                    if (nextQty > Number(row.stock || existing.stock || 0)) {
+                        alert(`Stock insuficiente para ${row.product_name} ${row.variant_size || ''}.`);
+                        return;
+                    }
+                    existing.quantity = nextQty;
                 } else {
                     selectedItems.push({
                         id: variantId,
-                        productName: `${component.product_name} [${pkg.name}]`,
-                        productSize: component.variant_size,
+                        productName: `${row.product_name} [${pkg.name}]`,
+                        productSize: row.variant_size,
                         price,
-                        stock: 999999,
-                        quantity: componentQty,
+                        stock: Number(row.stock || 0),
+                        quantity: row.qty,
                         line_discount_percentage: combinedLineDiscount,
-                        taxes,
+                        taxes: row.taxes || [],
                         taxRate,
                         taxAmount,
                         totalPrice,
@@ -836,11 +1069,17 @@
                 if (checkbox) {
                     checkbox.checked = true;
                 }
-            });
+            }
 
             recalcSubtotals();
             renderCart();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('packageFlavorModal')).hide();
             alert(`Paquete "${pkg.name}" agregado al carrito.`);
+            pendingPackageSelection = null;
+        }
+
+        function addMaterialPackageToSale(packageId) {
+            openPackageFlavorModal(packageId);
         }
         document.addEventListener('DOMContentLoaded', function () {
             // Escuchar todos los checkboxes
@@ -1423,6 +1662,14 @@ function updateQuantity(id, newQty) {
         }
 
         document.getElementById('scanCodeBtn')?.addEventListener('click', addByScanCode);
+        document.getElementById('confirmPackageFlavorBtn')?.addEventListener('click', confirmPackageFlavorSelection);
+        document.getElementById('packageFlavorModal')?.addEventListener('hidden.bs.modal', () => {
+            pendingPackageSelection = null;
+            const rows = document.getElementById('packageFlavorRows');
+            const summary = document.getElementById('packageFlavorSummary');
+            if (rows) rows.innerHTML = '';
+            if (summary) summary.innerHTML = '';
+        });
         document.getElementById('openQrScannerBtn')?.addEventListener('click', () => {
             // Warm up permission on a direct user gesture to avoid flaky prompts on mobile.
             ensureCameraPermission();

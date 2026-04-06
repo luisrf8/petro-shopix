@@ -319,6 +319,9 @@
                         data-plan-id="{{ $latestPayment?->plan_id }}"
                         data-electronic-invoicing-enabled="{{ (int) (($tenant->electronic_invoicing_enabled ?? false) ? 1 : 0) }}"
                         data-restrict-delivery-city-to-tenant="{{ (int) (($tenant->restrict_delivery_city_to_tenant ?? true) ? 1 : 0) }}"
+                        data-working-days='@json($tenant->working_days ?? [])'
+                        data-opening-time="{{ !empty($tenant->opening_time) ? \Illuminate\Support\Str::substr((string) $tenant->opening_time, 0, 5) : '' }}"
+                        data-closing-time="{{ !empty($tenant->closing_time) ? \Illuminate\Support\Str::substr((string) $tenant->closing_time, 0, 5) : '' }}"
                         data-active="{{ $tenant->is_active }}">
                         Editar
                       </a>
@@ -444,6 +447,42 @@
               </select>
               <small class="text-muted">Si está activa, solo permite envíos a la ciudad configurada de la tienda.</small>
             </div>
+
+            <div class="mb-3">
+              <label class="form-label">Días laborales (opcional)</label>
+              <div class="row g-2">
+                @php
+                  $weekDays = [
+                    'monday' => 'Lunes',
+                    'tuesday' => 'Martes',
+                    'wednesday' => 'Miércoles',
+                    'thursday' => 'Jueves',
+                    'friday' => 'Viernes',
+                    'saturday' => 'Sábado',
+                    'sunday' => 'Domingo',
+                  ];
+                @endphp
+                @foreach($weekDays as $dayKey => $dayLabel)
+                  <div class="col-6 col-md-4">
+                    <div class="form-check">
+                      <input class="form-check-input edit-tenant-working-day" type="checkbox" id="edit_working_day_{{ $dayKey }}" name="working_days[]" value="{{ $dayKey }}">
+                      <label class="form-check-label" for="edit_working_day_{{ $dayKey }}">{{ $dayLabel }}</label>
+                    </div>
+                  </div>
+                @endforeach
+              </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+              <div class="col-12 col-md-6">
+                <label for="editTenantOpeningTime" class="form-label">Hora de apertura</label>
+                <input type="time" class="form-control border border-1 p-2" id="editTenantOpeningTime" name="opening_time">
+              </div>
+              <div class="col-12 col-md-6">
+                <label for="editTenantClosingTime" class="form-label">Hora de cierre</label>
+                <input type="time" class="form-control border border-1 p-2" id="editTenantClosingTime" name="closing_time">
+              </div>
+            </div>
             <div class="d-flex flex-row-reverse">
               <button type="submit" class="btn btn-info">Guardar</button>
             </div>
@@ -542,6 +581,21 @@
       document.getElementById('editTenantStatus').value = this.dataset.active || '1';
       document.getElementById('editTenantElectronicInvoicingEnabled').value = this.dataset.electronicInvoicingEnabled || '0';
       document.getElementById('editTenantRestrictDeliveryCityToTenant').value = this.dataset.restrictDeliveryCityToTenant || '1';
+      document.getElementById('editTenantOpeningTime').value = this.dataset.openingTime || '';
+      document.getElementById('editTenantClosingTime').value = this.dataset.closingTime || '';
+
+      const incomingWorkingDays = (() => {
+        try {
+          const parsed = JSON.parse(this.dataset.workingDays || '[]');
+          return Array.isArray(parsed) ? parsed.map(day => String(day).toLowerCase()) : [];
+        } catch (error) {
+          return [];
+        }
+      })();
+
+      document.querySelectorAll('.edit-tenant-working-day').forEach((checkbox) => {
+        checkbox.checked = incomingWorkingDays.includes(String(checkbox.value || '').toLowerCase());
+      });
 
       // 👇 Aquí actualizamos la vista previa del logo dinámicamente
       const logoPreview = document.getElementById('editTenantLogoPreview');
