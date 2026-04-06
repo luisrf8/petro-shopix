@@ -125,18 +125,34 @@
                             @endphp
                             <li class="text-sm d-flex align-items-center gap-2">
                               <img src="{{ $itemImage }}" alt="{{ $item->variant?->product?->name ?? 'Producto' }}" style="width:28px; height:28px; object-fit:cover; border-radius:6px; border:1px solid #e2e8f0;">
-                              <span>{{ $item->variant?->product?->name ?? 'Producto' }} - {{ $item->variant?->size ?? 'Variante' }} (x{{ rtrim(rtrim(number_format($item->quantity, 2, '.', ''), '0'), '.') }})</span>
+                              <span>
+                                {{ $item->variant?->product?->name ?? 'Producto' }} - {{ $item->variant?->size ?? 'Variante' }} (x{{ rtrim(rtrim(number_format($item->quantity, 2, '.', ''), '0'), '.') }})
+                                @if(($item->selection_mode ?? 'variant') === 'product')
+                                  <span class="badge bg-info ms-1">Flexible</span>
+                                @else
+                                  <span class="badge bg-secondary ms-1">Fijo</span>
+                                @endif
+                              </span>
                             </li>
                           @endforeach
                         </ul>
                       </td>
                       <td>
-                        <form method="POST" action="{{ route('materials.toggleStatus', $package->id) }}">
-                          @csrf
-                          <button class="btn btn-sm btn-outline-secondary mb-0" type="submit">
-                            {{ $package->is_active ? 'Desactivar' : 'Activar' }}
+                        <div class="d-flex gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            class="btn btn-sm btn-outline-info mb-0 edit-package-btn"
+                            data-package-id="{{ $package->id }}">
+                            Editar
                           </button>
-                        </form>
+
+                          <form method="POST" action="{{ route('materials.toggleStatus', $package->id) }}">
+                            @csrf
+                            <button class="btn btn-sm btn-outline-secondary mb-0" type="submit">
+                              {{ $package->is_active ? 'Desactivar' : 'Activar' }}
+                            </button>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   @endforeach
@@ -149,6 +165,54 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="editMaterialPackageModal" tabindex="-1" aria-labelledby="editMaterialPackageModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editMaterialPackageModalLabel">Editar paquete / lista de materiales</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form method="POST" id="editMaterialPackageForm" data-update-template="{{ route('materials.update', ['id' => '__ID__']) }}">
+        @csrf
+        @method('PUT')
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <label class="form-label">Nombre del paquete</label>
+              <input type="text" class="form-control border border-1 p-2 bg-white" name="name" id="editPackageName" required>
+            </div>
+            <div class="col-12 col-md-5">
+              <label class="form-label">Descripción</label>
+              <input type="text" class="form-control border border-1 p-2 bg-white" name="description" id="editPackageDescription">
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label">Descuento (%)</label>
+              <input type="number" min="0" max="100" step="0.01" class="form-control border border-1 p-2 bg-white" name="discount_percentage" id="editPackageDiscount" value="0">
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label">Precio fijo del paquete ($)</label>
+              <input type="number" min="0.01" step="0.01" class="form-control border border-1 p-2 bg-white" name="package_price" id="editPackagePrice" placeholder="Opcional">
+            </div>
+          </div>
+
+          <hr>
+
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Materiales del paquete</h6>
+            <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="addEditMaterialRow">+ Agregar material</button>
+          </div>
+
+          <div id="editMaterialsRows" class="d-flex flex-column gap-2"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-info">Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -156,7 +220,31 @@
   document.addEventListener('DOMContentLoaded', function () {
     const rowsContainer = document.getElementById('materialsRows');
     const addRowBtn = document.getElementById('addMaterialRow');
+    const editRowsContainer = document.getElementById('editMaterialsRows');
+    const addEditRowBtn = document.getElementById('addEditMaterialRow');
+    const editPackageButtons = document.querySelectorAll('.edit-package-btn');
+    const editForm = document.getElementById('editMaterialPackageForm');
+    const editModalElement = document.getElementById('editMaterialPackageModal');
+    const editModal = editModalElement ? bootstrap.Modal.getOrCreateInstance(editModalElement) : null;
     const fallbackImage = @json(asset('assets/img/shopix5.png'));
+
+    const packageCatalog = @json(($packages ?? collect())->map(function ($package) {
+      return [
+        'id' => (int) $package->id,
+        'name' => (string) $package->name,
+        'description' => (string) ($package->description ?? ''),
+        'discount_percentage' => (float) ($package->discount_percentage ?? 0),
+        'package_price' => !is_null($package->package_price) ? (float) $package->package_price : null,
+        'items' => ($package->items ?? collect())->map(function ($item) {
+          return [
+            'selection_mode' => (string) ($item->selection_mode ?? 'variant'),
+            'variant_id' => (int) ($item->product_variant_id ?? 0),
+            'product_id' => (int) ($item->variant->product_id ?? 0),
+            'quantity' => (float) ($item->quantity ?? 0),
+          ];
+        })->values()->toArray(),
+      ];
+    })->values());
 
     const variantMeta = {
       @foreach($productItems as $product)
@@ -198,6 +286,7 @@
     `;
 
     let rowIndex = 0;
+    let editRowIndex = 0;
 
     function refreshRowPreview(rowElement) {
       if (!rowElement) return;
@@ -248,11 +337,23 @@
       label.textContent = `${meta.name || 'Producto'} (Stock total: ${meta.stock ?? 0})`;
     }
 
-    function addRow() {
-      rowIndex += 1;
-      const row = document.createElement('div');
-      row.className = 'border rounded p-2';
-      row.innerHTML = `
+    function buildRowHtml(index, seed = {}) {
+      const selectedMode = String(seed.selection_mode || 'variant');
+      const selectedVariantId = seed.variant_id ? String(seed.variant_id) : '';
+      const selectedProductId = seed.product_id ? String(seed.product_id) : '';
+      const selectedQuantity = (seed.quantity ?? 1);
+
+      const scopedVariantOptions = variantOptions.replace(
+        `value="${selectedVariantId}"`,
+        `value="${selectedVariantId}" selected`
+      );
+
+      const scopedProductOptions = productOptions.replace(
+        `value="${selectedProductId}"`,
+        `value="${selectedProductId}" selected`
+      );
+
+      return `
         <div class="row g-2 align-items-end">
           <div class="col-12 col-md-2">
             <label class="form-label mb-1">Imagen</label>
@@ -262,40 +363,63 @@
           </div>
           <div class="col-12 col-md-6">
             <label class="form-label mb-1">Modo</label>
-            <select name="items[${rowIndex}][selection_mode]" class="form-select border border-1 bg-white js-material-selection-mode" required>
-              <option value="variant" selected>Variante fija (modo clásico)</option>
-              <option value="product">Producto flexible (sabores en venta)</option>
+            <select name="items[${index}][selection_mode]" class="form-select border border-1 bg-white js-material-selection-mode" required>
+              <option value="variant" ${selectedMode === 'variant' ? 'selected' : ''}>Variante fija (modo clásico)</option>
+              <option value="product" ${selectedMode === 'product' ? 'selected' : ''}>Producto flexible (sabores en venta)</option>
             </select>
-            <div class="js-variant-select-wrap mt-2">
-              <select name="items[${rowIndex}][variant_id]" class="form-select border border-1 bg-white js-material-variant-select" required>
-                ${variantOptions}
+            <div class="js-variant-select-wrap mt-2 ${selectedMode === 'product' ? 'd-none' : ''}">
+              <select name="items[${index}][variant_id]" class="form-select border border-1 bg-white js-material-variant-select" ${selectedMode === 'variant' ? 'required' : ''}>
+                ${scopedVariantOptions}
               </select>
             </div>
-            <div class="js-product-select-wrap mt-2 d-none">
-              <select name="items[${rowIndex}][product_id]" class="form-select border border-1 bg-white js-material-product-select">
-                ${productOptions}
+            <div class="js-product-select-wrap mt-2 ${selectedMode === 'product' ? '' : 'd-none'}">
+              <select name="items[${index}][product_id]" class="form-select border border-1 bg-white js-material-product-select" ${selectedMode === 'product' ? 'required' : ''}>
+                ${scopedProductOptions}
               </select>
             </div>
             <p class="text-xs text-muted mb-0 mt-1 js-material-item-label">Selecciona una variante fija para este material</p>
           </div>
           <div class="col-8 col-md-3">
             <label class="form-label mb-1">Cantidad</label>
-            <input type="number" name="items[${rowIndex}][quantity]" class="form-control border border-1 p-2 bg-white" min="0.01" step="0.01" placeholder="1" required>
+            <input type="number" name="items[${index}][quantity]" class="form-control border border-1 p-2 bg-white" min="0.01" step="0.01" placeholder="1" value="${selectedQuantity}" required>
           </div>
           <div class="col-4 col-md-1">
             <button type="button" class="btn btn-outline-danger w-100 remove-row">X</button>
           </div>
         </div>
       `;
+    }
+
+    function appendCreateRow(seed = {}) {
+      if (!rowsContainer) {
+        return;
+      }
+
+      rowIndex += 1;
+      const row = document.createElement('div');
+      row.className = 'border rounded p-2';
+      row.innerHTML = buildRowHtml(rowIndex, seed);
       rowsContainer.appendChild(row);
       refreshRowPreview(row);
     }
 
-    addRow();
+    function appendEditRow(seed = {}) {
+      editRowIndex += 1;
+      const row = document.createElement('div');
+      row.className = 'border rounded p-2';
+      row.innerHTML = buildRowHtml(editRowIndex, seed);
+      editRowsContainer?.appendChild(row);
+      refreshRowPreview(row);
+    }
 
-    addRowBtn.addEventListener('click', addRow);
+    if (rowsContainer) {
+      appendCreateRow();
+    }
 
-    rowsContainer.addEventListener('click', function (event) {
+    addRowBtn?.addEventListener('click', () => appendCreateRow());
+    addEditRowBtn?.addEventListener('click', () => appendEditRow());
+
+    rowsContainer?.addEventListener('click', function (event) {
       if (!event.target.classList.contains('remove-row')) return;
       const allRows = rowsContainer.querySelectorAll('.border.rounded.p-2');
       if (allRows.length <= 1) {
@@ -304,7 +428,7 @@
       event.target.closest('.border.rounded.p-2')?.remove();
     });
 
-    rowsContainer.addEventListener('change', function (event) {
+    rowsContainer?.addEventListener('change', function (event) {
       if (!event.target.classList.contains('js-material-selection-mode')
           && !event.target.classList.contains('js-material-product-select')
           && !event.target.classList.contains('js-material-variant-select')) {
@@ -312,6 +436,56 @@
       }
       const row = event.target.closest('.border.rounded.p-2');
       refreshRowPreview(row);
+    });
+
+    editRowsContainer?.addEventListener('click', function (event) {
+      if (!event.target.classList.contains('remove-row')) return;
+      const allRows = editRowsContainer.querySelectorAll('.border.rounded.p-2');
+      if (allRows.length <= 1) {
+        return;
+      }
+      event.target.closest('.border.rounded.p-2')?.remove();
+    });
+
+    editRowsContainer?.addEventListener('change', function (event) {
+      if (!event.target.classList.contains('js-material-selection-mode')
+          && !event.target.classList.contains('js-material-product-select')
+          && !event.target.classList.contains('js-material-variant-select')) {
+        return;
+      }
+      const row = event.target.closest('.border.rounded.p-2');
+      refreshRowPreview(row);
+    });
+
+    editPackageButtons.forEach((button) => {
+      button.addEventListener('click', function () {
+        const packageId = Number(this.dataset.packageId || 0);
+        const pkg = packageCatalog.find((item) => Number(item.id) === packageId);
+        if (!pkg || !editForm) {
+          return;
+        }
+
+        const updateTemplate = editForm.dataset.updateTemplate || '';
+        editForm.action = updateTemplate.replace('__ID__', String(packageId));
+        document.getElementById('editPackageName').value = pkg.name || '';
+        document.getElementById('editPackageDescription').value = pkg.description || '';
+        document.getElementById('editPackageDiscount').value = Number(pkg.discount_percentage || 0);
+        document.getElementById('editPackagePrice').value = (pkg.package_price === null || pkg.package_price === undefined) ? '' : Number(pkg.package_price || 0);
+
+        if (editRowsContainer) {
+          editRowsContainer.innerHTML = '';
+        }
+        editRowIndex = 0;
+
+        const items = Array.isArray(pkg.items) ? pkg.items : [];
+        if (items.length === 0) {
+          appendEditRow();
+        } else {
+          items.forEach((item) => appendEditRow(item));
+        }
+
+        editModal?.show();
+      });
     });
   });
 </script>
