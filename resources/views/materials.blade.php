@@ -207,7 +207,7 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-info">Guardar cambios</button>
+          <button type="submit" class="btn btn-info" id="editPackageSubmitBtn" disabled>Guardar cambios</button>
         </div>
       </form>
     </div>
@@ -224,8 +224,10 @@
     const addEditRowBtn = document.getElementById('addEditMaterialRow');
     const editPackageButtons = document.querySelectorAll('.edit-package-btn');
     const editForm = document.getElementById('editMaterialPackageForm');
+    const editSubmitBtn = document.getElementById('editPackageSubmitBtn');
     const editModalElement = document.getElementById('editMaterialPackageModal');
     const editModal = editModalElement ? bootstrap.Modal.getOrCreateInstance(editModalElement) : null;
+    let editFormInitialState = '';
     const fallbackImage = @json(asset('assets/img/shopix5.png'));
 
     const packageCatalog = @json(($packages ?? collect())->map(function ($package) {
@@ -412,6 +414,35 @@
       refreshRowPreview(row);
     }
 
+    function serializeEditFormState() {
+      if (!editForm) {
+        return '';
+      }
+
+      const fields = Array.from(editForm.querySelectorAll('input, select, textarea'));
+      const pairs = fields
+        .filter((field) => field.name && field.type !== 'hidden')
+        .map((field) => {
+          if (field.type === 'checkbox') {
+            return `${field.name}:${field.checked ? '1' : '0'}`;
+          }
+
+          return `${field.name}:${String(field.value ?? '').trim()}`;
+        })
+        .sort();
+
+      return pairs.join('|');
+    }
+
+    function refreshEditSubmitState() {
+      if (!editSubmitBtn) {
+        return;
+      }
+
+      const currentState = serializeEditFormState();
+      editSubmitBtn.disabled = currentState === editFormInitialState;
+    }
+
     if (rowsContainer) {
       appendCreateRow();
     }
@@ -455,6 +486,24 @@
       }
       const row = event.target.closest('.border.rounded.p-2');
       refreshRowPreview(row);
+      refreshEditSubmitState();
+    });
+
+    editRowsContainer?.addEventListener('input', refreshEditSubmitState);
+    editForm?.addEventListener('input', refreshEditSubmitState);
+    editForm?.addEventListener('change', refreshEditSubmitState);
+
+    editForm?.addEventListener('submit', function (event) {
+      const currentState = serializeEditFormState();
+      if (currentState === editFormInitialState) {
+        event.preventDefault();
+        return;
+      }
+
+      const confirmed = window.confirm('¿Deseas guardar los cambios de esta lista de materiales?');
+      if (!confirmed) {
+        event.preventDefault();
+      }
     });
 
     editPackageButtons.forEach((button) => {
@@ -483,6 +532,9 @@
         } else {
           items.forEach((item) => appendEditRow(item));
         }
+
+        editFormInitialState = serializeEditFormState();
+        refreshEditSubmitState();
 
         editModal?.show();
       });
