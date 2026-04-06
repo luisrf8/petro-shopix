@@ -13,6 +13,7 @@ class MaterialPackageItem extends Model
         'material_package_id',
         'product_variant_id',
         'quantity',
+        'selection_mode',
         'discount_percentage',
     ];
 

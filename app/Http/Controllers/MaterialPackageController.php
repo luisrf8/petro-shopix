@@ -49,21 +49,29 @@ class MaterialPackageController extends Controller
             'items' => 'required|array|min:1',
             'items.*.variant_id' => 'nullable|integer|exists:product_variants,id',
             'items.*.product_id' => 'nullable|integer|exists:products,id',
+            'items.*.selection_mode' => ['required', Rule::in(['variant', 'product'])],
             'items.*.quantity' => 'required|numeric|min:0.01',
         ]);
 
         $itemRows = collect($validated['items'])
             ->map(function ($row, $index) use ($user) {
+                $selectionMode = (string) ($row['selection_mode'] ?? 'variant');
                 $variantId = isset($row['variant_id']) ? (int) $row['variant_id'] : 0;
                 $productId = isset($row['product_id']) ? (int) $row['product_id'] : 0;
 
-                if ($variantId <= 0 && $productId <= 0) {
+                if ($selectionMode === 'variant' && $variantId <= 0) {
                     throw ValidationException::withMessages([
-                        "items.$index" => 'Debes seleccionar un producto o una variante en cada material.',
+                        "items.$index.variant_id" => 'Debes seleccionar una variante en modo por variante.',
                     ]);
                 }
 
-                if ($variantId <= 0 && $productId > 0) {
+                if ($selectionMode === 'product' && $productId <= 0) {
+                    throw ValidationException::withMessages([
+                        "items.$index.product_id" => 'Debes seleccionar un producto en modo por producto.',
+                    ]);
+                }
+
+                if ($selectionMode === 'product' && $variantId <= 0 && $productId > 0) {
                     $variantId = (int) ProductVariant::query()
                         ->where('product_id', $productId)
                         ->whereHas('product', function ($query) use ($user) {
@@ -80,16 +88,36 @@ class MaterialPackageController extends Controller
                     }
                 }
 
+                if ($selectionMode === 'variant' && $variantId > 0) {
+                    $validVariantForTenant = ProductVariant::query()
+                        ->whereKey($variantId)
+                        ->whereHas('product', function ($query) use ($user) {
+                            $query->where('tenant_id', $user->tenant_id);
+                        })
+                        ->exists();
+
+                    if (!$validVariantForTenant) {
+                        throw ValidationException::withMessages([
+                            "items.$index.variant_id" => 'La variante seleccionada no pertenece a esta tienda.',
+                        ]);
+                    }
+                }
+
                 return [
                     'variant_id' => $variantId,
                     'quantity' => (float) $row['quantity'],
+                    'selection_mode' => $selectionMode,
                 ];
             })
-            ->groupBy('variant_id')
-            ->map(function ($rows, $variantId) {
+            ->groupBy(function ($row) {
+                return $row['selection_mode'] . ':' . $row['variant_id'];
+            })
+            ->map(function ($rows) {
+                $first = $rows->first();
                 return [
-                    'variant_id' => (int) $variantId,
+                    'variant_id' => (int) ($first['variant_id'] ?? 0),
                     'quantity' => $rows->sum('quantity'),
+                    'selection_mode' => (string) ($first['selection_mode'] ?? 'variant'),
                 ];
             })
             ->values();
@@ -125,6 +153,7 @@ class MaterialPackageController extends Controller
                     'material_package_id' => $package->id,
                     'product_variant_id' => $item['variant_id'],
                     'quantity' => $item['quantity'],
+                    'selection_mode' => $item['selection_mode'] ?? 'variant',
                     'discount_percentage' => 0,
                 ]);
             }

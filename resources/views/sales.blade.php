@@ -776,12 +776,29 @@
 
                         return [
                             'variant_id' => $item->product_variant_id,
+                            'selection_mode' => $item->selection_mode ?? 'variant',
                             'variant_size' => $item->variant->size ?? '',
                             'variant_stock' => (float) ($item->variant->stock ?? 0),
                             'variant_price' => (float) $effectivePrice,
                             'product_name' => $item->variant->product->name ?? 'Producto',
                             'quantity' => (float) ($item->quantity ?? 0),
-                            'selectable_variants' => $selectableVariants,
+                            'selectable_variants' => (($item->selection_mode ?? 'variant') === 'product')
+                                ? $selectableVariants
+                                : [[
+                                    'variant_id' => (int) $item->product_variant_id,
+                                    'variant_size' => (string) ($item->variant->size ?? ''),
+                                    'variant_stock' => (float) ($item->variant->stock ?? 0),
+                                    'variant_price' => (float) $effectivePrice,
+                                    'product_name' => $item->variant->product->name ?? 'Producto',
+                                    'taxes' => ($item->variant && $item->variant->product && $item->variant->product->taxes)
+                                        ? $item->variant->product->taxes->map(function ($tax) {
+                                            return [
+                                                'name' => $tax->name,
+                                                'rate' => (float) $tax->rate,
+                                            ];
+                                        })->values()->toArray()
+                                        : [],
+                                ]],
                             'taxes' => ($item->variant && $item->variant->product && $item->variant->product->taxes)
                                 ? $item->variant->product->taxes->map(function ($tax) {
                                     return [
@@ -859,6 +876,12 @@
 
             const qtyInput = document.getElementById(`packageQty_${packageId}`);
             const packQty = Math.max(1, parseInt(qtyInput?.value || '1', 10));
+
+            const hasFlexibleComponents = (pkg.items || []).some(component => String(component.selection_mode || 'variant') === 'product');
+            if (!hasFlexibleComponents) {
+                addFixedOnlyMaterialPackageToSale(pkg, packQty);
+                return;
+            }
 
             const components = (pkg.items || []).map((component, index) => {
                 const requiredQty = (parseFloat(component.quantity) || 0) * packQty;
@@ -1080,6 +1103,67 @@
 
         function addMaterialPackageToSale(packageId) {
             openPackageFlavorModal(packageId);
+        }
+
+        function addFixedOnlyMaterialPackageToSale(pkg, packQty) {
+            (pkg.items || []).forEach(component => {
+                const variantId = String(component.variant_id);
+                const componentQty = (parseFloat(component.quantity) || 0) * packQty;
+                if (componentQty <= 0) {
+                    return;
+                }
+
+                const taxes = component.taxes || [];
+                const taxRate = calculateTaxRateFromTaxes(taxes);
+                const packageDiscount = Math.max(0, Math.min(100, parseFloat(pkg.discount_percentage || 0)));
+                const priceBeforePackageDiscount = parseFloat(component.variant_price) || 0;
+                const baseLineMultiplier = ((100 - packageDiscount) / 100);
+
+                const packageBaseTotal = (pkg.items || []).reduce((sum, row) => {
+                    const rowQty = parseFloat(row.quantity) || 0;
+                    const rowBasePrice = parseFloat(row.variant_price) || 0;
+                    return sum + (rowBasePrice * ((100 - packageDiscount) / 100) * rowQty);
+                }, 0);
+
+                const targetPackageTotal = (pkg.package_price !== null && pkg.package_price !== undefined)
+                    ? (parseFloat(pkg.package_price) || 0)
+                    : packageBaseTotal;
+
+                const priceScale = packageBaseTotal > 0 ? (targetPackageTotal / packageBaseTotal) : 1;
+                const combinedLineMultiplier = baseLineMultiplier * priceScale;
+                const price = priceBeforePackageDiscount * combinedLineMultiplier;
+                const taxAmount = price * (taxRate / 100);
+                const totalPrice = price + taxAmount;
+                const combinedLineDiscount = (1 - combinedLineMultiplier) * 100;
+
+                const existing = selectedItems.find(item => String(item.id) === variantId);
+                if (existing) {
+                    existing.quantity = Number(existing.quantity || 0) + componentQty;
+                } else {
+                    selectedItems.push({
+                        id: variantId,
+                        productName: `${component.product_name} [${pkg.name}]`,
+                        productSize: component.variant_size,
+                        price,
+                        stock: Number(component.variant_stock || 999999),
+                        quantity: componentQty,
+                        line_discount_percentage: combinedLineDiscount,
+                        taxes,
+                        taxRate,
+                        taxAmount,
+                        totalPrice,
+                    });
+                }
+
+                const checkbox = document.getElementById(`variant_${variantId}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+
+            recalcSubtotals();
+            renderCart();
+            alert(`Paquete "${pkg.name}" agregado al carrito.`);
         }
         document.addEventListener('DOMContentLoaded', function () {
             // Escuchar todos los checkboxes

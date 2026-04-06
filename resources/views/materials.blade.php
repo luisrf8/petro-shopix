@@ -9,7 +9,7 @@
       <div class="card mb-4">
         <div class="card-header p-3">
           <h5 class="mb-1">Crear paquete / lista de materiales</h5>
-          <p class="text-sm text-muted mb-0">Combina productos para crear combos. La selección de sabores/variantes se define al vender.</p>
+          <p class="text-sm text-muted mb-0">Define cada material en modo variante fija (como antes) o modo producto flexible para escoger sabores al vender.</p>
         </div>
         <div class="card-body p-3">
           @if(session('success'))
@@ -158,6 +158,19 @@
     const addRowBtn = document.getElementById('addMaterialRow');
     const fallbackImage = @json(asset('assets/img/shopix5.png'));
 
+    const variantMeta = {
+      @foreach($productItems as $product)
+        @foreach($product->variants as $variant)
+          "{{ $variant->id }}": {
+            name: @json($product->name),
+            size: @json($variant->size),
+            stock: @json($variant->stock),
+            image: @json((isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'))),
+          },
+        @endforeach
+      @endforeach
+    };
+
     const productMeta = {
       @foreach($productItems as $product)
         "{{ $product->id }}": {
@@ -167,6 +180,15 @@
         },
       @endforeach
     };
+
+    const variantOptions = `
+      <option value="">Selecciona variante...</option>
+      @foreach($productItems as $product)
+        @foreach($product->variants as $variant)
+          <option value="{{ $variant->id }}">{{ $product->name }} - {{ $variant->size }} (Stock: {{ $variant->stock }})</option>
+        @endforeach
+      @endforeach
+    `;
 
     const productOptions = `
       <option value="">Selecciona producto...</option>
@@ -180,16 +202,45 @@
     function refreshRowPreview(rowElement) {
       if (!rowElement) return;
 
-      const select = rowElement.querySelector('.js-material-product-select');
-      const image = rowElement.querySelector('.js-material-product-image');
-      const label = rowElement.querySelector('.js-material-product-label');
+      const modeSelect = rowElement.querySelector('.js-material-selection-mode');
+      const variantSelect = rowElement.querySelector('.js-material-variant-select');
+      const productSelect = rowElement.querySelector('.js-material-product-select');
+      const image = rowElement.querySelector('.js-material-item-image');
+      const label = rowElement.querySelector('.js-material-item-label');
 
-      if (!select || !image || !label) return;
+      if (!modeSelect || !variantSelect || !productSelect || !image || !label) return;
 
-      const meta = productMeta[String(select.value)] || null;
+      const mode = modeSelect.value || 'variant';
+      const variantWrap = rowElement.querySelector('.js-variant-select-wrap');
+      const productWrap = rowElement.querySelector('.js-product-select-wrap');
+
+      if (mode === 'variant') {
+        variantWrap?.classList.remove('d-none');
+        productWrap?.classList.add('d-none');
+        variantSelect.required = true;
+        productSelect.required = false;
+
+        const meta = variantMeta[String(variantSelect.value)] || null;
+        if (!meta) {
+          image.src = fallbackImage;
+          label.textContent = 'Selecciona una variante fija para este material';
+          return;
+        }
+
+        image.src = meta.image || fallbackImage;
+        label.textContent = `${meta.name || 'Producto'} - ${meta.size || 'Variante'} (Stock: ${meta.stock ?? 0})`;
+        return;
+      }
+
+      variantWrap?.classList.add('d-none');
+      productWrap?.classList.remove('d-none');
+      variantSelect.required = false;
+      productSelect.required = true;
+
+      const meta = productMeta[String(productSelect.value)] || null;
       if (!meta) {
         image.src = fallbackImage;
-        label.textContent = 'Selecciona un producto para ver su imagen';
+        label.textContent = 'Selecciona un producto flexible para definir sabores en la venta';
         return;
       }
 
@@ -206,17 +257,28 @@
           <div class="col-12 col-md-2">
             <label class="form-label mb-1">Imagen</label>
             <div class="border rounded d-flex align-items-center justify-content-center bg-white" style="height: 62px; overflow: hidden;">
-              <img src="${fallbackImage}" alt="Vista previa" class="js-material-product-image" style="width: 100%; height: 100%; object-fit: cover;">
+              <img src="${fallbackImage}" alt="Vista previa" class="js-material-item-image" style="width: 100%; height: 100%; object-fit: cover;">
             </div>
           </div>
-          <div class="col-12 col-md-8">
-            <label class="form-label mb-1">Producto</label>
-            <select name="items[${rowIndex}][product_id]" class="form-select border border-1 bg-white js-material-product-select" required>
-              ${productOptions}
+          <div class="col-12 col-md-6">
+            <label class="form-label mb-1">Modo</label>
+            <select name="items[${rowIndex}][selection_mode]" class="form-select border border-1 bg-white js-material-selection-mode" required>
+              <option value="variant" selected>Variante fija (modo clásico)</option>
+              <option value="product">Producto flexible (sabores en venta)</option>
             </select>
-            <p class="text-xs text-muted mb-0 mt-1 js-material-product-label">Selecciona un producto para ver su imagen</p>
+            <div class="js-variant-select-wrap mt-2">
+              <select name="items[${rowIndex}][variant_id]" class="form-select border border-1 bg-white js-material-variant-select" required>
+                ${variantOptions}
+              </select>
+            </div>
+            <div class="js-product-select-wrap mt-2 d-none">
+              <select name="items[${rowIndex}][product_id]" class="form-select border border-1 bg-white js-material-product-select">
+                ${productOptions}
+              </select>
+            </div>
+            <p class="text-xs text-muted mb-0 mt-1 js-material-item-label">Selecciona una variante fija para este material</p>
           </div>
-          <div class="col-8 col-md-1">
+          <div class="col-8 col-md-3">
             <label class="form-label mb-1">Cantidad</label>
             <input type="number" name="items[${rowIndex}][quantity]" class="form-control border border-1 p-2 bg-white" min="0.01" step="0.01" placeholder="1" required>
           </div>
@@ -243,7 +305,11 @@
     });
 
     rowsContainer.addEventListener('change', function (event) {
-      if (!event.target.classList.contains('js-material-product-select')) return;
+      if (!event.target.classList.contains('js-material-selection-mode')
+          && !event.target.classList.contains('js-material-product-select')
+          && !event.target.classList.contains('js-material-variant-select')) {
+        return;
+      }
       const row = event.target.closest('.border.rounded.p-2');
       refreshRowPreview(row);
     });
