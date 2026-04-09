@@ -234,6 +234,117 @@
     padding: 0.85rem;
   }
 
+  .tenant-auth-entry-shell {
+    display: block;
+  }
+
+  .tenant-auth-form-shell {
+    border-radius: 18px;
+    border: 1px solid #e5e7eb;
+    background: linear-gradient(180deg, #ffffff, #fffaf5);
+    padding: 1rem;
+  }
+
+  .tenant-auth-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .tenant-auth-head h6 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #0f172a;
+  }
+
+  .tenant-auth-head p {
+    margin: 0.25rem 0 0;
+    color: #64748b;
+    font-size: 0.9rem;
+  }
+
+  .tenant-auth-head-pill {
+    border-radius: 999px;
+    padding: 0.42rem 0.72rem;
+    border: 1px solid #fed7aa;
+    background: #fff7ed;
+    color: #9a3412;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .tenant-auth-social-grid {
+    display: grid;
+    gap: 0.65rem;
+    margin-bottom: 0.95rem;
+  }
+
+  .tenant-auth-social-btn {
+    min-height: 48px;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    color: #111827;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  .tenant-auth-social-btn:hover,
+  .tenant-auth-social-btn:focus {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+    border-color: rgba(var(--tenant-accent-rgb), 0.45);
+    color: #111827;
+  }
+
+  .tenant-auth-social-btn[data-provider="google"] i { color: #ea4335; }
+  .tenant-auth-social-btn[data-provider="facebook"] i { color: #1877f2; }
+  .tenant-auth-social-btn[data-provider="apple"] i { color: #111827; }
+
+  .tenant-auth-social-btn.is-disabled {
+    opacity: 0.55;
+    pointer-events: none;
+    background: #f8fafc;
+  }
+
+  .tenant-auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #94a3b8;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin: 0.9rem 0;
+  }
+
+  .tenant-auth-divider::before,
+  .tenant-auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e5e7eb;
+  }
+
+  .tenant-auth-alert {
+    border-radius: 14px;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #991b1b;
+    padding: 0.8rem 0.9rem;
+    font-size: 0.9rem;
+  }
+
   #tenantProCheckoutModal .nav-tabs {
     border-bottom: 1px solid #dbe3ee;
     gap: 0.35rem;
@@ -387,8 +498,45 @@
     #tenant-pro-checkout-section {
       padding: 0.75rem;
     }
+
+    .tenant-auth-entry-shell {
+      display: block;
+    }
+
+    .tenant-auth-head {
+      flex-direction: column;
+    }
+
+    .tenant-auth-social-btn {
+      justify-content: flex-start;
+      padding-inline: 0.9rem;
+    }
   }
 </style>
+
+@php
+  $tenantAuthRedirect = request()->getRequestUri() ?: '/';
+  $tenantSocialProviders = [
+    [
+      'key' => 'google',
+      'label' => 'Google',
+      'icon' => 'bi bi-google',
+      'enabled' => filled(config('services.google.client_id')) && filled(config('services.google.client_secret')) && filled(config('services.google.redirect')),
+    ],
+    [
+      'key' => 'facebook',
+      'label' => 'Facebook',
+      'icon' => 'bi bi-facebook',
+      'enabled' => filled(config('services.facebook.client_id')) && filled(config('services.facebook.client_secret')) && filled(config('services.facebook.redirect')),
+    ],
+    [
+      'key' => 'apple',
+      'label' => 'Apple',
+      'icon' => 'bi bi-apple',
+      'enabled' => filled(config('services.apple.client_id')) && filled(config('services.apple.client_secret')) && filled(config('services.apple.redirect')),
+    ],
+  ];
+@endphp
 
 <div class="offcanvas offcanvas-end" tabindex="-1" id="tenantCartOffcanvas" aria-labelledby="tenantCartOffcanvasLabel">
   <div class="offcanvas-header border-bottom tenant-cart-header">
@@ -475,52 +623,80 @@
       </div>
       <div class="modal-body tenant-pro-modal-body">
         <div id="tenant-pro-auth-section" class="mb-4 tenant-pro-auth-wrap">
-          <ul class="nav nav-tabs" id="tenantAuthTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-              <button class="nav-link active" id="tenant-login-tab" data-bs-toggle="tab" data-bs-target="#tenant-login-panel" type="button" role="tab">Iniciar sesión</button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" id="tenant-register-tab" data-bs-toggle="tab" data-bs-target="#tenant-register-panel" type="button" role="tab">Crear cuenta</button>
-            </li>
-          </ul>
-          <div class="tab-content border border-top-0 rounded-bottom p-3" id="tenantAuthTabsContent">
-            <div class="tab-pane fade show active" id="tenant-login-panel" role="tabpanel">
-              <form id="tenant-pro-login-form" class="row g-2">
-                <div class="col-12 col-md-6">
-                  <input type="email" class="form-control" id="tenant-pro-login-email" placeholder="Email" required>
+          <div class="tenant-auth-entry-shell">
+            <div class="tenant-auth-form-shell">
+              <div class="tenant-auth-head">
+                <div>
+                  <h6>Iniciar sesión o registrarte</h6>
+                  <p>Usa una red social o tu correo para continuar.</p>
                 </div>
-                <div class="col-12 col-md-6">
-                  <input type="password" class="form-control" id="tenant-pro-login-password" placeholder="Contraseña" required>
+                <span class="tenant-auth-head-pill">Sin salir de la landing</span>
+              </div>
+
+              <div id="tenant-pro-auth-alert" class="tenant-auth-alert d-none" role="alert"></div>
+
+              <div class="tenant-auth-social-grid">
+                @foreach($tenantSocialProviders as $provider)
+                  <a href="{{ route('client.social.redirect', ['provider' => $provider['key'], 'redirect' => $tenantAuthRedirect]) }}"
+                     class="tenant-auth-social-btn {{ $provider['enabled'] ? '' : 'is-disabled' }}"
+                     data-provider="{{ $provider['key'] }}"
+                     aria-disabled="{{ $provider['enabled'] ? 'false' : 'true' }}">
+                    <i class="{{ $provider['icon'] }} fs-5"></i>
+                    <span>Continuar con {{ $provider['label'] }}</span>
+                  </a>
+                @endforeach
+              </div>
+
+              <div class="tenant-auth-divider">o con correo</div>
+
+              <ul class="nav nav-tabs" id="tenantAuthTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link active" id="tenant-login-tab" data-bs-toggle="tab" data-bs-target="#tenant-login-panel" type="button" role="tab">Iniciar sesión</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link" id="tenant-register-tab" data-bs-toggle="tab" data-bs-target="#tenant-register-panel" type="button" role="tab">Crear cuenta</button>
+                </li>
+              </ul>
+              <div class="tab-content border border-top-0 rounded-bottom p-3" id="tenantAuthTabsContent">
+                <div class="tab-pane fade show active" id="tenant-login-panel" role="tabpanel">
+                  <form id="tenant-pro-login-form" class="row g-2">
+                    <div class="col-12 col-md-6">
+                      <input type="email" class="form-control" id="tenant-pro-login-email" placeholder="Email" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <input type="password" class="form-control" id="tenant-pro-login-password" placeholder="Contraseña" required>
+                    </div>
+                    <div class="col-12">
+                      <button type="submit" class="btn btn-dark">Entrar</button>
+                    </div>
+                  </form>
                 </div>
-                <div class="col-12">
-                  <button type="submit" class="btn btn-dark">Entrar</button>
+                <div class="tab-pane fade" id="tenant-register-panel" role="tabpanel">
+                  <form id="tenant-pro-register-form" class="row g-2">
+                    <div class="col-12 col-md-6">
+                      <input type="text" class="form-control" id="tenant-pro-register-name" placeholder="Nombre" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <input type="email" class="form-control" id="tenant-pro-register-email" placeholder="Email" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <input type="password" class="form-control" id="tenant-pro-register-password" placeholder="Contraseña" minlength="8" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <input type="password" class="form-control" id="tenant-pro-register-password-confirmation" placeholder="Confirmar contraseña" minlength="8" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <input type="text" class="form-control" id="tenant-pro-register-dni" placeholder="DNI (opcional)">
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <input type="text" class="form-control" id="tenant-pro-register-phone" placeholder="Teléfono (opcional)">
+                    </div>
+                    <div class="col-12">
+                      <button type="submit" class="btn btn-dark">Crear cuenta</button>
+                    </div>
+                  </form>
                 </div>
-              </form>
-            </div>
-            <div class="tab-pane fade" id="tenant-register-panel" role="tabpanel">
-              <form id="tenant-pro-register-form" class="row g-2">
-                <div class="col-12 col-md-4">
-                  <input type="text" class="form-control" id="tenant-pro-register-name" placeholder="Nombre" required>
-                </div>
-                <div class="col-12 col-md-4">
-                  <input type="email" class="form-control" id="tenant-pro-register-email" placeholder="Email" required>
-                </div>
-                <div class="col-12 col-md-4">
-                  <input type="password" class="form-control" id="tenant-pro-register-password" placeholder="Contraseña" minlength="8" required>
-                </div>
-                <div class="col-12 col-md-4">
-                  <input type="password" class="form-control" id="tenant-pro-register-password-confirmation" placeholder="Confirmar contraseña" minlength="8" required>
-                </div>
-                <div class="col-12 col-md-4">
-                  <input type="text" class="form-control" id="tenant-pro-register-dni" placeholder="DNI (opcional)">
-                </div>
-                <div class="col-12 col-md-4">
-                  <input type="text" class="form-control" id="tenant-pro-register-phone" placeholder="Teléfono (opcional)">
-                </div>
-                <div class="col-12">
-                  <button type="submit" class="btn btn-dark">Crear cuenta</button>
-                </div>
-              </form>
+              </div>
             </div>
           </div>
         </div>
@@ -609,7 +785,7 @@
           </div>
         </div>
       </div>
-      <div class="modal-footer tenant-pro-modal-footer">
+      <div class="modal-footer tenant-pro-modal-footer" id="tenantProCheckoutModalFooter">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
         <button type="button" class="btn btn-success" id="tenant-pro-submit-order" disabled>Confirmar pedido</button>
       </div>
@@ -1064,6 +1240,8 @@
 
     const authTokenKey = 'shopix_ecomm_token';
     const authUserKey = 'shopix_ecomm_user';
+    const authResumeKey = `shopix_resume_checkout_${tenantSlug}`;
+    const tenantAuthAlert = document.getElementById('tenant-pro-auth-alert');
     let proPaymentMethods = [];
     let proDollarRate = 0;
     let proEuroRate = 0;
@@ -1098,6 +1276,37 @@
           user: user || null,
         },
       }));
+    }
+
+    function showTenantAuthAlert(message) {
+      if (!tenantAuthAlert) return;
+      tenantAuthAlert.textContent = message || '';
+      tenantAuthAlert.classList.toggle('d-none', !message);
+    }
+
+    function clearTenantAuthAlert() {
+      showTenantAuthAlert('');
+    }
+
+    function setCheckoutResumeState(shouldResumeCheckout) {
+      sessionStorage.setItem(authResumeKey, JSON.stringify({
+        checkout: !!shouldResumeCheckout,
+      }));
+    }
+
+    function consumeCheckoutResumeState() {
+      const raw = sessionStorage.getItem(authResumeKey);
+      if (!raw) {
+        return null;
+      }
+
+      sessionStorage.removeItem(authResumeKey);
+
+      try {
+        return JSON.parse(raw);
+      } catch (error) {
+        return null;
+      }
     }
 
     function escapeHtml(value) {
@@ -1396,6 +1605,7 @@
     }
 
     async function openProCheckout(options = {}) {
+      clearTenantAuthAlert();
       const cart = getCart();
       const authOnly = !!options.authOnly;
       if (!authOnly && cart.length === 0) {
@@ -1417,6 +1627,7 @@
       const paymentRowsContainer = document.getElementById('tenant-pro-payment-rows');
       const addPaymentRowButton = document.getElementById('tenant-pro-add-payment-row');
       const modalTitle = document.getElementById('tenantProCheckoutModalLabel');
+      const modalFooter = document.getElementById('tenantProCheckoutModalFooter');
 
       const token = getAuthToken();
       const user = getAuthUser();
@@ -1434,34 +1645,60 @@
         }
       }
 
-      if (authOnly && cart.length === 0) {
+      const showAuthOnlyState = (title) => {
         if (modalTitle) {
-          modalTitle.textContent = isLogged ? 'Checkout Pro' : 'Iniciar sesión';
+          modalTitle.textContent = title;
         }
 
-        if (isLogged) {
-          authSection.classList.add('d-none');
-          checkoutSection.classList.add('d-none');
-        } else {
-          authSection.classList.remove('d-none');
-          checkoutSection.classList.add('d-none');
-          const loginTab = document.getElementById('tenant-login-tab');
-          if (loginTab) {
-            bootstrap.Tab.getOrCreateInstance(loginTab).show();
-          }
-        }
-
-        paymentRowsContainer.innerHTML = '<p class="tenant-cart-empty">Inicia sesión para consultar tu cuenta o agrega productos al carrito para continuar con el checkout.</p>';
-        totalAmountElement.textContent = `0.00 ${getBaseCurrencySymbol()}`;
+        authSection.classList.remove('d-none');
+        checkoutSection.classList.add('d-none');
+        modalFooter?.classList.add('d-none');
         submitOrderButton.disabled = true;
+        paymentRowsContainer.innerHTML = '';
+        totalAmountElement.textContent = `${getSubtotal(cart).toFixed(2)} ${getBaseCurrencySymbol()}`;
 
+        const loginTab = document.getElementById('tenant-login-tab');
+        if (loginTab) {
+          bootstrap.Tab.getOrCreateInstance(loginTab).show();
+        }
+      };
+
+      const showCheckoutState = () => {
+        if (modalTitle) {
+          modalTitle.textContent = 'Checkout';
+        }
+
+        authSection.classList.add('d-none');
+        checkoutSection.classList.remove('d-none');
+        modalFooter?.classList.remove('d-none');
+        submitOrderButton.disabled = cart.length === 0;
+      };
+
+      const showLoggedInIdleState = () => {
+        if (modalTitle) {
+          modalTitle.textContent = 'Sesión activa';
+        }
+
+        authSection.classList.add('d-none');
+        checkoutSection.classList.add('d-none');
+        modalFooter?.classList.add('d-none');
+        submitOrderButton.disabled = true;
+        paymentRowsContainer.innerHTML = '<p class="tenant-cart-empty">Tu sesión ya está activa. Agrega productos al carrito para continuar con el checkout.</p>';
+      };
+
+      if (!isLogged) {
+        showAuthOnlyState(cart.length > 0 && !authOnly ? 'Inicia sesión para continuar' : 'Iniciar sesión');
         const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
         modal.show();
         return;
       }
 
-      if (modalTitle) {
-        modalTitle.textContent = 'Checkout Pro';
+      if (authOnly && cart.length === 0) {
+        showLoggedInIdleState();
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+        modal.show();
+        return;
       }
 
       let methodsResponse;
@@ -1555,22 +1792,7 @@
       totalAmountElement.textContent = `${getSubtotal(cart).toFixed(2)} ${getBaseCurrencySymbol()}`;
       updateProPaymentSummary();
 
-      if (isLogged) {
-        authSection.classList.add('d-none');
-        checkoutSection.classList.remove('d-none');
-        submitOrderButton.disabled = cart.length === 0;
-      } else {
-        authSection.classList.remove('d-none');
-        checkoutSection.classList.add('d-none');
-        submitOrderButton.disabled = true;
-      }
-
-      if (authOnly && !isLogged) {
-        const loginTab = document.getElementById('tenant-login-tab');
-        if (loginTab) {
-          bootstrap.Tab.getOrCreateInstance(loginTab).show();
-        }
-      }
+      showCheckoutState();
 
       const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
       modal.show();
@@ -1578,6 +1800,7 @@
 
     async function loginProCustomer(event) {
       event.preventDefault();
+      clearTenantAuthAlert();
       const email = document.getElementById('tenant-pro-login-email').value.trim();
       const password = document.getElementById('tenant-pro-login-password').value;
 
@@ -1593,17 +1816,17 @@
 
       const data = await response.json();
       if (!response.ok || !data.token || !data.user) {
-        alert(data.message || 'No se pudo iniciar sesión.');
+        showTenantAuthAlert(data.message || 'No se pudo iniciar sesión.');
         return;
       }
 
       setAuthData(data.token, data.user);
-      alert('Sesión iniciada correctamente.');
       openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
     }
 
     async function registerProCustomer(event) {
       event.preventDefault();
+      clearTenantAuthAlert();
       const name = document.getElementById('tenant-pro-register-name').value.trim();
       const email = document.getElementById('tenant-pro-register-email').value.trim();
       const password = document.getElementById('tenant-pro-register-password').value;
@@ -1623,12 +1846,11 @@
 
       const data = await response.json();
       if (!response.ok || !data.token || !data.user) {
-        alert(data.message || 'No se pudo crear la cuenta.');
+        showTenantAuthAlert(data.message || 'No se pudo crear la cuenta.');
         return;
       }
 
       setAuthData(data.token, data.user);
-      alert('Cuenta creada correctamente.');
       openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
     }
 
@@ -1790,6 +2012,19 @@
     }
 
     document.addEventListener('click', event => {
+      const authTrigger = event.target.closest('[data-shopix-open-auth]');
+      if (authTrigger) {
+        event.preventDefault();
+        closeTenantCartOffcanvas();
+        openProCheckout({ authOnly: true });
+        return;
+      }
+
+      const socialTrigger = event.target.closest('.tenant-auth-social-btn:not(.is-disabled)');
+      if (socialTrigger) {
+        setCheckoutResumeState(cartEnabled && getCart().length > 0);
+      }
+
       const copyAllButton = event.target.closest('.pro-copy-all');
       if (copyAllButton) {
         const copyAllValue = decodeURIComponent(copyAllButton.dataset.copyAllValue || '');
@@ -1855,6 +2090,22 @@
 
     document.getElementById('tenant-pro-login-form')?.addEventListener('submit', loginProCustomer);
     document.getElementById('tenant-pro-register-form')?.addEventListener('submit', registerProCustomer);
+
+    const resumedCheckoutState = consumeCheckoutResumeState();
+    if (resumedCheckoutState) {
+      const shouldResumeCheckout = !!resumedCheckoutState.checkout && cartEnabled && getCart().length > 0 && !!getAuthToken();
+      openProCheckout({ authOnly: !shouldResumeCheckout });
+    }
+
+    const urlAuthError = new URLSearchParams(window.location.search).get('shopix_auth_error');
+    if (urlAuthError) {
+      showTenantAuthAlert(urlAuthError);
+      openProCheckout({ authOnly: true });
+
+      const sanitizedUrl = new URL(window.location.href);
+      sanitizedUrl.searchParams.delete('shopix_auth_error');
+      window.history.replaceState({}, document.title, sanitizedUrl.pathname + sanitizedUrl.search + sanitizedUrl.hash);
+    }
 
     if (cartEnabled) {
       document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach(input => {

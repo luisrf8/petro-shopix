@@ -142,14 +142,14 @@
                             <div class="login-point"><i class="bi bi-diagram-3"></i><span>Separado del acceso de clientes</span></div>
                             <div class="login-point"><i class="bi bi-stars"></i><span>Gestión del backoffice</span></div>
                         </div>
-                        <a href="{{ route('client.login') }}" class="btn btn-outline-light btn-sm mt-3">Ir a login de cliente</a>
+                        <span class="btn btn-outline-light btn-sm mt-3 disabled" aria-disabled="true">Login cliente solo desde landings</span>
                     </div>
                     <div class="col-lg-7 login-form-wrap">
                         <div class="text-center mb-4">
                             <a href="/" class="text-decoration-none">
                                 <img src="{{ asset('assets/img/shopix5.png') }}" class="login-brand" alt="Shopix">
                             </a>
-                            <p class="login-subtitle">Version 1.0</p>
+                            <p class="login-subtitle">Version 0.0</p>
                         </div>
                         <h1 class="h3 login-title">Login administrativo</h1>
                         <p class="login-subtitle">Ingresa con una cuenta de administración para continuar.</p>

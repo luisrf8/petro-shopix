@@ -18,8 +18,16 @@
       --text-secondary: #475569;
       --line-soft: #dbe4f0;
       --card-shadow: 0 20px 46px rgba(15, 23, 42, 0.08);
-      --card-shadow-hover: 0 24px 52px rgba(15, 23, 42, 0.14);
-      --brand-dark: #111827;
+    const landingFilterElements = Array.from(document.querySelectorAll('[data-landing-filter]'));
+    const landingFilterGroups = landingFilterElements.reduce((groups, element) => {
+      const key = element.dataset.landingFilter;
+      groups[key] = groups[key] || [];
+      groups[key].push(element);
+      return groups;
+    }, {});
+
+    const landingClearFiltersButtons = document.querySelectorAll('[data-landing-clear]');
+    const landingResultsCounters = document.querySelectorAll('[data-landing-results-count]');
       --brand-accent: #2563eb;
     }
 
@@ -45,12 +53,12 @@
       border-radius: 12px;
       padding: 0.42rem 0.9rem;
     }
-
-    .hero {
-      position: relative;
-      overflow: hidden;
-      padding: 7rem 0 2.3rem;
-    }
+      const selectedName = normalizeText(getLandingFilterValue('name'));
+      const selectedType = normalizeText(getLandingFilterValue('type'));
+      const selectedActivity = normalizeText(getLandingFilterValue('activity'));
+      const selectedRegion = normalizeText(getLandingFilterValue('region'));
+      const selectedState = normalizeText(getLandingFilterValue('state'));
+      const selectedCity = normalizeText(getLandingFilterValue('city'));
 
     .hero::before {
       content: '';
@@ -81,30 +89,57 @@
       border: 1px solid rgba(37, 99, 235, 0.18);
     }
 
-    .hero h1 {
-      font-family: 'Plus Jakarta Sans', sans-serif;
+      landingResultsCounters.forEach(counter => {
+        counter.textContent = `${visibleCount} de ${landingTotalItems} resultados`;
       font-size: clamp(1.9rem, 4.2vw, 3.1rem);
       font-weight: 800;
       letter-spacing: -0.02em;
-      margin-top: 0.95rem;
-      color: #0b1220;
-    }
-
-    .hero-subtitle {
-      max-width: 760px;
-      color: var(--text-secondary);
+    Object.entries(landingFilterGroups).forEach(([key, elements]) => {
+      const eventName = key === 'name' ? 'input' : 'change';
+      elements.forEach(element => {
+        element.addEventListener(eventName, () => {
+          syncLandingFilterValue(key, element.value, element);
+          applyLandingDirectoryFilters();
+        });
+      });
       font-size: clamp(0.98rem, 2.2vw, 1.13rem);
       margin-bottom: 0;
-    }
+    landingClearFiltersButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        Object.values(landingFilterGroups).forEach(elements => {
+          elements.forEach(element => {
+            element.value = '';
+          });
+        });
 
-    .directory-filter-card {
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 22px;
+        applyLandingDirectoryFilters();
+      });
+    });
+
+    const navbarCollapse = document.getElementById('landingNavbar');
+    const navLinks = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
+    const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;
+
+    navLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth < 992 && navbarCollapse?.classList.contains('show') && bsCollapse) {
+          bsCollapse.hide();
       background: rgba(255, 255, 255, 0.9);
       backdrop-filter: blur(10px);
       box-shadow: var(--card-shadow);
       position: relative;
       overflow: hidden;
+    }
+
+    .mobile-directory-filter-shell {
+      display: none;
+    }
+
+    .mobile-directory-filter-shell .directory-filter-card {
+      margin-top: 0.4rem;
+      box-shadow: none;
+      border-color: rgba(148, 163, 184, 0.24);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
     }
 
     .directory-grid {
@@ -297,6 +332,26 @@
         padding-top: 6.4rem;
       }
 
+      #landingNavbar.show {
+        margin-top: 0.6rem;
+        padding: 0.75rem;
+        max-height: calc(100vh - 110px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        border: 1px solid #dbe4f0;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.97);
+        box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+      }
+
+      .mobile-directory-filter-shell {
+        display: block;
+      }
+
+      .directory-filter-card.is-desktop {
+        display: none;
+      }
+
       .directory-filter-group {
         padding: 0.85rem;
       }
@@ -343,9 +398,88 @@
               <a class="btn btn-light text-dark landing-nav-link" href="/landings">Por tienda / servicio</a>
             </li>
             <li class="nav-item">
-              <a class="btn btn-light text-dark landing-nav-link" href="/login">Iniciar sesión</a>
+              <a class="btn btn-light text-dark landing-nav-link" href="/login">Acceso admin</a>
             </li>
           </ul>
+
+          <div class="mobile-directory-filter-shell d-md-none">
+            <div class="directory-filter-card p-3 mt-2">
+              <div class="row g-3 align-items-end">
+                <div class="col-12">
+                  <label class="form-label" for="landingNameFilterMobile">Buscar por nombre de tienda o servicio</label>
+                  <input id="landingNameFilterMobile" data-landing-filter="name" type="search" class="form-control" placeholder="Ej: panaderia artesanal, taller automotriz, farmacia central">
+                </div>
+                <div class="col-12 d-flex flex-wrap gap-2">
+                  <button type="button" data-landing-clear class="btn btn-outline-secondary directory-clear-btn w-100">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Limpiar filtros
+                  </button>
+                  <span class="directory-results-meta" data-landing-results-count>0 resultados</span>
+                </div>
+              </div>
+
+              <div class="row g-3 mt-1">
+                <div class="col-12">
+                  <div class="directory-filter-group h-100">
+                    <div class="directory-filter-group-title"><i class="bi bi-geo-alt-fill me-1"></i> Localidad</div>
+                    <div class="row g-2">
+                      <div class="col-12">
+                        <label class="form-label" for="landingRegionFilterMobile">Region</label>
+                        <select id="landingRegionFilterMobile" data-landing-filter="region" class="form-select">
+                          <option value="">Todas</option>
+                          @foreach(($tenantFilters['regions'] ?? collect()) as $region)
+                            <option value="{{ $region }}">{{ $region }}</option>
+                          @endforeach
+                        </select>
+                      </div>
+                      <div class="col-12">
+                        <label class="form-label" for="landingStateFilterMobile">Estado</label>
+                        <select id="landingStateFilterMobile" data-landing-filter="state" class="form-select">
+                          <option value="">Todos</option>
+                          @foreach(($tenantFilters['states'] ?? collect()) as $state)
+                            <option value="{{ $state }}">{{ $state }}</option>
+                          @endforeach
+                        </select>
+                      </div>
+                      <div class="col-12">
+                        <label class="form-label" for="landingCityFilterMobile">Ciudad</label>
+                        <select id="landingCityFilterMobile" data-landing-filter="city" class="form-select">
+                          <option value="">Todas</option>
+                          @foreach(($tenantFilters['cities'] ?? collect()) as $city)
+                            <option value="{{ $city }}">{{ $city }}</option>
+                          @endforeach
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="directory-filter-group h-100">
+                    <div class="directory-filter-group-title"><i class="bi bi-sliders2-vertical me-1"></i> Especificaciones</div>
+                    <div class="row g-2">
+                      <div class="col-12">
+                        <label class="form-label" for="landingTypeFilterMobile">Tipo de tienda / servicio</label>
+                        <select id="landingTypeFilterMobile" data-landing-filter="type" class="form-select">
+                          <option value="">Todos</option>
+                          @foreach(($tenantFilters['types'] ?? collect()) as $type)
+                            <option value="{{ $type }}">{{ $type }}</option>
+                          @endforeach
+                        </select>
+                      </div>
+                      <div class="col-12">
+                        <label class="form-label" for="landingActivityFilterMobile">Actividad economica</label>
+                        <select id="landingActivityFilterMobile" data-landing-filter="activity" class="form-select">
+                          <option value="">Todas</option>
+                          @foreach(($tenantFilters['activities'] ?? collect()) as $activity)
+                            <option value="{{ $activity }}">{{ $activity }}</option>
+                          @endforeach
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </nav>
     </div>
@@ -361,17 +495,17 @@
 
   <section class="py-4">
     <div class="container">
-      <div class="directory-filter-card p-3 p-md-4 mb-4">
+      <div class="directory-filter-card is-desktop p-3 p-md-4 mb-4">
         <div class="row g-3 align-items-end">
           <div class="col-12 col-lg-7">
-            <label class="form-label" for="landingNameFilter">Buscar por nombre de tienda o servicio</label>
-            <input id="landingNameFilter" type="search" class="form-control" placeholder="Ej: panaderia artesanal, taller automotriz, farmacia central">
+            <label class="form-label" for="landingNameFilterDesktop">Buscar por nombre de tienda o servicio</label>
+            <input id="landingNameFilterDesktop" data-landing-filter="name" type="search" class="form-control" placeholder="Ej: panaderia artesanal, taller automotriz, farmacia central">
           </div>
           <div class="col-12 col-lg-5 d-flex flex-wrap justify-content-lg-end gap-2">
-            <button type="button" id="landingClearFilters" class="btn btn-outline-secondary directory-clear-btn">
+            <button type="button" data-landing-clear class="btn btn-outline-secondary directory-clear-btn">
               <i class="bi bi-arrow-counterclockwise me-1"></i> Limpiar filtros
             </button>
-            <span class="directory-results-meta align-self-center" id="landingResultsCount">0 resultados</span>
+            <span class="directory-results-meta align-self-center" data-landing-results-count>0 resultados</span>
           </div>
         </div>
 
@@ -381,8 +515,8 @@
               <div class="directory-filter-group-title"><i class="bi bi-geo-alt-fill me-1"></i> Localidad</div>
               <div class="row g-2">
                 <div class="col-12 col-md-4">
-                  <label class="form-label" for="landingRegionFilter">Region</label>
-                  <select id="landingRegionFilter" class="form-select">
+                  <label class="form-label" for="landingRegionFilterDesktop">Region</label>
+                  <select id="landingRegionFilterDesktop" data-landing-filter="region" class="form-select">
                     <option value="">Todas</option>
                     @foreach(($tenantFilters['regions'] ?? collect()) as $region)
                       <option value="{{ $region }}">{{ $region }}</option>
@@ -390,8 +524,8 @@
                   </select>
                 </div>
                 <div class="col-12 col-md-4">
-                  <label class="form-label" for="landingStateFilter">Estado</label>
-                  <select id="landingStateFilter" class="form-select">
+                  <label class="form-label" for="landingStateFilterDesktop">Estado</label>
+                  <select id="landingStateFilterDesktop" data-landing-filter="state" class="form-select">
                     <option value="">Todos</option>
                     @foreach(($tenantFilters['states'] ?? collect()) as $state)
                       <option value="{{ $state }}">{{ $state }}</option>
@@ -399,8 +533,8 @@
                   </select>
                 </div>
                 <div class="col-12 col-md-4">
-                  <label class="form-label" for="landingCityFilter">Ciudad</label>
-                  <select id="landingCityFilter" class="form-select">
+                  <label class="form-label" for="landingCityFilterDesktop">Ciudad</label>
+                  <select id="landingCityFilterDesktop" data-landing-filter="city" class="form-select">
                     <option value="">Todas</option>
                     @foreach(($tenantFilters['cities'] ?? collect()) as $city)
                       <option value="{{ $city }}">{{ $city }}</option>
@@ -415,8 +549,8 @@
               <div class="directory-filter-group-title"><i class="bi bi-sliders2-vertical me-1"></i> Especificaciones</div>
               <div class="row g-2">
                 <div class="col-12 col-md-6">
-                  <label class="form-label" for="landingTypeFilter">Tipo de tienda / servicio</label>
-                  <select id="landingTypeFilter" class="form-select">
+                  <label class="form-label" for="landingTypeFilterDesktop">Tipo de tienda / servicio</label>
+                  <select id="landingTypeFilterDesktop" data-landing-filter="type" class="form-select">
                     <option value="">Todos</option>
                     @foreach(($tenantFilters['types'] ?? collect()) as $type)
                       <option value="{{ $type }}">{{ $type }}</option>
@@ -424,8 +558,8 @@
                   </select>
                 </div>
                 <div class="col-12 col-md-6">
-                  <label class="form-label" for="landingActivityFilter">Actividad economica</label>
-                  <select id="landingActivityFilter" class="form-select">
+                  <label class="form-label" for="landingActivityFilterDesktop">Actividad economica</label>
+                  <select id="landingActivityFilterDesktop" data-landing-filter="activity" class="form-select">
                     <option value="">Todas</option>
                     @foreach(($tenantFilters['activities'] ?? collect()) as $activity)
                       <option value="{{ $activity }}">{{ $activity }}</option>
@@ -519,20 +653,31 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    const landingFilters = {
-      name: document.getElementById('landingNameFilter'),
-      type: document.getElementById('landingTypeFilter'),
-      activity: document.getElementById('landingActivityFilter'),
-      region: document.getElementById('landingRegionFilter'),
-      state: document.getElementById('landingStateFilter'),
-      city: document.getElementById('landingCityFilter'),
-    };
+    const landingFilterElements = Array.from(document.querySelectorAll('[data-landing-filter]'));
+    const landingFilterGroups = landingFilterElements.reduce((groups, element) => {
+      const key = element.dataset.landingFilter;
+      groups[key] = groups[key] || [];
+      groups[key].push(element);
+      return groups;
+    }, {});
 
-    const landingClearFiltersButton = document.getElementById('landingClearFilters');
-    const landingResultsCount = document.getElementById('landingResultsCount');
+    const landingClearFiltersButtons = document.querySelectorAll('[data-landing-clear]');
+    const landingResultsCounters = document.querySelectorAll('[data-landing-results-count]');
     const landingDirectoryItems = Array.from(document.querySelectorAll('.landing-directory-item'));
     const landingDirectoryEmpty = document.getElementById('landingDirectoryEmpty');
     const landingTotalItems = landingDirectoryItems.length;
+
+    function getLandingFilterValue(key) {
+      return landingFilterGroups[key]?.[0]?.value || '';
+    }
+
+    function syncLandingFilterValue(key, value, sourceElement = null) {
+      (landingFilterGroups[key] || []).forEach(element => {
+        if (element !== sourceElement && element.value !== value) {
+          element.value = value;
+        }
+      });
+    }
 
     function normalizeText(value) {
       return String(value || '')
@@ -543,12 +688,12 @@
     }
 
     function applyLandingDirectoryFilters() {
-      const selectedName = normalizeText(landingFilters.name?.value);
-      const selectedType = normalizeText(landingFilters.type?.value);
-      const selectedActivity = normalizeText(landingFilters.activity?.value);
-      const selectedRegion = normalizeText(landingFilters.region?.value);
-      const selectedState = normalizeText(landingFilters.state?.value);
-      const selectedCity = normalizeText(landingFilters.city?.value);
+      const selectedName = normalizeText(getLandingFilterValue('name'));
+      const selectedType = normalizeText(getLandingFilterValue('type'));
+      const selectedActivity = normalizeText(getLandingFilterValue('activity'));
+      const selectedRegion = normalizeText(getLandingFilterValue('region'));
+      const selectedState = normalizeText(getLandingFilterValue('state'));
+      const selectedCity = normalizeText(getLandingFilterValue('city'));
 
       let visibleCount = 0;
 
@@ -579,28 +724,43 @@
         landingDirectoryEmpty.classList.toggle('d-none', visibleCount > 0);
       }
 
-      if (landingResultsCount) {
-        landingResultsCount.textContent = `${visibleCount} de ${landingTotalItems} resultados`;
-      }
+      landingResultsCounters.forEach(counter => {
+        counter.textContent = `${visibleCount} de ${landingTotalItems} resultados`;
+      });
     }
 
-    Object.entries(landingFilters).forEach(([key, filterEl]) => {
-      if (!filterEl) {
-        return;
-      }
-
+    Object.entries(landingFilterGroups).forEach(([key, elements]) => {
       const eventName = key === 'name' ? 'input' : 'change';
-      filterEl.addEventListener(eventName, applyLandingDirectoryFilters);
+      elements.forEach(element => {
+        element.addEventListener(eventName, () => {
+          syncLandingFilterValue(key, element.value, element);
+          applyLandingDirectoryFilters();
+        });
+      });
     });
 
-    landingClearFiltersButton?.addEventListener('click', () => {
-      Object.values(landingFilters).forEach(filterEl => {
-        if (filterEl) {
-          filterEl.value = '';
+    landingClearFiltersButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        Object.values(landingFilterGroups).forEach(elements => {
+          elements.forEach(element => {
+            element.value = '';
+          });
+        });
+
+        applyLandingDirectoryFilters();
+      });
+    });
+
+    const navbarCollapse = document.getElementById('landingNavbar');
+    const navLinks = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
+    const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;
+
+    navLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        if (window.innerWidth < 992 && navbarCollapse?.classList.contains('show') && bsCollapse) {
+          bsCollapse.hide();
         }
       });
-
-      applyLandingDirectoryFilters();
     });
 
     applyLandingDirectoryFilters();

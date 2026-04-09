@@ -32,8 +32,13 @@ use App\Http\Controllers\{
 Route::middleware('guest')->group(function () {
     Route::get('admin/login', [AuthenticatedSessionController::class, 'createAdmin'])->name('login');
     Route::post('admin/login', [AuthenticatedSessionController::class, 'authenticateAdmin'])->name('admin.login.submit');
-    Route::get('client/login', [AuthenticatedSessionController::class, 'createCustomer'])->name('client.login');
     Route::post('client/login', [AuthenticatedSessionController::class, 'authenticateCustomer'])->name('client.login.submit');
+    Route::get('client/login/{provider}', [AuthenticatedSessionController::class, 'redirectToCustomerProvider'])
+        ->where('provider', 'google|facebook|apple')
+        ->name('client.social.redirect');
+    Route::get('client/login/{provider}/callback', [AuthenticatedSessionController::class, 'handleCustomerProviderCallback'])
+        ->where('provider', 'google|facebook|apple')
+        ->name('client.social.callback');
     Route::get('login', function () {
         return redirect()->route('login');
     });

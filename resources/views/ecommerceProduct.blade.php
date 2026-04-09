@@ -614,6 +614,9 @@
             <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}#contacto"><i class="bi bi-chat-dots"></i> Contacto</a>
             </li>
+            <li class="nav-item">
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="#" data-shopix-open-auth><i class="bi bi-person-circle"></i> Entrar</a>
+            </li>
             @if(!empty($mapsUrl))
               <li class="nav-item">
                 <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer"><i class="bi bi-geo-alt"></i> Ver dirección</a>
@@ -643,6 +646,9 @@
             </div>
           </div>
           <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-dark" href="#" data-shopix-open-auth>
+              <i class="bi bi-person-circle me-1"></i> Iniciar sesión
+            </a>
             <a class="btn btn-outline-dark" href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}">
               <i class="bi bi-arrow-left me-1"></i> Volver al catálogo
             </a>

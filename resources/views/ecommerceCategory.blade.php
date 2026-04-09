@@ -436,6 +436,17 @@
       padding: 1rem;
     }
 
+    .mobile-filter-shell {
+      display: none;
+    }
+
+    .mobile-filter-shell .filter-panel-card {
+      margin-top: 0.35rem;
+      box-shadow: none;
+      border-color: #dbe4f0;
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+    }
+
     .catalog-search {
       display: flex;
       align-items: center;
@@ -540,7 +551,11 @@
       }
 
       .filters-panel {
-        position: static;
+        display: none;
+      }
+
+      .mobile-filter-shell {
+        display: block;
       }
 
       .filter-chip-card {
@@ -564,6 +579,9 @@
       #landingNavbar.show {
         margin-top: 0.6rem;
         padding: 0.75rem;
+        max-height: calc(100vh - 110px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
         border: 1px solid #dbe4f0;
         border-radius: 14px;
         background: rgba(255, 255, 255, 0.97);
@@ -640,6 +658,9 @@
             <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}#contacto"><i class="bi bi-chat-dots"></i> Contacto</a>
             </li>
+            <li class="nav-item">
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="#" data-shopix-open-auth><i class="bi bi-person-circle"></i> Entrar</a>
+            </li>
             @if(!empty($mapsUrl))
               <li class="nav-item">
                 <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer"><i class="bi bi-geo-alt"></i> Ver dirección</a>
@@ -650,65 +671,64 @@
               <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}"><i class="bi bi-arrow-left"></i> Volver</a>
             </li>
           </ul>
+
+          <div class="mobile-filter-shell d-lg-none">
+            <div class="filter-panel-card">
+              <h3 class="h6 fw-bold mb-3">Filtrar catálogo</h3>
+
+              <label for="product-search-mobile" class="small text-muted mb-1">Buscar por nombre</label>
+              <div class="catalog-search mb-3">
+                <i class="bi bi-search"></i>
+                <input type="text" id="product-search-mobile" data-catalog-search class="form-control border-0 shadow-none" placeholder="Ej. termo, camiseta, paquete...">
+              </div>
+
+              <div class="d-grid gap-2">
+                <button type="button" class="filter-card-btn category-link active" data-id="all" aria-pressed="true">
+                  <span class="fw-semibold">Todos</span>
+                  <small class="text-muted">Mostrar todo</small>
+                </button>
+
+                @foreach($categories as $category)
+                  <button type="button" class="filter-card-btn category-link" data-id="{{ $category->id }}" aria-pressed="false">
+                    <span class="fw-semibold">{{ $category->name }}</span>
+                    <small class="text-muted">Filtrar</small>
+                  </button>
+                @endforeach
+
+                @if(isset($materialPackages) && $materialPackages->count() > 0)
+                  <button type="button" class="filter-card-btn category-link" data-id="packages" aria-pressed="false">
+                    <span class="fw-semibold">Paquetes</span>
+                    <small class="text-muted">Combos</small>
+                  </button>
+                @endif
+              </div>
+
+              <hr class="my-3">
+              <div class="small text-muted d-grid gap-2">
+                <div><i class="bi bi-shield-lock me-1"></i> Compra protegida</div>
+                <div><i class="bi bi-lock me-1"></i> Datos protegidos</div>
+                <div><i class="bi bi-whatsapp me-1"></i> Soporte directo</div>
+              </div>
+            </div>
+          </div>
         </div>
       </nav>
     </div>
   </header>
 
-  <!-- DESCUBRIMIENTO -->
-  <section class="py-10 discovery-shell page-shell mt-10">
-    <div class="container">
-      <div class="discovery-head d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mt-10">
-        <div>
-          <h2 class="section-title text-start mb-2">Explora el catálogo de {{ $tenant->name }}</h2>
-          <p>Filtra por categorías en tarjetas y encuentra productos rápido en una vista clara y moderna.</p>
-        </div>
-        <div class="trust-pills">
-          <span class="trust-pill"><i class="bi bi-shield-check me-1"></i>Compra segura</span>
-          <span class="trust-pill"><i class="bi bi-lock me-1"></i>Privacidad protegida</span>
-          <span class="trust-pill"><i class="bi bi-stars me-1"></i>Experiencia moderna</span>
-        </div>
-      </div>
-
-      <div class="catalog-filter-rail my-4 py-4">
-        <button type="button" class="filter-chip-card category-link active" data-id="all" aria-pressed="true">
-          <span class="filter-chip-thumb"><i class="bi bi-grid-3x3-gap"></i></span>
-          <span class="filter-chip-meta">
-            <small>Catálogo completo</small>
-            <strong>Ver todo</strong>
-          </span>
-        </button>
-
-        @foreach($categories as $category)
-          <button type="button" class="filter-chip-card category-link" data-id="{{ $category->id }}" aria-pressed="false">
-            <span class="filter-chip-thumb" style="background-image: url('{{ \App\Support\ImageStorage::url($category->image) ?? asset('assets/img/shopix5.png') }}');"></span>
-            <span class="filter-chip-meta">
-              <small>Categoría</small>
-              <strong>{{ $category->name }}</strong>
-            </span>
-          </button>
-        @endforeach
-
-        @if(isset($materialPackages) && $materialPackages->count() > 0)
-          <button type="button" class="filter-chip-card category-link" data-id="packages" aria-pressed="false">
-            <span class="filter-chip-thumb"><i class="bi bi-box-seam"></i></span>
-            <span class="filter-chip-meta">
-              <small>Promociones</small>
-              <strong>Paquetes y combos</strong>
-            </span>
-          </button>
-        @endif
-      </div>
-    </div>
-  </section>
 
   <!-- PRODUCTOS -->
-  <section id="productos" class="py-3 section-muted">
+  <section id="productos" class="py-3 section-muted mt-10">
     <div class="container">
       <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
         <div>
           <h2 class="section-title text-start mb-0">Catálogo de productos</h2>
           <p class="text-muted mb-0">Vista organizada por categorías para navegar más rápido.</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <a href="#" class="btn btn-dark" data-shopix-open-auth>
+            <i class="bi bi-person-circle me-1"></i> Iniciar sesión
+          </a>
         </div>
       </div>
 
@@ -717,10 +737,10 @@
           <div class="filter-panel-card">
             <h3 class="h6 fw-bold mb-3">Filtrar catálogo</h3>
 
-            <label for="product-search" class="small text-muted mb-1">Buscar por nombre</label>
+            <label for="product-search-desktop" class="small text-muted mb-1">Buscar por nombre</label>
             <div class="catalog-search mb-3">
               <i class="bi bi-search"></i>
-              <input type="text" id="product-search" class="form-control border-0 shadow-none" placeholder="Ej. termo, camiseta, paquete...">
+              <input type="text" id="product-search-desktop" data-catalog-search class="form-control border-0 shadow-none" placeholder="Ej. termo, camiseta, paquete...">
             </div>
 
             <div class="d-grid gap-2">
@@ -931,7 +951,7 @@
   const products = document.querySelectorAll('.product-item');
   const packageItems = document.querySelectorAll('.package-item');
   const packagesSection = document.getElementById('paquetes');
-  const searchInput = document.getElementById('product-search');
+  const searchInputs = document.querySelectorAll('[data-catalog-search]');
   const productsCounter = document.getElementById('products-counter');
   const productsEmpty = document.getElementById('products-empty');
   const packagesEmpty = document.getElementById('packages-empty');
@@ -1026,6 +1046,7 @@
   });
 
   let activeCategory = 'all';
+  let searchText = '';
 
   function setActiveCategory(categoryId) {
     activeCategory = categoryId;
@@ -1040,8 +1061,15 @@
     });
   }
 
+  function syncSearchInputs(value) {
+    searchInputs.forEach(input => {
+      if (input.value !== value) {
+        input.value = value;
+      }
+    });
+  }
+
   function applyCatalogFilters() {
-    const searchText = (searchInput?.value || '').trim().toLowerCase();
     let visibleProducts = 0;
     let visiblePackages = 0;
 
@@ -1093,17 +1121,26 @@
       setActiveCategory(link.dataset.id);
       applyCatalogFilters();
 
+      if (window.innerWidth < 992 && navbarCollapse?.classList.contains('show') && link.closest('.mobile-filter-shell') && bsCollapse) {
+        bsCollapse.hide();
+      }
+
       if (link.classList.contains('category-card') || link.classList.contains('filter-chip-card')) {
         document.getElementById('productos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     });
   });
 
-  if (searchInput) {
-    searchInput.addEventListener('input', applyCatalogFilters);
-  }
+  searchInputs.forEach(input => {
+    input.addEventListener('input', () => {
+      searchText = (input.value || '').trim().toLowerCase();
+      syncSearchInputs(input.value || '');
+      applyCatalogFilters();
+    });
+  });
 
   setActiveCategory('all');
+  syncSearchInputs('');
   applyCatalogFilters();
 </script>
 </body>

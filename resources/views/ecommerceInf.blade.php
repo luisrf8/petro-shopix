@@ -60,6 +60,16 @@
       ? trim(($openingTimeLabel !== '' ? $openingTimeLabel : '--:--') . ' - ' . ($closingTimeLabel !== '' ? $closingTimeLabel : '--:--'))
       : '';
     $whatsapp = preg_replace('/\D/', '', (string) ($tenant->phone_code . $tenant->phone_number));
+    $whatsappUrl = !empty($whatsapp) ? 'https://api.whatsapp.com/send?phone=' . $whatsapp : null;
+    $serviceLabel = !empty($tenant->business_type) && \Illuminate\Support\Str::lower((string) $tenant->business_type) === 'servicio'
+      ? 'Servicio'
+      : 'Tienda';
+    $heroSummary = !empty($tenant->description)
+      ? \Illuminate\Support\Str::limit((string) $tenant->description, 96)
+      : ($serviceLabel === 'Servicio' ? 'Agenda, consulta y compra desde tu móvil.' : 'Explora, elige y compra desde tu móvil.');
+    $daysShortLabel = $workingDaysText !== ''
+      ? \Illuminate\Support\Str::limit($workingDaysText, 36)
+      : ($serviceLabel === 'Servicio' ? 'Atención por agenda' : 'Horario no publicado');
     $mapsUrl = null;
     if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
       $mapsUrl = 'https://www.google.com/maps?q=' . $tenant->latitude . ',' . $tenant->longitude;
@@ -291,6 +301,110 @@
       color: #ffffff;
       background: rgba(15, 23, 42, 0.35);
       border-color: #ffffff;
+    }
+
+    .hero-market-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.8rem;
+      margin-top: 1.25rem;
+    }
+
+    .hero-market-card {
+      border-radius: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.36));
+      padding: 1rem;
+      text-align: left;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 20px 40px rgba(2, 6, 23, 0.18);
+    }
+
+    .hero-market-card small {
+      display: block;
+      color: rgba(226, 232, 240, 0.8);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.72rem;
+      margin-bottom: 0.4rem;
+      font-weight: 700;
+    }
+
+    .hero-market-card strong {
+      display: block;
+      font-size: 1rem;
+      line-height: 1.2;
+      color: #ffffff;
+      margin-bottom: 0.25rem;
+    }
+
+    .hero-market-card span {
+      display: block;
+      color: rgba(226, 232, 240, 0.76);
+      font-size: 0.86rem;
+      line-height: 1.35;
+    }
+
+    .hero-login-btn {
+      background: linear-gradient(135deg, #f97316, #fb923c);
+      color: #ffffff;
+      border-color: transparent;
+      box-shadow: 0 14px 28px rgba(249, 115, 22, 0.28);
+    }
+
+    .hero-login-btn:hover,
+    .hero-login-btn:focus {
+      color: #ffffff;
+      background: linear-gradient(135deg, #ea580c, #f97316);
+    }
+
+    .discovery-head h2 {
+      margin-bottom: 0.25rem !important;
+    }
+
+    .discovery-highlight-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.9rem;
+      margin-top: 1rem;
+    }
+
+    .discovery-highlight-card {
+      border: 1px solid #dbe4f0;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+      padding: 1rem;
+      display: flex;
+      gap: 0.8rem;
+      align-items: flex-start;
+      min-height: 110px;
+    }
+
+    .discovery-highlight-icon {
+      width: 2.6rem;
+      height: 2.6rem;
+      flex-shrink: 0;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(var(--tenant-accent-rgb), 0.12);
+      color: var(--tenant-primary);
+      font-size: 1.1rem;
+    }
+
+    .discovery-highlight-card strong {
+      display: block;
+      font-size: 0.96rem;
+      color: #0f172a;
+    }
+
+    .discovery-highlight-card span {
+      display: block;
+      color: #64748b;
+      font-size: 0.84rem;
+      line-height: 1.35;
+      margin-top: 0.18rem;
     }
 
     .section-title {
@@ -734,6 +848,84 @@
       background: #f8fafc;
     }
 
+    .contact-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0 1.25rem;
+    }
+
+    .contact-stat {
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      padding: 0.9rem;
+      background: #fff;
+    }
+
+    .contact-stat small {
+      display: block;
+      color: #64748b;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.35rem;
+      font-weight: 700;
+    }
+
+    .contact-stat strong {
+      display: block;
+      color: #0f172a;
+      font-size: 0.96rem;
+      line-height: 1.3;
+    }
+
+    .mobile-quickbar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1200;
+      display: none;
+      padding: 0.65rem 0.8rem calc(0.65rem + env(safe-area-inset-bottom));
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+      border-top: 1px solid rgba(var(--tenant-primary-rgb), 0.12);
+      box-shadow: 0 -12px 28px rgba(15, 23, 42, 0.08);
+    }
+
+    .mobile-quickbar-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.55rem;
+    }
+
+    .mobile-quickbar-link {
+      border-radius: 16px;
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      color: #0f172a;
+      text-decoration: none;
+      padding: 0.58rem 0.35rem;
+      text-align: center;
+      font-size: 0.74rem;
+      font-weight: 700;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .mobile-quickbar-link i {
+      font-size: 1rem;
+    }
+
+    .mobile-quickbar-link.is-primary {
+      background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+      color: #fff;
+      border-color: transparent;
+    }
+
     @media (max-width: 991.98px) {
       .landing-header {
         background: transparent;
@@ -757,6 +949,11 @@
 
       .hero {
         min-height: 85vh;
+      }
+
+      .hero-market-grid,
+      .discovery-highlight-grid {
+        grid-template-columns: 1fr;
       }
 
       .category-card {
@@ -811,6 +1008,10 @@
         padding-top: 6rem;
       }
 
+      body {
+        padding-bottom: 5.75rem;
+      }
+
       .hero-title {
         font-size: clamp(1.35rem, 8vw, 2rem);
       }
@@ -840,6 +1041,19 @@
       .contact-btn {
         width: 100%;
         justify-content: center;
+      }
+
+      .hero-market-card,
+      .contact-stat {
+        padding: 0.85rem;
+      }
+
+      .contact-stat-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .mobile-quickbar {
+        display: block;
       }
     }
   </style>
@@ -887,6 +1101,9 @@
             <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="#contacto"><i class="bi bi-chat-dots"></i> Contacto</a>
             </li>
+            <li class="nav-item">
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="#" data-shopix-open-auth><i class="bi bi-person-circle"></i> Entrar</a>
+            </li>
             @include('partials.tenant-cart-nav')
           </ul>
         </div>
@@ -924,23 +1141,41 @@
       @endphp
       <div class="hero-copy-shell">
         <h1 class="hero-title">{{ strtoupper($tenant->name) }}</h1>
-        <h2 class="hero-slogan">{{ $tenant->slogan ?? '' }}</h2>
-        <p class="hero-description">{{ $tenant->description ?? '' }}</p>
+        <h2 class="hero-slogan">{{ $tenant->slogan ?: ($serviceLabel === 'Servicio' ? 'Tu servicio, sin vueltas.' : 'Compra fácil, rápido y directo.') }}</h2>
+        <p class="hero-description">{{ $heroSummary }}</p>
         <div class="hero-badges">
-          @if(!empty($businessTypeLabel))
-            <span class="hero-badge">{{ $businessTypeLabel }}</span>
-          @endif
-          @if(!empty($economicActivityLabel))
-            <span class="hero-badge">{{ $economicActivityLabel }}</span>
-          @endif
           @if(!empty($locationLabel))
             <span class="hero-badge">{{ $locationLabel }}</span>
           @endif
+          <span class="hero-badge">{{ $serviceLabel }}</span>
+          @if(!empty($economicActivityLabel))
+            <span class="hero-badge">{{ $economicActivityLabel }}</span>
+          @endif
+        </div>
+        <div class="hero-market-grid">
+          <div class="hero-market-card">
+            <small>Atención</small>
+            <strong>{{ $workingHoursLabel !== '' ? $workingHoursLabel : 'Atención digital' }}</strong>
+            <span>{{ $daysShortLabel }}</span>
+          </div>
+          <div class="hero-market-card">
+            <small>Compra</small>
+            <strong>{{ $cartEnabled ? 'Carrito activo' : 'Catálogo directo' }}</strong>
+            <span>{{ $cartEnabled ? 'Agrega productos y completa tu pedido en línea.' : 'Explora el catálogo y consulta por WhatsApp.' }}</span>
+          </div>
+          <div class="hero-market-card">
+            <small>Acceso</small>
+            <strong>Cliente en 1 toque</strong>
+            <span>Entra con Google, Apple, Facebook o correo.</span>
+          </div>
         </div>
         <div class="hero-actions">
-          <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-light px-4">Ver productos</a>
+          <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-light px-4">Explorar</a>
+          @if(!empty($whatsappUrl))
+            <a href="{{ $whatsappUrl }}" target="_blank" rel="noopener noreferrer" class="btn hero-action-secondary px-4">WhatsApp</a>
+          @endif
           @if(!empty($mapsUrl))
-            <a href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer" class="btn hero-action-secondary px-4">Ver dirección</a>
+            <a href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer" class="btn hero-action-secondary px-4">Ubicación</a>
           @endif
         </div>
       </div>
@@ -952,16 +1187,40 @@
     <div class="container">
       <div class="discovery-head d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
         <div>
-          <h2 class="section-title text-start mb-2">Explora nuestro catálogo</h2>
-          <p>Navega por categorías en tarjetas, encuentra rápido lo que necesitas y compra con confianza.</p>
+          <h2 class="section-title text-start mb-2">Explora rápido</h2>
+          <p>Todo pensado para móvil: elegir, entrar y comprar.</p>
         </div>
         <div class="trust-pills">
-          <span class="trust-pill"><i class="bi bi-shield-check me-1"></i>Compra segura</span>
-          <span class="trust-pill"><i class="bi bi-lock me-1"></i>Privacidad protegida</span>
-          <span class="trust-pill"><i class="bi bi-stars me-1"></i>Experiencia moderna</span>
+          <span class="trust-pill"><i class="bi bi-lightning-charge me-1"></i>Rápido</span>
+          <span class="trust-pill"><i class="bi bi-shield-check me-1"></i>Seguro</span>
+          <span class="trust-pill"><i class="bi bi-phone me-1"></i>Móvil</span>
           @if(!empty($mapsUrl))
-            <a href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer" class="discovery-map-btn"><i class="bi bi-geo-alt"></i>Ver dirección</a>
+            <a href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer" class="discovery-map-btn"><i class="bi bi-geo-alt"></i>Ver ubicación</a>
           @endif
+        </div>
+      </div>
+
+      <div class="discovery-highlight-grid">
+        <div class="discovery-highlight-card">
+          <span class="discovery-highlight-icon"><i class="bi bi-clock-history"></i></span>
+          <div>
+            <strong>Horario visible</strong>
+            <span>{{ $workingHoursLabel !== '' ? $workingHoursLabel : 'Consulta disponibilidad directamente con el negocio.' }}</span>
+          </div>
+        </div>
+        <div class="discovery-highlight-card">
+          <span class="discovery-highlight-icon"><i class="bi bi-shop-window"></i></span>
+          <div>
+            <strong>{{ $serviceLabel }}</strong>
+            <span>{{ $economicActivityLabel ?: 'Catálogo activo y atención directa.' }}</span>
+          </div>
+        </div>
+        <div class="discovery-highlight-card">
+          <span class="discovery-highlight-icon"><i class="bi bi-person-bounding-box"></i></span>
+          <div>
+            <strong>Login social</strong>
+            <span>Google, Apple y Facebook listos para clientes.</span>
+          </div>
         </div>
       </div>
 
@@ -1016,8 +1275,8 @@
     <div class="container">
       <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
         <div>
-          <h2 class="section-title text-start mb-0">Productos Destacados</h2>
-          <p class="text-muted mb-0">Diseño limpio, filtros simples y navegación rápida por categorías.</p>
+          <h2 class="section-title text-start mb-0">Destacados</h2>
+          <p class="text-muted mb-0">Menos pasos para encontrar lo que buscas.</p>
         </div>
       </div>
 
@@ -1176,23 +1435,30 @@
       <div class="row align-items-center">
         <div class="col-12 col-md-6 mb-4 mb-md-0">
           <div class="contact-card">
-          <h2 class="section-title text-start mb-3">Contáctanos</h2>
-          <p class="mb-3">{{ $tenant->name ?? '' }} - {{ $tenant->description ?? '' }}.</p>
-          @if(!empty($locationSummary))
-            <p class="mb-2">Somos una empresa de {{ $locationSummary }}.</p>
-          @endif
-          @if(!empty($tenant->address))
-            <p class="mb-3">Ubicada en {{ $tenant->address }}.</p>
-          @endif
-          @if(!empty($workingDaysText))
-            <p class="mb-2"><strong>Días laborales:</strong> {{ $workingDaysText }}</p>
-          @endif
-          @if(!empty($workingHoursLabel))
-            <p class="mb-3"><strong>Horario:</strong> {{ $workingHoursLabel }}</p>
-          @endif
+          <h2 class="section-title text-start mb-3">Contacto</h2>
+          <p class="mb-2">{{ $tenant->name ?? '' }}</p>
+          <p class="text-muted mb-0">{{ $heroSummary }}</p>
+          <div class="contact-stat-grid">
+            <div class="contact-stat">
+              <small>Horario</small>
+              <strong>{{ $workingHoursLabel !== '' ? $workingHoursLabel : 'Sin horario publicado' }}</strong>
+            </div>
+            <div class="contact-stat">
+              <small>Días</small>
+              <strong>{{ $workingDaysText !== '' ? $workingDaysText : 'Consulta disponibilidad' }}</strong>
+            </div>
+            <div class="contact-stat">
+              <small>Zona</small>
+              <strong>{{ $locationSummary !== '' ? $locationSummary : 'Ubicación por confirmar' }}</strong>
+            </div>
+            <div class="contact-stat">
+              <small>Dirección</small>
+              <strong>{{ !empty($tenant->address) ? $tenant->address : 'Disponible por mapa o contacto directo' }}</strong>
+            </div>
+          </div>
           <div class="contact-actions">
-            @if(!empty($whatsapp))
-              <a href="https://api.whatsapp.com/send?phone={{ $whatsapp }}" target="_blank" class="contact-btn contact-btn-primary">
+            @if(!empty($whatsappUrl))
+              <a href="{{ $whatsappUrl }}" target="_blank" class="contact-btn contact-btn-primary">
                 <i class="bi bi-whatsapp"></i> Escríbenos por WhatsApp
               </a>
             @endif
@@ -1252,6 +1518,26 @@
       </div>
     </div>
   </section>
+  <div class="mobile-quickbar d-sm-none">
+    <div class="mobile-quickbar-grid">
+      <a href="#top" class="mobile-quickbar-link">
+        <i class="bi bi-house"></i>
+        <span>Inicio</span>
+      </a>
+      <a href="#categorias" class="mobile-quickbar-link">
+        <i class="bi bi-grid"></i>
+        <span>Categorías</span>
+      </a>
+      <button type="button" class="mobile-quickbar-link" data-bs-toggle="offcanvas" data-bs-target="#tenantCartOffcanvas" aria-controls="tenantCartOffcanvas">
+        <i class="bi bi-cart3"></i>
+        <span>Carrito</span>
+      </button>
+      <a href="#" class="mobile-quickbar-link is-primary" data-shopix-open-auth>
+        <i class="bi bi-person-circle"></i>
+        <span>Entrar</span>
+      </a>
+    </div>
+  </div>
   <footer class="py-4 text-center bg-dark text-white">
     <p>© 2025 {{ $tenant->name }} - SHOPIX. Todos los derechos reservados.</p>
   </footer>
