@@ -89,11 +89,7 @@ class SaleController extends Controller
         ->where('is_active', true)
         ->get();
 
-        $customerRoleIds = $this->resolveCustomerRoleIds();
-        $existingCustomersForSale = User::query()
-            ->where('tenant_id', $user->tenant_id)
-            ->where('is_active', 1)
-            ->whereIn('role_id', $customerRoleIds)
+        $existingCustomersForSale = $this->customerCandidatesQuery((int) $user->tenant_id)
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'phone_number', 'dni']);
 
@@ -113,12 +109,12 @@ class SaleController extends Controller
             'delivery_city_id' => 'nullable|integer|exists:cities,id',
             'sale_document_mode' => 'nullable|in:delivery_note,electronic_invoice',
             'create_new_customer' => 'nullable|boolean',
-            'customer_existing_id' => 'nullable|integer|required_unless:create_new_customer,1',
+            'customer_existing_id' => 'nullable|integer|required_unless:create_new_customer,true',
             'customer_new' => 'nullable|array',
-            'customer_new.name' => 'required_if:create_new_customer,1|string|max:255',
-            'customer_new.email' => 'required_if:create_new_customer,1|email|unique:users,email',
-            'customer_new.phone_number' => 'required_if:create_new_customer,1|string|max:20',
-            'customer_new.dni' => 'required_if:create_new_customer,1|string|max:100',
+            'customer_new.name' => 'required_if:create_new_customer,true|string|max:255',
+            'customer_new.email' => 'required_if:create_new_customer,true|email|unique:users,email',
+            'customer_new.phone_number' => 'required_if:create_new_customer,true|string|max:20',
+            'customer_new.dni' => 'required_if:create_new_customer,true|string|max:100',
             'mark_delivered' => 'nullable|boolean',
             'mark_payments_paid' => 'nullable|boolean',
             'mark_sale_completed' => 'nullable|boolean',
@@ -153,13 +149,10 @@ class SaleController extends Controller
             $createdCustomerTemporaryPassword = $defaultCustomerPassword;
         } else {
             $selectedCustomerId = (int) ($validated['customer_existing_id'] ?? 0);
-            $customerRoleIds = $this->resolveCustomerRoleIds();
 
-            $existingCustomer = User::query()
-                ->where('tenant_id', $tenantId)
-                ->where('is_active', 1)
-                ->whereIn('role_id', $customerRoleIds)
-                ->find($selectedCustomerId);
+            $existingCustomer = $this->customerCandidatesQuery($tenantId)
+                ->whereKey($selectedCustomerId)
+                ->first();
 
             if (!$existingCustomer) {
                 return response()->json(['error' => 'Debes seleccionar un cliente existente válido.'], 422);
@@ -417,6 +410,33 @@ class SaleController extends Controller
         }
 
         return $roleIds;
+    }
+
+    private function customerCandidatesQuery(int $tenantId)
+    {
+        $excludedRoleIds = Role::query()
+            ->get()
+            ->filter(function (Role $role) {
+                $canonicalRole = User::canonicalRoleName($role->name);
+                $normalizedName = strtolower(trim((string) $role->name));
+
+                return in_array($canonicalRole, ['owner', 'admin', 'seller', 'warehouse'], true)
+                    || in_array($normalizedName, ['super_user', 'super user'], true);
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        return User::query()
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->when(!empty($excludedRoleIds), function ($query) use ($excludedRoleIds) {
+                $query->where(function ($customerQuery) use ($excludedRoleIds) {
+                    $customerQuery->whereNotIn('role_id', $excludedRoleIds)
+                        ->orWhereNull('role_id');
+                });
+            });
     }
 
     private function resolveCustomerRoleId(): int
