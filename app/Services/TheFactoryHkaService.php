@@ -190,7 +190,7 @@ class TheFactoryHkaService
             $lineTotal = round($lineSubtotal + $lineTaxAmount, 2);
             $multiplier = $emitOtherCurrency ? $exchangeRate : 1;
             $isExempt = $lineTaxAmount <= 0;
-            $lineTaxableBase = $isExempt ? 0.0 : $lineSubtotal;
+            $lineBaseAmount = $lineSubtotal;
 
             return [
                 'numeroLinea' => (string) ($index + 1),
@@ -205,8 +205,8 @@ class TheFactoryHkaService
                 'descripcionBonificacion' => null,
                 'descuentoMonto' => $this->formatAmount(0, 2),
                 'recargoMonto' => $this->formatAmount(0, 2),
-                'precioItem' => $this->formatAmount($lineTaxableBase * $multiplier, 2),
-                'precioAntesDescuento' => $this->formatAmount($lineTaxableBase * $multiplier, 2),
+                'precioItem' => $this->formatAmount($lineBaseAmount * $multiplier, 2),
+                'precioAntesDescuento' => $this->formatAmount($lineBaseAmount * $multiplier, 2),
                 'codigoImpuesto' => $isExempt ? 'E' : 'G',
                 'tasaIVA' => $lineTaxAmount > 0 ? $this->formatPlainNumber($lineTaxRate > 0 ? $lineTaxRate : 16, 2) : null,
                 'valorIVA' => $lineTaxAmount > 0 ? $this->formatAmount($lineTaxAmount * $multiplier, 2) : null,
@@ -233,6 +233,39 @@ class TheFactoryHkaService
         $documentTaxTotal = $emitOtherCurrency ? round($taxTotal * $exchangeRate, 2) : $taxTotal;
         $documentMontoTotalConIva = $emitOtherCurrency ? round($montoTotalConIva * $exchangeRate, 2) : $montoTotalConIva;
         $documentTotalPagar = $emitOtherCurrency ? round($totalPagar * $exchangeRate, 2) : $totalPagar;
+        $taxesSubtotal = [];
+        if ($taxTotal > 0) {
+            $taxesSubtotal[] = [
+                'codigoTotalImp' => 'G',
+                'alicuotaImp' => $this->formatPlainNumber($taxRate > 0 ? $taxRate : 16, 2),
+                'baseImponibleImp' => $this->formatAmount($documentTaxableBaseTotal, 2),
+                'valorTotalImp' => $this->formatAmount($documentTaxTotal, 2),
+            ];
+        }
+        if ($exemptTotal > 0) {
+            $taxesSubtotal[] = [
+                'codigoTotalImp' => 'E',
+                'baseImponibleImp' => $this->formatAmount($documentExemptTotal, 2),
+                'valorTotalImp' => $this->formatAmount(0, 2),
+            ];
+        }
+
+        $foreignTaxesSubtotal = [];
+        if ($taxTotal > 0) {
+            $foreignTaxesSubtotal[] = [
+                'codigoTotalImp' => 'G',
+                'alicuotaImp' => $this->formatPlainNumber($taxRate > 0 ? $taxRate : 16, 2),
+                'baseImponibleImp' => $this->formatAmount($taxableBaseTotal, 2),
+                'valorTotalImp' => $this->formatAmount($taxTotal, 2),
+            ];
+        }
+        if ($exemptTotal > 0) {
+            $foreignTaxesSubtotal[] = [
+                'codigoTotalImp' => 'E',
+                'baseImponibleImp' => $this->formatAmount($exemptTotal, 2),
+                'valorTotalImp' => $this->formatAmount(0, 2),
+            ];
+        }
 
         $payments = $order->payments->map(function ($payment) use ($documentCurrency, $documentTotalPagar, $exchangeRate, $emitOtherCurrency, $order) {
             $paymentCurrency = $this->normalizeCurrency((string) ($documentCurrency));
@@ -314,12 +347,7 @@ class TheFactoryHkaService
                     'montoEnLetras' => null,
                     'listaRecargo' => null,
                     'listaDescBonificacion' => null,
-                    'impuestosSubtotal' => $taxTotal > 0 ? [[
-                        'codigoTotalImp' => 'G',
-                        'alicuotaImp' => $this->formatPlainNumber($taxRate > 0 ? $taxRate : 16, 2),
-                        'baseImponibleImp' => $this->formatAmount($documentTaxableBaseTotal, 2),
-                        'valorTotalImp' => $this->formatAmount($documentTaxTotal, 2),
-                    ]] : [],
+                    'impuestosSubtotal' => $taxesSubtotal,
                     'otrosImpuestosSubtotal' => null,
                     'formasPago' => $payments,
                     'totalIGTF' => null,
@@ -344,12 +372,7 @@ class TheFactoryHkaService
                     'totalRecargos' => null,
                     'listaRecargo' => null,
                     'listaDescBonificacion' => null,
-                    'impuestosSubtotal' => $taxTotal > 0 ? [[
-                        'codigoTotalImp' => 'G',
-                        'alicuotaImp' => $this->formatPlainNumber($taxRate > 0 ? $taxRate : 16, 2),
-                        'baseImponibleImp' => $this->formatAmount($taxableBaseTotal, 2),
-                        'valorTotalImp' => $this->formatAmount($taxTotal, 2),
-                    ]] : [],
+                    'impuestosSubtotal' => $foreignTaxesSubtotal,
                     'otrosImpuestosSubtotal' => null,
                     'montoTotalOTI' => null,
                     'montoTotalIVAyOTI' => null,
