@@ -817,88 +817,77 @@
                 </a>
               </div>
             @endforeach
+
+            @if(isset($materialPackages) && $materialPackages->count() > 0)
+              @foreach($materialPackages as $package)
+                @php
+                  $firstItem = $package->items->first();
+                  $firstImage = $firstItem && $firstItem->variant && $firstItem->variant->product && isset($firstItem->variant->product->images[0])
+                    ? (\App\Support\ImageStorage::url($firstItem->variant->product->images[0]->path) ?? asset('assets/img/shopix5.png'))
+                    : null;
+                  $packageTotalBeforeDiscount = $package->items->sum(function($it) {
+                    $basePrice = (float) ($it->variant->price ?? 0);
+                    $productDiscount = (float) ($it->variant->product->discount_percentage ?? 0);
+                    $variantDiscount = (float) ($it->variant->discount_percentage ?? 0);
+                    $price = $basePrice
+                      * ((100 - $productDiscount) / 100)
+                      * ((100 - $variantDiscount) / 100);
+                    $qty = (float) ($it->quantity ?? 0);
+                    return $price * $qty;
+                  });
+                  $packageDiscount = (float) ($package->discount_percentage ?? 0);
+                  $packageTotalCalculated = $packageTotalBeforeDiscount * ((100 - $packageDiscount) / 100);
+                  $packageTotal = !is_null($package->package_price)
+                    ? (float) $package->package_price
+                    : $packageTotalCalculated;
+                @endphp
+                <div class="col-12 col-sm-6 col-md-4 col-lg-4 mb-4 package-item" data-name="{{ strtolower($package->name) }}">
+                  <div class="card card-product h-100">
+                    @if($firstImage)
+                      <img src="{{ $firstImage }}" class="card-img-top landing-media-image" style="height: 300px; object-fit: cover;">
+                    @else
+                      <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
+                        <i class="bi bi-box-seam text-muted fs-1"></i>
+                      </div>
+                    @endif
+                    <div class="card-body text-start">
+                      <h5 class="fw-bold text-dark">{{ $package->name }}</h5>
+                      <p class="text-muted mb-1">{{ $package->description ?: 'Paquete personalizado.' }}</p>
+                      <p class="small mb-1">{{ $package->items->count() }} material(es)</p>
+                      <p class="mb-2">
+                        <span class="price-neo-chip">
+                          <strong>{{ number_format($packageTotal, 2) }}</strong>
+                          <span>{{ $baseCurrencySymbol }}</span>
+                        </span>
+                      </p>
+                      @if(!is_null($package->package_price))
+                        <p class="text-dark small mb-2">Precio fijo combo</p>
+                      @endif
+                      @if($packageDiscount > 0)
+                        <p class="text-success small mb-2">Descuento del paquete: {{ number_format($packageDiscount, 2) }}%</p>
+                      @endif
+                      <div class="d-flex gap-2 align-items-center">
+                        <input type="number" min="1" value="1" class="form-control form-control-sm" id="tenant-pack-qty-{{ $package->id }}" style="max-width: 90px;">
+                        <button type="button" class="btn btn-dark btn-sm js-add-tenant-package" data-package-id="{{ $package->id }}">Agregar paquete</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              @endforeach
+            @endif
           </div>
 
           <div id="products-empty" class="empty-state" style="display: none;">
             No encontramos productos con los filtros seleccionados.
           </div>
-        </div>
-      </div>
-    </div>
-  </section>
 
-  @if(isset($materialPackages) && $materialPackages->count() > 0)
-  <section id="paquetes" class="py-5 section-shell border-top" data-category="packages">
-    <div class="container">
-      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-        <div>
-          <h2 class="section-title text-start mb-0">Paquetes y Combos</h2>
-          <p class="text-muted mb-0">Ahorra con combinaciones listas para comprar.</p>
-        </div>
-      </div>
-      <div class="row" id="packages-container">
-        @foreach($materialPackages as $package)
-          @php
-            $firstItem = $package->items->first();
-            $firstImage = $firstItem && $firstItem->variant && $firstItem->variant->product && isset($firstItem->variant->product->images[0])
-              ? (\App\Support\ImageStorage::url($firstItem->variant->product->images[0]->path) ?? asset('assets/img/shopix5.png'))
-              : null;
-            $packageTotalBeforeDiscount = $package->items->sum(function($it) {
-              $basePrice = (float) ($it->variant->price ?? 0);
-              $productDiscount = (float) ($it->variant->product->discount_percentage ?? 0);
-              $variantDiscount = (float) ($it->variant->discount_percentage ?? 0);
-              $price = $basePrice
-                * ((100 - $productDiscount) / 100)
-                * ((100 - $variantDiscount) / 100);
-              $qty = (float) ($it->quantity ?? 0);
-              return $price * $qty;
-            });
-            $packageDiscount = (float) ($package->discount_percentage ?? 0);
-            $packageTotalCalculated = $packageTotalBeforeDiscount * ((100 - $packageDiscount) / 100);
-            $packageTotal = !is_null($package->package_price)
-              ? (float) $package->package_price
-              : $packageTotalCalculated;
-          @endphp
-          <div class="col-12 col-sm-6 col-md-4 col-lg-3 mb-4 package-item" data-name="{{ strtolower($package->name) }}">
-            <div class="card card-product h-100">
-              @if($firstImage)
-                <img src="{{ $firstImage }}" class="card-img-top landing-media-image" style="height: 300px; object-fit: cover;">
-              @else
-                <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
-                  <i class="bi bi-box-seam text-muted fs-1"></i>
-                </div>
-              @endif
-              <div class="card-body text-start">
-                <h5 class="fw-bold text-dark">{{ $package->name }}</h5>
-                <p class="text-muted mb-1">{{ $package->description ?: 'Paquete personalizado.' }}</p>
-                <p class="small mb-1">{{ $package->items->count() }} material(es)</p>
-                <p class="mb-2">
-                  <span class="price-neo-chip">
-                    <strong>{{ number_format($packageTotal, 2) }}</strong>
-                    <span>{{ $baseCurrencySymbol }}</span>
-                  </span>
-                </p>
-                @if(!is_null($package->package_price))
-                  <p class="text-dark small mb-2">Precio fijo combo</p>
-                @endif
-                @if($packageDiscount > 0)
-                  <p class="text-success small mb-2">Descuento del paquete: {{ number_format($packageDiscount, 2) }}%</p>
-                @endif
-                <div class="d-flex gap-2 align-items-center">
-                  <input type="number" min="1" value="1" class="form-control form-control-sm" id="tenant-pack-qty-{{ $package->id }}" style="max-width: 90px;">
-                  <button type="button" class="btn btn-dark btn-sm js-add-tenant-package" data-package-id="{{ $package->id }}">Agregar paquete</button>
-                </div>
-              </div>
-            </div>
+          <div id="packages-empty" class="empty-state" style="display: none;">
+            No encontramos paquetes con los filtros seleccionados.
           </div>
-        @endforeach
-      </div>
-      <div id="packages-empty" class="empty-state" style="display: none;">
-        No encontramos paquetes con los filtros seleccionados.
+        </div>
       </div>
     </div>
   </section>
-  @endif
 
   <footer class="py-4 text-center bg-dark text-white">
     <p>© 2025 {{ $tenant->name }} - SHOPIX. Todos los derechos reservados.</p>
@@ -950,7 +939,6 @@
   const categoryLinks = document.querySelectorAll('.category-link[data-id]');
   const products = document.querySelectorAll('.product-item');
   const packageItems = document.querySelectorAll('.package-item');
-  const packagesSection = document.getElementById('paquetes');
   const searchInputs = document.querySelectorAll('[data-catalog-search]');
   const productsCounter = document.getElementById('products-counter');
   const productsEmpty = document.getElementById('products-empty');
@@ -1096,21 +1084,18 @@
       }
     });
 
-    if (packagesSection) {
-      packagesSection.style.display = visiblePackages > 0 ? 'block' : 'none';
-    }
+    const totalVisible = visibleProducts + visiblePackages;
 
     if (productsCounter) {
-      const totalVisible = visibleProducts + visiblePackages;
       productsCounter.textContent = `Mostrando ${totalVisible} resultado${totalVisible === 1 ? '' : 's'}`;
     }
 
     if (productsEmpty) {
-      productsEmpty.style.display = visibleProducts > 0 ? 'none' : 'block';
+      productsEmpty.style.display = totalVisible > 0 ? 'none' : 'block';
     }
 
     if (packagesEmpty) {
-      packagesEmpty.style.display = visiblePackages > 0 ? 'none' : 'block';
+      packagesEmpty.style.display = activeCategory === 'packages' && visiblePackages === 0 ? 'block' : 'none';
     }
   }
 
@@ -1125,8 +1110,10 @@
         bsCollapse.hide();
       }
 
-      if (link.classList.contains('category-card') || link.classList.contains('filter-chip-card')) {
-        document.getElementById('productos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const targetSection = document.getElementById('productos');
+
+      if (targetSection && (link.classList.contains('category-card') || link.classList.contains('filter-chip-card') || link.dataset.id === 'packages')) {
+        targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     });
   });

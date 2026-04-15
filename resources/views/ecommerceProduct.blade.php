@@ -222,6 +222,20 @@
       box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
     }
 
+    .page-toolbar {
+      max-width: 1180px;
+      margin: 0 auto 1rem;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .page-toolbar .btn {
+      border-radius: 12px;
+      padding-inline: 1rem;
+    }
+
     .spotlight-kicker {
       font-size: 0.78rem;
       font-weight: 700;
@@ -262,36 +276,71 @@
     }
 
     .product-detail-card {
-      max-width: 1120px;
-      min-height: 66vh;
+      max-width: 90vw;
+      min-height: 80vh;
       margin: 16px auto 28px;
-      padding: 30px;
-      border-radius: 16px;
+      padding: 36px;
+      border-radius: 24px;
       border: 1px solid #e5e7eb;
-      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.1);
       background-color: #fff;
     }
 
+    .product-detail-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+      gap: 2rem;
+      align-items: start;
+    }
+
+    .product-gallery-shell {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .product-content-shell {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      min-width: 0;
+    }
+
     .main-image {
-      max-height: 560px;
+      max-height: 640px;
       width: 100%;
       object-fit: cover;
-      border-radius: 12px;
+      border-radius: 18px;
       border: 1px solid #e5e7eb;
     }
 
     .product-gallery-main .d-flex.align-items-center.justify-content-center.rounded-3 {
       border: 1px solid #e5e7eb;
-      border-radius: 12px;
+      border-radius: 18px;
       background-color: #f8fafc !important;
     }
 
     .product-meta-card {
       border: 1px solid #e2e8f0;
-      border-radius: 14px;
-      background: #f8fafc;
-      padding: 0.95rem;
-      margin-bottom: 1rem;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      padding: 1.2rem 1.25rem;
+      margin-bottom: 0;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    }
+
+    .product-meta-subtitle {
+      color: #64748b;
+      margin-bottom: 0;
+      line-height: 1.55;
+    }
+
+    .variant-section-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      background: #ffffff;
+      padding: 1.2rem 1.25rem;
     }
 
     .variant-header {
@@ -299,15 +348,15 @@
       justify-content: space-between;
       align-items: center;
       gap: 0.5rem;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.75rem;
     }
 
     .secure-box {
       border: 1px solid #dbe3ee;
-      border-radius: 12px;
-      background: #f8fafc;
-      padding: 0.8rem;
-      margin-top: 0.85rem;
+      border-radius: 16px;
+      background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+      padding: 0.95rem 1rem;
+      margin-top: 0;
       color: #334155;
       font-size: 0.9rem;
     }
@@ -494,11 +543,30 @@
 
     .product-gallery-thumbs {
       order: 1;
-      margin-right: 1rem;
+      margin-right: 0;
     }
 
     .product-gallery-main {
       order: 2;
+      min-width: 0;
+    }
+
+    .detail-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
+      padding-top: 1rem;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .detail-actions .btn {
+      min-width: 190px;
+    }
+
+    .variant-badge {
+      border-radius: 999px;
+      padding: 0.45rem 0.8rem;
     }
 
     @media (max-width: 991.98px) {
@@ -534,9 +602,20 @@
       }
 
       .product-detail-card {
+        margin-top: 25px auto;
+      }
+
+      .page-toolbar {
         max-width: 95vw;
-        margin: 25px auto;
-        padding: 20px;
+      }
+
+      .product-detail-layout {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+
+      .product-gallery-shell {
+        grid-template-columns: 1fr;
       }
 
       .spotlight-card {
@@ -569,6 +648,29 @@
       #thumbnail-gallery .thumbnail-image,
       #thumbnail-gallery .border.rounded-3 {
         flex: 0 0 auto;
+      }
+
+      .page-toolbar {
+        justify-content: stretch;
+      }
+
+      .page-toolbar .btn {
+        width: 100%;
+      }
+
+      .product-detail-card {
+        padding: 16px;
+        border-radius: 18px;
+      }
+
+      .product-meta-card,
+      .variant-section-card,
+      .secure-box {
+        padding: 1rem;
+      }
+
+      .detail-actions .btn {
+        width: 100%;
       }
     }
   </style>
@@ -632,33 +734,9 @@
     </div>
   </header>
   <section class="py-10 section-muted page-shell">
-    <div class="container">
-      <div class="spotlight-card">
-        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-          <div>
-            <div class="spotlight-kicker">Producto seleccionado</div>
-            <h1 class="spotlight-title">{{ $product->name }}</h1>
-            <p class="spotlight-desc">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta tienda.', 170) }}</p>
-            <div class="trust-pills">
-              <span class="trust-pill"><i class="bi bi-shield-check me-1"></i> Compra segura</span>
-              <span class="trust-pill"><i class="bi bi-lock me-1"></i> Datos protegidos</span>
-              <span class="trust-pill"><i class="bi bi-headset me-1"></i> Soporte directo</span>
-            </div>
-          </div>
-          <div class="d-flex gap-2 flex-wrap">
-            <a class="btn btn-dark" href="#" data-shopix-open-auth>
-              <i class="bi bi-person-circle me-1"></i> Iniciar sesión
-            </a>
-            <a class="btn btn-outline-dark" href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}">
-              <i class="bi bi-arrow-left me-1"></i> Volver al catálogo
-            </a>
-          </div>
-        </div>
-      </div>
-
       <div class="product-detail-card">
-        <div class="row">
-          <div class="col-md-5 d-flex flex-column flex-md-row mb-4 mb-md-0 gap-3 align-items-start">
+        <div class="product-detail-layout">
+          <div class="product-gallery-shell">
             <div class="product-gallery-thumbs">
               <div class="d-flex flex-column gap-2" id="thumbnail-gallery">
                 @if(count($product->images) > 0)
@@ -694,67 +772,69 @@
             </div>
           </div>
 
-          <div class="col-md-7 ps-md-5">
+          <div class="product-content-shell">
             <div class="product-meta-card">
               <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
                 <h2 class="h4 fw-bold mb-0">{{ $product->name }}</h2>
-                <span class="badge text-bg-light border">{{ $product->variants->count() }} variante{{ $product->variants->count() == 1 ? '' : 's' }}</span>
+                <span class="badge text-bg-light border variant-badge">{{ $product->variants->count() }} variante{{ $product->variants->count() == 1 ? '' : 's' }}</span>
               </div>
-              <p class="text-muted mb-0">{{ $product->description }}</p>
+              <p class="product-meta-subtitle">{{ $product->description }}</p>
             </div>
 
-            <div class="variant-header">
-              <h5 class="fw-semibold mb-0">Selecciona una variante</h5>
-              <small class="text-muted">Elige talla o presentación</small>
-            </div>
-            <div id="selected-variant-indicator" class="variant-preview-pill d-none">
-              <i class="bi bi-stars"></i>
-              <span>Seleccionado: <strong id="selected-variant-label">-</strong></span>
-            </div>
+            <div class="variant-section-card">
+              <div class="variant-header">
+                <h5 class="fw-semibold mb-0">Selecciona una variante</h5>
+                <small class="text-muted">Elige talla o presentación</small>
+              </div>
+              <div id="selected-variant-indicator" class="variant-preview-pill d-none">
+                <i class="bi bi-stars"></i>
+                <span>Seleccionado: <strong id="selected-variant-label">-</strong></span>
+              </div>
 
-            <div id="variants-container" class="variant-grid">
-                @forelse ($product->variants as $variant)
-                @php
-                  $productDiscount = (float) ($product->discount_percentage ?? 0);
-                  $variantDiscount = (float) ($variant->discount_percentage ?? 0);
-                  $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
-                  $variantImage = optional($variant->images->first())->path;
-                  $variantImageUrl = $variantImage ? (\App\Support\ImageStorage::url($variantImage) ?? asset('assets/img/shopix5.png')) : (isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'));
-                @endphp
-                    <div 
-                        class="variant-button"
-                        data-variant-id="{{ $variant->id }}"
-                        data-size="{{ $variant->size }}"
-                        data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}"
-                        data-stock="{{ $variant->stock }}"
-                        data-product-name="{{ $product->name }}"
-                        data-image-src="{{ $variantImageUrl }}"
-                        {{ $variant->stock <= 0 ? 'disabled' : '' }}
-                    >
-                        <div class="variant-chip-top">
-                          <div class="variant-media">
-                            <img src="{{ $variantImageUrl }}" alt="Variante {{ $variant->size }}">
+              <div id="variants-container" class="variant-grid">
+                  @forelse ($product->variants as $variant)
+                  @php
+                    $productDiscount = (float) ($product->discount_percentage ?? 0);
+                    $variantDiscount = (float) ($variant->discount_percentage ?? 0);
+                    $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+                    $variantImage = optional($variant->images->first())->path;
+                    $variantImageUrl = $variantImage ? (\App\Support\ImageStorage::url($variantImage) ?? asset('assets/img/shopix5.png')) : (isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'));
+                  @endphp
+                      <div 
+                          class="variant-button"
+                          data-variant-id="{{ $variant->id }}"
+                          data-size="{{ $variant->size }}"
+                          data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}"
+                          data-stock="{{ $variant->stock }}"
+                          data-product-name="{{ $product->name }}"
+                          data-image-src="{{ $variantImageUrl }}"
+                          {{ $variant->stock <= 0 ? 'disabled' : '' }}
+                      >
+                          <div class="variant-chip-top">
+                            <div class="variant-media">
+                              <img src="{{ $variantImageUrl }}" alt="Variante {{ $variant->size }}">
+                            </div>
+                            @if ($variant->stock <= 0)
+                              <span class="badge bg-danger">Agotado</span>
+                            @else
+                              <span class="badge text-bg-light border">{{ $variant->stock }} disp.</span>
+                            @endif
                           </div>
-                          @if ($variant->stock <= 0)
-                            <span class="badge bg-danger">Agotado</span>
-                          @else
-                            <span class="badge text-bg-light border">{{ $variant->stock }} disp.</span>
-                          @endif
-                        </div>
-                        <div class="variant-meta">
-                          <span class="fw-semibold">{{ $variant->size }}</span>
-                          <div class="variant-price-row">
-                            <span>{{ number_format($effectiveVariantPrice, 2) }}</span>
-                            <span class="text-muted small">{{ $baseCurrencySymbol }}</span>
+                          <div class="variant-meta">
+                            <span class="fw-semibold">{{ $variant->size }}</span>
+                            <div class="variant-price-row">
+                              <span>{{ number_format($effectiveVariantPrice, 2) }}</span>
+                              <span class="text-muted small">{{ $baseCurrencySymbol }}</span>
+                            </div>
                           </div>
-                        </div>
-                  @if($productDiscount > 0 || $variantDiscount > 0)
-                    <small class="variant-discount d-block mt-1">Desc: {{ number_format($productDiscount + $variantDiscount, 2) }}%</small>
-                  @endif
-                    </div>
-                @empty
-                    <p class="text-muted">No hay variantes disponibles.</p>
-                @endforelse
+                    @if($productDiscount > 0 || $variantDiscount > 0)
+                      <small class="variant-discount d-block mt-1">Desc: {{ number_format($productDiscount + $variantDiscount, 2) }}%</small>
+                    @endif
+                      </div>
+                  @empty
+                      <p class="text-muted">No hay variantes disponibles.</p>
+                  @endforelse
+              </div>
             </div>
 
             <div class="secure-box">
@@ -764,7 +844,7 @@
             </div>
 
             @if($cartEnabled)
-              <div class="mt-4 pt-3 border-top d-flex flex-column flex-sm-row justify-content-center gap-2">
+              <div class="detail-actions">
                 <button
                   id="add-to-cart-button"
                   class="btn btn-primary btn-lg"
@@ -781,7 +861,7 @@
                 </button>
               </div>
             @else
-              <div class="mt-4 pt-3 border-top d-flex justify-content-center">
+              <div class="detail-actions">
                 <button
                   id="whatsapp-button"
                   class="btn btn-success btn-lg"
@@ -794,7 +874,6 @@
           </div>
         </div>
       </div>
-    </div>
   </section>
 
   <footer class="py-4 text-center bg-dark text-white">

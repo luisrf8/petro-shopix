@@ -17,18 +17,13 @@
       --text-primary: #0f172a;
       --text-secondary: #475569;
       --line-soft: #dbe4f0;
-      --card-shadow: 0 20px 46px rgba(15, 23, 42, 0.08);
-    const landingFilterElements = Array.from(document.querySelectorAll('[data-landing-filter]'));
-    const landingFilterGroups = landingFilterElements.reduce((groups, element) => {
-      const key = element.dataset.landingFilter;
-      groups[key] = groups[key] || [];
-      groups[key].push(element);
-      return groups;
-    }, {});
-
-    const landingClearFiltersButtons = document.querySelectorAll('[data-landing-clear]');
-    const landingResultsCounters = document.querySelectorAll('[data-landing-results-count]');
       --brand-accent: #2563eb;
+      --card-shadow: 0 20px 46px rgba(15, 23, 42, 0.08);
+      --card-shadow-hover: 0 26px 54px rgba(15, 23, 42, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
     }
 
     body {
@@ -39,6 +34,7 @@
         linear-gradient(180deg, #fbfdff 0%, var(--bg-page) 54%, #f7f9fd 100%);
       color: var(--text-primary);
       min-height: 100vh;
+      overflow-x: hidden;
     }
 
     .landing-header {
@@ -53,12 +49,12 @@
       border-radius: 12px;
       padding: 0.42rem 0.9rem;
     }
-      const selectedName = normalizeText(getLandingFilterValue('name'));
-      const selectedType = normalizeText(getLandingFilterValue('type'));
-      const selectedActivity = normalizeText(getLandingFilterValue('activity'));
-      const selectedRegion = normalizeText(getLandingFilterValue('region'));
-      const selectedState = normalizeText(getLandingFilterValue('state'));
-      const selectedCity = normalizeText(getLandingFilterValue('city'));
+
+    .hero {
+      position: relative;
+      padding: 8.5rem 0 2.75rem;
+      overflow: hidden;
+    }
 
     .hero::before {
       content: '';
@@ -87,65 +83,35 @@
       border-radius: 999px;
       background: rgba(37, 99, 235, 0.1);
       border: 1px solid rgba(37, 99, 235, 0.18);
+      margin-bottom: 1rem;
     }
 
-      landingResultsCounters.forEach(counter => {
-        counter.textContent = `${visibleCount} de ${landingTotalItems} resultados`;
-      font-size: clamp(1.9rem, 4.2vw, 3.1rem);
+    .hero h1 {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: clamp(1.95rem, 4.1vw, 3.1rem);
       font-weight: 800;
-      letter-spacing: -0.02em;
-    Object.entries(landingFilterGroups).forEach(([key, elements]) => {
-      const eventName = key === 'name' ? 'input' : 'change';
-      elements.forEach(element => {
-        element.addEventListener(eventName, () => {
-          syncLandingFilterValue(key, element.value, element);
-          applyLandingDirectoryFilters();
-        });
-      });
-      font-size: clamp(0.98rem, 2.2vw, 1.13rem);
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      max-width: 14ch;
+      margin-bottom: 0.85rem;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(0.98rem, 2vw, 1.1rem);
+      line-height: 1.65;
+      color: var(--text-secondary);
+      max-width: 70ch;
       margin-bottom: 0;
-    landingClearFiltersButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        Object.values(landingFilterGroups).forEach(elements => {
-          elements.forEach(element => {
-            element.value = '';
-          });
-        });
+    }
 
-        applyLandingDirectoryFilters();
-      });
-    });
-
-    const navbarCollapse = document.getElementById('landingNavbar');
-    const navLinks = document.querySelectorAll('#landingNavbar .nav-link, #landingNavbar .btn');
-    const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;
-
-    navLinks.forEach(link => {
-      link.addEventListener('click', () => {
-        if (window.innerWidth < 992 && navbarCollapse?.classList.contains('show') && bsCollapse) {
-          bsCollapse.hide();
+    .directory-filter-card {
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 24px;
       background: rgba(255, 255, 255, 0.9);
       backdrop-filter: blur(10px);
       box-shadow: var(--card-shadow);
       position: relative;
       overflow: hidden;
-    }
-
-    .mobile-directory-filter-shell {
-      display: none;
-    }
-
-    .mobile-directory-filter-shell .directory-filter-card {
-      margin-top: 0.4rem;
-      box-shadow: none;
-      border-color: rgba(148, 163, 184, 0.24);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
-    }
-
-    .directory-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 1rem;
     }
 
     .directory-filter-card::after {
@@ -160,11 +126,23 @@
       pointer-events: none;
     }
 
+    .mobile-directory-filter-shell {
+      display: none;
+    }
+
+    .mobile-directory-filter-shell .directory-filter-card {
+      margin-top: 0.4rem;
+      box-shadow: none;
+      border-color: rgba(148, 163, 184, 0.24);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+    }
+
     .directory-filter-group {
       border: 1px solid var(--line-soft);
       border-radius: 16px;
       padding: 1rem;
       background: linear-gradient(180deg, rgba(248, 250, 252, 0.84), rgba(255, 255, 255, 0.96));
+      height: 100%;
     }
 
     .directory-filter-group-title {
@@ -210,6 +188,17 @@
       padding-inline: 1rem;
     }
 
+    .directory-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.25rem;
+      align-items: stretch;
+    }
+
+    .landing-directory-item {
+      min-width: 0;
+    }
+
     .directory-tenant-card {
       border: 1px solid rgba(148, 163, 184, 0.24);
       border-radius: 18px;
@@ -217,6 +206,7 @@
       box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
       transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
       height: 100%;
+      overflow: hidden;
     }
 
     .directory-tenant-card:hover {
@@ -263,6 +253,10 @@
       padding: 0.24rem 0.64rem;
       letter-spacing: 0.03em;
       text-transform: uppercase;
+      max-width: calc(100% - 1.8rem);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .directory-card-logo {
@@ -275,19 +269,11 @@
       flex-shrink: 0;
     }
 
-    .directory-tenant-logo {
-      width: 62px;
-      height: 62px;
-      border-radius: 999px;
-      object-fit: cover;
-      border: 1px solid #e9ecef;
-      background: #fff;
-    }
-
     .directory-chip {
       display: inline-flex;
       align-items: center;
       gap: 0.34rem;
+      max-width: 100%;
       background: #eff6ff;
       color: #1e40af;
       border: 1px solid #bfdbfe;
@@ -295,10 +281,15 @@
       font-size: 0.74rem;
       font-weight: 700;
       padding: 0.23rem 0.62rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .directory-location {
       color: #52637b;
+      line-height: 1.55;
+      min-height: 2.7em;
     }
 
     .directory-slogan {
@@ -312,6 +303,7 @@
       -webkit-box-orient: vertical;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-height: 2.45em;
     }
 
     .directory-description {
@@ -327,9 +319,9 @@
       min-height: 3.7em;
     }
 
-    @media (max-width: 767.98px) {
+    @media (max-width: 991.98px) {
       .hero {
-        padding-top: 6.4rem;
+        padding-top: 7.25rem;
       }
 
       #landingNavbar.show {
@@ -342,6 +334,21 @@
         border-radius: 14px;
         background: rgba(255, 255, 255, 0.97);
         box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+      }
+
+      .landing-nav-link {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 767.98px) {
+      .hero {
+        padding-top: 6.5rem;
+        padding-bottom: 2rem;
+      }
+
+      .hero h1 {
+        max-width: none;
       }
 
       .mobile-directory-filter-shell {
@@ -358,6 +365,16 @@
 
       .directory-grid {
         grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+
+      .directory-tenant-media {
+        height: 200px;
+      }
+
+      .directory-card-logo {
+        width: 52px;
+        height: 52px;
       }
     }
 
