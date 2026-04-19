@@ -8,7 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::connection(config('webpush.database_connection'))->create(config('webpush.table_name'), function (Blueprint $table) {
+        $connection = config('webpush.database_connection', env('WEBPUSH_DB_CONNECTION', env('DB_CONNECTION', 'mysql')));
+        $tableName = config('webpush.table_name', env('WEBPUSH_DB_TABLE', 'push_subscriptions'));
+
+        Schema::connection($connection)->create($tableName, function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->morphs('subscribable');
             $table->string('endpoint', 500)->unique();
@@ -21,6 +24,9 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::connection(config('webpush.database_connection'))->dropIfExists(config('webpush.table_name'));
+        $connection = config('webpush.database_connection', env('WEBPUSH_DB_CONNECTION', env('DB_CONNECTION', 'mysql')));
+        $tableName = config('webpush.table_name', env('WEBPUSH_DB_TABLE', 'push_subscriptions'));
+
+        Schema::connection($connection)->dropIfExists($tableName);
     }
 };
