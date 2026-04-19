@@ -9,8 +9,8 @@
     @endphp
     <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <link rel="apple-touch-icon" sizes="76x76" href="{{ asset('assets/img/shopix5.png') }}">
-  <link rel="icon" type="image/png" href="{{ asset('assets/img/shopix5.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180]) }}">
+  <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192]) }}">
   <meta name="theme-color" content="#{{ $backofficePwaTheme }}">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">

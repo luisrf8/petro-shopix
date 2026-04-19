@@ -18,8 +18,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <link rel="apple-touch-icon" sizes="76x76" href="{{ asset('assets/img/shopix5.png') }}">
-  <link rel="icon" type="image/png" href="{{ asset('assets/img/shopix5.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180]) }}">
+  <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192]) }}">
   <title>
   </title>
   <!--     Fonts and icons     -->
@@ -62,10 +62,11 @@
     margin-left: auto;
     display: flex;
     flex-direction: row;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
     width: auto;
+    row-gap: 0.4rem;
   }
 
   .header-session-user {
@@ -124,8 +125,26 @@
   }
 
   @media (max-width: 576px) {
+    #navbarBlur .container-fluid {
+      align-items: flex-start;
+    }
+
+    #navbarBlur .header-actions-wrap {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    #navbarBlur .header-actions-wrap .navbar-nav {
+      width: 100%;
+      justify-content: flex-end;
+      gap: 0.35rem;
+    }
+
     .header-session-user {
-      max-width: 160px;
+      order: -1;
+      flex: 1 0 100%;
+      max-width: 100%;
+      margin-right: 0 !important;
     }
 
     .header-session-user .session-name {
@@ -134,6 +153,17 @@
 
     .header-session-user .session-meta {
       font-size: 0.64rem;
+    }
+
+    .header-session-user .session-meta:not(:last-child) {
+      display: none;
+    }
+
+    .header-notification-optin,
+    .header-pwa-install {
+      padding: 0.32rem 0.55rem !important;
+      font-size: 0.72rem;
+      white-space: nowrap;
     }
   }
 

@@ -80,13 +80,13 @@ Route::get('/manifest.webmanifest', function (\Illuminate\Http\Request $request)
         'theme_color' => $themeColor,
         'icons' => [
             [
-                'src' => url('/assets/img/shopix5.png'),
+                'src' => route('pwa.icon', ['size' => 192]),
                 'sizes' => '192x192',
                 'type' => 'image/png',
                 'purpose' => 'any maskable',
             ],
             [
-                'src' => url('/assets/img/shopix5.png'),
+                'src' => route('pwa.icon', ['size' => 512]),
                 'sizes' => '512x512',
                 'type' => 'image/png',
                 'purpose' => 'any maskable',
@@ -94,6 +94,62 @@ Route::get('/manifest.webmanifest', function (\Illuminate\Http\Request $request)
         ],
     ], 200, ['Content-Type' => 'application/manifest+json']);
 })->name('tenant.pwa.manifest');
+
+Route::get('/pwa-icon/{size}.png', function (int $size) {
+    abort_unless(in_array($size, [180, 192, 512], true), 404);
+
+    $sourcePath = public_path('assets/img/shopix5.png');
+    abort_unless(is_file($sourcePath), 404);
+
+    if (!function_exists('imagecreatetruecolor') || !function_exists('imagecreatefrompng')) {
+        return response()->file($sourcePath, ['Content-Type' => 'image/png']);
+    }
+
+    $sourceImage = @imagecreatefrompng($sourcePath);
+    abort_unless($sourceImage !== false, 404);
+
+    $sourceWidth = imagesx($sourceImage);
+    $sourceHeight = imagesy($sourceImage);
+    $icon = imagecreatetruecolor($size, $size);
+
+    imagealphablending($icon, false);
+    imagesavealpha($icon, true);
+    $background = imagecolorallocatealpha($icon, 255, 255, 255, 0);
+    imagefilledrectangle($icon, 0, 0, $size, $size, $background);
+
+    $padding = (int) floor($size * 0.12);
+    $availableSize = max($size - ($padding * 2), 1);
+    $scale = min($availableSize / max($sourceWidth, 1), $availableSize / max($sourceHeight, 1));
+    $targetWidth = max((int) round($sourceWidth * $scale), 1);
+    $targetHeight = max((int) round($sourceHeight * $scale), 1);
+    $destinationX = (int) floor(($size - $targetWidth) / 2);
+    $destinationY = (int) floor(($size - $targetHeight) / 2);
+
+    imagecopyresampled(
+        $icon,
+        $sourceImage,
+        $destinationX,
+        $destinationY,
+        0,
+        0,
+        $targetWidth,
+        $targetHeight,
+        $sourceWidth,
+        $sourceHeight
+    );
+
+    ob_start();
+    imagepng($icon);
+    $binary = ob_get_clean();
+
+    imagedestroy($icon);
+    imagedestroy($sourceImage);
+
+    return response($binary, 200, [
+        'Content-Type' => 'image/png',
+        'Cache-Control' => 'public, max-age=604800',
+    ]);
+})->name('pwa.icon');
 Route::get('/storage/gdrive/{fileId}', [GoogleDriveController::class, 'streamImage'])->where('fileId', '.*')->name('storage.gdrive.proxy');
 Route::get('/publicOrder/{id}', [SaleController::class, 'showPublicOrder']);
 Route::get('/publicOrder/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->name('public.order.pdf');
