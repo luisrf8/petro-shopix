@@ -20,7 +20,7 @@ class WorkflowStatusNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database', 'broadcast', 'mail', WebPushChannel::class];
+        return ['database', 'broadcast', WebPushChannel::class, 'mail'];
     }
 
     public function toArray(object $notifiable): array
