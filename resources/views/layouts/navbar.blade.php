@@ -583,7 +583,7 @@
           return;
         }
 
-        installPwaBtn.textContent = deferredInstallPrompt ? 'Instalar app' : 'Instalar app';
+        installPwaBtn.textContent = 'Instalar app';
       }
 
       async function installBackofficePwa() {
@@ -881,8 +881,8 @@
           syncBrowserPushSubscription().catch(() => {});
         }
 
-        enableBrowserNotificationsBtn?.addEventListener('click', requestBrowserNotificationPermission);
-        installPwaBtn?.addEventListener('click', installBackofficePwa);
+        document.getElementById('backoffice-enable-browser-notifications')?.addEventListener('click', requestBrowserNotificationPermission);
+        document.getElementById('backoffice-install-pwa')?.addEventListener('click', installBackofficePwa);
       } catch (error) {
       }
     })();

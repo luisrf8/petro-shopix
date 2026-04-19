@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ class NotificationController extends Controller
         $user = auth()->user();
 
         $notifications = $user
-            ? $user->notifications()->latest()->paginate(20)->through(fn ($notification) => $this->transformNotification($notification, $user))
+            ? $user->notifications()->latest()->paginate(20)->through(fn ($notification) => $this->safeTransformNotification($notification, $user))
             : collect();
 
         return view('notifications', compact('notifications'));
@@ -51,7 +52,7 @@ class NotificationController extends Controller
             ->latest()
             ->limit(20)
             ->get()
-            ->map(fn ($notification) => $this->transformNotification($notification, $user))
+            ->map(fn ($notification) => $this->safeTransformNotification($notification, $user))
             ->values();
 
         return response()->json([
@@ -91,7 +92,7 @@ class NotificationController extends Controller
             ->latest()
             ->limit(20)
             ->get()
-            ->map(fn ($notification) => $this->transformNotification($notification, $user))
+            ->map(fn ($notification) => $this->safeTransformNotification($notification, $user))
             ->values();
 
         return response()->json([
@@ -115,6 +116,32 @@ class NotificationController extends Controller
             'is_read' => !is_null($notification->read_at),
             'target_url' => $this->resolveNotificationTargetUrl($notification, $user),
         ];
+    }
+
+    private function safeTransformNotification($notification, $user): array
+    {
+        try {
+            return $this->transformNotification($notification, $user);
+        } catch (\Throwable $exception) {
+            Log::warning('No se pudo transformar una notificacion.', [
+                'notification_id' => $notification->id ?? null,
+                'user_id' => $user->id ?? null,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return [
+                'id' => $notification->id ?? null,
+                'title' => $notification->data['title'] ?? 'Notificación',
+                'message' => $notification->data['message'] ?? '',
+                'type' => $notification->data['type'] ?? 'info',
+                'order_id' => $notification->data['order_id'] ?? null,
+                'payment_id' => $notification->data['payment_id'] ?? null,
+                'created_at' => optional($notification->created_at)->toDateTimeString(),
+                'read_at' => optional($notification->read_at)->toDateTimeString(),
+                'is_read' => !is_null($notification->read_at ?? null),
+                'target_url' => null,
+            ];
+        }
     }
 
     private function resolveNotificationTargetUrl($notification, $user): ?string
