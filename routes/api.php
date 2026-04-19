@@ -28,7 +28,7 @@ Route::post('/user/{id}', [UserController::class, 'update'])->whereNumber('id');
 Route::post('users/{id}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggleStatus');
 
 // Rutas de productos y categorías
-Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+Route::get('/products', [ProductController::class, 'index'])->name('api.products.index');
 Route::get('/get-products', [ProductController::class, 'getProducts'])->name('products.getProducts');
 Route::get('/categories', [CategoryController::class, 'getCategories'])->name('categories.getCategories');
 Route::get('/products/{id}', [ProductController::class, 'showByCategoryEcomm']);
