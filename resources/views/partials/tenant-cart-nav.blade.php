@@ -172,6 +172,24 @@
     background: #fff;
   }
 
+  .tenant-notification-permission-card {
+    border: 1px solid #dbe3ee;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 0.9rem;
+  }
+
+  .tenant-notification-permission-card.is-ready {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+  }
+
+  .tenant-notification-permission-copy {
+    font-size: 0.86rem;
+    color: #475569;
+    margin-bottom: 0;
+  }
+
   .tenant-order-meta {
     color: #5f6368;
     font-size: 0.9rem;
@@ -441,6 +459,17 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+        <div id="tenant-notification-permission-panel" class="tenant-notification-permission-card d-none mb-3">
+          <div class="d-flex flex-column gap-2">
+            <div>
+              <div class="fw-semibold" id="tenant-notification-permission-title">Activa alertas del navegador</div>
+              <p class="tenant-notification-permission-copy" id="tenant-notification-permission-copy">Permite notificaciones para recibir avisos nativos en este dispositivo.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-sm btn-dark mb-0" id="tenant-enable-browser-notifications">Activar alertas</button>
+            </div>
+          </div>
+        </div>
         <div id="tenant-notifications-list" class="d-flex flex-column gap-2"></div>
       </div>
     </div>
@@ -617,7 +646,12 @@
     const notificationsList = document.getElementById('tenant-notifications-list');
     const notificationsBtn = document.getElementById('tenant-notifications-btn');
     const notificationsModal = document.getElementById('tenantNotificationsModal');
+    const notificationPermissionPanel = document.getElementById('tenant-notification-permission-panel');
+    const notificationPermissionTitle = document.getElementById('tenant-notification-permission-title');
+    const notificationPermissionCopy = document.getElementById('tenant-notification-permission-copy');
+    const enableBrowserNotificationsBtn = document.getElementById('tenant-enable-browser-notifications');
     let tenantToastContainer = document.getElementById('tenant-toast-container');
+    let serviceWorkerRegistrationPromise = null;
 
     if (notificationsModal && notificationsModal.parentElement !== document.body) {
       document.body.appendChild(notificationsModal);
@@ -650,6 +684,230 @@
     }
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const serviceWorkerUrl = @json(url('/push-sw.js'));
+    const vapidPublicKey = @json(env('VAPID_PUBLIC_KEY'));
+    const defaultNotificationIcon = @json(\App\Support\ImageStorage::url($tenantThemeModel->logo ?? null) ?? asset('assets/img/shopix5.png'));
+
+    function supportsBrowserNotifications() {
+      return window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+    }
+
+    function isStandaloneMode() {
+      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    }
+
+    async function ensureServiceWorkerRegistration() {
+      if (!supportsBrowserNotifications()) {
+        return null;
+      }
+
+      if (!serviceWorkerRegistrationPromise) {
+        serviceWorkerRegistrationPromise = navigator.serviceWorker.register(serviceWorkerUrl, { scope: '/' });
+      }
+
+      return serviceWorkerRegistrationPromise;
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+
+      for (let index = 0; index < rawData.length; index += 1) {
+        outputArray[index] = rawData.charCodeAt(index);
+      }
+
+      return outputArray;
+    }
+
+    async function syncBrowserPushSubscription(token) {
+      if (!supportsBrowserNotifications() || !vapidPublicKey) {
+        return null;
+      }
+
+      const registration = await ensureServiceWorkerRegistration();
+      if (!registration) {
+        return null;
+      }
+
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        });
+      }
+
+      await fetch('/api/push-subscriptions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+        }),
+      });
+
+      return subscription;
+    }
+
+    async function removeBrowserPushSubscription(token) {
+      if (!supportsBrowserNotifications()) {
+        return;
+      }
+
+      const registration = await ensureServiceWorkerRegistration().catch(() => null);
+      const subscription = await registration?.pushManager.getSubscription();
+
+      if (!subscription) {
+        return;
+      }
+
+      await fetch('/api/push-subscriptions', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({
+          endpoint: subscription.endpoint,
+        }),
+      }).catch(() => {});
+    }
+
+    async function showBrowserNotification(notification, options = {}) {
+      if (!supportsBrowserNotifications() || Notification.permission !== 'granted') {
+        return;
+      }
+
+      const force = options.force === true;
+      if (!force && document.visibilityState === 'visible' && !isStandaloneMode()) {
+        return;
+      }
+
+      const registration = await ensureServiceWorkerRegistration().catch(() => null);
+      const title = notification.title || 'Notificación';
+      const body = notification.message || notification.body || '';
+      const targetUrl = notification.target_url || notification.url || window.location.href;
+      const notificationOptions = {
+        body,
+        icon: defaultNotificationIcon,
+        badge: defaultNotificationIcon,
+        data: {
+          url: targetUrl,
+        },
+        tag: `shopix-${notification.id || Date.now()}`,
+      };
+
+      if (registration && typeof registration.showNotification === 'function') {
+        await registration.showNotification(title, notificationOptions);
+        return;
+      }
+
+      const nativeNotification = new Notification(title, notificationOptions);
+      nativeNotification.onclick = () => {
+        window.focus();
+        window.location.href = targetUrl;
+        nativeNotification.close();
+      };
+    }
+
+    function updateNotificationPermissionUi() {
+      const hasSession = !!currentToken && !!currentUser?.id;
+
+      if (!notificationPermissionPanel) {
+        return;
+      }
+
+      if (!hasSession) {
+        notificationPermissionPanel.classList.add('d-none');
+        notificationPermissionPanel.classList.remove('is-ready');
+        return;
+      }
+
+      if (!supportsBrowserNotifications()) {
+        notificationPermissionPanel.classList.remove('d-none', 'is-ready');
+        notificationPermissionTitle.textContent = 'Este navegador aún no admite alertas web aquí';
+        notificationPermissionCopy.textContent = 'Necesitas HTTPS y un navegador compatible. En iPhone, las alertas web funcionan mejor al instalar la tienda en pantalla de inicio.';
+        if (enableBrowserNotificationsBtn) {
+          enableBrowserNotificationsBtn.textContent = 'Entendido';
+        }
+        return;
+      }
+
+      const permission = Notification.permission;
+      notificationPermissionPanel.classList.remove('d-none');
+
+      if (permission === 'granted') {
+        notificationPermissionPanel.classList.add('is-ready');
+        notificationPermissionTitle.textContent = 'Alertas del navegador activas';
+        notificationPermissionCopy.textContent = 'Este dispositivo ya puede recibir notificaciones web de la tienda.';
+        if (enableBrowserNotificationsBtn) {
+          enableBrowserNotificationsBtn.textContent = 'Revisar';
+        }
+        return;
+      }
+
+      notificationPermissionPanel.classList.remove('is-ready');
+
+      if (permission === 'denied') {
+        notificationPermissionTitle.textContent = 'El permiso fue bloqueado';
+        notificationPermissionCopy.textContent = 'Debes reactivar las notificaciones desde la configuración del navegador o del sistema para este sitio.';
+        if (enableBrowserNotificationsBtn) {
+          enableBrowserNotificationsBtn.textContent = 'Ver ayuda';
+        }
+        return;
+      }
+
+      notificationPermissionTitle.textContent = 'Activa alertas del navegador';
+      notificationPermissionCopy.textContent = 'Permite notificaciones para recibir avisos nativos en este dispositivo. En iPhone, instala la tienda en pantalla de inicio para mejor compatibilidad.';
+      if (enableBrowserNotificationsBtn) {
+        enableBrowserNotificationsBtn.textContent = 'Activar alertas';
+      }
+    }
+
+    async function requestBrowserNotificationPermission() {
+      if (!currentToken || !currentUser?.id) {
+        openTenantAuthModal();
+        return;
+      }
+
+      if (!supportsBrowserNotifications()) {
+        alert('Este navegador necesita HTTPS, Service Worker y soporte Push API para activar alertas web. En iPhone, instala la tienda en pantalla de inicio.');
+        return;
+      }
+
+      if (!vapidPublicKey) {
+        alert('Las notificaciones push aún no están configuradas en el servidor.');
+        return;
+      }
+
+      if (Notification.permission === 'denied') {
+        alert('El permiso de notificaciones está bloqueado. Debes habilitarlo manualmente en la configuración del navegador o del sistema.');
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      updateNotificationPermissionUi();
+
+      if (permission !== 'granted') {
+        return;
+      }
+
+      await syncBrowserPushSubscription(currentToken);
+      await showBrowserNotification({
+        title: 'Alertas activadas',
+        message: 'Desde ahora recibirás notificaciones nativas de esta tienda en este dispositivo.',
+        target_url: window.location.href,
+      }, { force: true });
+      showTenantToast('Alertas activadas', 'Este dispositivo ya puede recibir notificaciones del navegador.');
+    }
 
     function openTenantAuthModal() {
       if (authModal && typeof bootstrap !== 'undefined' && bootstrap?.Modal) {
@@ -1064,6 +1322,8 @@
         notificationsCount.textContent = '0';
         notificationsCount.classList.add('d-none');
       }
+
+      updateNotificationPermissionUi();
     }
 
     let currentUser = null;
@@ -1074,6 +1334,8 @@
       const token = localStorage.getItem('shopix_ecomm_token') || '';
       applyAuthState(user, token);
 
+      ensureServiceWorkerRegistration().catch(() => {});
+
       if (user && user.name && token) {
         function incrementBadge() {
           const current = Number(notificationsCount.textContent || 0) + 1;
@@ -1082,18 +1344,34 @@
         }
 
         function bindRealtimeChannel() {
-          const pusherKey = @json(env('PUSHER_APP_KEY'));
+          const pusherKey = @json(env('REVERB_APP_KEY', env('PUSHER_APP_KEY')));
           if (!pusherKey) {
             return;
           }
 
-          const pusher = new Pusher(pusherKey, {
-            cluster: @json(env('PUSHER_APP_CLUSTER')),
-            wsHost: @json(env('PUSHER_HOST', '127.0.0.1')),
-            wsPort: Number(@json(env('PUSHER_PORT', 6001))),
-            wssPort: Number(@json(env('PUSHER_PORT', 6001))),
-            forceTLS: @json(env('PUSHER_SCHEME', 'http')) === 'https',
+          const configuredHost = @json(env('REVERB_HOST', env('PUSHER_HOST')));
+          const configuredPort = Number(@json(env('REVERB_PORT', env('PUSHER_PORT', 8080))));
+          const configuredScheme = @json(env('REVERB_SCHEME', env('PUSHER_SCHEME')));
+          const configuredCluster = @json(env('PUSHER_APP_CLUSTER'));
+
+          const browserHost = window.location.hostname;
+          const wsHost = !configuredHost || configuredHost === '127.0.0.1' || configuredHost === '0.0.0.0'
+            ? browserHost
+            : configuredHost;
+
+          const forceTLS = configuredScheme
+            ? configuredScheme === 'https'
+            : window.location.protocol === 'https:';
+
+          const wsPort = configuredPort || (forceTLS ? 443 : 80);
+
+          const pusherOptions = {
+            wsHost,
+            wsPort,
+            wssPort: wsPort,
+            forceTLS,
             enabledTransports: ['ws', 'wss'],
+            disableStats: true,
             authEndpoint: '/api/broadcasting/auth',
             auth: {
               headers: {
@@ -1101,12 +1379,19 @@
                 'Accept': 'application/json',
               },
             },
-          });
+          };
+
+          if (configuredCluster) {
+            pusherOptions.cluster = configuredCluster;
+          }
+
+          const pusher = new Pusher(pusherKey, pusherOptions);
 
           const channel = pusher.subscribe(`private-App.Models.User.${user.id}`);
           const handleIncoming = async (notification) => {
             showTenantToast(notification.title || 'Notificación', notification.message || '');
             incrementBadge();
+            showBrowserNotification(notification).catch(() => {});
 
             try {
               const payload = await fetchNotifications(token);
@@ -1124,6 +1409,10 @@
           .catch(() => {
             notificationsList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar notificaciones.</p>';
           });
+
+        if (supportsBrowserNotifications() && Notification.permission === 'granted') {
+          syncBrowserPushSubscription(token).catch(() => {});
+        }
 
         bindRealtimeChannel();
 
@@ -1145,6 +1434,10 @@
       const user = event.detail?.user || null;
       const token = event.detail?.token || '';
       applyAuthState(user, token);
+
+      if (token && user?.id && supportsBrowserNotifications() && Notification.permission === 'granted') {
+        syncBrowserPushSubscription(token).catch(() => {});
+      }
     });
 
     document.getElementById('tenant-public-login-form')?.addEventListener('submit', submitTenantPublicLogin);
@@ -1198,6 +1491,10 @@
     });
 
     logoutButton.addEventListener('click', () => {
+      if (currentToken) {
+        removeBrowserPushSubscription(currentToken).catch(() => {});
+      }
+
       localStorage.removeItem('shopix_ecomm_token');
       localStorage.removeItem('shopix_ecomm_user');
       window.dispatchEvent(new CustomEvent('shopix-auth-changed', {
@@ -1215,5 +1512,6 @@
 
     document.getElementById('tenant-customer-change-password-form')?.addEventListener('submit', submitTenantCustomerPasswordChange);
     document.getElementById('tenant-customer-phone-form')?.addEventListener('submit', submitTenantCustomerPhoneUpdate);
+    enableBrowserNotificationsBtn?.addEventListener('click', requestBrowserNotificationPermission);
   })();
 </script>

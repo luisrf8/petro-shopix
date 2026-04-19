@@ -56,6 +56,8 @@
     [$tenantAccentR, $tenantAccentG, $tenantAccentB] = $toRgb($tenantColorAccent);
   @endphp
 
+  @include('partials.tenant-pwa-head', ['tenant' => $tenant, 'tenantColorPrimary' => $tenantColorPrimary])
+
   <style>
     :root {
       --tenant-primary: {{ $tenantColorPrimary }};

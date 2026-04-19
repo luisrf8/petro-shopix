@@ -11,12 +11,14 @@
         "endroid/qr-code": "^4.6",
         "google/apiclient": "^2.16",
         "guzzlehttp/guzzle": "^7.0.1",
+        "laravel-notification-channels/webpush": "^10.0",
         "laravel/breeze": "^2.3",
         "laravel/framework": "^11.0",
         "laravel/reverb": "^1.8",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.5",
         "masbug/flysystem-google-drive-ext": "^2.4",
+        "minishlink/web-push": "^9.0",
         "simplesoftwareio/simple-qrcode": "^4.2",
         "tymon/jwt-auth": "^2.2"
     },
@@ -29,8 +31,13 @@
     "autoload": {
         "psr-4": {
             "App\\": "app/",
+            "Base64Url\\": "vendor/spomky-labs/base64url/src/",
             "Database\\Factories\\": "database/factories/",
-            "Database\\Seeders\\": "database/seeders/"
+            "Database\\Seeders\\": "database/seeders/",
+            "Jose\\Component\\": "vendor/web-token/jwt-library/",
+            "Minishlink\\WebPush\\": "vendor/minishlink/web-push/src/",
+            "NotificationChannels\\WebPush\\": "vendor/laravel-notification-channels/webpush/src/",
+            "SpomkyLabs\\Pki\\": "vendor/spomky-labs/pki-framework/src/"
         }
     },
     "autoload-dev": {

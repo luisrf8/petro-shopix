@@ -52,4 +52,29 @@ $app->singleton(
 |
 */
 
+spl_autoload_register(static function (string $class): void {
+    $basePath = dirname(__DIR__);
+    $prefixes = [
+        'NotificationChannels\\WebPush\\' => $basePath . '/vendor/laravel-notification-channels/webpush/src/',
+        'Minishlink\\WebPush\\' => $basePath . '/vendor/minishlink/web-push/src/',
+        'Base64Url\\' => $basePath . '/vendor/spomky-labs/base64url/src/',
+        'SpomkyLabs\\Pki\\' => $basePath . '/vendor/spomky-labs/pki-framework/src/',
+        'Jose\\Component\\' => $basePath . '/vendor/web-token/jwt-library/',
+    ];
+
+    foreach ($prefixes as $prefix => $path) {
+        if (!str_starts_with($class, $prefix)) {
+            continue;
+        }
+
+        $relativeClass = substr($class, strlen($prefix));
+        $relativePath = str_replace('\\', '/', $relativeClass) . '.php';
+        $filePath = $path . $relativePath;
+
+        if (is_file($filePath)) {
+            require_once $filePath;
+        }
+    }
+});
+
 return $app;

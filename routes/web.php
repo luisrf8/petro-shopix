@@ -52,6 +52,47 @@ Route::middleware('guest')->group(function () {
 Route::get('/', [IndexController::class, 'landing'])->name('landing');
 Route::get('/landings', [IndexController::class, 'landingDirectory'])->name('landing.directory');
 Route::get('/index', fn() => view('index'));
+Route::get('/manifest.webmanifest', function (\Illuminate\Http\Request $request) {
+    $name = trim((string) $request->query('name', config('app.name', 'Shopix')));
+    $startUrl = (string) $request->query('start_url', '/');
+    $themeColor = '#' . ltrim((string) $request->query('theme', '0F172A'), '#');
+
+    if ($name === '') {
+        $name = config('app.name', 'Shopix');
+    }
+
+    if ($startUrl === '' || !str_starts_with($startUrl, '/')) {
+        $startUrl = '/';
+    }
+
+    if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $themeColor)) {
+        $themeColor = '#0F172A';
+    }
+
+    return response()->json([
+        'name' => $name,
+        'short_name' => \Illuminate\Support\Str::limit($name, 12, ''),
+        'start_url' => $startUrl,
+        'scope' => '/',
+        'display' => 'standalone',
+        'background_color' => '#FFFFFF',
+        'theme_color' => $themeColor,
+        'icons' => [
+            [
+                'src' => url('/assets/img/shopix5.png'),
+                'sizes' => '192x192',
+                'type' => 'image/png',
+                'purpose' => 'any maskable',
+            ],
+            [
+                'src' => url('/assets/img/shopix5.png'),
+                'sizes' => '512x512',
+                'type' => 'image/png',
+                'purpose' => 'any maskable',
+            ],
+        ],
+    ], 200, ['Content-Type' => 'application/manifest+json']);
+})->name('tenant.pwa.manifest');
 Route::get('/storage/gdrive/{fileId}', [GoogleDriveController::class, 'streamImage'])->where('fileId', '.*')->name('storage.gdrive.proxy');
 Route::get('/publicOrder/{id}', [SaleController::class, 'showPublicOrder']);
 Route::get('/publicOrder/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->name('public.order.pdf');

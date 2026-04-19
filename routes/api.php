@@ -14,6 +14,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PushSubscriptionController;
 
 // ------------------------ RUTAS PÚBLICAS ------------------------
 
@@ -45,6 +46,8 @@ Route::middleware(['auth.jwt'])->group(function () {
     Route::post('/create-sale/ecomm', [SaleController::class, 'storeEcommerceSale']);
     Route::get('/notifications', [NotificationController::class, 'apiIndex']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'apiMarkAsRead']);
+    Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store']);
+    Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
 });
 
 // ------------------------ CATEGORÍAS ------------------------

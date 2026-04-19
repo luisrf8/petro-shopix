@@ -13,7 +13,7 @@
   <link href="{{ asset('assets/css/nucleo-icons.css') }}" rel="stylesheet">
   <link href="{{ asset('assets/css/nucleo-svg.css') }}" rel="stylesheet">
   <!-- Font Awesome Icons -->
-  <script src="https://kit.fontawesome.com/42d5adcbca.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <!-- Material Icons -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
   <!-- CSS Files -->
@@ -378,6 +378,7 @@
     <!-- Scripts -->
     <script src="{{ asset('assets/js/core/popper.min.js') }}"></script>
     <script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
+    <script src="{{ asset('assets/js/plugins/perfect-scrollbar.min.js') }}"></script>
     <script src="{{ asset('assets/js/material-dashboard.min.js?v=3.2.0') }}"></script>
     <script src="{{ asset('assets/js/navbar.js') }}"></script>
     @if(!empty($moduleHelp))

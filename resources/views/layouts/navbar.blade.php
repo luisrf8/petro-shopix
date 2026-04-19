@@ -479,16 +479,10 @@
       <div class="mx-3">
       </div>
     </div>
-<!-- Core JS Files -->
-<script src="{{ asset('assets/js/core/popper.min.js') }}"></script>
-<script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
 <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
 <!-- Github buttons -->
 <script async defer src="https://buttons.github.io/buttons.js"></script>
 <div class="toast-container position-fixed top-0 end-0 p-3" id="backoffice-toast-container" style="z-index: 3000;"></div>
-
-<!-- Control Center for Material Dashboard: parallax effects, scripts for the example pages etc -->
-<script src="{{ asset('assets/js/material-dashboard.min.js?v=3.2.0') }}"></script>
 
   <script>
   </script>
@@ -542,23 +536,45 @@
 
       function bindNotificationChannel() {
         const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-        const pusherKey = @json(env('PUSHER_APP_KEY'));
+        const pusherKey = @json(env('REVERB_APP_KEY', env('PUSHER_APP_KEY')));
         if (!pusherKey) return;
 
-        const pusher = new Pusher(pusherKey, {
-          cluster: @json(env('PUSHER_APP_CLUSTER')),
-          wsHost: @json(env('PUSHER_HOST', '127.0.0.1')),
-          wsPort: Number(@json(env('PUSHER_PORT', 6001))),
-          wssPort: Number(@json(env('PUSHER_PORT', 6001))),
-          forceTLS: @json(env('PUSHER_SCHEME', 'http')) === 'https',
+        const configuredHost = @json(env('REVERB_HOST', env('PUSHER_HOST')));
+        const configuredPort = Number(@json(env('REVERB_PORT', env('PUSHER_PORT', 8080))));
+        const configuredScheme = @json(env('REVERB_SCHEME', env('PUSHER_SCHEME')));
+        const configuredCluster = @json(env('PUSHER_APP_CLUSTER'));
+
+        const browserHost = window.location.hostname;
+        const wsHost = !configuredHost || configuredHost === '127.0.0.1' || configuredHost === '0.0.0.0'
+          ? browserHost
+          : configuredHost;
+
+        const forceTLS = configuredScheme
+          ? configuredScheme === 'https'
+          : window.location.protocol === 'https:';
+
+        const wsPort = configuredPort || (forceTLS ? 443 : 80);
+
+        const pusherOptions = {
+          wsHost,
+          wsPort,
+          wssPort: wsPort,
+          forceTLS,
           enabledTransports: ['ws', 'wss'],
+          disableStats: true,
           authEndpoint: '/broadcasting/auth',
           auth: {
             headers: {
               'X-CSRF-TOKEN': csrf,
             },
           },
-        });
+        };
+
+        if (configuredCluster) {
+          pusherOptions.cluster = configuredCluster;
+        }
+
+        const pusher = new Pusher(pusherKey, pusherOptions);
 
         const channel = pusher.subscribe(`private-App.Models.User.${userId}`);
         const handleIncoming = (notification) => {
@@ -570,6 +586,7 @@
 
         channel.bind('Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
         channel.bind('.Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
+        pusher.connection.bind('error', () => {});
       }
 
       async function loadInitialUnreadCount() {
