@@ -679,11 +679,6 @@
           return;
         }
 
-        const force = options.force === true;
-        if (!force && document.visibilityState === 'visible') {
-          return;
-        }
-
         const registration = await ensureServiceWorkerRegistration().catch(() => null);
         const title = notification.title || 'Notificación';
         const body = notification.message || notification.body || '';
@@ -838,6 +833,9 @@
           const message = notification.message || '';
           updateBadge();
           showToast(title, message);
+          window.dispatchEvent(new CustomEvent('shopix:backoffice-notification', {
+            detail: notification,
+          }));
           showBrowserNotification(notification).catch(() => {});
         };
 

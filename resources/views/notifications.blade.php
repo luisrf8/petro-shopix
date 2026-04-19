@@ -77,7 +77,6 @@
 @endsection
 
 @push('scripts')
-<script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
 <script>
   (() => {
     const setupState = document.getElementById('backoffice-notification-setup-state');
@@ -150,57 +149,6 @@
       }
 
       setupHint.textContent = message;
-    }
-
-    function bindRealtimeNotifications() {
-      const pusherKey = @json(config('broadcasting.connections.reverb.key'));
-      if (!pusherKey) {
-        return;
-      }
-
-      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-
-      const configuredHost = @json(config('broadcasting.connections.reverb.options.host'));
-      const configuredPort = Number(@json(config('broadcasting.connections.reverb.options.port')));
-      const configuredScheme = @json(config('broadcasting.connections.reverb.options.scheme'));
-      const configuredCluster = @json(config('broadcasting.connections.pusher.options.cluster'));
-
-      const browserHost = window.location.hostname;
-      const wsHost = !configuredHost || configuredHost === '127.0.0.1' || configuredHost === '0.0.0.0'
-        ? browserHost
-        : configuredHost;
-
-      const forceTLS = configuredScheme
-        ? configuredScheme === 'https'
-        : window.location.protocol === 'https:';
-
-      const wsPort = configuredPort || (forceTLS ? 443 : 80);
-
-      const pusherOptions = {
-        wsHost,
-        wsPort,
-        wssPort: wsPort,
-        forceTLS,
-        enabledTransports: ['ws', 'wss'],
-        disableStats: true,
-        authEndpoint: '/broadcasting/auth',
-        auth: {
-          headers: {
-            'X-CSRF-TOKEN': csrf,
-          },
-        },
-      };
-
-      if (configuredCluster) {
-        pusherOptions.cluster = configuredCluster;
-      }
-
-      const pusher = new Pusher(pusherKey, pusherOptions);
-
-      const channel = pusher.subscribe(`private-App.Models.User.${userId}`);
-      const handleIncoming = (notification) => appendNotification(notification);
-      channel.bind('Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
-      channel.bind('.Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
     }
 
     function supportsBrowserNotifications() {
@@ -455,7 +403,10 @@
       updateBrowserNotificationUi();
     });
 
-    bindRealtimeNotifications();
+    window.addEventListener('shopix:backoffice-notification', (event) => {
+      appendNotification(event.detail || null);
+    });
+
     ensureServiceWorkerRegistration().catch(() => {});
     updateInstallPwaUi();
     updateBrowserNotificationUi();
