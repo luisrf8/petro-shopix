@@ -1,10 +1,22 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    @php
+      $backofficePwaName = trim((string) config('app.name', 'Shopix'));
+      $backofficePwaName = $backofficePwaName !== '' ? $backofficePwaName . ' Admin' : 'Shopix Admin';
+      $backofficePwaTheme = '0F172A';
+      $backofficePwaStartUrl = request()->getRequestUri() ?: '/dashboard';
+    @endphp
     <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <link rel="apple-touch-icon" sizes="76x76" href="{{ asset('assets/img/shopix5.png') }}">
   <link rel="icon" type="image/png" href="{{ asset('assets/img/shopix5.png') }}">
+  <meta name="theme-color" content="#{{ $backofficePwaTheme }}">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="{{ \Illuminate\Support\Str::limit($backofficePwaName, 24, '') }}">
+  <link rel="manifest" href="{{ route('tenant.pwa.manifest', ['start_url' => $backofficePwaStartUrl, 'name' => $backofficePwaName, 'theme' => $backofficePwaTheme]) }}">
   <title>
   </title>
   <!--     Fonts and icons     -->

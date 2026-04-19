@@ -108,6 +108,21 @@
     color: #166534 !important;
   }
 
+  .header-pwa-install {
+    border: 1px solid rgba(52, 71, 103, 0.18);
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem !important;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .header-pwa-install.is-ready {
+    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(59, 130, 246, 0.08);
+    color: #1d4ed8 !important;
+  }
+
   @media (max-width: 576px) {
     .header-session-user {
       max-width: 160px;
@@ -206,6 +221,11 @@
             <li class="nav-item d-flex align-items-center me-2">
               <button type="button" id="backoffice-enable-browser-notifications" class="nav-link text-body bg-transparent header-notification-optin d-none border-0" aria-label="Activar alertas del navegador" title="Activar alertas del navegador">
                 Activar alertas
+              </button>
+            </li>
+            <li class="nav-item d-flex align-items-center me-2">
+              <button type="button" id="backoffice-install-pwa" class="nav-link text-body bg-transparent header-pwa-install d-none border-0" aria-label="Instalar aplicacion" title="Instalar aplicacion">
+                Instalar app
               </button>
             </li>
             <li class="nav-item d-flex align-items-center">

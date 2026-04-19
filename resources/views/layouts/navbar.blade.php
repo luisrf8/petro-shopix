@@ -503,11 +503,13 @@
       const badges = Array.from(document.querySelectorAll('.backoffice-notifications-count'));
       const toastContainer = document.getElementById('backoffice-toast-container');
       const enableBrowserNotificationsBtn = document.getElementById('backoffice-enable-browser-notifications');
+      const installPwaBtn = document.getElementById('backoffice-install-pwa');
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
       const serviceWorkerUrl = @json(url('/push-sw.js'));
       const vapidPublicKey = @json(config('webpush.vapid.public_key'));
       const defaultNotificationIcon = @json(optional(auth()->user()?->tenant)->logo ? \App\Support\ImageStorage::url(auth()->user()->tenant->logo) : asset('assets/img/shopix5.png'));
       let serviceWorkerRegistrationPromise = null;
+      let deferredInstallPrompt = null;
 
       function updateBadge(unread) {
         if (!badges.length) return;
@@ -543,6 +545,76 @@
 
       function supportsBrowserNotifications() {
         return window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+      }
+
+      function isIosDevice() {
+        return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+      }
+
+      function isStandaloneMode() {
+        return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      }
+
+      function browserNotificationSupportState() {
+        return {
+          secureContext: window.isSecureContext,
+          notificationApi: 'Notification' in window,
+          serviceWorkerApi: 'serviceWorker' in navigator,
+          pushManagerApi: 'PushManager' in window,
+          vapidConfigured: !!vapidPublicKey,
+        };
+      }
+
+      function updateInstallPwaUi() {
+        if (!installPwaBtn) {
+          return;
+        }
+
+        installPwaBtn.classList.remove('d-none');
+
+        if (isStandaloneMode()) {
+          installPwaBtn.textContent = 'App instalada';
+          installPwaBtn.classList.add('is-ready');
+          return;
+        }
+
+        installPwaBtn.classList.remove('is-ready');
+
+        if (isIosDevice()) {
+          installPwaBtn.textContent = 'Agregar a inicio';
+          return;
+        }
+
+        installPwaBtn.textContent = deferredInstallPrompt ? 'Instalar app' : 'Instalar app';
+      }
+
+      async function installBackofficePwa() {
+        if (!installPwaBtn) {
+          return;
+        }
+
+        if (isStandaloneMode()) {
+          return;
+        }
+
+        if (isIosDevice()) {
+          alert('En iPhone o iPad, abre este sitio en Safari, toca Compartir y luego selecciona "Agregar a pantalla de inicio". Después abre Shopix desde el icono instalado.');
+          return;
+        }
+
+        if (!deferredInstallPrompt) {
+          alert('La instalación aún no está disponible en este navegador. Recarga la página, usa HTTPS y asegúrate de que el sitio no esté ya instalado.');
+          return;
+        }
+
+        deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice.catch(() => null);
+        deferredInstallPrompt = null;
+        updateInstallPwaUi();
+
+        if (choice?.outcome === 'accepted') {
+          showToast('Instalación iniciada', 'Shopix se agregará como app en este dispositivo.');
+        }
       }
 
       async function ensureServiceWorkerRegistration() {
@@ -645,13 +717,22 @@
           return;
         }
 
+        const support = browserNotificationSupportState();
+
+        enableBrowserNotificationsBtn.classList.remove('d-none');
+
         if (!supportsBrowserNotifications()) {
-          enableBrowserNotificationsBtn.classList.add('d-none');
+          enableBrowserNotificationsBtn.textContent = 'Alertas no disponibles';
           enableBrowserNotificationsBtn.classList.remove('is-ready');
           return;
         }
 
-        enableBrowserNotificationsBtn.classList.remove('d-none');
+        if (!support.vapidConfigured) {
+          enableBrowserNotificationsBtn.textContent = 'Alertas no configuradas';
+          enableBrowserNotificationsBtn.classList.remove('is-ready');
+          return;
+        }
+
         const permission = Notification.permission;
 
         if (permission === 'granted') {
@@ -671,12 +752,20 @@
       }
 
       async function requestBrowserNotificationPermission() {
+        const support = browserNotificationSupportState();
+
         if (!supportsBrowserNotifications()) {
-          alert('Este navegador necesita HTTPS, Service Worker y soporte Push API para activar alertas web. En iPhone, abre Shopix desde Safari y agrega el sitio a pantalla de inicio.');
+          const missing = [];
+          if (!support.secureContext) missing.push('HTTPS');
+          if (!support.notificationApi) missing.push('Notification API');
+          if (!support.serviceWorkerApi) missing.push('Service Worker');
+          if (!support.pushManagerApi) missing.push('Push API');
+
+          alert(`Este navegador todavía no puede activar alertas web aquí. Falta: ${missing.join(', ')}. En iPhone, abre Shopix desde Safari y agrega el sitio a pantalla de inicio.`);
           return;
         }
 
-        if (!vapidPublicKey) {
+        if (!support.vapidConfigured) {
           alert('Las notificaciones push aún no están configuradas en el servidor.');
           return;
         }
@@ -770,17 +859,30 @@
         }
       }
 
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredInstallPrompt = event;
+        updateInstallPwaUi();
+      });
+
+      window.addEventListener('appinstalled', () => {
+        deferredInstallPrompt = null;
+        updateInstallPwaUi();
+      });
+
       loadInitialUnreadCount();
       bindNotificationChannel();
 
       try {
         ensureServiceWorkerRegistration().catch(() => {});
         updateBrowserNotificationUi();
+        updateInstallPwaUi();
         if (supportsBrowserNotifications() && Notification.permission === 'granted') {
           syncBrowserPushSubscription().catch(() => {});
         }
 
         enableBrowserNotificationsBtn?.addEventListener('click', requestBrowserNotificationPermission);
+        installPwaBtn?.addEventListener('click', installBackofficePwa);
       } catch (error) {
       }
     })();
