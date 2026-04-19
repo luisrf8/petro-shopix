@@ -104,13 +104,13 @@
     }
 
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    const pusherKey = @json(env('REVERB_APP_KEY', env('PUSHER_APP_KEY')));
+    const pusherKey = @json(config('broadcasting.connections.reverb.key'));
     if (!pusherKey) return;
 
-    const configuredHost = @json(env('REVERB_HOST', env('PUSHER_HOST')));
-    const configuredPort = Number(@json(env('REVERB_PORT', env('PUSHER_PORT', 8080))));
-    const configuredScheme = @json(env('REVERB_SCHEME', env('PUSHER_SCHEME')));
-    const configuredCluster = @json(env('PUSHER_APP_CLUSTER'));
+    const configuredHost = @json(config('broadcasting.connections.reverb.options.host'));
+    const configuredPort = Number(@json(config('broadcasting.connections.reverb.options.port')));
+    const configuredScheme = @json(config('broadcasting.connections.reverb.options.scheme'));
+    const configuredCluster = @json(config('broadcasting.connections.pusher.options.cluster'));
 
     const browserHost = window.location.hostname;
     const wsHost = !configuredHost || configuredHost === '127.0.0.1' || configuredHost === '0.0.0.0'
