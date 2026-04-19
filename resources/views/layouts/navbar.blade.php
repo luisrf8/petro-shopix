@@ -662,7 +662,27 @@
         return 'aesgcm';
       }
 
-      async function syncBrowserPushSubscription() {
+      async function deleteStoredPushSubscription(endpoint) {
+        if (!endpoint) {
+          return;
+        }
+
+        await fetch('/push-subscriptions', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+          },
+          body: JSON.stringify({ endpoint }),
+        }).catch(() => {});
+      }
+
+      function shouldForceIosPushRefresh() {
+        return isIosDevice() && isStandaloneMode() && Notification.permission === 'granted';
+      }
+
+      async function syncBrowserPushSubscription(options = {}) {
         if (!supportsBrowserNotifications() || !vapidPublicKey) {
           return null;
         }
@@ -673,6 +693,12 @@
         }
 
         let subscription = await registration.pushManager.getSubscription();
+        if (subscription && options.forceRefresh === true) {
+          await deleteStoredPushSubscription(subscription.endpoint);
+          await subscription.unsubscribe().catch(() => {});
+          subscription = null;
+        }
+
         if (!subscription) {
           subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
@@ -900,13 +926,25 @@
         updateBrowserNotificationUi();
         updateInstallPwaUi();
         if (supportsBrowserNotifications() && Notification.permission === 'granted') {
-          syncBrowserPushSubscription().catch(() => {});
+          syncBrowserPushSubscription({ forceRefresh: shouldForceIosPushRefresh() }).catch(() => {});
         }
 
         document.getElementById('backoffice-enable-browser-notifications')?.addEventListener('click', requestBrowserNotificationPermission);
         document.getElementById('backoffice-install-pwa')?.addEventListener('click', installBackofficePwa);
       } catch (error) {
       }
+
+      window.addEventListener('pageshow', () => {
+        if (shouldForceIosPushRefresh()) {
+          syncBrowserPushSubscription({ forceRefresh: true }).catch(() => {});
+        }
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && shouldForceIosPushRefresh()) {
+          syncBrowserPushSubscription({ forceRefresh: true }).catch(() => {});
+        }
+      });
     })();
 
     document.addEventListener("DOMContentLoaded", function () {

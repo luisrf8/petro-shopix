@@ -47,13 +47,15 @@ class WorkflowStatusNotification extends Notification
     public function toWebPush(object $notifiable, object $notification): WebPushMessage
     {
         $targetUrl = $this->resolveTargetUrl($notifiable) ?? url('/');
+        $iconUrl = route('pwa.icon', ['size' => 192]);
 
         return (new WebPushMessage)
             ->title((string) ($this->payload['title'] ?? 'Notificación'))
             ->body((string) ($this->payload['message'] ?? 'Tienes una nueva notificación.'))
-            ->icon(url('/assets/img/shopix5.png'))
-            ->badge(url('/assets/img/shopix5.png'))
+            ->icon($iconUrl)
+            ->badge($iconUrl)
             ->tag('shopix-notification-' . ($this->payload['order_id'] ?? $this->payload['payment_id'] ?? 'general'))
+            ->renotify()
             ->data([
                 'url' => $targetUrl,
                 'order_id' => $this->payload['order_id'] ?? null,
@@ -62,7 +64,8 @@ class WorkflowStatusNotification extends Notification
             ])
             ->action('Abrir', 'open_url')
             ->options([
-                'TTL' => 86400,
+                'TTL' => 2419200,
+                'urgency' => 'high',
             ]);
     }
 

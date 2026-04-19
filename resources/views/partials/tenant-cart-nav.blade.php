@@ -742,7 +742,28 @@
       return 'aesgcm';
     }
 
-    async function syncBrowserPushSubscription(token) {
+    async function deleteStoredPushSubscription(token, endpoint) {
+      if (!token || !endpoint) {
+        return;
+      }
+
+      await fetch('/api/push-subscriptions', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        body: JSON.stringify({ endpoint }),
+      }).catch(() => {});
+    }
+
+    function shouldForceIosPushRefresh() {
+      return isIosDevice() && isStandaloneMode() && Notification.permission === 'granted';
+    }
+
+    async function syncBrowserPushSubscription(token, options = {}) {
       if (!supportsBrowserNotifications() || !vapidPublicKey) {
         return null;
       }
@@ -753,6 +774,12 @@
       }
 
       let subscription = await registration.pushManager.getSubscription();
+      if (subscription && options.forceRefresh === true) {
+        await deleteStoredPushSubscription(token, subscription.endpoint);
+        await subscription.unsubscribe().catch(() => {});
+        subscription = null;
+      }
+
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
@@ -1435,7 +1462,7 @@
           });
 
         if (supportsBrowserNotifications() && Notification.permission === 'granted') {
-          syncBrowserPushSubscription(token).catch(() => {});
+          syncBrowserPushSubscription(token, { forceRefresh: shouldForceIosPushRefresh() }).catch(() => {});
         }
 
         bindRealtimeChannel();
@@ -1460,8 +1487,20 @@
       applyAuthState(user, token);
 
       if (token && user?.id && supportsBrowserNotifications() && Notification.permission === 'granted') {
-        syncBrowserPushSubscription(token).catch(() => {});
+        syncBrowserPushSubscription(token, { forceRefresh: shouldForceIosPushRefresh() }).catch(() => {});
       }
+
+      window.addEventListener('pageshow', () => {
+        if (token && shouldForceIosPushRefresh()) {
+          syncBrowserPushSubscription(token, { forceRefresh: true }).catch(() => {});
+        }
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && token && shouldForceIosPushRefresh()) {
+          syncBrowserPushSubscription(token, { forceRefresh: true }).catch(() => {});
+        }
+      });
     });
 
     document.getElementById('tenant-public-login-form')?.addEventListener('submit', submitTenantPublicLogin);
