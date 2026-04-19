@@ -770,15 +770,19 @@
         }
       }
 
-      ensureServiceWorkerRegistration().catch(() => {});
-      updateBrowserNotificationUi();
-      if (supportsBrowserNotifications() && Notification.permission === 'granted') {
-        syncBrowserPushSubscription().catch(() => {});
-      }
-
       loadInitialUnreadCount();
       bindNotificationChannel();
-      enableBrowserNotificationsBtn?.addEventListener('click', requestBrowserNotificationPermission);
+
+      try {
+        ensureServiceWorkerRegistration().catch(() => {});
+        updateBrowserNotificationUi();
+        if (supportsBrowserNotifications() && Notification.permission === 'granted') {
+          syncBrowserPushSubscription().catch(() => {});
+        }
+
+        enableBrowserNotificationsBtn?.addEventListener('click', requestBrowserNotificationPermission);
+      } catch (error) {
+      }
     })();
 
     document.addEventListener("DOMContentLoaded", function () {

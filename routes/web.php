@@ -22,6 +22,7 @@ use App\Http\Controllers\{
     MaterialPackageController,
     WarehouseController,
     NotificationController,
+    PushSubscriptionController,
     HelpPreferenceController,
     GoogleDriveController,
     ReportController,
