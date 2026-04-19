@@ -502,14 +502,11 @@
 
       const badges = Array.from(document.querySelectorAll('.backoffice-notifications-count'));
       const toastContainer = document.getElementById('backoffice-toast-container');
-      const enableBrowserNotificationsBtn = document.getElementById('backoffice-enable-browser-notifications');
-      const installPwaBtn = document.getElementById('backoffice-install-pwa');
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
       const serviceWorkerUrl = @json(url('/push-sw.js'));
       const vapidPublicKey = @json(config('webpush.vapid.public_key'));
       const defaultNotificationIcon = @json(optional(auth()->user()?->tenant)->logo ? \App\Support\ImageStorage::url(auth()->user()->tenant->logo) : asset('assets/img/shopix5.png'));
       let serviceWorkerRegistrationPromise = null;
-      let deferredInstallPrompt = null;
 
       function updateBadge(unread) {
         if (!badges.length) return;
@@ -566,6 +563,7 @@
       }
 
       function updateInstallPwaUi() {
+        const installPwaBtn = document.getElementById('backoffice-install-pwa');
         if (!installPwaBtn) {
           return;
         }
@@ -589,6 +587,7 @@
       }
 
       async function installBackofficePwa() {
+        const installPwaBtn = document.getElementById('backoffice-install-pwa');
         if (!installPwaBtn) {
           return;
         }
@@ -602,14 +601,14 @@
           return;
         }
 
-        if (!deferredInstallPrompt) {
+        if (!window.__shopixDeferredInstallPrompt) {
           alert('La instalación aún no está disponible en este navegador. Recarga la página, usa HTTPS y asegúrate de que el sitio no esté ya instalado.');
           return;
         }
 
-        deferredInstallPrompt.prompt();
-        const choice = await deferredInstallPrompt.userChoice.catch(() => null);
-        deferredInstallPrompt = null;
+        window.__shopixDeferredInstallPrompt.prompt();
+        const choice = await window.__shopixDeferredInstallPrompt.userChoice.catch(() => null);
+        window.__shopixDeferredInstallPrompt = null;
         updateInstallPwaUi();
 
         if (choice?.outcome === 'accepted') {
@@ -713,6 +712,7 @@
       }
 
       function updateBrowserNotificationUi() {
+        const enableBrowserNotificationsBtn = document.getElementById('backoffice-enable-browser-notifications');
         if (!enableBrowserNotificationsBtn) {
           return;
         }
@@ -861,12 +861,12 @@
 
       window.addEventListener('beforeinstallprompt', (event) => {
         event.preventDefault();
-        deferredInstallPrompt = event;
+        window.__shopixDeferredInstallPrompt = event;
         updateInstallPwaUi();
       });
 
       window.addEventListener('appinstalled', () => {
-        deferredInstallPrompt = null;
+        window.__shopixDeferredInstallPrompt = null;
         updateInstallPwaUi();
       });
 

@@ -248,16 +248,6 @@
                 @endif
               </a>
             </li>
-            <li class="nav-item d-flex align-items-center me-2">
-              <button type="button" id="backoffice-enable-browser-notifications" class="nav-link text-body bg-transparent header-notification-optin d-none border-0" aria-label="Activar alertas del navegador" title="Activar alertas del navegador">
-                Activar alertas
-              </button>
-            </li>
-            <li class="nav-item d-flex align-items-center me-2">
-              <button type="button" id="backoffice-install-pwa" class="nav-link text-body bg-transparent header-pwa-install d-none border-0" aria-label="Instalar aplicacion" title="Instalar aplicacion">
-                Instalar app
-              </button>
-            </li>
             <li class="nav-item d-flex align-items-center">
               <form method="POST" action="{{ route('logout') }}" class="m-0 p-0">
                 @csrf
