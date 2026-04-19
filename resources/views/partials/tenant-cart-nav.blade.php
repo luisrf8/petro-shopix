@@ -685,7 +685,7 @@
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const serviceWorkerUrl = @json(url('/push-sw.js'));
-    const vapidPublicKey = @json(env('VAPID_PUBLIC_KEY'));
+    const vapidPublicKey = @json(config('webpush.vapid.public_key'));
     const defaultNotificationIcon = @json(\App\Support\ImageStorage::url($tenantThemeModel->logo ?? null) ?? asset('assets/img/shopix5.png'));
 
     function supportsBrowserNotifications() {

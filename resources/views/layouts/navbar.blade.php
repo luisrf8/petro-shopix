@@ -502,6 +502,13 @@
 
       const badges = Array.from(document.querySelectorAll('.backoffice-notifications-count'));
       const toastContainer = document.getElementById('backoffice-toast-container');
+      const enableBrowserNotificationsBtn = document.getElementById('backoffice-enable-browser-notifications');
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      const serviceWorkerUrl = @json(url('/push-sw.js'));
+      const vapidPublicKey = @json(config('webpush.vapid.public_key'));
+      const defaultNotificationIcon = @json(optional(auth()->user()?->tenant)->logo ? \App\Support\ImageStorage::url(auth()->user()->tenant->logo) : asset('assets/img/shopix5.png'));
+      let serviceWorkerRegistrationPromise = null;
+
       function updateBadge(unread) {
         if (!badges.length) return;
         const current = Number(badges[0].textContent || 0);
@@ -534,8 +541,168 @@
         toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
       }
 
+      function supportsBrowserNotifications() {
+        return window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+      }
+
+      async function ensureServiceWorkerRegistration() {
+        if (!supportsBrowserNotifications()) {
+          return null;
+        }
+
+        if (!serviceWorkerRegistrationPromise) {
+          serviceWorkerRegistrationPromise = navigator.serviceWorker.register(serviceWorkerUrl, { scope: '/' });
+        }
+
+        return serviceWorkerRegistrationPromise;
+      }
+
+      function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+
+        for (let index = 0; index < rawData.length; index += 1) {
+          outputArray[index] = rawData.charCodeAt(index);
+        }
+
+        return outputArray;
+      }
+
+      async function syncBrowserPushSubscription() {
+        if (!supportsBrowserNotifications() || !vapidPublicKey) {
+          return null;
+        }
+
+        const registration = await ensureServiceWorkerRegistration();
+        if (!registration) {
+          return null;
+        }
+
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+          });
+        }
+
+        await fetch('/push-subscriptions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+          },
+          body: JSON.stringify({
+            subscription: subscription.toJSON(),
+          }),
+        });
+
+        return subscription;
+      }
+
+      async function showBrowserNotification(notification, options = {}) {
+        if (!supportsBrowserNotifications() || Notification.permission !== 'granted') {
+          return;
+        }
+
+        const force = options.force === true;
+        if (!force && document.visibilityState === 'visible') {
+          return;
+        }
+
+        const registration = await ensureServiceWorkerRegistration().catch(() => null);
+        const title = notification.title || 'Notificación';
+        const body = notification.message || notification.body || '';
+        const targetUrl = notification.target_url || notification.url || window.location.href;
+        const notificationOptions = {
+          body,
+          icon: defaultNotificationIcon,
+          badge: defaultNotificationIcon,
+          data: {
+            url: targetUrl,
+          },
+          tag: `shopix-backoffice-${notification.id || Date.now()}`,
+        };
+
+        if (registration && typeof registration.showNotification === 'function') {
+          await registration.showNotification(title, notificationOptions);
+          return;
+        }
+
+        const nativeNotification = new Notification(title, notificationOptions);
+        nativeNotification.onclick = () => {
+          window.focus();
+          window.location.href = targetUrl;
+          nativeNotification.close();
+        };
+      }
+
+      function updateBrowserNotificationUi() {
+        if (!enableBrowserNotificationsBtn) {
+          return;
+        }
+
+        if (!supportsBrowserNotifications()) {
+          enableBrowserNotificationsBtn.classList.add('d-none');
+          enableBrowserNotificationsBtn.classList.remove('is-ready');
+          return;
+        }
+
+        enableBrowserNotificationsBtn.classList.remove('d-none');
+        const permission = Notification.permission;
+
+        if (permission === 'granted') {
+          enableBrowserNotificationsBtn.textContent = 'Alertas activas';
+          enableBrowserNotificationsBtn.classList.add('is-ready');
+          return;
+        }
+
+        enableBrowserNotificationsBtn.classList.remove('is-ready');
+
+        if (permission === 'denied') {
+          enableBrowserNotificationsBtn.textContent = 'Alertas bloqueadas';
+          return;
+        }
+
+        enableBrowserNotificationsBtn.textContent = 'Activar alertas';
+      }
+
+      async function requestBrowserNotificationPermission() {
+        if (!supportsBrowserNotifications()) {
+          alert('Este navegador necesita HTTPS, Service Worker y soporte Push API para activar alertas web. En iPhone, abre Shopix desde Safari y agrega el sitio a pantalla de inicio.');
+          return;
+        }
+
+        if (!vapidPublicKey) {
+          alert('Las notificaciones push aún no están configuradas en el servidor.');
+          return;
+        }
+
+        if (Notification.permission === 'denied') {
+          alert('El permiso de notificaciones está bloqueado. Debes habilitarlo manualmente en la configuración del navegador o del sistema.');
+          return;
+        }
+
+        const permission = await Notification.requestPermission();
+        updateBrowserNotificationUi();
+
+        if (permission !== 'granted') {
+          return;
+        }
+
+        await syncBrowserPushSubscription();
+        await showBrowserNotification({
+          title: 'Alertas activadas',
+          message: 'Este dispositivo ya puede recibir notificaciones del panel de Shopix.',
+          target_url: window.location.href,
+        }, { force: true });
+        showToast('Alertas activadas', 'Este dispositivo ya puede recibir notificaciones del panel.');
+      }
+
       function bindNotificationChannel() {
-        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
         const pusherKey = @json(config('broadcasting.connections.reverb.key'));
         if (!pusherKey) return;
 
@@ -565,7 +732,7 @@
           authEndpoint: '/broadcasting/auth',
           auth: {
             headers: {
-              'X-CSRF-TOKEN': csrf,
+              'X-CSRF-TOKEN': csrfToken,
             },
           },
         };
@@ -582,6 +749,7 @@
           const message = notification.message || '';
           updateBadge();
           showToast(title, message);
+          showBrowserNotification(notification).catch(() => {});
         };
 
         channel.bind('Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
@@ -602,8 +770,15 @@
         }
       }
 
+      ensureServiceWorkerRegistration().catch(() => {});
+      updateBrowserNotificationUi();
+      if (supportsBrowserNotifications() && Notification.permission === 'granted') {
+        syncBrowserPushSubscription().catch(() => {});
+      }
+
       loadInitialUnreadCount();
       bindNotificationChannel();
+      enableBrowserNotificationsBtn?.addEventListener('click', requestBrowserNotificationPermission);
     })();
 
     document.addEventListener("DOMContentLoaded", function () {

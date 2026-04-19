@@ -93,6 +93,21 @@
     display: block;
   }
 
+  .header-notification-optin {
+    border: 1px solid rgba(52, 71, 103, 0.18);
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem !important;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .header-notification-optin.is-ready {
+    border-color: rgba(34, 197, 94, 0.35);
+    background: rgba(34, 197, 94, 0.08);
+    color: #166534 !important;
+  }
+
   @media (max-width: 576px) {
     .header-session-user {
       max-width: 160px;
@@ -187,6 +202,11 @@
                   <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none backoffice-notifications-count">0</span>
                 @endif
               </a>
+            </li>
+            <li class="nav-item d-flex align-items-center me-2">
+              <button type="button" id="backoffice-enable-browser-notifications" class="nav-link text-body bg-transparent header-notification-optin d-none border-0" aria-label="Activar alertas del navegador" title="Activar alertas del navegador">
+                Activar alertas
+              </button>
             </li>
             <li class="nav-item d-flex align-items-center">
               <form method="POST" action="{{ route('logout') }}" class="m-0 p-0">
