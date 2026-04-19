@@ -25,7 +25,7 @@ class PushSubscriptionController extends Controller
             'subscription.keys' => ['nullable', 'array'],
             'subscription.keys.p256dh' => ['nullable', 'string'],
             'subscription.keys.auth' => ['nullable', 'string'],
-            'subscription.contentEncoding' => ['nullable', 'string', 'max:50'],
+            'subscription.contentEncoding' => ['nullable', 'string', 'in:aesgcm,aes128gcm'],
         ]);
 
         $subscription = $validated['subscription'];
@@ -34,7 +34,7 @@ class PushSubscriptionController extends Controller
             (string) $subscription['endpoint'],
             data_get($subscription, 'keys.p256dh'),
             data_get($subscription, 'keys.auth'),
-            data_get($subscription, 'contentEncoding', 'aesgcm')
+            data_get($subscription, 'contentEncoding')
         );
 
         return response()->json([

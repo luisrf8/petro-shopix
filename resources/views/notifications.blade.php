@@ -259,6 +259,27 @@
       return outputArray;
     }
 
+    function resolvePushContentEncoding(subscription) {
+      const subscriptionJson = typeof subscription?.toJSON === 'function' ? subscription.toJSON() : null;
+      if (subscriptionJson?.contentEncoding) {
+        return subscriptionJson.contentEncoding;
+      }
+
+      const supportedEncodings = Array.isArray(window.PushManager?.supportedContentEncodings)
+        ? window.PushManager.supportedContentEncodings
+        : [];
+
+      if (supportedEncodings.includes('aes128gcm')) {
+        return 'aes128gcm';
+      }
+
+      if (supportedEncodings.includes('aesgcm')) {
+        return 'aesgcm';
+      }
+
+      return 'aesgcm';
+    }
+
     async function syncBrowserPushSubscription() {
       const vapidPublicKey = @json(config('webpush.vapid.public_key'));
       if (!supportsBrowserNotifications() || !vapidPublicKey) {
@@ -286,7 +307,10 @@
           'X-CSRF-TOKEN': csrf,
         },
         body: JSON.stringify({
-          subscription: subscription.toJSON(),
+          subscription: {
+            ...subscription.toJSON(),
+            contentEncoding: resolvePushContentEncoding(subscription),
+          },
         }),
       });
 
