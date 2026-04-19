@@ -558,6 +558,7 @@ class SaleController extends Controller
             'status' => 0, // Pendiente por defecto en eCommerce
             'address' => $address ?? 'Tienda',
             'preference' => $preference,
+            'tenant_id' => $tenantForSale->id,
             'sale_currency_code' => $saleCurrencyCode,
         ]);
     
@@ -612,6 +613,15 @@ class SaleController extends Controller
                 }
             }
         }
+
+        WorkflowNotifier::notifyTenantRoles((int) $tenantForSale->id, ['owner', 'administrador', 'admin', 'vendedor'], [
+            'title' => 'Nueva compra de cliente',
+            'message' => 'Se creó el pedido #' . $salesOrder->id . '. Revisa venta y métodos de pago.',
+            'type' => 'new-order',
+            'tenant_id' => $tenantForSale->id,
+            'order_id' => $salesOrder->id,
+            'action' => 'review_order_and_payments',
+        ]);
     
         return response()->json(['message' => 'Venta en eCommerce registrada exitosamente.'], 200);
     }

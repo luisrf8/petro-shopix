@@ -11,9 +11,25 @@ class WorkflowNotifier
 {
     public static function notifyTenantRoles(int $tenantId, array $roleNames, array $payload): void
     {
+        $definitions = User::storeRoleDefinitions();
+
         $normalizedRoleNames = collect($roleNames)
-            ->map(fn ($name) => strtolower((string) $name))
+            ->flatMap(function ($name) use ($definitions) {
+                $normalized = strtolower(trim((string) $name));
+                if ($normalized === '') {
+                    return [];
+                }
+
+                $canonical = User::canonicalRoleName($normalized) ?? $normalized;
+                $aliases = $definitions[$canonical]['aliases'] ?? [];
+
+                return array_merge([$normalized, $canonical], array_map(
+                    fn ($alias) => strtolower((string) $alias),
+                    $aliases
+                ));
+            })
             ->filter()
+            ->unique()
             ->values();
 
         if ($normalizedRoleNames->isEmpty()) {

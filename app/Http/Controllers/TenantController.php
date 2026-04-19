@@ -1777,7 +1777,7 @@ class TenantController extends Controller
                 return $salesOrder;
             });
 
-            WorkflowNotifier::notifyTenantRoles((int) $tenant->id, ['administrador', 'admin', 'vendedor'], [
+            WorkflowNotifier::notifyTenantRoles((int) $tenant->id, ['owner', 'administrador', 'admin', 'vendedor'], [
                 'title' => 'Nueva compra de cliente',
                 'message' => 'Se creó el pedido #' . $salesOrder->id . '. Revisa venta y métodos de pago.',
                 'type' => 'new-order',
