@@ -1287,6 +1287,11 @@
     const directoryClientNotificationsModal = directoryClientNotificationsModalElement ? bootstrap.Modal.getOrCreateInstance(directoryClientNotificationsModalElement) : null;
     const directoryClientOrdersModal = directoryClientOrdersModalElement ? bootstrap.Modal.getOrCreateInstance(directoryClientOrdersModalElement) : null;
     const directoryClientAccountModal = directoryClientAccountModalElement ? bootstrap.Modal.getOrCreateInstance(directoryClientAccountModalElement) : null;
+    const directoryServiceWorkerUrl = @json(url('/push-sw.js'));
+    const directoryVapidPublicKey = @json(config('webpush.vapid.public_key'));
+    const directoryDefaultNotificationIcon = @json(url('/pwa-icon/192.png'));
+    let directoryServiceWorkerRegistrationPromise = null;
+    let directoryNotificationAutoPrompted = false;
 
     function getDirectoryAuthToken() {
       return localStorage.getItem(directoryAuthTokenKey) || '';
@@ -1299,6 +1304,189 @@
     function isDirectoryIosDevice() {
       const userAgent = window.navigator.userAgent || '';
       return /iPad|iPhone|iPod/.test(userAgent) || (userAgent.includes('Mac') && 'ontouchend' in document);
+    }
+
+    function supportsDirectoryBrowserNotifications() {
+      return window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+    }
+
+    async function ensureDirectoryServiceWorkerRegistration() {
+      if (!supportsDirectoryBrowserNotifications()) {
+        return null;
+      }
+
+      if (!directoryServiceWorkerRegistrationPromise) {
+        directoryServiceWorkerRegistrationPromise = navigator.serviceWorker.register(directoryServiceWorkerUrl, { scope: '/' });
+      }
+
+      return directoryServiceWorkerRegistrationPromise;
+    }
+
+    function directoryUrlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+
+      for (let index = 0; index < rawData.length; index += 1) {
+        outputArray[index] = rawData.charCodeAt(index);
+      }
+
+      return outputArray;
+    }
+
+    function resolveDirectoryPushContentEncoding(subscription) {
+      const subscriptionJson = typeof subscription?.toJSON === 'function' ? subscription.toJSON() : null;
+      if (subscriptionJson?.contentEncoding) {
+        return subscriptionJson.contentEncoding;
+      }
+
+      const supportedEncodings = Array.isArray(window.PushManager?.supportedContentEncodings)
+        ? window.PushManager.supportedContentEncodings
+        : [];
+
+      if (supportedEncodings.includes('aes128gcm')) {
+        return 'aes128gcm';
+      }
+
+      if (supportedEncodings.includes('aesgcm')) {
+        return 'aesgcm';
+      }
+
+      return 'aesgcm';
+    }
+
+    async function syncDirectoryBrowserPushSubscription(token, options = {}) {
+      if (!supportsDirectoryBrowserNotifications() || !directoryVapidPublicKey) {
+        return null;
+      }
+
+      const registration = await ensureDirectoryServiceWorkerRegistration();
+      if (!registration) {
+        return null;
+      }
+
+      let subscription = await registration.pushManager.getSubscription();
+      if (subscription && options.forceRefresh === true) {
+        await fetch('/api/push-subscriptions', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        }).catch(() => {});
+        await subscription.unsubscribe().catch(() => {});
+        subscription = null;
+      }
+
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: directoryUrlBase64ToUint8Array(directoryVapidPublicKey),
+        });
+      }
+
+      await fetch('/api/push-subscriptions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify({
+          subscription: {
+            ...subscription.toJSON(),
+            contentEncoding: resolveDirectoryPushContentEncoding(subscription),
+          },
+        }),
+      });
+
+      return subscription;
+    }
+
+    async function showDirectoryBrowserNotification(notification, options = {}) {
+      if (!supportsDirectoryBrowserNotifications() || Notification.permission !== 'granted') {
+        return;
+      }
+
+      const force = options.force === true;
+      if (!force && document.visibilityState === 'visible' && !isDirectoryStandaloneMode()) {
+        return;
+      }
+
+      const registration = await ensureDirectoryServiceWorkerRegistration().catch(() => null);
+      const notificationOptions = {
+        body: notification.message || notification.body || '',
+        icon: directoryDefaultNotificationIcon,
+        badge: directoryDefaultNotificationIcon,
+        data: {
+          url: notification.target_url || notification.url || window.location.href,
+        },
+        tag: `shopix-directory-${notification.id || Date.now()}`,
+      };
+
+      if (registration && typeof registration.showNotification === 'function') {
+        await registration.showNotification(notification.title || 'Notificación', notificationOptions);
+        return;
+      }
+
+      const nativeNotification = new Notification(notification.title || 'Notificación', notificationOptions);
+      nativeNotification.onclick = () => {
+        window.focus();
+        window.location.href = notificationOptions.data.url;
+        nativeNotification.close();
+      };
+    }
+
+    async function requestDirectoryBrowserNotificationPermission() {
+      const token = getDirectoryAuthToken();
+      const user = getDirectoryAuthUser();
+
+      if (!token || !user?.id) {
+        return;
+      }
+
+      if (!supportsDirectoryBrowserNotifications()) {
+        return;
+      }
+
+      if (!directoryVapidPublicKey || Notification.permission === 'denied') {
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        return;
+      }
+
+      await syncDirectoryBrowserPushSubscription(token);
+      await showDirectoryBrowserNotification({
+        title: 'Alertas activadas',
+        message: 'Este dispositivo ya puede recibir notificaciones de Shopix.',
+        target_url: window.location.href,
+      }, { force: true });
+    }
+
+    function maybeAutoRequestDirectoryBrowserNotificationPermission() {
+      const token = getDirectoryAuthToken();
+      const user = getDirectoryAuthUser();
+
+      if (directoryNotificationAutoPrompted || !token || !user?.id || !isDirectoryStandaloneMode()) {
+        return;
+      }
+
+      if (!supportsDirectoryBrowserNotifications() || !directoryVapidPublicKey || Notification.permission !== 'default') {
+        return;
+      }
+
+      directoryNotificationAutoPrompted = true;
+      requestDirectoryBrowserNotificationPermission().catch(() => {
+        directoryNotificationAutoPrompted = false;
+      });
     }
 
     function updateDirectoryInstallPwaUi() {
@@ -1685,6 +1873,9 @@
       directoryClientLoginForm?.reset();
       fillDirectoryAccount(data.user);
       syncDirectoryClientData();
+      setTimeout(() => {
+        maybeAutoRequestDirectoryBrowserNotificationPermission();
+      }, 120);
 
       const pendingUrl = consumeDirectoryPendingUrl();
       if (pendingUrl) {
@@ -1726,6 +1917,9 @@
       directoryClientRegisterForm?.reset();
       fillDirectoryAccount(data.user);
       syncDirectoryClientData();
+      setTimeout(() => {
+        maybeAutoRequestDirectoryBrowserNotificationPermission();
+      }, 120);
 
       const pendingUrl = consumeDirectoryPendingUrl();
       if (pendingUrl) {
@@ -1973,6 +2167,9 @@
     window.addEventListener('appinstalled', () => {
       window.__shopixDirectoryDeferredInstallPrompt = null;
       updateDirectoryInstallPwaUi();
+      setTimeout(() => {
+        maybeAutoRequestDirectoryBrowserNotificationPermission();
+      }, 220);
     });
 
     updateLandingCityOptions(getLandingFilterValue('state'));
@@ -1980,6 +2177,15 @@
     fillDirectoryAccount(getDirectoryAuthUser());
     syncDirectoryClientData();
     updateDirectoryInstallPwaUi();
+    ensureDirectoryServiceWorkerRegistration().catch(() => {});
+
+    if (supportsDirectoryBrowserNotifications() && Notification.permission === 'granted' && getDirectoryAuthToken() && getDirectoryAuthUser()?.id) {
+      syncDirectoryBrowserPushSubscription(getDirectoryAuthToken()).catch(() => {});
+    }
+
+    setTimeout(() => {
+      maybeAutoRequestDirectoryBrowserNotificationPermission();
+    }, 180);
     applyLandingDirectoryFilters();
   </script>
 </body>

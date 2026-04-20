@@ -676,7 +676,8 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const serviceWorkerUrl = @json(url('/push-sw.js'));
     const vapidPublicKey = @json(config('webpush.vapid.public_key'));
-    const defaultNotificationIcon = @json(\App\Support\ImageStorage::url($tenantThemeModel->logo ?? null) ?? asset('assets/img/shopix5.png'));
+    const defaultNotificationIcon = @json(\App\Support\ImageStorage::url($tenantThemeModel->logo ?? null) ?? asset('assets/img/shopix6.png'));
+    let storefrontNotificationAutoPrompted = false;
 
     function supportsBrowserNotifications() {
       return window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
@@ -950,6 +951,25 @@
       showTenantToast('Alertas activadas', 'Este dispositivo ya puede recibir notificaciones del navegador.');
     }
 
+    function maybeAutoRequestBrowserNotificationPermission() {
+      if (storefrontNotificationAutoPrompted) {
+        return;
+      }
+
+      if (!currentToken || !currentUser?.id || !isStandaloneMode()) {
+        return;
+      }
+
+      if (!supportsBrowserNotifications() || !vapidPublicKey || Notification.permission !== 'default') {
+        return;
+      }
+
+      storefrontNotificationAutoPrompted = true;
+      requestBrowserNotificationPermission().catch(() => {
+        storefrontNotificationAutoPrompted = false;
+      });
+    }
+
     function openTenantAuthModal() {
       if (authModal && typeof bootstrap !== 'undefined' && bootstrap?.Modal) {
         const offcanvasElement = document.getElementById('tenantCartOffcanvas');
@@ -1132,6 +1152,9 @@
 
       persistTenantAuth(data.token, data.user);
       bootstrap.Modal.getInstance(authModal)?.hide();
+      setTimeout(() => {
+        maybeAutoRequestBrowserNotificationPermission();
+      }, 120);
     }
 
     async function submitTenantPublicRegister(event) {
@@ -1164,6 +1187,9 @@
 
       persistTenantAuth(data.token, data.user);
       bootstrap.Modal.getInstance(authModal)?.hide();
+      setTimeout(() => {
+        maybeAutoRequestBrowserNotificationPermission();
+      }, 120);
     }
 
     async function fetchNotifications(token) {
@@ -1463,6 +1489,10 @@
           syncBrowserPushSubscription(token, { forceRefresh: shouldForceIosPushRefresh() }).catch(() => {});
         }
 
+        setTimeout(() => {
+          maybeAutoRequestBrowserNotificationPermission();
+        }, 180);
+
         bindRealtimeChannel();
 
         notificationsBtn?.addEventListener('click', async () => {
@@ -1488,6 +1518,10 @@
         syncBrowserPushSubscription(token, { forceRefresh: shouldForceIosPushRefresh() }).catch(() => {});
       }
 
+      setTimeout(() => {
+        maybeAutoRequestBrowserNotificationPermission();
+      }, 180);
+
       window.addEventListener('pageshow', () => {
         if (token && shouldForceIosPushRefresh()) {
           syncBrowserPushSubscription(token, { forceRefresh: true }).catch(() => {});
@@ -1499,6 +1533,12 @@
           syncBrowserPushSubscription(token, { forceRefresh: true }).catch(() => {});
         }
       });
+    });
+
+    window.addEventListener('appinstalled', () => {
+      setTimeout(() => {
+        maybeAutoRequestBrowserNotificationPermission();
+      }, 220);
     });
 
     document.getElementById('tenant-public-login-form')?.addEventListener('submit', submitTenantPublicLogin);

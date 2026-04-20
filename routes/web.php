@@ -99,7 +99,7 @@ Route::get('/manifest.webmanifest', function (\Illuminate\Http\Request $request)
 Route::get('/pwa-icon/{size}.png', function (int $size) {
     abort_unless(in_array($size, [180, 192, 512], true), 404);
 
-    $sourcePath = public_path('assets/img/shopix5.png');
+    $sourcePath = public_path('assets/img/shopix6.png');
     abort_unless(is_file($sourcePath), 404);
 
     if (!function_exists('imagecreatetruecolor') || !function_exists('imagecreatefrompng')) {
