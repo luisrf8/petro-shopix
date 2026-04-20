@@ -113,9 +113,9 @@ Route::get('/pwa-icon/{size}.png', function (int $size) {
     $sourceHeight = imagesy($sourceImage);
     $icon = imagecreatetruecolor($size, $size);
 
-    imagealphablending($icon, false);
-    imagesavealpha($icon, true);
-    $background = imagecolorallocatealpha($icon, 255, 255, 255, 0);
+    imagealphablending($icon, true);
+    imagesavealpha($icon, false);
+    $background = imagecolorallocate($icon, 255, 255, 255);
     imagefilledrectangle($icon, 0, 0, $size, $size, $background);
 
     $padding = (int) floor($size * 0.12);

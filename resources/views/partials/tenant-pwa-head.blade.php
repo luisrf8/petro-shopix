@@ -4,4 +4,4 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="{{ \Illuminate\Support\Str::limit('Shopix', 24, '') }}">
 <link rel="manifest" href="{{ route('tenant.pwa.manifest', ['start_url' => route('landing.directory'), 'name' => 'Shopix', 'theme' => '2563eb']) }}">
-<link rel="apple-touch-icon" href="{{ asset('assets/img/shopix5.png') }}">
+<link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180]) }}">
