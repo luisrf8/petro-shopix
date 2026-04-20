@@ -10,9 +10,9 @@
   <meta name="apple-mobile-web-app-title" content="Shopix">
   <meta name="theme-color" content="#2563eb">
   <title>Shopix - Por tienda / servicio</title>
-  <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192]) }}">
-  <link rel="manifest" href="{{ route('tenant.pwa.manifest', ['start_url' => route('landing.directory'), 'name' => 'Shopix', 'theme' => '2563eb']) }}">
-  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180]) }}">
+  <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192, 'variant' => 'client']) }}">
+  <link rel="manifest" href="{{ route('tenant.pwa.manifest', ['start_url' => route('landing.directory'), 'name' => 'Shopix', 'theme' => '2563eb', 'icon_variant' => 'client']) }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180, 'variant' => 'client']) }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">

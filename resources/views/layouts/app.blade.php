@@ -9,14 +9,14 @@
     @endphp
     <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180]) }}">
-  <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192]) }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180, 'variant' => 'admin']) }}">
+  <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192, 'variant' => 'admin']) }}">
   <meta name="theme-color" content="#{{ $backofficePwaTheme }}">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="{{ \Illuminate\Support\Str::limit($backofficePwaName, 24, '') }}">
-  <link rel="manifest" href="{{ route('tenant.pwa.manifest', ['start_url' => $backofficePwaStartUrl, 'name' => $backofficePwaName, 'theme' => $backofficePwaTheme]) }}">
+  <link rel="manifest" href="{{ route('tenant.pwa.manifest', ['start_url' => $backofficePwaStartUrl, 'name' => $backofficePwaName, 'theme' => $backofficePwaTheme, 'icon_variant' => 'admin']) }}">
   <title>
   </title>
   <!--     Fonts and icons     -->

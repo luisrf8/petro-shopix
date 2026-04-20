@@ -58,6 +58,7 @@ Route::get('/manifest.webmanifest', function (\Illuminate\Http\Request $request)
     $name = trim((string) $request->query('name', config('app.name', 'Shopix')));
     $startUrl = (string) $request->query('start_url', '/');
     $themeColor = '#' . ltrim((string) $request->query('theme', '0F172A'), '#');
+    $iconVariant = trim((string) $request->query('icon_variant', 'client'));
 
     if ($name === '') {
         $name = config('app.name', 'Shopix');
@@ -71,6 +72,10 @@ Route::get('/manifest.webmanifest', function (\Illuminate\Http\Request $request)
         $themeColor = '#0F172A';
     }
 
+    if (!in_array($iconVariant, ['client', 'admin'], true)) {
+        $iconVariant = 'client';
+    }
+
     return response()->json([
         'name' => $name,
         'short_name' => \Illuminate\Support\Str::limit($name, 12, ''),
@@ -81,13 +86,13 @@ Route::get('/manifest.webmanifest', function (\Illuminate\Http\Request $request)
         'theme_color' => $themeColor,
         'icons' => [
             [
-                'src' => route('pwa.icon', ['size' => 192]),
+                'src' => route('pwa.icon', ['size' => 192, 'variant' => $iconVariant]),
                 'sizes' => '192x192',
                 'type' => 'image/png',
                 'purpose' => 'any maskable',
             ],
             [
-                'src' => route('pwa.icon', ['size' => 512]),
+                'src' => route('pwa.icon', ['size' => 512, 'variant' => $iconVariant]),
                 'sizes' => '512x512',
                 'type' => 'image/png',
                 'purpose' => 'any maskable',
@@ -99,7 +104,9 @@ Route::get('/manifest.webmanifest', function (\Illuminate\Http\Request $request)
 Route::get('/pwa-icon/{size}.png', function (int $size) {
     abort_unless(in_array($size, [180, 192, 512], true), 404);
 
-    $sourcePath = public_path('assets/img/shopix6.png');
+    $variant = request()->query('variant', 'client');
+    $sourceFile = $variant === 'admin' ? 'shopix8.png' : 'shopix7.png';
+    $sourcePath = public_path('assets/img/' . $sourceFile);
     abort_unless(is_file($sourcePath), 404);
 
     if (!function_exists('imagecreatetruecolor') || !function_exists('imagecreatefrompng')) {
@@ -119,10 +126,18 @@ Route::get('/pwa-icon/{size}.png', function (int $size) {
     imagefilledrectangle($icon, 0, 0, $size, $size, $background);
 
     $padding = (int) floor($size * 0.12);
-    $availableSize = max($size - ($padding * 2), 1);
-    $scale = min($availableSize / max($sourceWidth, 1), $availableSize / max($sourceHeight, 1));
-    $targetWidth = max((int) round($sourceWidth * $scale), 1);
-    $targetHeight = max((int) round($sourceHeight * $scale), 1);
+    $sourceAspectRatio = $sourceWidth / max($sourceHeight, 1);
+
+    if ($sourceAspectRatio >= 2.2) {
+        $targetWidth = max((int) round($size * 0.84), 1);
+        $targetHeight = max((int) round($size * 0.34), 1);
+    } else {
+        $availableSize = max($size - ($padding * 2), 1);
+        $scale = min($availableSize / max($sourceWidth, 1), $availableSize / max($sourceHeight, 1));
+        $targetWidth = max((int) round($sourceWidth * $scale), 1);
+        $targetHeight = max((int) round($sourceHeight * $scale), 1);
+    }
+
     $destinationX = (int) floor(($size - $targetWidth) / 2);
     $destinationY = (int) floor(($size - $targetHeight) / 2);
 
