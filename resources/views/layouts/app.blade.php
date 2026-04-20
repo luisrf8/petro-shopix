@@ -819,6 +819,51 @@
         });
       </script>
     @endif
+    <script>
+      (function () {
+        const nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+        if (!nativeFetch) {
+          return;
+        }
+
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const loginUrl = @json(route('login'));
+
+        window.fetch = async function (input, init) {
+          const response = await nativeFetch(input, init);
+          if (response.status !== 419) {
+            return response;
+          }
+
+          let payload = {};
+          try {
+            payload = await response.clone().json();
+          } catch (error) {
+            payload = {};
+          }
+
+          if (csrfMeta && payload.csrf_token) {
+            csrfMeta.setAttribute('content', payload.csrf_token);
+          }
+
+          const targetUrl = payload.login_url || loginUrl;
+          const message = payload.message || 'Tu sesion vencio. Inicia sesion nuevamente.';
+
+          window.dispatchEvent(new CustomEvent('shopix:session-expired', {
+            detail: {
+              message,
+              targetUrl,
+              payload,
+            },
+          }));
+
+          window.alert(message);
+          window.location.assign(targetUrl);
+
+          return response;
+        };
+      })();
+    </script>
     @stack('scripts')
 </body>
 </html>

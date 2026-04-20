@@ -71,38 +71,50 @@
         <table class="table align-items-center mb-0">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Tienda</th>
-              <th>Orden</th>
-              <th>Tipo/Serie/Número</th>
-              <th>Estado</th>
-              <th>Código</th>
-              <th>Mensaje</th>
-              <th>Emitido</th>
-              <th>Anulado</th>
               <th>Fecha</th>
+              <th>Hora</th>
+              <th>Tienda</th>
+              <th>Tipo de Doc</th>
+              <th>Serie</th>
+              <th>Nro. Documento</th>
+              <th>Control</th>
+              <th>Doc. Afectado</th>
+              <th>Tasa</th>
+              <th>Usuario</th>
+              <th>Total</th>
+              <th>Estado</th>
+              <th>Orden</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             @forelse($rows as $row)
-              <tr>
-                <td>{{ $row->id }}</td>
+              <tr class="{{ $row->is_annulled ? 'table-danger' : '' }}">
+                <td>{{ $row->display_date }}</td>
+                <td>{{ $row->display_time }}</td>
                 <td>{{ $row->tenant->name ?? 'N/A' }}</td>
-                <td>#{{ $row->sales_order_id }}</td>
+                <td>{{ $row->display_document_type }}</td>
+                <td>{{ $row->serie ?: '-' }}</td>
+                <td>{{ $row->numero_documento ?: '-' }}</td>
+                <td>{{ $row->display_control_number }}</td>
+                <td>{{ $row->affected_document }}</td>
+                <td>{{ $row->display_tax_rate }}</td>
+                <td>{{ $row->display_user }}</td>
+                <td>{{ number_format((float) ($row->display_total_amount ?? 0), 2) }}</td>
                 <td>
-                  <div>{{ $row->tipo_documento ?? '-' }}</div>
-                  <small class="text-muted">{{ $row->serie ?? '-' }} / {{ $row->numero_documento ?? '-' }}</small>
+                  <span class="badge badge-sm {{ $row->is_annulled ? 'bg-gradient-danger' : 'bg-gradient-success' }}">
+                    {{ $row->is_annulled ? 'Anulada' : ($row->estado_documento ?: 'Activa') }}
+                  </span>
+                  @if($row->mensaje)
+                    <div><small class="text-muted">{{ $row->mensaje }}</small></div>
+                  @endif
                 </td>
-                <td>{{ $row->estado_documento ?? '-' }}</td>
-                <td>{{ $row->codigo ?? '-' }}</td>
-                <td style="max-width: 280px; white-space: normal;">{{ $row->mensaje ?? '-' }}</td>
-                <td>{{ $row->issued_at ? $row->issued_at->format('d/m/Y H:i') : 'No' }}</td>
-                <td>{{ $row->is_annulled ? 'Sí' : 'No' }}</td>
-                <td>{{ optional($row->created_at)->format('d/m/Y H:i') }}</td>
+                <td>#{{ $row->sales_order_id }}</td>
                 <td>
                   <div class="d-flex gap-2 flex-wrap">
                     <a href="{{ route('sales.showByOrder', $row->sales_order_id) }}" class="btn btn-outline-dark btn-sm mb-0">Ver orden</a>
+                    <a href="{{ route('sales.orders.pdfs', ['id' => $row->sales_order_id, 'type' => 'invoice']) }}" class="btn btn-outline-secondary btn-sm mb-0">PDF</a>
+                    <a href="{{ route('sales.orders.pdfs', ['id' => $row->sales_order_id, 'type' => 'invoice']) }}?disposition=inline" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm mb-0">Imprimir</a>
                     @if($canRetry)
                       <form method="POST" action="{{ route('electronic.documents.retry', $row->id) }}">
                         @csrf
@@ -114,7 +126,7 @@
               </tr>
             @empty
               <tr>
-                <td colspan="11" class="text-center text-muted py-4">No hay documentos electrónicos para los filtros aplicados.</td>
+                <td colspan="14" class="text-center text-muted py-4">No hay documentos electrónicos para los filtros aplicados.</td>
               </tr>
             @endforelse
           </tbody>

@@ -370,6 +370,49 @@
                                 </div>
 
                                 <div class="mb-3">
+                                    <label class="form-label fw-bold d-block">Contribuyente especial</label>
+                                    <input type="hidden" name="special_taxpayer" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
+                                            id="special_taxpayer"
+                                            name="special_taxpayer"
+                                            value="1"
+                                            {{ (bool) ($tenant->special_taxpayer ?? false) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="special_taxpayer">
+                                            La tienda es contribuyente especial
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Si está activo, el sistema no aplicará IGTF en los cobros.</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold d-block">Habilitación de imprenta para cambio de alícuotas</label>
+                                    <input type="hidden" name="printer_tax_change_enabled" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
+                                            id="printer_tax_change_enabled"
+                                            name="printer_tax_change_enabled"
+                                            value="1"
+                                            {{ (bool) ($tenant->printer_tax_change_enabled ?? false) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="printer_tax_change_enabled">
+                                            Permitir cambios de alícuotas en productos existentes
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Úsalo solo cuando la imprenta autorice el cambio fiscal.</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Referencia de habilitación de imprenta</label>
+                                    <input type="text" class="form-control p-2 border border-radius-lg" name="printer_tax_change_reference" value="{{ $tenant->printer_tax_change_reference ?? '' }}" placeholder="Providencia, ticket o referencia de aprobación">
+                                </div>
+
+                                <div class="mb-3">
                                     <label class="form-label fw-bold d-block">Restricción de envíos por ciudad</label>
                                     <input type="hidden" name="restrict_delivery_city_to_tenant" value="0">
                                     <div class="form-check form-switch">

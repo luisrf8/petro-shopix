@@ -158,6 +158,7 @@ class ProductController extends Controller
     {
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         $product = Product::with(['variants.images', 'images', 'category', 'taxes'])->findOrFail($id);
+        $tenant = Tenant::find($tenantId);
 
         if ($tenantId > 0 && (int) $product->tenant_id !== $tenantId) {
             abort(404);
@@ -167,7 +168,10 @@ class ProductController extends Controller
             ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->get();
         $taxes = Tax::all();
-        return view('productItem', compact('product', 'categories', 'taxes'));
+        $canEditProductTaxes = (bool) ($tenant->printer_tax_change_enabled ?? false);
+        $productTaxChangeReference = (string) ($tenant->printer_tax_change_reference ?? '');
+
+        return view('productItem', compact('product', 'categories', 'taxes', 'canEditProductTaxes', 'productTaxChangeReference'));
     }
     
     public function store(Request $request)
@@ -202,6 +206,17 @@ class ProductController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $variants = $request->input('variants', []);
+        if (is_string($variants)) {
+            $variants = json_decode($variants, true);
+        }
+
+        if (!is_array($variants)) {
+            $variants = [];
+        }
+
+        $request->merge(['variants' => $variants]);
+
         // Compatibilidad entre formularios antiguos (name/description) y nuevos (productName/productDescription).
         $request->merge([
             'productName' => $request->input('productName', $request->input('name')),
@@ -218,18 +233,13 @@ class ProductController extends Controller
             'tax_ids.*' => 'exists:taxes,id',
             'images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
             'variant_images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
+            'variants' => 'required|array|min:1',
+            'variants.*.name' => 'required|string|max:255',
+            'variants.*.price' => 'required|numeric|gt:0',
+            'variants.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
+            'variants.*.stock' => 'required|integer|min:0',
+            'variants.*.barcode' => 'nullable|string|max:100',
         ]);
-
-        $variants = $request->input('variants', []);
-        if (is_string($variants)) {
-            $variants = json_decode($variants, true);
-        }
-
-        if (!is_array($variants)) {
-            throw ValidationException::withMessages([
-                'variants' => ['El formato de las variantes no es valido.'],
-            ]);
-        }
 
         $normalizedBarcodes = [];
         foreach ($variants as $index => $variant) {
@@ -364,6 +374,19 @@ class ProductController extends Controller
         DB::raw("SET @user_id = " . auth()->id());
 
         $product = Product::findOrFail($id);
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+
+        if ($tenantId > 0 && (int) $product->tenant_id !== $tenantId) {
+            return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
+        }
+
+        $tenant = Tenant::find($tenantId);
+        if (!(bool) ($tenant->printer_tax_change_enabled ?? false)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Las alícuotas de productos ya creados están bloqueadas. Debes habilitar la autorización de imprenta para poder modificarlas.',
+            ], 422);
+        }
 
         $request->validate([
             'taxes' => 'array',
@@ -373,7 +396,10 @@ class ProductController extends Controller
         // Sincroniza las relaciones
         $product->taxes()->sync($request->taxes);
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Alícuotas actualizadas con autorización de imprenta.',
+        ]);
     }
 
     public function generateCodes(Product $product)

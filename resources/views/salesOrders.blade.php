@@ -56,7 +56,7 @@
                               $mode = (string) ($order->document_issue_mode ?? 'delivery_note');
                             @endphp
                             <span class="badge badge-sm {{ $mode === 'electronic_invoice' ? 'bg-gradient-success' : 'bg-gradient-secondary' }}">
-                              {{ $mode === 'electronic_invoice' ? 'Factura digital' : 'Nota de entrega' }}
+                              {{ $mode === 'electronic_invoice' ? 'Factura digital' : 'Orden de entrega' }}
                             </span>
                           </td>
                           <td class="text-center">

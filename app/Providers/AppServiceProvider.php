@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Observers\AuditModelObserver;
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Auth;
@@ -25,6 +27,32 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $auditObserver = app(AuditModelObserver::class);
+
+        Event::listen('eloquent.updating: *', function (string $eventName, array $data) use ($auditObserver) {
+            if (isset($data[0])) {
+                $auditObserver->updating($data[0]);
+            }
+        });
+
+        Event::listen('eloquent.updated: *', function (string $eventName, array $data) use ($auditObserver) {
+            if (isset($data[0])) {
+                $auditObserver->updated($data[0]);
+            }
+        });
+
+        Event::listen('eloquent.deleting: *', function (string $eventName, array $data) use ($auditObserver) {
+            if (isset($data[0])) {
+                $auditObserver->deleting($data[0]);
+            }
+        });
+
+        Event::listen('eloquent.deleted: *', function (string $eventName, array $data) use ($auditObserver) {
+            if (isset($data[0])) {
+                $auditObserver->deleted($data[0]);
+            }
+        });
+
         ResetPassword::createUrlUsing(function (object $notifiable, string $token) {
             return config('app.frontend_url')."/password-reset/$token?email={$notifiable->getEmailForPasswordReset()}";
         });

@@ -63,6 +63,54 @@ class TheFactoryHkaService
         return $this->request('post', '/api/DescargaArchivo', $payload);
     }
 
+    public function downloadDocumentFile(array $payload): array
+    {
+        $response = $this->downloadDocument($payload);
+        $fileType = strtolower((string) ($payload['tipoArchivo'] ?? 'pdf'));
+        $base64 = trim((string) Arr::get($response, 'data.archivo', ''));
+
+        if (!($response['ok'] ?? false)) {
+            return $response + [
+                'content' => null,
+                'extension' => $fileType,
+                'mime_type' => $this->resolveDownloadedMimeType($fileType),
+            ];
+        }
+
+        if ($base64 === '') {
+            return [
+                'ok' => false,
+                'status' => $response['status'] ?? 422,
+                'message' => 'The Factory HKA no devolvió contenido para el archivo solicitado.',
+                'data' => $response['data'] ?? null,
+                'raw' => $response['raw'] ?? null,
+                'content' => null,
+                'extension' => $fileType,
+                'mime_type' => $this->resolveDownloadedMimeType($fileType),
+            ];
+        }
+
+        $binary = base64_decode($base64, true);
+        if ($binary === false) {
+            return [
+                'ok' => false,
+                'status' => $response['status'] ?? 422,
+                'message' => 'The Factory HKA devolvió un archivo inválido.',
+                'data' => $response['data'] ?? null,
+                'raw' => $response['raw'] ?? null,
+                'content' => null,
+                'extension' => $fileType,
+                'mime_type' => $this->resolveDownloadedMimeType($fileType),
+            ];
+        }
+
+        return $response + [
+            'content' => $binary,
+            'extension' => $fileType,
+            'mime_type' => $this->resolveDownloadedMimeType($fileType),
+        ];
+    }
+
     public function sendDocumentByEmail(array $payload): array
     {
         return $this->request('post', '/api/Correo/Enviar', $payload);
@@ -104,6 +152,11 @@ class TheFactoryHkaService
     }
 
     public function listAnnulledDocuments(array $payload): array
+    {
+        return $this->request('post', '/api/ListadoDocumentos', $payload);
+    }
+
+    public function listDocuments(array $payload): array
     {
         return $this->request('post', '/api/ListadoDocumentos', $payload);
     }
@@ -455,6 +508,15 @@ class TheFactoryHkaService
                 'raw' => null,
             ];
         }
+    }
+
+    private function resolveDownloadedMimeType(string $fileType): string
+    {
+        return match (strtolower($fileType)) {
+            'xml' => 'application/xml',
+            'json' => 'application/json',
+            default => 'application/pdf',
+        };
     }
 
     private function getAuthToken(): ?string

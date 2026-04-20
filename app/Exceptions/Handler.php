@@ -5,6 +5,7 @@ namespace App\Exceptions;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -53,6 +54,21 @@ class Handler extends ExceptionHandler
             return redirect()->back()->withInput()->withErrors([
                 'upload' => $message,
             ]);
+        });
+
+        $this->renderable(function (TokenMismatchException $e, Request $request) {
+            $message = 'Tu sesion vencio por seguridad. Inicia sesion nuevamente para continuar.';
+
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'login_url' => route('login'),
+                    'should_refresh' => true,
+                ], 419);
+            }
+
+            return redirect()->guest(route('login'))->with('status', $message);
         });
     }
 }

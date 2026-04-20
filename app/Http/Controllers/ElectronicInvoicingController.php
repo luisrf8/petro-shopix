@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ElectronicDocument;
 use App\Models\SalesOrder;
 use App\Models\Tenant;
+use App\Services\FiscalCorrelativeService;
 use App\Services\TheFactoryHkaService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,7 +14,10 @@ use Illuminate\Support\Arr;
 
 class ElectronicInvoicingController extends Controller
 {
-    public function __construct(private readonly TheFactoryHkaService $service)
+    public function __construct(
+        private readonly TheFactoryHkaService $service,
+        private readonly FiscalCorrelativeService $fiscalCorrelativeService
+    )
     {
     }
 
@@ -70,11 +74,14 @@ class ElectronicInvoicingController extends Controller
             ->orderByDesc('id');
 
         if ($request->query('export') === 'csv') {
-            $rows = $query->get();
+            $rows = $query->get()->map(fn (ElectronicDocument $row) => $this->decorateElectronicDocumentRow($row));
             return $this->exportCsv($rows);
         }
 
         $rows = $query->paginate(30)->withQueryString();
+        $rows->setCollection(
+            $rows->getCollection()->map(fn (ElectronicDocument $row) => $this->decorateElectronicDocumentRow($row))
+        );
         $tenants = $isSuperAdmin
             ? Tenant::query()->orderBy('name')->get(['id', 'name'])
             : Tenant::query()->where('id', $authTenantId)->orderBy('name')->get(['id', 'name']);
@@ -147,6 +154,7 @@ class ElectronicInvoicingController extends Controller
         ]);
 
         $response = $this->service->emitDocument($payload);
+        $internalNumber = $this->fiscalCorrelativeService->next((int) $order->tenant_id, 'invoice', 'FAC');
 
         $document = ElectronicDocument::create([
             'tenant_id' => $order->tenant_id,
@@ -156,6 +164,7 @@ class ElectronicInvoicingController extends Controller
             'tipo_documento' => (string) Arr::get($payload, 'encabezado.identificacionDocumento.tipoDocumento', '01'),
             'serie' => (string) Arr::get($payload, 'encabezado.identificacionDocumento.serie', ''),
             'numero_documento' => (string) Arr::get($response, 'data.resultado.numeroDocumento', Arr::get($payload, 'encabezado.identificacionDocumento.numeroDocumento')),
+            'internal_number' => $internalNumber,
             'numero_control' => (string) Arr::get($response, 'data.resultado.numeroControl', ''),
             'transaccion_id' => (string) Arr::get($response, 'data.resultado.transaccionId', Arr::get($payload, 'encabezado.identificacionDocumento.transaccionId')),
             'estado_documento' => (string) Arr::get($response, 'data.resultado.autorizado', Arr::get($response, 'data.resultado.imprentaDigital', '')),
@@ -252,12 +261,13 @@ class ElectronicInvoicingController extends Controller
         return back()->with('success', 'Documento enviado por correo electrónico.');
     }
 
-    public function download(Request $request, SalesOrder $order): RedirectResponse
+    public function download(Request $request, SalesOrder $order)
     {
         $this->authorizeOrderAccess($order);
 
         $validated = $request->validate([
             'tipo_archivo' => 'nullable|in:pdf,PDF,xml,XML,json,JSON',
+            'disposition' => 'nullable|in:inline,attachment',
         ]);
 
         $document = $order->electronicDocuments()->latest('id')->first();
@@ -265,7 +275,7 @@ class ElectronicInvoicingController extends Controller
             return back()->with('error', 'No existe documento electrónico para descargar.');
         }
 
-        $response = $this->service->downloadDocument([
+        $response = $this->service->downloadDocumentFile([
             'serie' => $document->serie,
             'tipoDocumento' => $document->tipo_documento ?: '01',
             'numeroDocumento' => $document->numero_documento,
@@ -278,10 +288,16 @@ class ElectronicInvoicingController extends Controller
 
         $document->update([
             'mensaje' => (string) ($response['message'] ?? $document->mensaje),
-            'response_payload' => $response['data'] ?? $document->response_payload,
+            'response_payload' => Arr::except((array) ($response['data'] ?? []), ['archivo']) ?: $document->response_payload,
         ]);
 
-        return back()->with('success', 'Archivo solicitado correctamente al proveedor electrónico.');
+        return $this->buildDownloadedFileResponse(
+            $document,
+            (string) ($response['content'] ?? ''),
+            (string) ($response['mime_type'] ?? 'application/pdf'),
+            (string) ($response['extension'] ?? strtolower((string) ($validated['tipo_archivo'] ?? 'pdf'))),
+            (string) ($validated['disposition'] ?? 'attachment')
+        );
     }
 
     public function annul(Request $request, SalesOrder $order): RedirectResponse
@@ -357,7 +373,7 @@ class ElectronicInvoicingController extends Controller
         abort_if((int) $order->tenant_id !== $tenantId, 404);
 
         if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
-            abort(422, 'Esta venta está configurada como nota de entrega. Cambia el tipo de documento para operar facturación digital.');
+            abort(422, 'Esta venta está configurada como orden de entrega. Cambia el tipo de documento para operar facturación digital.');
         }
 
         if (!(bool) ($order->tenant?->electronic_invoicing_enabled ?? false)) {
@@ -377,24 +393,25 @@ class ElectronicInvoicingController extends Controller
             $output = fopen('php://output', 'w');
             fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
             fputcsv($output, [
-                'ID', 'Tienda', 'Orden', 'Tipo', 'Serie', 'Numero', 'Control', 'Estado', 'Codigo', 'Mensaje', 'Emitido', 'Anulado', 'Fecha'
+                'Fecha', 'Hora', 'Tipo de Doc', 'Serie', 'Nro. Documento', 'Control', 'Doc. Afectado', 'Tasa', 'Usuario', 'Total', 'Estado', 'Anulado', 'Orden', 'Tienda'
             ]);
 
             foreach ($rows as $row) {
                 fputcsv($output, [
-                    (string) $row->id,
-                    (string) ($row->tenant->name ?? 'N/A'),
-                    (string) ($row->sales_order_id ?? ''),
-                    (string) ($row->tipo_documento ?? ''),
+                    (string) ($row->display_date ?? ''),
+                    (string) ($row->display_time ?? ''),
+                    (string) ($row->display_document_type ?? ''),
                     (string) ($row->serie ?? ''),
                     (string) ($row->numero_documento ?? ''),
-                    (string) ($row->numero_control ?? ''),
+                    (string) ($row->display_control_number ?? ''),
+                    (string) ($row->affected_document ?? '-'),
+                    (string) ($row->display_tax_rate ?? '-'),
+                    (string) ($row->display_user ?? 'N/A'),
+                    number_format((float) ($row->display_total_amount ?? 0), 2, '.', ''),
                     (string) ($row->estado_documento ?? ''),
-                    (string) ($row->codigo ?? ''),
-                    (string) ($row->mensaje ?? ''),
-                    $row->issued_at ? $row->issued_at->format('d/m/Y H:i') : 'No',
                     $row->is_annulled ? 'Si' : 'No',
-                    optional($row->created_at)->format('d/m/Y H:i') ?? '',
+                    (string) ($row->sales_order_id ?? ''),
+                    (string) ($row->tenant->name ?? 'N/A'),
                 ]);
             }
 
@@ -418,5 +435,104 @@ class ElectronicInvoicingController extends Controller
         $roleName = strtolower((string) optional($user->role)->name);
 
         return in_array($roleName, ['owner', 'admin', 'administrador', 'vendor', 'vendedor', 'seller', 'almacen', 'almacenista', 'warehouse'], true);
+    }
+
+    private function decorateElectronicDocumentRow(ElectronicDocument $row): ElectronicDocument
+    {
+        $issuedAt = $row->issued_at ?? $row->created_at;
+        $requestPayload = is_array($row->request_payload) ? $row->request_payload : [];
+
+        $row->setAttribute('display_date', optional($issuedAt)->format('d/m/Y') ?? '');
+        $row->setAttribute('display_time', optional($issuedAt)->format('H:i:s') ?? '');
+        $row->setAttribute('display_document_type', $this->mapDocumentTypeLabel((string) ($row->tipo_documento ?? '')));
+        $row->setAttribute('display_control_number', $this->formatControlNumber((string) ($row->numero_control ?? '')));
+        $row->setAttribute('affected_document', $this->extractAffectedDocument($requestPayload));
+        $row->setAttribute('display_tax_rate', $this->extractTaxRate($requestPayload));
+        $row->setAttribute('display_total_amount', $this->extractTotalAmount($requestPayload));
+        $row->setAttribute('display_user', (string) ($row->creator->name ?? 'N/A'));
+
+        return $row;
+    }
+
+    private function buildDownloadedFileResponse(ElectronicDocument $document, string $content, string $mimeType, string $extension, string $disposition)
+    {
+        $safeDisposition = $disposition === 'inline' ? 'inline' : 'attachment';
+        $fileName = implode('-', array_filter([
+            'factura',
+            trim((string) ($document->serie ?? '')) !== '' ? trim((string) $document->serie) : null,
+            trim((string) ($document->numero_documento ?? '')),
+        ])) . '.' . strtolower($extension ?: 'pdf');
+
+        return response($content, 200, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => $safeDisposition . '; filename="' . $fileName . '"',
+        ]);
+    }
+
+    private function mapDocumentTypeLabel(string $documentType): string
+    {
+        return match ($documentType) {
+            '01' => 'Factura',
+            '02' => 'Nota de débito',
+            '03' => 'Nota de crédito',
+            '04' => 'Orden de entrega',
+            '05' => 'Comprobante de retención',
+            '06' => 'Guía de despacho',
+            '07' => 'ARC',
+            default => $documentType !== '' ? $documentType : '-',
+        };
+    }
+
+    private function formatControlNumber(string $controlNumber): string
+    {
+        $trimmed = trim($controlNumber);
+        if ($trimmed === '') {
+            return '-';
+        }
+
+        if (str_contains($trimmed, '-')) {
+            return $trimmed;
+        }
+
+        $digits = preg_replace('/\D+/', '', $trimmed) ?: $trimmed;
+        if (strlen($digits) > 2) {
+            return substr($digits, 0, 2) . '-' . substr($digits, 2);
+        }
+
+        return $digits;
+    }
+
+    private function extractAffectedDocument(array $requestPayload): string
+    {
+        $serie = trim((string) Arr::get($requestPayload, 'encabezado.identificacionDocumento.serieFacturaAfectada', ''));
+        $number = trim((string) Arr::get($requestPayload, 'encabezado.identificacionDocumento.numeroFacturaAfectada', ''));
+
+        if ($number === '') {
+            return '-';
+        }
+
+        return $serie !== '' ? $serie . '-' . $number : $number;
+    }
+
+    private function extractTaxRate(array $requestPayload): string
+    {
+        $taxes = Arr::get($requestPayload, 'encabezado.totales.impuestosSubtotal', []);
+        if (!is_array($taxes)) {
+            return '-';
+        }
+
+        $rates = collect($taxes)
+            ->pluck('alicuotaImp')
+            ->filter(fn ($rate) => trim((string) $rate) !== '')
+            ->map(fn ($rate) => rtrim(rtrim((string) $rate, '0'), '.'))
+            ->unique()
+            ->values();
+
+        return $rates->isEmpty() ? '-' : $rates->implode(', ') . '%';
+    }
+
+    private function extractTotalAmount(array $requestPayload): float
+    {
+        return (float) Arr::get($requestPayload, 'encabezado.totales.totalAPagar', 0);
     }
 }

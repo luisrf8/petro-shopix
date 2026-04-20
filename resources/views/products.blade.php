@@ -250,7 +250,7 @@
               </div>
               <div class="mb-3">
                 <label for="productPrice" class="form-label">Precio</label>
-                <input type="number" class="form-control border border-1 p-2" id="productPrice" name="price" step="0.01" required>
+                <input type="number" class="form-control border border-1 p-2" id="productPrice" name="price" min="0.01" step="0.01" required>
               </div>
               <div class="mb-3">
                 <label for="productImages" class="form-label">Imágenes</label>

@@ -14,6 +14,12 @@ class Tax extends Model
         'is_bill',
         'is_active'
     ];
+
+    protected $casts = [
+        'rate' => 'float',
+        'is_active' => 'boolean',
+    ];
+
     public function products()
     {
         return $this->belongsToMany(Product::class, 'product_tax');

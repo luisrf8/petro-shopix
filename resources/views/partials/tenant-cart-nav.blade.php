@@ -354,15 +354,6 @@
   }
 </style>
 
-<li class="nav-item ms-lg-auto" id="tenant-session-login-wrap">
-  <button type="button"
-          id="tenant-session-login"
-          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
-    <i class="bi bi-box-arrow-in-right"></i>
-    <span>Iniciar sesión</span>
-  </button>
-</li>
-
 <li class="nav-item d-none dropdown ms-lg-auto" id="tenant-session-indicator-wrap">
   <button type="button"
           class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2 dropdown-toggle tenant-user-dropdown-btn"
@@ -620,8 +611,6 @@
 
 <script>
   (() => {
-    const loginWrap = document.getElementById('tenant-session-login-wrap');
-    const loginButton = document.getElementById('tenant-session-login');
     const indicatorWrap = document.getElementById('tenant-session-indicator-wrap');
     const indicatorText = document.getElementById('tenant-session-indicator');
     const logoutWrap = document.getElementById('tenant-session-logout-wrap');
@@ -650,6 +639,7 @@
     const notificationPermissionTitle = document.getElementById('tenant-notification-permission-title');
     const notificationPermissionCopy = document.getElementById('tenant-notification-permission-copy');
     const enableBrowserNotificationsBtn = document.getElementById('tenant-enable-browser-notifications');
+    const authTriggers = Array.from(document.querySelectorAll('[data-shopix-open-auth]'));
     let tenantToastContainer = document.getElementById('tenant-toast-container');
     let serviceWorkerRegistrationPromise = null;
 
@@ -679,7 +669,7 @@
       document.body.appendChild(tenantToastContainer);
     }
 
-    if (!loginWrap || !loginButton || !indicatorWrap || !indicatorText || !logoutWrap || !logoutButton || !ordersWrap || !ordersButton || !ordersList || !notificationsWrap || !notificationsCount || !notificationsList || !accountWrap || !accountButton) {
+    if (!indicatorWrap || !indicatorText || !logoutWrap || !logoutButton || !ordersWrap || !ordersButton || !ordersList || !notificationsWrap || !notificationsCount || !notificationsList || !accountWrap || !accountButton) {
       return;
     }
 
@@ -1356,7 +1346,6 @@
 
       const hasSession = !!currentToken && !!currentUser?.id;
 
-      loginWrap.classList.toggle('d-none', hasSession);
       indicatorWrap.classList.toggle('d-none', !hasSession);
       logoutWrap.classList.toggle('d-none', !hasSession);
       ordersWrap.classList.toggle('d-none', !hasSession);
@@ -1365,6 +1354,15 @@
       ordersMobileWrap?.classList.toggle('d-none', !hasSession);
       accountMobileWrap?.classList.toggle('d-none', !hasSession);
       notificationsWrap.classList.toggle('d-none', !hasSession);
+      authTriggers.forEach(trigger => {
+        const navItem = trigger.closest('.nav-item');
+        if (navItem) {
+          navItem.classList.toggle('d-none', hasSession);
+          return;
+        }
+
+        trigger.classList.toggle('d-none', hasSession);
+      });
 
       if (hasSession) {
         indicatorText.textContent = `Hola, ${currentUser.name || 'Usuario'}`;
@@ -1545,12 +1543,30 @@
       accountButton?.click();
     });
 
-    loginButton.addEventListener('click', () => {
-      if (openTenantAuthModal()) {
+    authTriggers.forEach(trigger => {
+      trigger.addEventListener('click', event => {
+        event.preventDefault();
+
+        if (currentToken && currentUser?.id) {
+          openTenantCustomerModal();
+          return;
+        }
+
+        if (openTenantAuthModal()) {
+          return;
+        }
+
+        alert('No se pudo abrir el inicio de sesión en este momento. Recarga la página e inténtalo nuevamente.');
+      });
+    });
+
+    window.addEventListener('shopix-open-auth-requested', () => {
+      if (currentToken && currentUser?.id) {
+        openTenantCustomerModal();
         return;
       }
 
-      alert('No se pudo abrir el inicio de sesión en este momento. Recarga la página e inténtalo nuevamente.');
+      openTenantAuthModal();
     });
 
     logoutButton.addEventListener('click', () => {

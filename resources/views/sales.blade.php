@@ -346,9 +346,13 @@
                             }
                         @endphp
 
-                        @if($igtfTax && (bool) ($tenant->electronic_invoicing_enabled ?? false))
+                        @if($igtfTax && (bool) ($tenant->electronic_invoicing_enabled ?? false) && !(bool) ($tenant->special_taxpayer ?? false))
                             <strong>
                                 Si el método de pago seleccionado es en {{ $baseCurrencyCode ?? 'USD' }} se aplicará el impuesto del IGTF del {{ $igtfTax->rate }}%
+                            </strong>
+                        @elseif($igtfTax && (bool) ($tenant->special_taxpayer ?? false))
+                            <strong>
+                                La tienda está marcada como contribuyente especial, por lo tanto no se aplica IGTF.
                             </strong>
                         @elseif($igtfTax)
                             <strong>
@@ -529,7 +533,7 @@
                         <div class="d-flex gap-4 flex-wrap">
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="sale_document_mode" id="sale_document_delivery" value="delivery_note" {{ (bool) ($tenant->electronic_invoicing_enabled ?? false) ? '' : 'checked' }}>
-                                <label class="form-check-label" for="sale_document_delivery">Nota de entrega</label>
+                                <label class="form-check-label" for="sale_document_delivery">Orden de entrega</label>
                             </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="sale_document_mode" id="sale_document_electronic" value="electronic_invoice" {{ (bool) ($tenant->electronic_invoicing_enabled ?? false) ? 'checked' : '' }} {{ (bool) ($tenant->electronic_invoicing_enabled ?? false) ? '' : 'disabled' }}>
@@ -537,7 +541,7 @@
                             </div>
                         </div>
                         @if(!(bool) ($tenant->electronic_invoicing_enabled ?? false))
-                            <small class="text-muted d-block mt-2">La facturación digital está desactivada para esta tienda. Solo se permite nota de entrega.</small>
+                            <small class="text-muted d-block mt-2">La facturación digital está desactivada para esta tienda. Solo se permite orden de entrega.</small>
                         @endif
                     </div>
 
@@ -718,6 +722,7 @@
         const dollarRateToBs = Number(@json($dollarRate->rate ?? 0));
         const euroRateToBs = Number(@json($euroRate->rate ?? 0));
         const tenantElectronicInvoicingEnabled = @json((bool) ($tenant->electronic_invoicing_enabled ?? false));
+        const tenantSpecialTaxpayer = @json((bool) ($tenant->special_taxpayer ?? false));
         const existingCustomersForSale = @json(($existingCustomersForSale ?? collect())->values());
         
         const authUser = @json($authUser);
@@ -1886,7 +1891,7 @@ function updateQuantity(id, newQty) {
             return `
                 <div class="d-flex flex-row gap-2 align-items-center" data-payment-entry-row="${entryId}">
                     <label class="m-0">Monto:</label>
-                    <input type="number" step="0.01" min="0" class="form-control payment-input border border-1 p-2"
+                    <input type="number" step="0.01" min="0.01" class="form-control payment-input border border-1 p-2"
                         data-method-id="${methodId}"
                         data-entry-id="${entryId}"
                         data-currency="${currency}"
@@ -1992,7 +1997,7 @@ function updateQuantity(id, newQty) {
         }
 
         function isIgtfEnabledForSale() {
-            return tenantElectronicInvoicingEnabled && Number(igtfTax?.rate || 0) > 0;
+            return tenantElectronicInvoicingEnabled && !tenantSpecialTaxpayer && Number(igtfTax?.rate || 0) > 0;
         }
 
         function calculateIgtfTax() {
@@ -2098,7 +2103,7 @@ function updateQuantity(id, newQty) {
             const deliveryAddressData = buildDeliveryAddress();
             const deliveryPreferenceLabel = deliveryType === 'shipping' ? 'Envío' : 'Retiro en tienda';
             const saleDocumentMode = document.querySelector('input[name="sale_document_mode"]:checked')?.value || 'delivery_note';
-            const saleDocumentModeLabel = saleDocumentMode === 'electronic_invoice' ? 'Facturación digital' : 'Nota de entrega';
+            const saleDocumentModeLabel = saleDocumentMode === 'electronic_invoice' ? 'Facturación digital' : 'Orden de entrega';
             const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
             const existingCustomerSelect = document.getElementById('existingCustomerSelect');
             const selectedCustomerOption = existingCustomerSelect?.options?.[existingCustomerSelect.selectedIndex] || null;

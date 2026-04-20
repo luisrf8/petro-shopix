@@ -971,6 +971,9 @@ class TenantController extends Controller
             'plan_id' => 'nullable|exists:plans,id',
             'is_active' => 'nullable|boolean',
             'electronic_invoicing_enabled' => 'nullable|boolean',
+            'special_taxpayer' => 'nullable|boolean',
+            'printer_tax_change_enabled' => 'nullable|boolean',
+            'printer_tax_change_reference' => 'nullable|string|max:255',
             'restrict_delivery_city_to_tenant' => 'nullable|boolean',
         ]);
 
@@ -1100,6 +1103,9 @@ class TenantController extends Controller
             'facebook' => $validated['facebook'] ?? $tenant->facebook,
             'is_active' => $validated['is_active'] ?? $tenant->is_active,
             'electronic_invoicing_enabled' => $validated['electronic_invoicing_enabled'] ?? $tenant->electronic_invoicing_enabled,
+            'special_taxpayer' => $validated['special_taxpayer'] ?? $tenant->special_taxpayer,
+            'printer_tax_change_enabled' => $validated['printer_tax_change_enabled'] ?? $tenant->printer_tax_change_enabled,
+            'printer_tax_change_reference' => $validated['printer_tax_change_reference'] ?? $tenant->printer_tax_change_reference,
             'restrict_delivery_city_to_tenant' => $validated['restrict_delivery_city_to_tenant'] ?? $tenant->restrict_delivery_city_to_tenant,
         ];
 
@@ -1214,6 +1220,9 @@ class TenantController extends Controller
                 'tiktok'         => 'nullable|string|max:255',
                 'instagram'         => 'nullable|string|max:255',
                 'facebook'         => 'nullable|string|max:255',
+                'special_taxpayer' => 'nullable|boolean',
+                'printer_tax_change_enabled' => 'nullable|boolean',
+                'printer_tax_change_reference' => 'nullable|string|max:255',
                 'restrict_delivery_city_to_tenant' => 'nullable|boolean',
             ]);
 
@@ -1355,6 +1364,9 @@ class TenantController extends Controller
                 'tiktok'          => $validated['tiktok'] ?? $tenant->tiktok,
                 'instagram'      => $validated['instagram'] ?? $tenant->instagram,
                 'facebook'       => $validated['facebook'] ?? $tenant->facebook,
+                'special_taxpayer' => $validated['special_taxpayer'] ?? $tenant->special_taxpayer,
+                'printer_tax_change_enabled' => $validated['printer_tax_change_enabled'] ?? $tenant->printer_tax_change_enabled,
+                'printer_tax_change_reference' => $validated['printer_tax_change_reference'] ?? $tenant->printer_tax_change_reference,
                 'restrict_delivery_city_to_tenant' => $validated['restrict_delivery_city_to_tenant'] ?? $tenant->restrict_delivery_city_to_tenant,
                 'background_image'=> $tenant->background_image, // 👈 clave
             ]);
@@ -1497,7 +1509,8 @@ class TenantController extends Controller
             ? (float) ($euroRate ?: 0)
             : (float) ($dollarRate ?: 0);
         $tenantElectronicInvoicingEnabled = (bool) ($tenant->electronic_invoicing_enabled ?? false);
-        $igtfRate = $tenantElectronicInvoicingEnabled ? $this->resolveIgtfRate() : 0;
+        $specialTaxpayer = $this->isSpecialTaxpayer($tenant);
+        $igtfRate = $this->shouldApplyIgtfForTenant($tenant) ? $this->resolveIgtfRate() : 0;
 
         return response()->json([
             'success' => true,
@@ -1507,6 +1520,7 @@ class TenantController extends Controller
             'base_currency' => $baseCurrency,
             'base_rate' => $baseRate,
             'electronic_invoicing_enabled' => $tenantElectronicInvoicingEnabled,
+            'special_taxpayer' => $specialTaxpayer,
             'igtf_rate' => (float) $igtfRate,
         ]);
     }
@@ -1530,6 +1544,16 @@ class TenantController extends Controller
                 $query->whereNull('is_active')->orWhere('is_active', 1);
             })
             ->value('rate') ?? 0);
+    }
+
+    private function isSpecialTaxpayer(Tenant $tenant): bool
+    {
+        return (bool) ($tenant->special_taxpayer ?? false);
+    }
+
+    private function shouldApplyIgtfForTenant(Tenant $tenant): bool
+    {
+        return (bool) ($tenant->electronic_invoicing_enabled ?? false) && !$this->isSpecialTaxpayer($tenant);
     }
 
     private function normalizeCheckoutCurrencyCode(?string $currencyCode): string
@@ -1622,7 +1646,7 @@ class TenantController extends Controller
                 'items' => 'required|array|min:1',
                 'items.*.variant_id' => 'required|integer|exists:product_variants,id',
                 'items.*.quantity' => 'required|integer|min:1',
-                'items.*.unit_price' => 'nullable|numeric|min:0',
+                'items.*.unit_price' => 'nullable|numeric|min:0.01',
                 'payments' => 'required|array|min:1',
                 'payments.*.method_id' => 'required|integer|exists:payment_methods,id',
                 'payments.*.amount' => 'required|numeric|min:0.01',
@@ -1679,7 +1703,7 @@ class TenantController extends Controller
             $markSaleCompleted = (bool) ($validated['mark_sale_completed'] ?? false);
             $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
             $tenantElectronicInvoicingEnabled = (bool) ($tenant->electronic_invoicing_enabled ?? false);
-            $igtfRate = $tenantElectronicInvoicingEnabled ? $this->resolveIgtfRate() : 0;
+            $igtfRate = $this->shouldApplyIgtfForTenant($tenant) ? $this->resolveIgtfRate() : 0;
 
             $preference = $validated['delivery_type'] === 'shipping'
                 ? 'Envío'
@@ -1712,7 +1736,7 @@ class TenantController extends Controller
 
                 $variantEffectivePrice = $this->getVariantDiscountedUnitPrice($variant);
                 $providedUnitPrice = isset($item['unit_price']) ? (float) $item['unit_price'] : $variantEffectivePrice;
-                $unitPrice = min($variantEffectivePrice, max(0, $providedUnitPrice));
+                $unitPrice = min($variantEffectivePrice, $providedUnitPrice);
 
                 $lineAmount = $unitPrice * (int) $item['quantity'];
                 $orderTotal += $lineAmount;
@@ -1764,7 +1788,7 @@ class TenantController extends Controller
                     $this->storePaymentReferenceImageFromPayload($payment, $paymentData['reference_image_data'] ?? null, $paymentData['reference_image_mime'] ?? null);
                 }
 
-                $igtfAmount = ($tenantElectronicInvoicingEnabled && $igtfRate > 0)
+                $igtfAmount = ($igtfRate > 0)
                     ? ($directBaseCurrencyPayments * ($igtfRate / 100))
                     : 0;
 

@@ -4,7 +4,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Shopix">
+  <meta name="theme-color" content="#2563eb">
   <title>Shopix - Por tienda / servicio</title>
+  <link rel="manifest" href="{{ route('tenant.pwa.manifest', ['start_url' => route('landing.directory'), 'name' => 'Shopix', 'theme' => '2563eb']) }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180]) }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
@@ -52,18 +59,9 @@
 
     .hero {
       position: relative;
-      padding: 8.5rem 0 2.75rem;
+      padding-top: 4.2rem;
+      padding-bottom: 0.35rem;
       overflow: hidden;
-    }
-
-    .hero::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background:
-        linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(239, 246, 255, 0.86)),
-        radial-gradient(26rem 14rem at 80% 18%, rgba(37, 99, 235, 0.14), transparent 65%);
-      z-index: 0;
     }
 
     .hero .container {
@@ -83,17 +81,7 @@
       border-radius: 999px;
       background: rgba(37, 99, 235, 0.1);
       border: 1px solid rgba(37, 99, 235, 0.18);
-      margin-bottom: 1rem;
-    }
-
-    .hero h1 {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      font-size: clamp(1.95rem, 4.1vw, 3.1rem);
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      line-height: 1.05;
-      max-width: 14ch;
-      margin-bottom: 0.85rem;
+      margin-bottom: 0.35rem;
     }
 
     .hero-subtitle {
@@ -104,6 +92,232 @@
       margin-bottom: 0;
     }
 
+    .hero-search-shell {
+      margin-top: 0.85rem;
+      max-width: 46rem;
+    }
+
+    .hero-search-card {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.82rem 0.9rem;
+      border-radius: 20px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(12px);
+    }
+
+    .hero-search-icon {
+      width: 2.6rem;
+      height: 2.6rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(14, 165, 233, 0.12));
+      color: var(--brand-accent);
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .hero-search-copy {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .hero-search-label {
+      display: block;
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 0.22rem;
+    }
+
+    .hero-search-input {
+      border: 0;
+      outline: 0;
+      width: 100%;
+      background: transparent;
+      color: #0f172a;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 0;
+    }
+
+    .hero-search-input::placeholder {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .directory-session-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      border: 1px solid rgba(37, 99, 235, 0.18);
+      border-radius: 999px;
+      padding: 0.45rem 0.8rem;
+      background: rgba(239, 246, 255, 0.9);
+      color: #1d4ed8;
+      font-weight: 700;
+    }
+
+    .directory-session-chip i {
+      font-size: 0.92rem;
+    }
+
+    .directory-auth-modal .modal-content {
+      border-radius: 22px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      overflow: hidden;
+      box-shadow: 0 28px 60px rgba(15, 23, 42, 0.18);
+    }
+
+    .directory-auth-modal .modal-header,
+    .directory-auth-modal .modal-footer {
+      border-color: #e2e8f0;
+      background: #ffffff;
+    }
+
+    .directory-auth-modal .modal-body {
+      background: linear-gradient(180deg, #f8fbff, #f8fafc);
+      padding: 1rem;
+    }
+
+    .directory-auth-shell {
+      border: 1px solid #dbe4f0;
+      border-radius: 18px;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.96);
+    }
+
+    .directory-auth-shell .nav-link {
+      border-radius: 12px 12px 0 0;
+      color: #475569;
+      font-weight: 700;
+    }
+
+    .directory-auth-shell .nav-link.active {
+      background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+      color: #ffffff;
+    }
+
+    .directory-auth-shell .form-control {
+      border-radius: 12px;
+      border-color: #d7dfeb;
+      padding-top: 0.68rem;
+      padding-bottom: 0.68rem;
+    }
+
+    .directory-auth-shell .form-control:focus {
+      border-color: rgba(37, 99, 235, 0.42);
+      box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.14);
+    }
+
+    .directory-auth-submit {
+      border-radius: 12px;
+      font-weight: 700;
+      padding-top: 0.72rem;
+      padding-bottom: 0.72rem;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      border-color: #0f172a;
+    }
+
+    .directory-auth-helper {
+      font-size: 0.9rem;
+      color: #475569;
+      margin-bottom: 0.85rem;
+    }
+
+    .directory-auth-error {
+      border-radius: 12px;
+      border: 1px solid #fecaca;
+      background: #fff1f2;
+      color: #b91c1c;
+      font-size: 0.88rem;
+      padding: 0.72rem 0.8rem;
+    }
+
+    .directory-client-action-btn {
+      position: relative;
+    }
+
+    .directory-pwa-install.is-ready {
+      background: #16a34a !important;
+      border-color: #16a34a !important;
+      color: #ffffff !important;
+    }
+
+    .directory-client-action-btn .badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      min-width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 0.32rem;
+      font-size: 0.66rem;
+      line-height: 1;
+      border-radius: 999px;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.24);
+    }
+
+    .directory-modern-modal .modal-content {
+      border: 1px solid #dbe4f0;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+    }
+
+    .directory-modern-modal .modal-header,
+    .directory-modern-modal .modal-footer {
+      background: #ffffff;
+      border-color: #e5e7eb;
+    }
+
+    .directory-modern-modal .modal-body {
+      background: #f8fafc;
+    }
+
+    .directory-list-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      background: #ffffff;
+      padding: 0.9rem;
+    }
+
+    .directory-list-meta {
+      color: #64748b;
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+
+    .directory-customer-shell {
+      border: 1px solid #dbe4f0;
+      border-radius: 14px;
+      background: #ffffff;
+      padding: 0.9rem;
+    }
+
+    .directory-customer-label {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-bottom: 0.15rem;
+    }
+
+    .directory-customer-value {
+      font-size: 0.95rem;
+      color: #0f172a;
+      font-weight: 700;
+      margin-bottom: 0;
+      word-break: break-word;
+    }
+
     .directory-filter-card {
       border: 1px solid rgba(148, 163, 184, 0.24);
       border-radius: 24px;
@@ -112,6 +326,86 @@
       box-shadow: var(--card-shadow);
       position: relative;
       overflow: hidden;
+    }
+
+    .directory-shell {
+      display: grid;
+      grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .directory-shell > :first-child {
+      margin-top: 0 !important;
+      padding-top: 0 !important;
+    }
+
+    .directory-sidebar {
+      position: sticky;
+      top: 6.6rem;
+    }
+
+    .directory-sidebar .directory-filter-card {
+      padding: 1.15rem;
+    }
+
+    .directory-sidebar-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .directory-sidebar-title {
+      font-size: 1rem;
+      font-weight: 800;
+      margin: 0;
+      color: #0f172a;
+    }
+
+    .directory-sidebar-subtitle {
+      font-size: 0.84rem;
+      line-height: 1.45;
+      color: #64748b;
+      margin: 0.2rem 0 0;
+    }
+
+    .directory-sidebar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      margin-top: 0.9rem;
+    }
+
+    .directory-sidebar-actions .directory-results-meta {
+      width: 100%;
+      font-size: 0.86rem;
+    }
+
+    .directory-content {
+      min-width: 0;
+    }
+
+    .directory-content-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .directory-content-title {
+      font-size: clamp(1.35rem, 2vw, 1.75rem);
+      font-weight: 800;
+      margin-bottom: 0.3rem;
+      color: #0f172a;
+    }
+
+    .directory-content-copy {
+      font-size: 0.94rem;
+      color: #64748b;
+      margin: 0;
+      max-width: 60ch;
     }
 
     .directory-filter-card::after {
@@ -191,7 +485,7 @@
     .directory-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 1.25rem;
+      gap: 0.95rem;
       align-items: stretch;
     }
 
@@ -203,7 +497,7 @@
       border: 1px solid rgba(148, 163, 184, 0.24);
       border-radius: 18px;
       background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
-      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
       transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
       height: 100%;
       overflow: hidden;
@@ -216,7 +510,7 @@
     }
 
     .directory-tenant-media {
-      height: 180px;
+      height: 168px;
       border-bottom: 1px solid rgba(148, 163, 184, 0.2);
       background: linear-gradient(120deg, #dbeafe, #eff6ff);
       position: relative;
@@ -310,7 +604,7 @@
       font-size: 0.86rem;
       color: #5b6b83;
       line-height: 1.45;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.55rem;
       display: -webkit-box;
       -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
@@ -321,7 +615,8 @@
 
     @media (max-width: 991.98px) {
       .hero {
-        padding-top: 7.25rem;
+        padding-top: 5.4rem;
+        padding-bottom: 0.25rem;
       }
 
       #landingNavbar.show {
@@ -343,8 +638,37 @@
 
     @media (max-width: 767.98px) {
       .hero {
-        padding-top: 6.5rem;
-        padding-bottom: 2rem;
+        padding-top: 4.7rem;
+        padding-bottom: 0.15rem;
+      }
+
+      .hero .container {
+        padding-left: 0.85rem;
+        padding-right: 0.85rem;
+      }
+
+      .hero-eyebrow {
+        margin-bottom: 0.15rem;
+        padding: 0.34rem 0.72rem;
+        font-size: 0.78rem;
+      }
+
+      .hero-search-shell {
+      }
+
+      .hero-search-card {
+        padding: 0.72rem 0.78rem;
+        border-radius: 18px;
+      }
+
+      .hero-search-icon {
+        width: 2.35rem;
+        height: 2.35rem;
+        border-radius: 12px;
+      }
+
+      .hero-search-input {
+        font-size: 0.96rem;
       }
 
       .hero h1 {
@@ -355,30 +679,101 @@
         display: block;
       }
 
+      .directory-shell {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+
+      .directory-sidebar {
+        position: static;
+      }
+
       .directory-filter-card.is-desktop {
         display: none;
       }
 
       .directory-filter-group {
-        padding: 0.85rem;
+        padding: 0.8rem;
+      }
+
+      .mobile-directory-filter-shell .directory-filter-card {
+        padding: 0.95rem;
+      }
+
+      .directory-content-header {
+        flex-direction: column;
+        margin-bottom: 0.85rem;
+      }
+
+      .directory-content-title {
+        font-size: 1.2rem;
       }
 
       .directory-grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.7rem;
       }
 
       .directory-tenant-media {
-        height: 200px;
+        height: 118px;
       }
 
       .directory-card-logo {
-        width: 52px;
-        height: 52px;
+        width: 42px;
+        height: 42px;
+      }
+
+      .directory-card-badge {
+        left: 0.55rem;
+        bottom: 0.55rem;
+        font-size: 0.62rem;
+        padding: 0.2rem 0.5rem;
+      }
+
+      .directory-tenant-card .p-3 {
+        padding: 0.75rem !important;
+      }
+
+      .directory-tenant-card h5 {
+        font-size: 0.98rem;
+        line-height: 1.2;
+      }
+
+      .directory-chip {
+        font-size: 0.66rem;
+        padding: 0.18rem 0.45rem;
+      }
+
+      .directory-location {
+        min-height: auto;
+        font-size: 0.76rem;
+        line-height: 1.35;
+      }
+
+      .directory-slogan {
+        font-size: 0.78rem;
+        min-height: auto;
+        -webkit-line-clamp: 2;
+      }
+
+      .directory-description {
+        font-size: 0.74rem;
+        line-height: 1.35;
+        min-height: auto;
+        -webkit-line-clamp: 2;
+      }
+
+      .directory-tenant-card .btn {
+        padding: 0.5rem 0.7rem;
+        font-size: 0.8rem;
       }
     }
 
     @media (min-width: 768px) and (max-width: 1199.98px) {
+      .directory-shell {
+        grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+      }
+
       .directory-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -386,7 +781,7 @@
 
     @media (min-width: 1400px) {
       .directory-tenant-media {
-        height: 200px;
+        height: 188px;
       }
     }
   </style>
@@ -414,8 +809,38 @@
             <li class="nav-item">
               <a class="btn btn-light text-dark landing-nav-link" href="/landings">Por tienda / servicio</a>
             </li>
-            <li class="nav-item">
-              <a class="btn btn-light text-dark landing-nav-link" href="/login">Acceso admin</a>
+            <li class="nav-item" id="directory-client-login-wrap">
+              <button type="button" class="btn btn-dark landing-nav-link" id="directory-client-login-btn">Entrar como cliente</button>
+            </li>
+            <li class="nav-item d-none" id="directory-client-session-wrap">
+              <div class="directory-session-chip">
+                <i class="bi bi-person-circle"></i>
+                <span id="directory-client-session-name">Cliente</span>
+              </div>
+            </li>
+            <li class="nav-item d-none" id="directory-client-notifications-wrap">
+              <button type="button" class="btn btn-light text-dark landing-nav-link directory-client-action-btn" id="directory-client-notifications-btn" data-bs-toggle="modal" data-bs-target="#directoryClientNotificationsModal">
+                <i class="bi bi-bell me-1"></i> Notificaciones
+                <span class="badge rounded-pill bg-danger d-none" id="directory-client-notifications-count">0</span>
+              </button>
+            </li>
+            <li class="nav-item d-none" id="directory-client-orders-wrap">
+              <button type="button" class="btn btn-light text-dark landing-nav-link" id="directory-client-orders-btn">
+                <i class="bi bi-bag-check me-1"></i> Mis compras
+              </button>
+            </li>
+            <li class="nav-item d-none" id="directory-client-account-wrap">
+              <button type="button" class="btn btn-light text-dark landing-nav-link" id="directory-client-account-btn">
+                <i class="bi bi-person-gear me-1"></i> Mi perfil
+              </button>
+            </li>
+            <li class="nav-item" id="directory-install-pwa-wrap">
+              <button type="button" class="btn btn-light text-dark landing-nav-link directory-pwa-install d-none" id="directory-install-pwa-btn">
+                Instalar app
+              </button>
+            </li>
+            <li class="nav-item d-none" id="directory-client-logout-wrap">
+              <button type="button" class="btn btn-light text-dark landing-nav-link" id="directory-client-logout-btn">Cerrar sesión</button>
             </li>
           </ul>
 
@@ -423,7 +848,6 @@
             <div class="directory-filter-card p-3 mt-2">
               <div class="row g-3 align-items-end">
                 <div class="col-12">
-                  <label class="form-label" for="landingNameFilterMobile">Buscar por nombre de tienda o servicio</label>
                   <input id="landingNameFilterMobile" data-landing-filter="name" type="search" class="form-control" placeholder="Ej: panaderia artesanal, taller automotriz, farmacia central">
                 </div>
                 <div class="col-12 d-flex flex-wrap gap-2">
@@ -439,15 +863,6 @@
                   <div class="directory-filter-group h-100">
                     <div class="directory-filter-group-title"><i class="bi bi-geo-alt-fill me-1"></i> Localidad</div>
                     <div class="row g-2">
-                      <div class="col-12">
-                        <label class="form-label" for="landingRegionFilterMobile">Region</label>
-                        <select id="landingRegionFilterMobile" data-landing-filter="region" class="form-select">
-                          <option value="">Todas</option>
-                          @foreach(($tenantFilters['regions'] ?? collect()) as $region)
-                            <option value="{{ $region }}">{{ $region }}</option>
-                          @endforeach
-                        </select>
-                      </div>
                       <div class="col-12">
                         <label class="form-label" for="landingStateFilterMobile">Estado</label>
                         <select id="landingStateFilterMobile" data-landing-filter="state" class="form-select">
@@ -503,103 +918,97 @@
   </header>
 
   <section class="hero">
-    <div class="container">
+    <div class="mx-4">
       <span class="hero-eyebrow"><i class="bi bi-geo-alt"></i> Explorador inteligente</span>
-      <h1>Por tienda / servicio y localidad</h1>
-      <p class="hero-subtitle">Encuentra comercios y servicios con filtros guiados por localidad y especificaciones del negocio, en una experiencia mas clara y organizada.</p>
+      <div class="hero-search-shell">
+        <label class="hero-search-card" for="landingHeroSearch">
+          <span class="hero-search-icon"><i class="bi bi-search"></i></span>
+          <span class="hero-search-copy">
+            <input id="landingHeroSearch" data-landing-filter="name" type="search" class="hero-search-input" placeholder="Buscar Tienda o Servicio...">
+          </span>
+        </label>
+      </div>
     </div>
   </section>
 
-  <section class="py-4">
-    <div class="container">
-      <div class="directory-filter-card is-desktop p-3 p-md-4 mb-4">
-        <div class="row g-3 align-items-end">
-          <div class="col-12 col-lg-7">
-            <label class="form-label" for="landingNameFilterDesktop">Buscar por nombre de tienda o servicio</label>
-            <input id="landingNameFilterDesktop" data-landing-filter="name" type="search" class="form-control" placeholder="Ej: panaderia artesanal, taller automotriz, farmacia central">
-          </div>
-          <div class="col-12 col-lg-5 d-flex flex-wrap justify-content-lg-end gap-2">
-            <button type="button" data-landing-clear class="btn btn-outline-secondary directory-clear-btn">
-              <i class="bi bi-arrow-counterclockwise me-1"></i> Limpiar filtros
-            </button>
-            <span class="directory-results-meta align-self-center" data-landing-results-count>0 resultados</span>
-          </div>
-        </div>
-
-        <div class="row g-3 mt-1">
-          <div class="col-12 col-xl-6">
-            <div class="directory-filter-group h-100">
-              <div class="directory-filter-group-title"><i class="bi bi-geo-alt-fill me-1"></i> Localidad</div>
-              <div class="row g-2">
-                <div class="col-12 col-md-4">
-                  <label class="form-label" for="landingRegionFilterDesktop">Region</label>
-                  <select id="landingRegionFilterDesktop" data-landing-filter="region" class="form-select">
-                    <option value="">Todas</option>
-                    @foreach(($tenantFilters['regions'] ?? collect()) as $region)
-                      <option value="{{ $region }}">{{ $region }}</option>
-                    @endforeach
-                  </select>
+  <section class="mx-4">
+    <div class="">
+      <div class="directory-shell">
+        <aside class="directory-sidebar">
+          <div class="directory-filter-card is-desktop">
+            <div class="row g-3 mt-1">
+              <div class="col-12">
+                <div class="directory-filter-group h-100">
+                  <div class="directory-filter-group-title"><i class="bi bi-geo-alt-fill me-1"></i> Localidad</div>
+                  <div class="row g-2">
+                    <div class="col-12">
+                      <label class="form-label" for="landingStateFilterDesktop">Estado</label>
+                      <select id="landingStateFilterDesktop" data-landing-filter="state" class="form-select">
+                        <option value="">Todos</option>
+                        @foreach(($tenantFilters['states'] ?? collect()) as $state)
+                          <option value="{{ $state }}">{{ $state }}</option>
+                        @endforeach
+                      </select>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label" for="landingCityFilterDesktop">Ciudad</label>
+                      <select id="landingCityFilterDesktop" data-landing-filter="city" class="form-select">
+                        <option value="">Todas</option>
+                        @foreach(($tenantFilters['cities'] ?? collect()) as $city)
+                          <option value="{{ $city }}">{{ $city }}</option>
+                        @endforeach
+                      </select>
+                    </div>
+                  </div>
                 </div>
-                <div class="col-12 col-md-4">
-                  <label class="form-label" for="landingStateFilterDesktop">Estado</label>
-                  <select id="landingStateFilterDesktop" data-landing-filter="state" class="form-select">
-                    <option value="">Todos</option>
-                    @foreach(($tenantFilters['states'] ?? collect()) as $state)
-                      <option value="{{ $state }}">{{ $state }}</option>
-                    @endforeach
-                  </select>
-                </div>
-                <div class="col-12 col-md-4">
-                  <label class="form-label" for="landingCityFilterDesktop">Ciudad</label>
-                  <select id="landingCityFilterDesktop" data-landing-filter="city" class="form-select">
-                    <option value="">Todas</option>
-                    @foreach(($tenantFilters['cities'] ?? collect()) as $city)
-                      <option value="{{ $city }}">{{ $city }}</option>
-                    @endforeach
-                  </select>
+              </div>
+              <div class="col-12">
+                <div class="directory-filter-group h-100">
+                  <div class="directory-filter-group-title"><i class="bi bi-sliders2-vertical me-1"></i> Especificaciones</div>
+                  <div class="row g-2">
+                    <div class="col-12">
+                      <label class="form-label" for="landingTypeFilterDesktop">Tipo de tienda / servicio</label>
+                      <select id="landingTypeFilterDesktop" data-landing-filter="type" class="form-select">
+                        <option value="">Todos</option>
+                        @foreach(($tenantFilters['types'] ?? collect()) as $type)
+                          <option value="{{ $type }}">{{ $type }}</option>
+                        @endforeach
+                      </select>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label" for="landingActivityFilterDesktop">Actividad economica</label>
+                      <select id="landingActivityFilterDesktop" data-landing-filter="activity" class="form-select">
+                        <option value="">Todas</option>
+                        @foreach(($tenantFilters['activities'] ?? collect()) as $activity)
+                          <option value="{{ $activity }}">{{ $activity }}</option>
+                        @endforeach
+                      </select>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div class="col-12 col-xl-6">
-            <div class="directory-filter-group h-100">
-              <div class="directory-filter-group-title"><i class="bi bi-sliders2-vertical me-1"></i> Especificaciones</div>
-              <div class="row g-2">
-                <div class="col-12 col-md-6">
-                  <label class="form-label" for="landingTypeFilterDesktop">Tipo de tienda / servicio</label>
-                  <select id="landingTypeFilterDesktop" data-landing-filter="type" class="form-select">
-                    <option value="">Todos</option>
-                    @foreach(($tenantFilters['types'] ?? collect()) as $type)
-                      <option value="{{ $type }}">{{ $type }}</option>
-                    @endforeach
-                  </select>
-                </div>
-                <div class="col-12 col-md-6">
-                  <label class="form-label" for="landingActivityFilterDesktop">Actividad economica</label>
-                  <select id="landingActivityFilterDesktop" data-landing-filter="activity" class="form-select">
-                    <option value="">Todas</option>
-                    @foreach(($tenantFilters['activities'] ?? collect()) as $activity)
-                      <option value="{{ $activity }}">{{ $activity }}</option>
-                    @endforeach
-                  </select>
-                </div>
-              </div>
+
+            <div class="directory-sidebar-actions">
+              <button type="button" data-landing-clear class="btn btn-outline-secondary directory-clear-btn w-100">
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Limpiar filtros
+              </button>
+              <span class="directory-results-meta" data-landing-results-count>0 resultados</span>
             </div>
           </div>
-        </div>
-      </div>
+        </aside>
 
-      <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-        <span class="directory-results-meta" id="landingResultsCountSummary">Tiendas y servicios disponibles por localidad</span>
-      </div>
+        <div class="directory-content">
+          <div class="directory-content-header">
+            <span class="directory-results-meta d-none d-md-inline-flex" data-landing-results-count>0 resultados</span>
+          </div>
 
-      <div class="directory-grid" id="landingDirectoryList">
+          <div class="directory-grid" id="landingDirectoryList">
         @foreach($tenantsDirectory as $tenant)
           <div class="landing-directory-item"
                data-name="{{ $tenant->name ?? '' }}"
                data-type="{{ $tenant->directory_type ?? '' }}"
                data-activity="{{ $tenant->directory_activity ?? '' }}"
-               data-region="{{ $tenant->directory_region ?? '' }}"
                data-state="{{ $tenant->directory_state ?? '' }}"
               data-city="{{ $tenant->directory_city ?? '' }}"
               data-search="{{ trim(implode(' ', array_filter([
@@ -607,7 +1016,6 @@
                 $tenant->slug ?? '',
                 $tenant->directory_type ?? '',
                 $tenant->directory_activity ?? '',
-                $tenant->directory_region ?? '',
                 $tenant->directory_state ?? '',
                 $tenant->directory_city ?? '',
                 $tenant->directory_country ?? '',
@@ -625,8 +1033,8 @@
                 <span class="directory-card-badge">{{ $tenant->directory_type ?? 'Tienda' }}</span>
               </div>
 
-              <div class="p-3 p-xl-4 d-flex flex-column flex-grow-1">
-                <div class="d-flex align-items-center gap-3 mb-2">
+              <div class="p-3 d-flex flex-column flex-grow-1">
+                <div class="d-flex align-items-center gap-2 mb-2">
                   @if(!empty($tenant->logo))
                     <img src="{{ \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" alt="Logo de {{ $tenant->name }}" class="directory-card-logo">
                   @else
@@ -639,7 +1047,7 @@
                   </div>
                 </div>
 
-                <p class="mb-3 small directory-location">
+                <p class="mb-2 small directory-location">
                   {{ $tenant->directory_region ?? 'Sin region' }}
                   @if(!empty($tenant->directory_state)) | {{ $tenant->directory_state }} @endif
                   @if(!empty($tenant->directory_city)) | {{ $tenant->directory_city }} @endif
@@ -654,22 +1062,186 @@
                 </p>
 
                 <div class="mt-auto">
-                  <a href="/{{ $tenant->slug }}" class="btn btn-dark w-100 rounded-3">Ver tienda / servicio</a>
+                  @php
+                    $directoryTypeLabel = mb_strtolower(trim((string) ($tenant->directory_type ?? 'tienda')));
+                    $directoryActionLabel = str_contains($directoryTypeLabel, 'servicio') ? 'Ver servicio' : 'Ver tienda';
+                  @endphp
+                  <a href="/{{ $tenant->slug }}" class="btn btn-dark w-100 rounded-3" data-directory-tenant-link>{{ $directoryActionLabel }}</a>
                 </div>
               </div>
             </div>
           </div>
         @endforeach
-      </div>
+          </div>
 
-      <div id="landingDirectoryEmpty" class="text-center text-muted mt-3 d-none">
-        No hay tiendas o servicios que coincidan con los filtros seleccionados.
+          <div id="landingDirectoryEmpty" class="text-center text-muted mt-3 d-none">
+            No hay tiendas o servicios que coincidan con los filtros seleccionados.
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
+  <div class="modal fade directory-auth-modal" id="directoryClientAuthModal" tabindex="-1" aria-labelledby="directoryClientAuthModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="directoryClientAuthModalLabel">Acceso cliente</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="directory-auth-shell">
+            <p class="directory-auth-helper">Ingresa como cliente para entrar a las tiendas de Shopix. Si instalas la app desde aquí, el acceso directo abrirá este explorador.</p>
+            <div id="directory-auth-error" class="directory-auth-error d-none mb-3"></div>
+            <ul class="nav nav-tabs mb-3" id="directoryAuthTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="directory-auth-login-tab" data-bs-toggle="tab" data-bs-target="#directory-auth-login-panel" type="button" role="tab">Iniciar sesión</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="directory-auth-register-tab" data-bs-toggle="tab" data-bs-target="#directory-auth-register-panel" type="button" role="tab">Crear cuenta</button>
+              </li>
+            </ul>
+            <div class="tab-content" id="directoryAuthTabsContent">
+              <div class="tab-pane fade show active" id="directory-auth-login-panel" role="tabpanel">
+                <form id="directory-client-login-form" class="row g-3">
+                  <div class="col-12">
+                    <input type="email" class="form-control" id="directory-client-login-email" placeholder="Email" required>
+                  </div>
+                  <div class="col-12">
+                    <input type="password" class="form-control" id="directory-client-login-password" placeholder="Contraseña" required>
+                  </div>
+                  <div class="col-12">
+                    <button type="submit" class="btn btn-dark w-100 directory-auth-submit">Entrar</button>
+                  </div>
+                </form>
+              </div>
+              <div class="tab-pane fade" id="directory-auth-register-panel" role="tabpanel">
+                <form id="directory-client-register-form" class="row g-3">
+                  <div class="col-12">
+                    <input type="text" class="form-control" id="directory-client-register-name" placeholder="Nombre" required>
+                  </div>
+                  <div class="col-12">
+                    <input type="email" class="form-control" id="directory-client-register-email" placeholder="Email" required>
+                  </div>
+                  <div class="col-12">
+                    <input type="password" class="form-control" id="directory-client-register-password" placeholder="Contraseña" minlength="8" required>
+                  </div>
+                  <div class="col-12">
+                    <input type="password" class="form-control" id="directory-client-register-password-confirmation" placeholder="Confirmar contraseña" minlength="8" required>
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <input type="text" class="form-control" id="directory-client-register-dni" placeholder="DNI opcional">
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <input type="text" class="form-control" id="directory-client-register-phone" placeholder="Teléfono opcional">
+                  </div>
+                  <div class="col-12">
+                    <button type="submit" class="btn btn-dark w-100 directory-auth-submit">Crear cuenta</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade directory-modern-modal" id="directoryClientNotificationsModal" tabindex="-1" aria-labelledby="directoryClientNotificationsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="directoryClientNotificationsModalLabel">Notificaciones</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="directory-client-notifications-list" class="d-flex flex-column gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade directory-modern-modal" id="directoryClientOrdersModal" tabindex="-1" aria-labelledby="directoryClientOrdersModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="directoryClientOrdersModalLabel">Mis compras</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="directory-client-orders-list" class="d-flex flex-column gap-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade directory-modern-modal" id="directoryClientAccountModal" tabindex="-1" aria-labelledby="directoryClientAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="directoryClientAccountModalLabel">Mi perfil</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body d-flex flex-column gap-3">
+          <div class="directory-customer-shell">
+            <div class="row g-2">
+              <div class="col-12 col-md-6">
+                <p class="directory-customer-label">Nombre</p>
+                <p class="directory-customer-value" id="directory-client-account-name">-</p>
+              </div>
+              <div class="col-12 col-md-6">
+                <p class="directory-customer-label">Email</p>
+                <p class="directory-customer-value" id="directory-client-account-email">-</p>
+              </div>
+              <div class="col-12 col-md-6">
+                <p class="directory-customer-label">DNI</p>
+                <p class="directory-customer-value" id="directory-client-account-dni">No registrado</p>
+              </div>
+              <div class="col-12 col-md-6">
+                <p class="directory-customer-label">Teléfono</p>
+                <p class="directory-customer-value" id="directory-client-account-phone">No registrado</p>
+              </div>
+              <div class="col-12">
+                <form id="directory-client-phone-form" class="row g-2 align-items-end">
+                  <div class="col-12 col-md-8">
+                    <label for="directory-client-phone-input" class="directory-customer-label">Agregar / actualizar teléfono</label>
+                    <input type="text" class="form-control" id="directory-client-phone-input" placeholder="Ej: +58 412 0000000" maxlength="50">
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <button type="submit" class="btn btn-outline-dark btn-sm w-100">Guardar teléfono</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div class="directory-customer-shell">
+            <h6 class="mb-2">Cambiar contraseña</h6>
+            <form id="directory-client-password-form" class="row g-2">
+              <div class="col-12">
+                <input type="password" class="form-control" id="directory-client-current-password" placeholder="Contraseña actual" minlength="8" required>
+              </div>
+              <div class="col-12 col-md-6">
+                <input type="password" class="form-control" id="directory-client-new-password" placeholder="Nueva contraseña" minlength="8" required>
+              </div>
+              <div class="col-12 col-md-6">
+                <input type="password" class="form-control" id="directory-client-new-password-confirmation" placeholder="Confirmar nueva contraseña" minlength="8" required>
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-outline-dark btn-sm">Actualizar contraseña</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    const directoryAuthTokenKey = 'shopix_ecomm_token';
+    const directoryAuthUserKey = 'shopix_ecomm_user';
+    const directoryPendingUrlKey = 'shopix_directory_pending_url';
     const landingFilterElements = Array.from(document.querySelectorAll('[data-landing-filter]'));
     const landingFilterGroups = landingFilterElements.reduce((groups, element) => {
       const key = element.dataset.landingFilter;
@@ -682,7 +1254,498 @@
     const landingResultsCounters = document.querySelectorAll('[data-landing-results-count]');
     const landingDirectoryItems = Array.from(document.querySelectorAll('.landing-directory-item'));
     const landingDirectoryEmpty = document.getElementById('landingDirectoryEmpty');
+    const directoryTenantLinks = Array.from(document.querySelectorAll('[data-directory-tenant-link]'));
+    const directoryClientLoginWrap = document.getElementById('directory-client-login-wrap');
+    const directoryClientLoginBtn = document.getElementById('directory-client-login-btn');
+    const directoryClientSessionWrap = document.getElementById('directory-client-session-wrap');
+    const directoryClientSessionName = document.getElementById('directory-client-session-name');
+    const directoryClientNotificationsWrap = document.getElementById('directory-client-notifications-wrap');
+    const directoryClientNotificationsBtn = document.getElementById('directory-client-notifications-btn');
+    const directoryClientNotificationsCount = document.getElementById('directory-client-notifications-count');
+    const directoryClientNotificationsList = document.getElementById('directory-client-notifications-list');
+    const directoryClientOrdersWrap = document.getElementById('directory-client-orders-wrap');
+    const directoryClientOrdersBtn = document.getElementById('directory-client-orders-btn');
+    const directoryClientOrdersList = document.getElementById('directory-client-orders-list');
+    const directoryClientAccountWrap = document.getElementById('directory-client-account-wrap');
+    const directoryClientAccountBtn = document.getElementById('directory-client-account-btn');
+    const directoryInstallPwaBtn = document.getElementById('directory-install-pwa-btn');
+    const directoryClientLogoutWrap = document.getElementById('directory-client-logout-wrap');
+    const directoryClientLogoutBtn = document.getElementById('directory-client-logout-btn');
+    const directoryClientAuthModalElement = document.getElementById('directoryClientAuthModal');
+    const directoryClientNotificationsModalElement = document.getElementById('directoryClientNotificationsModal');
+    const directoryClientOrdersModalElement = document.getElementById('directoryClientOrdersModal');
+    const directoryClientAccountModalElement = document.getElementById('directoryClientAccountModal');
+    const directoryAuthError = document.getElementById('directory-auth-error');
+    const directoryClientLoginForm = document.getElementById('directory-client-login-form');
+    const directoryClientRegisterForm = document.getElementById('directory-client-register-form');
+    const directoryClientPhoneForm = document.getElementById('directory-client-phone-form');
+    const directoryClientPasswordForm = document.getElementById('directory-client-password-form');
     const landingTotalItems = landingDirectoryItems.length;
+    const landingStateCityMap = buildLandingStateCityMap();
+    const directoryAuthModal = directoryClientAuthModalElement ? bootstrap.Modal.getOrCreateInstance(directoryClientAuthModalElement) : null;
+    const directoryClientNotificationsModal = directoryClientNotificationsModalElement ? bootstrap.Modal.getOrCreateInstance(directoryClientNotificationsModalElement) : null;
+    const directoryClientOrdersModal = directoryClientOrdersModalElement ? bootstrap.Modal.getOrCreateInstance(directoryClientOrdersModalElement) : null;
+    const directoryClientAccountModal = directoryClientAccountModalElement ? bootstrap.Modal.getOrCreateInstance(directoryClientAccountModalElement) : null;
+
+    function getDirectoryAuthToken() {
+      return localStorage.getItem(directoryAuthTokenKey) || '';
+    }
+
+    function isDirectoryStandaloneMode() {
+      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    }
+
+    function isDirectoryIosDevice() {
+      const userAgent = window.navigator.userAgent || '';
+      return /iPad|iPhone|iPod/.test(userAgent) || (userAgent.includes('Mac') && 'ontouchend' in document);
+    }
+
+    function updateDirectoryInstallPwaUi() {
+      if (!directoryInstallPwaBtn) {
+        return;
+      }
+
+      directoryInstallPwaBtn.classList.remove('d-none');
+
+      if (isDirectoryStandaloneMode()) {
+        directoryInstallPwaBtn.textContent = 'App instalada';
+        directoryInstallPwaBtn.classList.add('is-ready');
+        return;
+      }
+
+      directoryInstallPwaBtn.classList.remove('is-ready');
+
+      if (isDirectoryIosDevice()) {
+        directoryInstallPwaBtn.textContent = 'Agregar a inicio';
+        return;
+      }
+
+      directoryInstallPwaBtn.textContent = 'Instalar app';
+    }
+
+    async function installDirectoryPwa() {
+      if (!directoryInstallPwaBtn || isDirectoryStandaloneMode()) {
+        return;
+      }
+
+      if (isDirectoryIosDevice()) {
+        alert('En iPhone o iPad, abre Shopix en Safari desde /landings, toca Compartir y luego selecciona "Agregar a pantalla de inicio". El acceso instalado abrirá el inicio del directorio de Shopix.');
+        return;
+      }
+
+      if (!window.__shopixDirectoryDeferredInstallPrompt) {
+        alert('La instalación aún no está disponible en este navegador. Recarga la página, usa HTTPS y asegúrate de que Shopix no esté ya instalado.');
+        return;
+      }
+
+      window.__shopixDirectoryDeferredInstallPrompt.prompt();
+      const choice = await window.__shopixDirectoryDeferredInstallPrompt.userChoice.catch(() => null);
+      window.__shopixDirectoryDeferredInstallPrompt = null;
+      updateDirectoryInstallPwaUi();
+
+      if (choice?.outcome === 'accepted') {
+        alert('La instalación de Shopix se inició correctamente. La app abrirá desde /landings.');
+      }
+    }
+
+    function getDirectoryAuthUser() {
+      try {
+        return JSON.parse(localStorage.getItem(directoryAuthUserKey) || 'null');
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function setDirectoryAuthData(token, user) {
+      localStorage.setItem(directoryAuthTokenKey, token || '');
+      localStorage.setItem(directoryAuthUserKey, JSON.stringify(user || null));
+      applyDirectoryAuthState();
+    }
+
+    function clearDirectoryAuthError() {
+      if (!directoryAuthError) {
+        return;
+      }
+
+      directoryAuthError.textContent = '';
+      directoryAuthError.classList.add('d-none');
+    }
+
+    function showDirectoryAuthError(message) {
+      if (!directoryAuthError) {
+        return;
+      }
+
+      directoryAuthError.textContent = message || 'No se pudo completar la autenticación.';
+      directoryAuthError.classList.remove('d-none');
+    }
+
+    function openDirectoryAuthModal(targetUrl = '') {
+      if (targetUrl) {
+        sessionStorage.setItem(directoryPendingUrlKey, targetUrl);
+      }
+
+      clearDirectoryAuthError();
+      directoryAuthModal?.show();
+    }
+
+    function consumeDirectoryPendingUrl() {
+      const url = sessionStorage.getItem(directoryPendingUrlKey) || '';
+      sessionStorage.removeItem(directoryPendingUrlKey);
+      return url;
+    }
+
+    function applyDirectoryAuthState() {
+      const token = getDirectoryAuthToken();
+      const user = getDirectoryAuthUser();
+      const hasSession = !!token && !!user?.id;
+
+      directoryClientLoginWrap?.classList.toggle('d-none', hasSession);
+      directoryClientSessionWrap?.classList.toggle('d-none', !hasSession);
+      directoryClientNotificationsWrap?.classList.toggle('d-none', !hasSession);
+      directoryClientOrdersWrap?.classList.toggle('d-none', !hasSession);
+      directoryClientAccountWrap?.classList.toggle('d-none', !hasSession);
+      directoryClientLogoutWrap?.classList.toggle('d-none', !hasSession);
+
+      if (directoryClientSessionName) {
+        directoryClientSessionName.textContent = hasSession ? `Hola, ${user.name || 'cliente'}` : 'Cliente';
+      }
+
+      if (!hasSession && directoryClientNotificationsCount) {
+        directoryClientNotificationsCount.textContent = '0';
+        directoryClientNotificationsCount.classList.add('d-none');
+      }
+    }
+
+    function fillDirectoryAccount(user) {
+      const nameElement = document.getElementById('directory-client-account-name');
+      const emailElement = document.getElementById('directory-client-account-email');
+      const dniElement = document.getElementById('directory-client-account-dni');
+      const phoneElement = document.getElementById('directory-client-account-phone');
+      const phoneInputElement = document.getElementById('directory-client-phone-input');
+
+      if (nameElement) nameElement.textContent = user?.name || '-';
+      if (emailElement) emailElement.textContent = user?.email || '-';
+      if (dniElement) dniElement.textContent = user?.dni || 'No registrado';
+      if (phoneElement) phoneElement.textContent = user?.phone_number || user?.phone || 'No registrado';
+      if (phoneInputElement) phoneInputElement.value = user?.phone_number || user?.phone || '';
+    }
+
+    async function fetchDirectoryNotifications(token) {
+      const response = await fetch('/api/notifications', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('No se pudieron cargar notificaciones.');
+      }
+
+      return response.json();
+    }
+
+    async function markDirectoryNotificationAsRead(token, id) {
+      await fetch(`/api/notifications/${id}/read`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+      });
+    }
+
+    async function fetchDirectoryOrders(token) {
+      const response = await fetch('/api/user/orders', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('No se pudieron cargar las compras.');
+      }
+
+      return response.json();
+    }
+
+    function renderDirectoryNotifications(payload, token) {
+      const unread = Number(payload?.unread_count || 0);
+      if (directoryClientNotificationsCount) {
+        directoryClientNotificationsCount.textContent = String(unread);
+        directoryClientNotificationsCount.classList.toggle('d-none', unread <= 0);
+      }
+
+      const rows = Array.isArray(payload?.notifications) ? payload.notifications : [];
+      if (!directoryClientNotificationsList) {
+        return;
+      }
+
+      if (rows.length === 0) {
+        directoryClientNotificationsList.innerHTML = '<p class="text-muted mb-0">No tienes notificaciones.</p>';
+        return;
+      }
+
+      directoryClientNotificationsList.innerHTML = rows.map(row => {
+        const actionButton = row.is_read
+          ? '<span class="badge bg-success">Leída</span>'
+          : `<button type="button" class="btn btn-sm btn-outline-dark" data-directory-mark-read="${row.id}">Marcar leída</button>`;
+
+        return `
+          <div class="directory-list-card ${row.is_read ? '' : 'border-dark'}">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div>
+                <div class="fw-semibold">${row.title || 'Notificación'}</div>
+                <div class="small text-muted">${row.message || ''}</div>
+                <div class="small text-secondary mt-1">${row.created_at || ''}</div>
+              </div>
+              <div class="d-flex flex-column gap-1 align-items-end">
+                ${row.target_url ? `<a href="${row.target_url}" class="btn btn-sm btn-dark">Abrir</a>` : ''}
+                ${actionButton}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      directoryClientNotificationsList.querySelectorAll('[data-directory-mark-read]').forEach(button => {
+        button.addEventListener('click', async () => {
+          const id = button.getAttribute('data-directory-mark-read');
+          await markDirectoryNotificationAsRead(token, id);
+          const updated = await fetchDirectoryNotifications(token);
+          renderDirectoryNotifications(updated, token);
+        });
+      });
+    }
+
+    function directoryOrderStatusLabel(status) {
+      if (Number(status) === 1) return 'Aprobado';
+      if (Number(status) === 2) return 'Negado';
+      return 'En proceso';
+    }
+
+    function directoryDeliveryStatusLabel(status) {
+      if (Number(status) === 1) return 'Entregado';
+      if (Number(status) === 2) return 'Cancelado';
+      return 'Pendiente';
+    }
+
+    function renderDirectoryOrders(payload) {
+      const rows = Array.isArray(payload?.orders) ? payload.orders : [];
+      if (!directoryClientOrdersList) {
+        return;
+      }
+
+      if (rows.length === 0) {
+        directoryClientOrdersList.innerHTML = '<p class="text-muted mb-0">Todavía no tienes compras registradas.</p>';
+        return;
+      }
+
+      directoryClientOrdersList.innerHTML = rows.map(row => `
+        <article class="directory-list-card">
+          <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
+            <div>
+              <div class="fw-semibold fs-6">Pedido #${row.id}</div>
+              <div class="directory-list-meta">${row.tenant_name || 'Tienda'} ${row.date ? `• ${row.date}` : ''}</div>
+            </div>
+            <a href="${row.public_url}" class="btn btn-sm btn-outline-dark">Ver detalle</a>
+          </div>
+          <div class="directory-list-meta mb-1"><strong>${row.items_count || 0}</strong> item(s) • <strong>${Number(row.total || 0).toFixed(2)} $</strong></div>
+          <div class="directory-list-meta mb-1">Pedido: ${directoryOrderStatusLabel(row.status)}</div>
+          <div class="directory-list-meta">Entrega: ${directoryDeliveryStatusLabel(row.deliver_status)}</div>
+        </article>
+      `).join('');
+    }
+
+    async function syncDirectoryClientData() {
+      const token = getDirectoryAuthToken();
+      const user = getDirectoryAuthUser();
+
+      if (!token || !user?.id) {
+        return;
+      }
+
+      try {
+        const payload = await fetchDirectoryNotifications(token);
+        renderDirectoryNotifications(payload, token);
+      } catch (error) {
+        if (directoryClientNotificationsList) {
+          directoryClientNotificationsList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar notificaciones.</p>';
+        }
+      }
+    }
+
+    async function submitDirectoryPhoneUpdate(event) {
+      event.preventDefault();
+
+      const token = getDirectoryAuthToken();
+      const user = getDirectoryAuthUser();
+      if (!token || !user?.id) {
+        return;
+      }
+
+      const phoneNumber = (document.getElementById('directory-client-phone-input')?.value || '').trim();
+      const response = await fetch('/api/user/update-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify({ phone_number: phoneNumber }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        alert(data.message || 'No se pudo actualizar el teléfono.');
+        return;
+      }
+
+      const updatedUser = data?.user || { ...user, phone_number: phoneNumber || null };
+      setDirectoryAuthData(token, updatedUser);
+      fillDirectoryAccount(updatedUser);
+      alert(data.message || 'Teléfono actualizado correctamente.');
+    }
+
+    async function submitDirectoryPasswordUpdate(event) {
+      event.preventDefault();
+
+      const token = getDirectoryAuthToken();
+      const user = getDirectoryAuthUser();
+      if (!token || !user?.id) {
+        return;
+      }
+
+      const current_password = document.getElementById('directory-client-current-password')?.value || '';
+      const new_password = document.getElementById('directory-client-new-password')?.value || '';
+      const new_password_confirmation = document.getElementById('directory-client-new-password-confirmation')?.value || '';
+
+      if (new_password !== new_password_confirmation) {
+        alert('La confirmación de la nueva contraseña no coincide.');
+        return;
+      }
+
+      const response = await fetch('/api/user/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify({
+          current_password,
+          new_password,
+          new_password_confirmation,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        alert(data.message || 'No se pudo actualizar la contraseña.');
+        return;
+      }
+
+      event.target.reset();
+      alert(data.message || 'Contraseña actualizada correctamente.');
+    }
+
+    async function submitDirectoryClientLogin(event) {
+      event.preventDefault();
+      clearDirectoryAuthError();
+
+      const response = await fetch('/api/loginEcomm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify({
+          email: document.getElementById('directory-client-login-email')?.value.trim() || '',
+          password: document.getElementById('directory-client-login-password')?.value || '',
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.token || !data.user) {
+        showDirectoryAuthError(data.message || 'No se pudo iniciar sesión como cliente.');
+        return;
+      }
+
+      setDirectoryAuthData(data.token, data.user);
+      directoryAuthModal?.hide();
+      directoryClientLoginForm?.reset();
+      fillDirectoryAccount(data.user);
+      syncDirectoryClientData();
+
+      const pendingUrl = consumeDirectoryPendingUrl();
+      if (pendingUrl) {
+        window.location.href = pendingUrl;
+      }
+    }
+
+    async function submitDirectoryClientRegister(event) {
+      event.preventDefault();
+      clearDirectoryAuthError();
+
+      const payload = {
+        name: document.getElementById('directory-client-register-name')?.value.trim() || '',
+        email: document.getElementById('directory-client-register-email')?.value.trim() || '',
+        password: document.getElementById('directory-client-register-password')?.value || '',
+        password_confirmation: document.getElementById('directory-client-register-password-confirmation')?.value || '',
+        dni: document.getElementById('directory-client-register-dni')?.value.trim() || '',
+        phone_number: document.getElementById('directory-client-register-phone')?.value.trim() || '',
+      };
+
+      const response = await fetch('/api/registerEcomm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.token || !data.user) {
+        showDirectoryAuthError(data.message || 'No se pudo crear la cuenta de cliente.');
+        return;
+      }
+
+      setDirectoryAuthData(data.token, data.user);
+      directoryAuthModal?.hide();
+      directoryClientRegisterForm?.reset();
+      fillDirectoryAccount(data.user);
+      syncDirectoryClientData();
+
+      const pendingUrl = consumeDirectoryPendingUrl();
+      if (pendingUrl) {
+        window.location.href = pendingUrl;
+      }
+    }
+
+    function buildLandingStateCityMap() {
+      return landingDirectoryItems.reduce((map, item) => {
+        const state = String(item.dataset.state || '').trim();
+        const city = String(item.dataset.city || '').trim();
+
+        if (!state || !city) {
+          return map;
+        }
+
+        map[state] = map[state] || new Set();
+        map[state].add(city);
+        return map;
+      }, {});
+    }
 
     function getLandingFilterValue(key) {
       return landingFilterGroups[key]?.[0]?.value || '';
@@ -694,6 +1757,38 @@
           element.value = value;
         }
       });
+    }
+
+    function updateLandingCityOptions(selectedState = '', preserveSelectedCity = true) {
+      const normalizedState = String(selectedState || '').trim();
+      const availableCities = normalizedState && landingStateCityMap[normalizedState]
+        ? Array.from(landingStateCityMap[normalizedState]).sort((left, right) => left.localeCompare(right, 'es'))
+        : @json((($tenantFilters['cities'] ?? collect())->values()->all()));
+
+      (landingFilterGroups.city || []).forEach(select => {
+        const currentValue = preserveSelectedCity ? select.value : '';
+        const hasCurrentValue = availableCities.includes(currentValue);
+
+        select.innerHTML = '';
+
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = normalizedState ? 'Todas en el estado' : 'Todas';
+        select.appendChild(defaultOption);
+
+        availableCities.forEach(city => {
+          const option = document.createElement('option');
+          option.value = city;
+          option.textContent = city;
+          select.appendChild(option);
+        });
+
+        select.value = hasCurrentValue ? currentValue : '';
+      });
+
+      if (normalizedState && !availableCities.includes(getLandingFilterValue('city'))) {
+        syncLandingFilterValue('city', '');
+      }
     }
 
     function normalizeText(value) {
@@ -708,7 +1803,6 @@
       const selectedName = normalizeText(getLandingFilterValue('name'));
       const selectedType = normalizeText(getLandingFilterValue('type'));
       const selectedActivity = normalizeText(getLandingFilterValue('activity'));
-      const selectedRegion = normalizeText(getLandingFilterValue('region'));
       const selectedState = normalizeText(getLandingFilterValue('state'));
       const selectedCity = normalizeText(getLandingFilterValue('city'));
 
@@ -719,7 +1813,6 @@
         const itemSearch = normalizeText(item.dataset.search || item.textContent || '');
         const itemType = normalizeText(item.dataset.type);
         const itemActivity = normalizeText(item.dataset.activity);
-        const itemRegion = normalizeText(item.dataset.region);
         const itemState = normalizeText(item.dataset.state);
         const itemCity = normalizeText(item.dataset.city);
 
@@ -727,7 +1820,6 @@
           (!selectedName || itemSearch.includes(selectedName) || itemName.includes(selectedName)) &&
           (!selectedType || itemType === selectedType) &&
           (!selectedActivity || itemActivity === selectedActivity) &&
-          (!selectedRegion || itemRegion === selectedRegion) &&
           (!selectedState || itemState === selectedState) &&
           (!selectedCity || itemCity === selectedCity);
 
@@ -751,6 +1843,11 @@
       elements.forEach(element => {
         element.addEventListener(eventName, () => {
           syncLandingFilterValue(key, element.value, element);
+
+          if (key === 'state') {
+            updateLandingCityOptions(element.value, false);
+          }
+
           applyLandingDirectoryFilters();
         });
       });
@@ -764,6 +1861,7 @@
           });
         });
 
+        updateLandingCityOptions('', false);
         applyLandingDirectoryFilters();
       });
     });
@@ -780,6 +1878,107 @@
       });
     });
 
+    directoryClientLoginBtn?.addEventListener('click', () => {
+      openDirectoryAuthModal();
+    });
+
+    directoryClientNotificationsBtn?.addEventListener('click', async () => {
+      const token = getDirectoryAuthToken();
+      const user = getDirectoryAuthUser();
+      if (!token || !user?.id) {
+        openDirectoryAuthModal();
+        return;
+      }
+
+      directoryClientNotificationsModal?.show();
+      try {
+        const payload = await fetchDirectoryNotifications(token);
+        renderDirectoryNotifications(payload, token);
+      } catch (error) {
+        if (directoryClientNotificationsList) {
+          directoryClientNotificationsList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar notificaciones.</p>';
+        }
+      }
+    });
+
+    directoryClientOrdersBtn?.addEventListener('click', async () => {
+      const token = getDirectoryAuthToken();
+      const user = getDirectoryAuthUser();
+      if (!token || !user?.id) {
+        openDirectoryAuthModal();
+        return;
+      }
+
+      if (directoryClientOrdersList) {
+        directoryClientOrdersList.innerHTML = '<p class="text-muted mb-0">Cargando compras...</p>';
+      }
+      directoryClientOrdersModal?.show();
+      try {
+        const payload = await fetchDirectoryOrders(token);
+        renderDirectoryOrders(payload);
+      } catch (error) {
+        if (directoryClientOrdersList) {
+          directoryClientOrdersList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar las compras.</p>';
+        }
+      }
+    });
+
+    directoryClientAccountBtn?.addEventListener('click', () => {
+      const token = getDirectoryAuthToken();
+      const user = getDirectoryAuthUser();
+      if (!token || !user?.id) {
+        openDirectoryAuthModal();
+        return;
+      }
+
+      fillDirectoryAccount(user);
+      directoryClientPasswordForm?.reset();
+      directoryClientAccountModal?.show();
+    });
+
+    directoryClientLogoutBtn?.addEventListener('click', () => {
+      localStorage.removeItem(directoryAuthTokenKey);
+      localStorage.removeItem(directoryAuthUserKey);
+      sessionStorage.removeItem(directoryPendingUrlKey);
+      applyDirectoryAuthState();
+    });
+
+    directoryTenantLinks.forEach(link => {
+      link.addEventListener('click', event => {
+        const token = getDirectoryAuthToken();
+        const user = getDirectoryAuthUser();
+
+        if (token && user?.id) {
+          return;
+        }
+
+        event.preventDefault();
+        openDirectoryAuthModal(link.getAttribute('href') || '');
+      });
+    });
+
+    directoryClientLoginForm?.addEventListener('submit', submitDirectoryClientLogin);
+    directoryClientRegisterForm?.addEventListener('submit', submitDirectoryClientRegister);
+    directoryClientPhoneForm?.addEventListener('submit', submitDirectoryPhoneUpdate);
+    directoryClientPasswordForm?.addEventListener('submit', submitDirectoryPasswordUpdate);
+    directoryInstallPwaBtn?.addEventListener('click', installDirectoryPwa);
+
+    window.addEventListener('beforeinstallprompt', event => {
+      event.preventDefault();
+      window.__shopixDirectoryDeferredInstallPrompt = event;
+      updateDirectoryInstallPwaUi();
+    });
+
+    window.addEventListener('appinstalled', () => {
+      window.__shopixDirectoryDeferredInstallPrompt = null;
+      updateDirectoryInstallPwaUi();
+    });
+
+    updateLandingCityOptions(getLandingFilterValue('state'));
+    applyDirectoryAuthState();
+    fillDirectoryAccount(getDirectoryAuthUser());
+    syncDirectoryClientData();
+    updateDirectoryInstallPwaUi();
     applyLandingDirectoryFilters();
   </script>
 </body>

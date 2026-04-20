@@ -4,6 +4,7 @@ namespace App\Support;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -76,8 +77,14 @@ class AuditLogger
             self::insert([
                 'table_name' => Str::limit($module, 100, ''),
                 'action' => Str::limit($action, 100, ''),
-                'user_id' => (int) ($user->id ?? 0),
+                'user_id' => $user?->id,
+                'tenant_id' => $user?->tenant_id,
+                'event_type' => 'request',
                 'description' => json_encode($descriptionPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'old_values' => !empty($oldModels) ? $oldModels : null,
+                'new_values' => !empty($newModels) ? $newModels : null,
+                'ip_address' => $request->ip(),
+                'occurred_at' => now(),
             ]);
         } catch (\Throwable $loggingException) {
             Log::warning('Audit logging failed', [
@@ -89,18 +96,15 @@ class AuditLogger
     public static function logEvent(string $module, string $action, string $message, ?int $userId = null, array $extra = []): void
     {
         try {
-            if (Str::lower(trim($module)) === 'auth') {
-                return;
-            }
-
             $user = $userId ? null : Auth::user();
-            $effectiveUserId = $userId ?: (int) ($user->id ?? 0);
+            $effectiveUserId = $userId ?: ($user?->id);
+            $tenantId = $extra['tenant_id'] ?? $user?->tenant_id;
 
             $payload = array_merge([
                 'module' => $module,
                 'message' => $message,
                 'role' => optional($user?->role)->name,
-                'tenant_id' => (int) ($user->tenant_id ?? 0),
+                'tenant_id' => $tenantId,
                 'ip' => request()?->ip(),
             ], self::sanitizeData($extra));
 
@@ -108,11 +112,53 @@ class AuditLogger
                 'table_name' => Str::limit($module, 100, ''),
                 'action' => Str::limit($action, 100, ''),
                 'user_id' => $effectiveUserId,
+                'tenant_id' => self::normalizeNullableInt($tenantId),
+                'event_type' => Str::lower(trim($module)) === 'auth' ? 'auth' : 'event',
                 'description' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'ip_address' => request()?->ip(),
+                'occurred_at' => now(),
             ]);
         } catch (\Throwable $loggingException) {
             Log::warning('Audit event logging failed', [
                 'message' => $loggingException->getMessage(),
+            ]);
+        }
+    }
+
+    public static function logModelChange(Model $model, string $action, string $message, ?array $oldValues = null, ?array $newValues = null): void
+    {
+        try {
+            $user = Auth::user();
+            $table = $model->getTable();
+
+            $payload = [
+                'module' => 'audit',
+                'message' => $message,
+                'model' => get_class($model),
+                'table' => $table,
+                'record_id' => (string) $model->getKey(),
+                'tenant_id' => self::resolveModelTenantId($model, $oldValues, $newValues, $user?->tenant_id),
+                'user_name' => $user?->name,
+                'ip' => request()?->ip(),
+            ];
+
+            self::insert([
+                'table_name' => Str::limit($table, 100, ''),
+                'action' => Str::limit($action, 100, ''),
+                'user_id' => $user?->id,
+                'tenant_id' => self::resolveModelTenantId($model, $oldValues, $newValues, $user?->tenant_id),
+                'event_type' => 'model',
+                'record_id' => (string) $model->getKey(),
+                'description' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'old_values' => self::sanitizeData($oldValues ?? []),
+                'new_values' => self::sanitizeData($newValues ?? []),
+                'ip_address' => request()?->ip(),
+                'occurred_at' => now(),
+            ]);
+        } catch (\Throwable $loggingException) {
+            Log::warning('Audit model logging failed', [
+                'message' => $loggingException->getMessage(),
+                'table' => $model->getTable(),
             ]);
         }
     }
@@ -122,10 +168,44 @@ class AuditLogger
         DB::table('audit_log')->insert([
             'table_name' => (string) ($payload['table_name'] ?? 'system'),
             'action' => (string) ($payload['action'] ?? 'UNKNOWN'),
-            'user_id' => (int) ($payload['user_id'] ?? 0),
+            'user_id' => self::normalizeNullableInt($payload['user_id'] ?? null),
+            'tenant_id' => self::normalizeNullableInt($payload['tenant_id'] ?? null),
+            'event_type' => $payload['event_type'] ?? null,
+            'record_id' => isset($payload['record_id']) ? (string) $payload['record_id'] : null,
             'description' => (string) ($payload['description'] ?? ''),
+            'old_values' => isset($payload['old_values']) ? json_encode($payload['old_values'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+            'new_values' => isset($payload['new_values']) ? json_encode($payload['new_values'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+            'ip_address' => $payload['ip_address'] ?? request()?->ip(),
+            'occurred_at' => $payload['occurred_at'] ?? now(),
             'created_at' => now(),
+            'updated_at' => now(),
         ]);
+    }
+
+    private static function resolveModelTenantId(Model $model, ?array $oldValues, ?array $newValues, $fallback = null): ?int
+    {
+        $candidates = [
+            $model->getAttribute('tenant_id'),
+            $newValues['tenant_id'] ?? null,
+            $oldValues['tenant_id'] ?? null,
+            $fallback,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $normalized = self::normalizeNullableInt($candidate);
+            if ($normalized !== null) {
+                return $normalized;
+            }
+        }
+
+        return null;
+    }
+
+    private static function normalizeNullableInt($value): ?int
+    {
+        $normalized = is_numeric($value) ? (int) $value : null;
+
+        return $normalized && $normalized > 0 ? $normalized : null;
     }
 
     private static function resolveModule(string $routeName, string $path): string

@@ -106,6 +106,9 @@
       font-family: 'Inter', sans-serif;
       background-color: #f3f4f6;
       color: #111827;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
 
     .landing-header {
@@ -350,6 +353,11 @@
 
     footer.bg-dark {
       background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary)) !important;
+      margin-top: auto;
+    }
+
+    footer.bg-dark p {
+      margin-bottom: 0;
     }
 
     .card-product {
@@ -757,7 +765,7 @@
       }
 
       .filters-panel {
-        position: static;
+        display: none;
       }
 
       .filter-chip-card {
@@ -971,12 +979,6 @@
   <!-- PRODUCTOS -->
   <section id="productos" class="py-5 section-muted">
     <div class="container">
-      <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
-        <div>
-          <h2 class="section-title text-start mb-0">Destacados</h2>
-          <p class="text-muted mb-0">Menos pasos para encontrar lo que buscas.</p>
-        </div>
-      </div>
 
       <div class="products-layout">
         <aside class="filters-panel">
@@ -1123,8 +1125,6 @@
         <div class="col-12 col-md-6 mb-4 mb-md-0">
           <div class="contact-card">
           <h2 class="section-title text-start mb-3">Contacto</h2>
-          <p class="mb-2">{{ $tenant->name ?? '' }}</p>
-          <p class="text-muted mb-0">{{ $heroSummary }}</p>
           <div class="contact-stat-grid">
             <div class="contact-stat">
               <small>Horario</small>

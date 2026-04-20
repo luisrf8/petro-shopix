@@ -168,6 +168,7 @@
                   <th>Tipo</th>
                   <th>Rubro</th>
                   <th>Facturación digital</th>
+                  <th>Contribuyente especial</th>
                   <th>Envío solo ciudad tienda</th>
                   <th>Estado</th>
                   <th class="tenant-plan-cell">Plan</th>
@@ -196,6 +197,13 @@
                         <span class="badge bg-success">Activa</span>
                       @else
                         <span class="badge bg-secondary">Inactiva</span>
+                      @endif
+                    </td>
+                    <td>
+                      @if((bool) ($tenant->special_taxpayer ?? false))
+                        <span class="badge bg-warning text-dark">Activo</span>
+                      @else
+                        <span class="badge bg-secondary">Inactivo</span>
                       @endif
                     </td>
                     <td>
@@ -318,6 +326,9 @@
                         data-owner-email="{{ $owner?->email }}"
                         data-plan-id="{{ $latestPayment?->plan_id }}"
                         data-electronic-invoicing-enabled="{{ (int) (($tenant->electronic_invoicing_enabled ?? false) ? 1 : 0) }}"
+                        data-special-taxpayer="{{ (int) (($tenant->special_taxpayer ?? false) ? 1 : 0) }}"
+                        data-printer-tax-change-enabled="{{ (int) (($tenant->printer_tax_change_enabled ?? false) ? 1 : 0) }}"
+                        data-printer-tax-change-reference="{{ $tenant->printer_tax_change_reference ?? '' }}"
                         data-restrict-delivery-city-to-tenant="{{ (int) (($tenant->restrict_delivery_city_to_tenant ?? true) ? 1 : 0) }}"
                         data-working-days='@json($tenant->working_days ?? [])'
                         data-opening-time="{{ !empty($tenant->opening_time) ? \Illuminate\Support\Str::substr((string) $tenant->opening_time, 0, 5) : '' }}"
@@ -437,6 +448,29 @@
                 <option value="0">Inactiva</option>
               </select>
               <small class="text-muted">Controla si la tienda usa integración de facturación electrónica.</small>
+            </div>
+
+            <div class="mb-3">
+              <label for="editTenantSpecialTaxpayer" class="form-label">Contribuyente especial</label>
+              <select class="form-select border border-1 p-2" id="editTenantSpecialTaxpayer" name="special_taxpayer" required>
+                <option value="1">Activo</option>
+                <option value="0">Inactivo</option>
+              </select>
+              <small class="text-muted">Si está activo, la tienda no aplicará IGTF.</small>
+            </div>
+
+            <div class="mb-3">
+              <label for="editTenantPrinterTaxChangeEnabled" class="form-label">Habilitación imprenta para alícuotas</label>
+              <select class="form-select border border-1 p-2" id="editTenantPrinterTaxChangeEnabled" name="printer_tax_change_enabled" required>
+                <option value="1">Activa</option>
+                <option value="0">Inactiva</option>
+              </select>
+              <small class="text-muted">Solo debe activarse cuando la imprenta autorice cambios de alícuotas.</small>
+            </div>
+
+            <div class="mb-3">
+              <label for="editTenantPrinterTaxChangeReference" class="form-label">Referencia imprenta</label>
+              <input type="text" class="form-control border border-1 p-2" id="editTenantPrinterTaxChangeReference" name="printer_tax_change_reference" placeholder="Providencia o referencia de aprobación">
             </div>
 
             <div class="mb-3">
@@ -580,6 +614,9 @@
       document.getElementById('editTenantPlan').value = this.dataset.planId || '';
       document.getElementById('editTenantStatus').value = this.dataset.active || '1';
       document.getElementById('editTenantElectronicInvoicingEnabled').value = this.dataset.electronicInvoicingEnabled || '0';
+      document.getElementById('editTenantSpecialTaxpayer').value = this.dataset.specialTaxpayer || '0';
+      document.getElementById('editTenantPrinterTaxChangeEnabled').value = this.dataset.printerTaxChangeEnabled || '0';
+      document.getElementById('editTenantPrinterTaxChangeReference').value = this.dataset.printerTaxChangeReference || '';
       document.getElementById('editTenantRestrictDeliveryCityToTenant').value = this.dataset.restrictDeliveryCityToTenant || '1';
       document.getElementById('editTenantOpeningTime').value = this.dataset.openingTime || '';
       document.getElementById('editTenantClosingTime').value = this.dataset.closingTime || '';

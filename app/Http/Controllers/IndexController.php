@@ -379,16 +379,16 @@ class IndexController extends Controller
             $log->audit_tenant_id = (string) ($payload['tenant_id'] ?? '');
             $log->audit_role = (string) ($payload['role'] ?? '');
             $log->audit_module = (string) ($payload['module'] ?? $log->table_name);
+            $log->audit_event_type = (string) ($log->event_type ?? '');
+            $log->audit_record_id = (string) ($log->record_id ?? '');
             $log->audit_status = (string) ($payload['status'] ?? '');
             $log->audit_route_name = (string) ($payload['route_name'] ?? '');
             $log->audit_path = (string) ($payload['path'] ?? '');
             $log->audit_message = (string) ($payload['message'] ?? '');
+            $log->audit_old_values = is_array($log->old_values) ? $log->old_values : [];
+            $log->audit_new_values = is_array($log->new_values) ? $log->new_values : [];
 
             return $log;
-        });
-
-        $logsCollection = $logsCollection->filter(function (Log $log) {
-            return !$this->isAuthAuditLog($log);
         });
 
         if ($filters['tenant_id'] !== '') {
@@ -450,14 +450,12 @@ class IndexController extends Controller
 
         $filterOptions = [
             'roles' => $rawLogs
-                ->filter(fn (Log $log) => !$this->isAuthAuditLog($log))
                 ->map(fn (Log $log) => (string) ($this->decodeAuditPayload($log->description)['role'] ?? ''))
                 ->filter()
                 ->unique()
                 ->sort()
                 ->values(),
             'modules' => $rawLogs
-                ->filter(fn (Log $log) => !$this->isAuthAuditLog($log))
                 ->map(function (Log $log) {
                     $payload = $this->decodeAuditPayload($log->description);
                     return (string) ($payload['module'] ?? $log->table_name);
@@ -467,14 +465,12 @@ class IndexController extends Controller
                 ->sort()
                 ->values(),
             'actions' => $rawLogs
-                ->filter(fn (Log $log) => !$this->isAuthAuditLog($log))
                 ->pluck('action')
                 ->filter()
                 ->unique()
                 ->sort()
                 ->values(),
             'statuses' => $rawLogs
-                ->filter(fn (Log $log) => !$this->isAuthAuditLog($log))
                 ->map(fn (Log $log) => (string) ($this->decodeAuditPayload($log->description)['status'] ?? ''))
                 ->filter()
                 ->unique()

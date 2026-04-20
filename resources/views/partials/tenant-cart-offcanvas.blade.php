@@ -410,13 +410,6 @@
     box-shadow: 0 0 0 0.2rem rgba(var(--tenant-accent-rgb), 0.18);
   }
 
-  #tenant-pro-logged-user {
-    border-radius: 12px;
-    border: 1px solid #bbf7d0;
-    background: #f0fdf4;
-    color: #166534;
-  }
-
   .tenant-pro-payment-row {
     border: 1px solid rgba(var(--tenant-accent-rgb), 0.35) !important;
     border-radius: 14px !important;
@@ -436,11 +429,153 @@
   }
 
   .tenant-pro-summary {
-    margin-top: 0.85rem;
-    border: 1px solid rgba(var(--tenant-accent-rgb), 0.35);
-    border-radius: 14px;
-    background: rgba(var(--tenant-accent-rgb), 0.08);
-    padding: 0.75rem;
+    margin-top: 0.5rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .tenant-pro-summary.is-compact {
+    margin-top: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  .tenant-pro-summary-grid {
+    display: flex;
+    flex-wrap: wrap;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem 0.75rem;
+  }
+
+  .tenant-pro-summary-card {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+    min-width: 0;
+    flex: 1 1 calc(50% - 0.75rem);
+  }
+
+  .tenant-pro-summary-card small {
+    display: block;
+    color: #64748b;
+    font-size: 0.74rem;
+    margin-bottom: 0.05rem;
+  }
+
+  .tenant-pro-summary-card strong,
+  .tenant-pro-summary-card span {
+    display: block;
+    color: #0f172a;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .tenant-pro-stepper {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+    margin: 0.7rem 0 0.9rem;
+  }
+
+  .tenant-pro-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.32rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding: 0.2rem 0.25rem;
+    color: #64748b;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .tenant-pro-step-index {
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #e2e8f0;
+    color: #334155;
+    flex-shrink: 0;
+  }
+
+  .tenant-pro-step-label {
+    display: block;
+    line-height: 1.15;
+  }
+
+  .tenant-pro-step.is-active {
+    color: var(--tenant-primary);
+  }
+
+  .tenant-pro-step.is-active .tenant-pro-step-index,
+  .tenant-pro-step.is-complete .tenant-pro-step-index {
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    color: #fff;
+  }
+
+  .tenant-pro-step.is-complete {
+    color: var(--tenant-primary);
+  }
+
+  .tenant-pro-step-panel + .tenant-pro-step-panel {
+    margin-top: 0.2rem;
+  }
+
+  .tenant-pro-step-shell {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    background: #fff;
+    padding: 0.9rem;
+  }
+
+  .tenant-pro-step-shell h6 {
+    margin-bottom: 0.4rem;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #0f172a;
+  }
+
+  .tenant-pro-step-note {
+    color: #64748b;
+    font-size: 0.84rem;
+    margin-bottom: 0.7rem;
+  }
+
+  .tenant-pro-success-card {
+    border: 1px solid #bbf7d0;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #f0fdf4, #ffffff);
+    padding: 1rem;
+    text-align: center;
+  }
+
+  .tenant-pro-success-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    margin: 0 auto 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #166534;
+    background: #dcfce7;
+    border: 1px solid #86efac;
+  }
+
+  .tenant-pro-success-card p {
+    margin: 0;
+    color: #475569;
   }
 
   .tenant-pro-summary-row {
@@ -497,6 +632,19 @@
     .tenant-pro-auth-wrap,
     #tenant-pro-checkout-section {
       padding: 0.75rem;
+    }
+
+    .tenant-pro-summary-grid {
+      gap: 0.2rem 0.6rem;
+    }
+
+    .tenant-pro-stepper {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .tenant-pro-step {
+      justify-content: flex-start;
+      padding-inline: 0;
     }
 
     .tenant-auth-entry-shell {
@@ -630,7 +778,6 @@
                   <h6>Iniciar sesión o registrarte</h6>
                   <p>Usa una red social o tu correo para continuar.</p>
                 </div>
-                <span class="tenant-auth-head-pill">Sin salir de la landing</span>
               </div>
 
               <div id="tenant-pro-auth-alert" class="tenant-auth-alert d-none" role="alert"></div>
@@ -701,61 +848,29 @@
           </div>
         </div>
 
-        <div id="tenant-pro-logged-user" class="alert alert-success d-none"></div>
-
         <div id="tenant-pro-checkout-section" class="d-none">
-          <div class="mb-3">
-            <label class="form-label">Tipo de entrega</label>
-            <div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-pickup" value="pickup" checked>
-                <label class="form-check-label" for="tenant-pro-delivery-pickup">Retiro en tienda</label>
+          <div class="tenant-pro-summary is-compact mb-3">
+            <div class="tenant-pro-summary-grid">
+              <div class="tenant-pro-summary-card">
+                <small>Total</small>
+                <strong class="highlight" id="tenant-pro-total-amount">0.00 $</strong>
+                <span class="text-muted small" id="tenant-pro-total-amount-bs">0.00 Bs</span>
               </div>
-              <div class="form-check form-check-inline">
-                <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-shipping" value="shipping">
-                <label class="form-check-label" for="tenant-pro-delivery-shipping">Envío</label>
+              <div class="tenant-pro-summary-card">
+                <small>Restante</small>
+                <strong class="highlight" id="tenant-pro-remaining-amount">0.00 $</strong>
+                <span class="text-muted small" id="tenant-pro-remaining-amount-bs">0.00 Bs</span>
               </div>
-            </div>
-          </div>
-
-          <div class="mb-3 d-none" id="tenant-pro-shipping-address-container">
-            <label class="form-label">Dirección de envío</label>
-            <div class="row g-2">
-              <div class="col-12 col-md-4">
-                <select id="tenant-pro-shipping-country" class="form-select">
-                  <option value="">País</option>
-                </select>
+              <div class="tenant-pro-summary-card">
+                <small>Pagado</small>
+                <strong id="tenant-pro-paid-amount">0.00 $</strong>
+                <span class="text-muted small" id="tenant-pro-paid-amount-bs">0.00 Bs</span>
               </div>
-              <div class="col-12 col-md-4">
-                <select id="tenant-pro-shipping-state" class="form-select" disabled>
-                  <option value="">Estado</option>
-                </select>
+              <div class="tenant-pro-summary-card">
+                <small>Tasa referencial</small>
+                <strong><span id="tenant-pro-dollar-rate">0.00</span> Bs</strong>
+                <span class="text-muted small">Base: <span id="tenant-pro-base-currency">USD</span></span>
               </div>
-              <div class="col-12 col-md-4">
-                <select id="tenant-pro-shipping-city" class="form-select" disabled>
-                  <option value="">Ciudad</option>
-                </select>
-              </div>
-              <div class="col-12">
-                <input type="text" id="tenant-pro-shipping-address-detail" class="form-control" placeholder="Dirección exacta (calle, referencia, etc.)">
-              </div>
-            </div>
-          </div>
-
-          <hr>
-          <h6>Métodos de pago</h6>
-          <p class="small text-muted mb-2">Cada pago requiere referencia y comprobante de pago (imagen).</p>
-          <div id="tenant-pro-payment-rows" class="d-flex flex-column gap-2"></div>
-          <button type="button" id="tenant-pro-add-payment-row" class="btn btn-outline-dark btn-sm mt-2">+ Agregar pago</button>
-
-          <div class="tenant-pro-summary mt-3">
-            <div class="tenant-pro-summary-row">
-              <strong>Total carrito</strong>
-              <strong class="highlight" id="tenant-pro-total-amount">0.00 $</strong>
-            </div>
-            <div class="tenant-pro-summary-row">
-              <span class="text-muted" id="tenant-pro-total-bs-label">Total carrito (Bs)</span>
-              <span id="tenant-pro-total-amount-bs" class="text-muted">0.00 Bs</span>
             </div>
             <div class="tenant-pro-summary-row mt-2 d-none" id="tenant-pro-igtf-base-payments-row">
               <span class="text-muted">Pagado en <span id="tenant-pro-igtf-base-code">USD</span> (base IGTF)</span>
@@ -765,29 +880,90 @@
               <span class="text-danger fw-semibold">IGTF</span>
               <span id="tenant-pro-igtf-amount" class="text-danger fw-semibold">0.00 $</span>
             </div>
-            <div class="tenant-pro-summary-row mt-2">
-              <span class="fw-semibold">Pagado</span>
-              <span id="tenant-pro-paid-amount">0.00 $</span>
+          </div>
+
+          <div class="tenant-pro-stepper" id="tenant-pro-stepper">
+            <div class="tenant-pro-step is-active" data-step="1">
+              <span class="tenant-pro-step-index">1</span>
+              <span class="tenant-pro-step-label">Entrega</span>
             </div>
-            <div class="tenant-pro-summary-row">
-              <span class="text-muted" id="tenant-pro-paid-bs-label">Pagado (Bs)</span>
-              <span id="tenant-pro-paid-amount-bs" class="text-muted">0.00 Bs</span>
+            <div class="tenant-pro-step" data-step="2">
+              <span class="tenant-pro-step-index">2</span>
+              <span class="tenant-pro-step-label">Pago</span>
             </div>
-            <div class="tenant-pro-summary-row mt-2">
-              <strong>Restante</strong>
-              <strong class="highlight" id="tenant-pro-remaining-amount">0.00 $</strong>
+            <div class="tenant-pro-step" data-step="3">
+              <span class="tenant-pro-step-index">3</span>
+              <span class="tenant-pro-step-label">Confirmación</span>
             </div>
-            <div class="tenant-pro-summary-row">
-              <span class="text-muted" id="tenant-pro-remaining-bs-label">Restante (Bs)</span>
-              <span id="tenant-pro-remaining-amount-bs" class="text-muted">0.00 Bs</span>
+          </div>
+
+          <div class="tenant-pro-step-panel" data-checkout-step-panel="1">
+            <div class="tenant-pro-step-shell">
+              <h6>Tipo de entrega</h6>
+              <p class="tenant-pro-step-note">Primero define cómo recibirás tu compra.</p>
+              <div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-pickup" value="pickup" checked>
+                  <label class="form-check-label" for="tenant-pro-delivery-pickup">Retiro en tienda</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-shipping" value="shipping">
+                  <label class="form-check-label" for="tenant-pro-delivery-shipping">Envío</label>
+                </div>
+              </div>
+
+              <div class="mt-3 d-none" id="tenant-pro-shipping-address-container">
+                <label class="form-label">Dirección de envío</label>
+                <div class="row g-2">
+                  <div class="col-12 col-md-4">
+                    <select id="tenant-pro-shipping-country" class="form-select">
+                      <option value="">País</option>
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <select id="tenant-pro-shipping-state" class="form-select" disabled>
+                      <option value="">Estado</option>
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <select id="tenant-pro-shipping-city" class="form-select" disabled>
+                      <option value="">Ciudad</option>
+                    </select>
+                  </div>
+                  <div class="col-12">
+                    <input type="text" id="tenant-pro-shipping-address-detail" class="form-control" placeholder="Dirección exacta (calle, referencia, etc.)">
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="tenant-pro-note">Tasa referencial: <span id="tenant-pro-dollar-rate">0.00</span> Bs por <span id="tenant-pro-base-currency">USD</span></div>
+          </div>
+
+          <div class="tenant-pro-step-panel d-none" data-checkout-step-panel="2">
+            <div class="tenant-pro-step-shell">
+              <h6>Métodos de pago</h6>
+              <p class="tenant-pro-step-note">Agrega tu pago con referencia y comprobante.</p>
+              <div id="tenant-pro-payment-rows" class="d-flex flex-column gap-2"></div>
+              <button type="button" id="tenant-pro-add-payment-row" class="btn btn-outline-dark btn-sm mt-2">+ Agregar pago</button>
+            </div>
+          </div>
+
+          <div class="tenant-pro-step-panel d-none" data-checkout-step-panel="3">
+            <div class="tenant-pro-success-card">
+              <div class="tenant-pro-success-icon">
+                <i class="bi bi-check2-circle"></i>
+              </div>
+              <h6 class="mb-2">Pago enviado con éxito</h6>
+              <p>Tu pago ha sido enviado correctamente. Te llegará una notificación con el seguimiento de tu compra.</p>
+              <a href="#" id="tenant-pro-success-link" class="btn btn-outline-dark btn-sm mt-3 d-none">Ver seguimiento</a>
+            </div>
           </div>
         </div>
       </div>
       <div class="modal-footer tenant-pro-modal-footer" id="tenantProCheckoutModalFooter">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-        <button type="button" class="btn btn-success" id="tenant-pro-submit-order" disabled>Confirmar pedido</button>
+        <button type="button" class="btn btn-outline-dark d-none" id="tenant-pro-prev-step">Atrás</button>
+        <button type="button" class="btn btn-dark d-none" id="tenant-pro-next-step">Continuar</button>
+        <button type="button" class="btn btn-success d-none" id="tenant-pro-submit-order" disabled>Confirmar pedido</button>
       </div>
     </div>
   </div>
@@ -1249,6 +1425,107 @@
     let proBaseCurrency = 'USD';
     let proIgtfRate = 0;
     let proElectronicInvoicingEnabled = false;
+    let proSpecialTaxpayer = false;
+    let currentCheckoutStep = 1;
+
+    function getCheckoutSummaryElement() {
+      return document.querySelector('#tenant-pro-checkout-section .tenant-pro-summary.is-compact');
+    }
+
+    function getCheckoutStepperElement() {
+      return document.getElementById('tenant-pro-stepper');
+    }
+
+    function getCheckoutStepPanels() {
+      return Array.from(document.querySelectorAll('[data-checkout-step-panel]'));
+    }
+
+    function resetCheckoutSuccessState() {
+      const successLink = document.getElementById('tenant-pro-success-link');
+      if (successLink) {
+        successLink.classList.add('d-none');
+        successLink.setAttribute('href', '#');
+      }
+    }
+
+    function setCheckoutStep(step) {
+      currentCheckoutStep = step;
+
+      const stepper = getCheckoutStepperElement();
+      const panels = getCheckoutStepPanels();
+      const summary = getCheckoutSummaryElement();
+      const prevButton = document.getElementById('tenant-pro-prev-step');
+      const nextButton = document.getElementById('tenant-pro-next-step');
+      const submitButton = document.getElementById('tenant-pro-submit-order');
+      const modalTitle = document.getElementById('tenantProCheckoutModalLabel');
+      const modalFooter = document.getElementById('tenantProCheckoutModalFooter');
+
+      stepper?.querySelectorAll('.tenant-pro-step').forEach(stepElement => {
+        const stepNumber = Number(stepElement.dataset.step || 0);
+        stepElement.classList.toggle('is-active', stepNumber === currentCheckoutStep);
+        stepElement.classList.toggle('is-complete', stepNumber < currentCheckoutStep);
+      });
+
+      panels.forEach(panel => {
+        const panelStep = Number(panel.dataset.checkoutStepPanel || 0);
+        panel.classList.toggle('d-none', panelStep !== currentCheckoutStep);
+      });
+
+      if (summary) {
+        summary.classList.toggle('d-none', currentCheckoutStep === 3);
+      }
+
+      if (stepper) {
+        stepper.classList.toggle('d-none', currentCheckoutStep === 3);
+      }
+
+      if (prevButton) {
+        prevButton.classList.toggle('d-none', currentCheckoutStep !== 2);
+      }
+
+      if (nextButton) {
+        nextButton.classList.toggle('d-none', currentCheckoutStep !== 1);
+      }
+
+      if (submitButton) {
+        submitButton.classList.toggle('d-none', currentCheckoutStep !== 2);
+      }
+
+      if (modalTitle) {
+        modalTitle.textContent = currentCheckoutStep === 3 ? 'Pedido enviado' : 'Checkout';
+      }
+    }
+
+    function validateCheckoutStepOne() {
+      const deliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+      if (deliveryType !== 'shipping') {
+        return true;
+      }
+
+      const deliveryAddressResult = buildShippingAddress(
+        proShippingCountrySelect,
+        proShippingStateSelect,
+        proShippingCitySelect,
+        proShippingAddressDetailInput
+      );
+
+      if (!deliveryAddressResult.valid) {
+        alert(deliveryAddressResult.message);
+        return false;
+      }
+
+      return true;
+    }
+
+    function showCheckoutSuccess(orderId = null) {
+      const successLink = document.getElementById('tenant-pro-success-link');
+      if (successLink && orderId) {
+        successLink.href = `/publicOrder/${orderId}`;
+        successLink.classList.remove('d-none');
+      }
+
+      setCheckoutStep(3);
+    }
 
     function getBaseCurrencySymbol() {
       return String(proBaseCurrency).toUpperCase() === 'EUR' ? '€' : '$';
@@ -1286,6 +1563,39 @@
 
     function clearTenantAuthAlert() {
       showTenantAuthAlert('');
+    }
+
+    function showTenantToast(title, message = '') {
+      if (typeof bootstrap === 'undefined' || !bootstrap?.Toast) {
+        return;
+      }
+
+      let toastContainer = document.getElementById('tenant-shopix-toast-container');
+      if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'tenant-shopix-toast-container';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '3000';
+        document.body.appendChild(toastContainer);
+      }
+
+      const toastElement = document.createElement('div');
+      toastElement.className = 'toast align-items-center border-0';
+      toastElement.setAttribute('role', 'status');
+      toastElement.setAttribute('aria-live', 'polite');
+      toastElement.setAttribute('aria-atomic', 'true');
+      toastElement.innerHTML = `
+        <div class="toast-header">
+          <strong class="me-auto">${escapeHtml(title || 'Shopix')}</strong>
+          <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body">${escapeHtml(message || '')}</div>
+      `;
+
+      toastContainer.appendChild(toastElement);
+      const toastInstance = bootstrap.Toast.getOrCreateInstance(toastElement, { delay: 2600 });
+      toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove(), { once: true });
+      toastInstance.show();
     }
 
     function setCheckoutResumeState(shouldResumeCheckout) {
@@ -1332,21 +1642,21 @@
             </div>
             <div class="col-12 col-md-4">
               <label class="form-label small mb-1">Monto</label>
-              <input type="number" step="0.01" min="0" class="form-control pro-payment-amount" placeholder="0.00">
+              <input type="number" step="0.01" min="0.01" class="form-control pro-payment-amount" placeholder="0.00">
             </div>
             <div class="col-10 col-md-3">
               <label class="form-label small mb-1">Referencia *</label>
               <input type="text" class="form-control pro-payment-reference" placeholder="Obligatoria" required>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label small mb-1">Imagen de comprobante *</label>
+              <input type="file" class="form-control pro-payment-reference-image" accept="image/png,image/jpeg,image/jpg,image/webp" required>
             </div>
             <div class="col-2 col-md-1 d-flex align-items-end">
               <button type="button" class="btn btn-outline-danger btn-sm w-100 pro-remove-payment-row" aria-label="Eliminar pago"><i class="bi bi-x-lg"></i></button>
             </div>
             <div class="col-12">
               <div class="small border rounded p-2 bg-light pro-payment-method-details"></div>
-            </div>
-            <div class="col-12 col-md-6">
-              <label class="form-label small mb-1">Imagen de comprobante *</label>
-              <input type="file" class="form-control pro-payment-reference-image" accept="image/png,image/jpeg,image/jpg,image/webp" required>
             </div>
             <div class="col-12 col-md-6">
               <div class="small text-muted pro-payment-reference-image-name pt-md-4">Sin imagen cargada</div>
@@ -1525,7 +1835,7 @@
         return sum + amountRaw;
       }, 0);
 
-      const shouldApplyIgtf = proElectronicInvoicingEnabled && Number(proIgtfRate || 0) > 0;
+      const shouldApplyIgtf = proElectronicInvoicingEnabled && !proSpecialTaxpayer && Number(proIgtfRate || 0) > 0;
       const igtfAmount = shouldApplyIgtf ? (directBasePaymentsTotal * (Number(proIgtfRate || 0) / 100)) : 0;
 
       return {
@@ -1620,7 +1930,6 @@
       }
 
       const authSection = document.getElementById('tenant-pro-auth-section');
-      const loggedUserBox = document.getElementById('tenant-pro-logged-user');
       const checkoutSection = document.getElementById('tenant-pro-checkout-section');
       const submitOrderButton = document.getElementById('tenant-pro-submit-order');
       const totalAmountElement = document.getElementById('tenant-pro-total-amount');
@@ -1632,18 +1941,6 @@
       const token = getAuthToken();
       const user = getAuthUser();
       const isLogged = !!token && !!user?.id;
-
-      if (loggedUserBox) {
-        if (isLogged) {
-          const safeName = escapeHtml(user?.name || 'Cliente');
-          const safeEmail = escapeHtml(user?.email || '');
-          loggedUserBox.classList.remove('d-none');
-          loggedUserBox.innerHTML = `<strong>Sesión activa:</strong> ${safeName}${safeEmail ? ` (${safeEmail})` : ''}`;
-        } else {
-          loggedUserBox.classList.add('d-none');
-          loggedUserBox.textContent = '';
-        }
-      }
 
       const showAuthOnlyState = (title) => {
         if (modalTitle) {
@@ -1664,19 +1961,17 @@
       };
 
       const showCheckoutState = () => {
-        if (modalTitle) {
-          modalTitle.textContent = 'Checkout';
-        }
-
         authSection.classList.add('d-none');
         checkoutSection.classList.remove('d-none');
         modalFooter?.classList.remove('d-none');
         submitOrderButton.disabled = cart.length === 0;
+        resetCheckoutSuccessState();
+        setCheckoutStep(1);
       };
 
       const showLoggedInIdleState = () => {
         if (modalTitle) {
-          modalTitle.textContent = 'Sesión activa';
+          modalTitle.textContent = 'Cuenta lista';
         }
 
         authSection.classList.add('d-none');
@@ -1725,6 +2020,7 @@
       proBaseRate = Number(methodsData.base_rate || 0);
       proIgtfRate = Number(methodsData.igtf_rate || 0);
       proElectronicInvoicingEnabled = !!methodsData.electronic_invoicing_enabled;
+      proSpecialTaxpayer = !!methodsData.special_taxpayer;
 
       if (methods.length === 0) {
         alert('Esta tienda no tiene métodos de pago activos para checkout.');
@@ -1821,6 +2117,7 @@
       }
 
       setAuthData(data.token, data.user);
+      showTenantToast('Acceso correcto', `Inicio de sesión correcto, ${data.user?.name || 'cliente'}.`);
       openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
     }
 
@@ -1851,6 +2148,7 @@
       }
 
       setAuthData(data.token, data.user);
+      showTenantToast('Cuenta creada', `Sesión iniciada correctamente, ${data.user?.name || 'cliente'}.`);
       openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
     }
 
@@ -1997,18 +2295,9 @@
         return;
       }
 
-      alert(data.message || 'Pedido realizado correctamente.');
-      saveCart([]);
-
-      const modalElement = document.getElementById('tenantProCheckoutModal');
-      const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-      modal.hide();
-
-      if (data.order_id) {
-        window.location.href = `/publicOrder/${data.order_id}`;
-      }
-
       setProSubmitLoading(false);
+      showCheckoutSuccess(data.order_id || null);
+      saveCart([]);
     }
 
     document.addEventListener('click', event => {
@@ -2016,7 +2305,7 @@
       if (authTrigger) {
         event.preventDefault();
         closeTenantCartOffcanvas();
-        openProCheckout({ authOnly: true });
+        window.dispatchEvent(new CustomEvent('shopix-open-auth-requested'));
         return;
       }
 
@@ -2093,6 +2382,10 @@
 
     const resumedCheckoutState = consumeCheckoutResumeState();
     if (resumedCheckoutState) {
+      const resumedUser = getAuthUser();
+      if (resumedUser?.id) {
+        showTenantToast('Acceso correcto', `Inicio de sesión correcto, ${resumedUser.name || 'cliente'}.`);
+      }
       const shouldResumeCheckout = !!resumedCheckoutState.checkout && cartEnabled && getCart().length > 0 && !!getAuthToken();
       openProCheckout({ authOnly: !shouldResumeCheckout });
     }
@@ -2123,6 +2416,18 @@
             });
           }
         });
+      });
+
+      document.getElementById('tenant-pro-next-step')?.addEventListener('click', () => {
+        if (!validateCheckoutStepOne()) {
+          return;
+        }
+
+        setCheckoutStep(2);
+      });
+
+      document.getElementById('tenant-pro-prev-step')?.addEventListener('click', () => {
+        setCheckoutStep(1);
       });
 
       document.getElementById('tenant-pro-submit-order')?.addEventListener('click', submitProOrder);

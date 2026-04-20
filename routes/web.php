@@ -26,7 +26,8 @@ use App\Http\Controllers\{
     HelpPreferenceController,
     GoogleDriveController,
     ReportController,
-    ElectronicInvoicingController
+    ElectronicInvoicingController,
+    SalesFiscalController
 };
 
 // RUTAS DE INVITADOS
@@ -211,6 +212,8 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::post('/sales-orders/{order}/electronic/annul', [ElectronicInvoicingController::class, 'annul'])->middleware('role.name:owner,admin,administrador')->name('sales.electronic.annul');
     Route::post('/sales-orders/{order}/electronic/metadata', [ElectronicInvoicingController::class, 'metadata'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.metadata');
     Route::post('/sales-orders/{order}/document-mode', [SaleController::class, 'updateDocumentMode'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.documentMode.update');
+    Route::post('/sales-orders/{order}/adjustment-notes', [SalesFiscalController::class, 'storeAdjustmentNote'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.adjustmentNotes.store');
+    Route::post('/sales-orders/{order}/retentions', [SalesFiscalController::class, 'storeRetention'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.retentions.store');
     Route::get('/my-electronic-documents', [ElectronicInvoicingController::class, 'tenantIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.documents.tenant');
     Route::get('/electronic-documents', [ElectronicInvoicingController::class, 'index'])->middleware('role.name:4')->name('electronic.documents.index');
     Route::post('/electronic-documents/{electronicDocument}/retry', [ElectronicInvoicingController::class, 'retry'])->middleware('role.name:4')->name('electronic.documents.retry');
@@ -236,6 +239,8 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/reports/customers/excel', [ReportController::class, 'customersExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.customers.excel');
     Route::get('/reports/accounts-receivable/pdf', [ReportController::class, 'receivablesPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.accountsReceivable.pdf');
     Route::get('/reports/accounts-receivable/excel', [ReportController::class, 'receivablesExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.accountsReceivable.excel');
+    Route::get('/reports/sales/book/pdf', [ReportController::class, 'salesBookPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.sales.book.pdf');
+    Route::get('/reports/sales/book/excel', [ReportController::class, 'salesBookExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.sales.book.excel');
     Route::get('/reports/store-expenses/pdf', [ReportController::class, 'storeExpensesPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.storeExpenses.pdf');
     Route::get('/reports/store-expenses/excel', [ReportController::class, 'storeExpensesExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.storeExpenses.excel');
 

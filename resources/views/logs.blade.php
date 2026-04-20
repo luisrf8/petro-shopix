@@ -79,9 +79,13 @@
             <tr>
               <th class="border border-1 p-2">ID</th>
               <th class="border border-1 p-2">Fecha</th>
+              <th class="border border-1 p-2">Hora</th>
               <th class="border border-1 p-2">Usuario</th>
               <th class="border border-1 p-2">Tienda</th>
               <th class="border border-1 p-2">Rol</th>
+              <th class="border border-1 p-2">Tipo</th>
+              <th class="border border-1 p-2">Tabla</th>
+              <th class="border border-1 p-2">Registro</th>
               <th class="border border-1 p-2">Funcionalidad</th>
               <th class="border border-1 p-2">Acción</th>
               <th class="border border-1 p-2">Ruta</th>
@@ -102,10 +106,14 @@
               @endphp
               <tr>
                 <td class="border border-1 p-2">{{ $log->id }}</td>
-                <td class="border border-1 p-2">{{ optional($log->created_at)->format('Y-m-d H:i:s') }}</td>
+                <td class="border border-1 p-2">{{ optional($log->occurred_at ?? $log->created_at)->format('Y-m-d') }}</td>
+                <td class="border border-1 p-2">{{ optional($log->occurred_at ?? $log->created_at)->format('H:i:s') }}</td>
                 <td class="border border-1 p-2">{{ $log->user_id }}</td>
                 <td class="border border-1 p-2">{{ $payload['tenant_id'] ?? '-' }}</td>
                 <td class="border border-1 p-2">{{ $payload['role'] ?? '-' }}</td>
+                <td class="border border-1 p-2">{{ $log->event_type ?? '-' }}</td>
+                <td class="border border-1 p-2">{{ $log->table_name ?? '-' }}</td>
+                <td class="border border-1 p-2">{{ $log->record_id ?? '-' }}</td>
                 <td class="border border-1 p-2">{{ $payload['module'] ?? $log->table_name }}</td>
                 <td class="border border-1 p-2">{{ $log->action }}</td>
                 <td class="border border-1 p-2">{{ $payload['path'] ?? '-' }}</td>
@@ -126,6 +134,14 @@
                           <li>{{ $changeLine }}</li>
                         @endforeach
                       </ul>
+                    @endif
+                    @if(!empty($log->old_values))
+                      <div class="mt-2"><strong>Antes:</strong></div>
+                      <pre class="mb-2 small bg-light p-2 rounded">{{ json_encode($log->old_values, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
+                    @endif
+                    @if(!empty($log->new_values))
+                      <div><strong>Después:</strong></div>
+                      <pre class="mb-0 small bg-light p-2 rounded">{{ json_encode($log->new_values, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}</pre>
                     @endif
                   @else
                     {{ $log->description }}

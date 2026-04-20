@@ -98,7 +98,7 @@
             </select>
           </div>
           <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
-          <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Descargar nota de entrega</a>
+          <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Descargar orden de entrega</a>
           @endif
           @if($canCommunicateCustomer && $storeWhatsappUrl)
             <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
@@ -123,13 +123,13 @@
             <div>
               <strong>Tipo de documento de la venta:</strong>
               <span class="badge {{ $documentIssueMode === 'electronic_invoice' ? 'bg-success' : 'bg-secondary' }} ms-2">
-                {{ $documentIssueMode === 'electronic_invoice' ? 'Facturación digital' : 'Nota de entrega' }}
+                {{ $documentIssueMode === 'electronic_invoice' ? 'Facturación digital' : 'Orden de entrega' }}
               </span>
             </div>
             <form method="POST" action="{{ route('sales.documentMode.update', $order->id) }}" class="d-flex gap-2 align-items-center">
               @csrf
               <select name="document_issue_mode" class="form-select form-select-sm border border-1 p-2" style="min-width: 220px;">
-                <option value="delivery_note" {{ $documentIssueMode === 'delivery_note' ? 'selected' : '' }}>Nota de entrega</option>
+                <option value="delivery_note" {{ $documentIssueMode === 'delivery_note' ? 'selected' : '' }}>Orden de entrega</option>
                 <option value="electronic_invoice" {{ $documentIssueMode === 'electronic_invoice' ? 'selected' : '' }} {{ (bool) ($order->tenant->electronic_invoicing_enabled ?? false) ? '' : 'disabled' }}>Facturación digital</option>
               </select>
               <button type="submit" class="btn btn-outline-dark btn-sm mb-0">Guardar</button>
@@ -169,6 +169,9 @@
               </form>
             </div>
             <div class="col-md-2">
+              <a href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?disposition=inline" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm w-100 mb-0">Imprimir factura</a>
+            </div>
+            <div class="col-md-2">
               <form method="POST" action="{{ route('sales.electronic.sendEmail', $order->id) }}">
                 @csrf
                 <input type="hidden" name="emails" value="{{ $order->user->email ?? '' }}">
@@ -182,7 +185,7 @@
                 <button type="submit" class="btn btn-outline-danger btn-sm w-100 mb-0" {{ $edoc && $edoc->is_annulled ? 'disabled' : '' }}>Anular</button>
               </form>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-1">
               <form method="POST" action="{{ route('sales.electronic.metadata', $order->id) }}">
                 @csrf
                 <button type="submit" class="btn btn-outline-primary btn-sm w-100 mb-0">Numeraciones</button>
@@ -191,23 +194,25 @@
           </div>
 
           <hr>
+          @if($edoc && $edoc->is_annulled)
+            <div class="alert alert-danger text-white mb-3">
+              Esta factura fiscal fue anulada en la imprenta autorizada{{ $edoc->annulled_at ? ' el ' . $edoc->annulled_at->format('d/m/Y H:i') : '' }}.
+            </div>
+          @endif
           <div class="row">
             <div class="col-md-6">
               <p class="mb-1"><strong>Serie:</strong> {{ $edoc->serie ?? '-' }}</p>
               <p class="mb-1"><strong>Tipo doc:</strong> {{ $edoc->tipo_documento ?? '-' }}</p>
               <p class="mb-1"><strong>Número:</strong> {{ $edoc->numero_documento ?? '-' }}</p>
-              <p class="mb-1"><strong>Control:</strong> {{ $edoc->numero_control ?? '-' }}</p>
+              <p class="mb-1"><strong>Control:</strong> <span class="badge bg-gradient-dark">{{ $edoc->numero_control ?? '-' }}</span></p>
             </div>
             <div class="col-md-6">
               <p class="mb-1"><strong>Transacción:</strong> {{ $edoc->transaccion_id ?? '-' }}</p>
-              <p class="mb-1"><strong>Estado:</strong> {{ $edoc->estado_documento ?? '-' }}</p>
+              <p class="mb-1"><strong>Estado:</strong> <span class="badge {{ ($edoc && $edoc->is_annulled) ? 'bg-gradient-danger' : 'bg-gradient-success' }}">{{ ($edoc && $edoc->is_annulled) ? 'Anulada' : ($edoc->estado_documento ?? 'Activa') }}</span></p>
               <p class="mb-1"><strong>Mensaje:</strong> {{ $edoc->mensaje ?? '-' }}</p>
               <p class="mb-1"><strong>Anulado:</strong> {{ ($edoc && $edoc->is_annulled) ? 'Sí' : 'No' }}</p>
             </div>
           </div>
-          @if($edoc && $edoc->url_consulta)
-            <a href="{{ $edoc->url_consulta }}" target="_blank" rel="noopener" class="btn btn-link btn-sm px-0">Abrir URL de consulta</a>
-          @endif
         </div>
       </div>
       @else
@@ -215,10 +220,165 @@
         @if(!(bool) ($order->tenant->electronic_invoicing_enabled ?? false))
           La facturación digital está desactivada para esta tienda. Un super administrador puede activarla desde Gestión de Tiendas.
         @else
-          Esta orden está configurada para Nota de entrega. Si deseas factura digital, cambia el tipo de documento arriba.
+          Esta orden está configurada para Orden de entrega. Si deseas factura digital, cambia el tipo de documento arriba.
         @endif
       </div>
       @endif
+      @php
+        $orderTaxBase = (float) $order->details->sum('amount');
+        $orderTaxTotal = (float) $order->details->flatMap->taxes->sum('tax_amount');
+        $orderGrossTotal = $orderTaxBase + $orderTaxTotal;
+      @endphp
+
+      <div class="row mt-4 g-4">
+        <div class="col-12 col-xl-6">
+          <div class="card h-100">
+            <div class="card-header pb-0">
+              <h6 class="mb-0">Notas de Crédito y Débito</h6>
+              <p class="text-sm text-muted mb-0">Registra ajustes fiscales vinculados a esta venta.</p>
+            </div>
+            <div class="card-body">
+              <form method="POST" action="{{ route('sales.adjustmentNotes.store', $order->id) }}" class="row g-3">
+                @csrf
+                <div class="col-md-4">
+                  <label class="form-label">Tipo de nota</label>
+                  <select name="note_type" class="form-select border border-1 p-2" required>
+                    <option value="credit">Nota de crédito</option>
+                    <option value="debit">Nota de débito</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Fecha</label>
+                  <input type="date" name="note_date" class="form-control border border-1 p-2" value="{{ now()->toDateString() }}" required>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Monto</label>
+                  <input type="number" name="amount" min="0.01" step="0.01" class="form-control border border-1 p-2" required>
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Motivo</label>
+                  <input type="text" name="reason" class="form-control border border-1 p-2" maxlength="255" required>
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Observaciones</label>
+                  <textarea name="notes" class="form-control border border-1 p-2" rows="2"></textarea>
+                </div>
+                <div class="col-12 d-flex justify-content-end">
+                  <button type="submit" class="btn btn-dark mb-0">Registrar nota</button>
+                </div>
+              </form>
+
+              <div class="table-responsive mt-4">
+                <table class="table align-items-center mb-0">
+                  <thead>
+                    <tr>
+                      <th>Correlativo</th>
+                      <th>Tipo</th>
+                      <th>Fecha</th>
+                      <th>Monto</th>
+                      <th>Estatus</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @forelse($order->adjustmentNotes as $note)
+                      <tr>
+                        <td>{{ $note->internal_number ?? 'N/A' }}</td>
+                        <td>{{ $note->note_type === 'credit' ? 'Crédito' : 'Débito' }}</td>
+                        <td>{{ optional($note->note_date)->format('d/m/Y') ?? 'N/A' }}</td>
+                        <td>{{ $note->currency_code }} {{ number_format((float) $note->amount, 2) }}</td>
+                        <td><span class="badge bg-gradient-secondary">{{ ucfirst(str_replace('_', ' ', $note->status ?? 'registered')) }}</span></td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="5" class="text-center text-muted">No hay notas registradas.</td>
+                      </tr>
+                    @endforelse
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-xl-6">
+          <div class="card h-100">
+            <div class="card-header pb-0">
+              <h6 class="mb-0">Retenciones</h6>
+              <p class="text-sm text-muted mb-0">Registra retenciones asociadas a esta venta para el libro de ventas.</p>
+            </div>
+            <div class="card-body">
+              <form method="POST" action="{{ route('sales.retentions.store', $order->id) }}" class="row g-3">
+                @csrf
+                <div class="col-md-4">
+                  <label class="form-label">Tipo</label>
+                  <select name="retention_type" class="form-select border border-1 p-2" required>
+                    <option value="iva">IVA</option>
+                    <option value="islr">ISLR</option>
+                    <option value="municipal">Municipal</option>
+                    <option value="other">Otra</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Fecha</label>
+                  <input type="date" name="retention_date" class="form-control border border-1 p-2" value="{{ now()->toDateString() }}" required>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Tasa (%)</label>
+                  <input type="number" name="retention_rate" min="0" max="100" step="0.01" class="form-control border border-1 p-2" required>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Base imponible</label>
+                  <input type="number" name="taxable_base" min="0.01" step="0.01" class="form-control border border-1 p-2" value="{{ number_format($orderGrossTotal, 2, '.', '') }}" required>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Monto retenido</label>
+                  <input type="number" name="retained_amount" min="0.01" step="0.01" class="form-control border border-1 p-2">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Comprobante</label>
+                  <input type="text" name="certificate_number" class="form-control border border-1 p-2" maxlength="60">
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Observaciones</label>
+                  <textarea name="notes" class="form-control border border-1 p-2" rows="2"></textarea>
+                </div>
+                <div class="col-12 d-flex justify-content-end">
+                  <button type="submit" class="btn btn-dark mb-0">Registrar retención</button>
+                </div>
+              </form>
+
+              <div class="table-responsive mt-4">
+                <table class="table align-items-center mb-0">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Tipo</th>
+                      <th>Comprobante</th>
+                      <th>Monto</th>
+                      <th>Estatus</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @forelse($order->retentions as $retention)
+                      <tr>
+                        <td>{{ optional($retention->retention_date)->format('d/m/Y') ?? 'N/A' }}</td>
+                        <td>{{ strtoupper($retention->retention_type ?? 'N/A') }}</td>
+                        <td>{{ $retention->certificate_number ?? 'N/A' }}</td>
+                        <td>{{ $retention->currency_code }} {{ number_format((float) $retention->retained_amount, 2) }}</td>
+                        <td><span class="badge bg-gradient-secondary">{{ ucfirst(str_replace('_', ' ', $retention->status ?? 'registered')) }}</span></td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="5" class="text-center text-muted">No hay retenciones registradas.</td>
+                      </tr>
+                    @endforelse
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <!-- Tabla de Detalles de la Orden -->
       <div class="card order-surface-card">
         <div class="card-header">

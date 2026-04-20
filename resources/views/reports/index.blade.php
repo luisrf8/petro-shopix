@@ -53,6 +53,14 @@
                             <label for="min_pending_balance" class="form-label">Saldo pendiente mínimo (cuentas por cobrar)</label>
                             <input type="number" id="min_pending_balance" name="min_pending_balance" min="0" step="0.01" value="{{ request('min_pending_balance', '0') }}" class="form-control border border-1 p-2" placeholder="0.00">
                         </div>
+                        <div class="col-md-4">
+                            <label for="sales_book_source" class="form-label">Fuente del libro de ventas</label>
+                            <select id="sales_book_source" name="sales_book_source" class="form-control border border-1 p-2">
+                                <option value="shopix" {{ request('sales_book_source', $selectedSalesBookSource ?? 'shopix') === 'shopix' ? 'selected' : '' }}>Shopix</option>
+                                <option value="hka" {{ request('sales_book_source', $selectedSalesBookSource ?? 'shopix') === 'hka' ? 'selected' : '' }}>Sesion HKA</option>
+                            </select>
+                            <small class="text-muted d-block mt-1">Para el libro de ventas, HKA se usa para reconciliar estatus y controles con la sesión autenticada.</small>
+                        </div>
                         <div class="col-12 d-flex gap-2">
                             <button type="submit" class="btn btn-dark mb-0">Aplicar filtros</button>
                             <a href="{{ route('reports.index') }}" class="btn btn-outline-secondary mb-0">Limpiar</a>
@@ -67,6 +75,7 @@
                             'expense_category' => request('expense_category', ''),
                             'min_pending_balance' => request('min_pending_balance', '0'),
                             'currency_code' => request('currency_code', $selectedCurrencyCode ?? $baseCurrencyCode ?? 'USD'),
+                            'sales_book_source' => request('sales_book_source', $selectedSalesBookSource ?? 'shopix'),
                         ];
                     @endphp
 
@@ -157,6 +166,19 @@
                                     <div class="d-flex gap-2 flex-wrap">
                                         <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.accountsReceivable.pdf', $params) }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0" href="{{ route('reports.accountsReceivable.excel', $params) }}">Excel</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 col-xl-4">
+                            <div class="card h-100 border">
+                                <div class="card-body">
+                                    <h6 class="mb-2">Libro de ventas</h6>
+                                    <p class="text-sm text-muted mb-3">Ventas con IVA, notas de crédito/débito y retenciones.</p>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.sales.book.pdf', $params) }}">PDF</a>
+                                        <a class="btn btn-outline-success btn-sm mb-0" href="{{ route('reports.sales.book.excel', $params) }}">Excel</a>
                                     </div>
                                 </div>
                             </div>

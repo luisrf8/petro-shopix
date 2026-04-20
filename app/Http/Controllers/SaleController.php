@@ -47,6 +47,7 @@ use Illuminate\Support\Arr;
 use App\Support\WorkflowNotifier;
 use App\Support\ImageStorage;
 use App\Support\TenantCurrency;
+use App\Services\FiscalCorrelativeService;
 use App\Services\TheFactoryHkaService;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -327,35 +328,35 @@ class SaleController extends Controller
             $writer = new PngWriter();
             $qrCodeImage = $writer->write($qrCode);
             $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
-            // Renderizar PDF
-            // $pdfContent = view('orderPdf', compact(
-            $pdfContent = view('fiscalOrderPdf', compact(
-                'order',
-                'totalOrden',
-                'totalTaxes',
-                'totalGeneral',
-                'totalPagado',
-                'imageBase64',
-                'qrCodeBase64',
-                'dollarRate'
-            ))->render();
+            $pdfUrl = null;
+            if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
+                $pdfContent = view('fiscalOrderPdf', compact(
+                    'order',
+                    'totalOrden',
+                    'totalTaxes',
+                    'totalGeneral',
+                    'totalPagado',
+                    'imageBase64',
+                    'qrCodeBase64',
+                    'dollarRate'
+                ))->render();
 
-            $options = new Options();
-            $options->set('isHtml5ParserEnabled', true);
-            $options->set('isPhpEnabled', true);
+                $options = new Options();
+                $options->set('isHtml5ParserEnabled', true);
+                $options->set('isPhpEnabled', true);
 
-            $dompdf = new Dompdf($options);
-            $dompdf->loadHtml($pdfContent);
-            $dompdf->setPaper('A4', 'portrait');
-            $dompdf->render();
+                $dompdf = new Dompdf($options);
+                $dompdf->loadHtml($pdfContent);
+                $dompdf->setPaper('A4', 'portrait');
+                $dompdf->render();
 
-            // $fileName = 'orden-' . $order->id . '.pdf';
-            $fileName = 'factura-' . $order->id . '.pdf';
-            Storage::disk('public')->put('orders/' . $fileName, $dompdf->output());
-            $pdfUrl = asset('storage/orders/' . $fileName);
+                $fileName = 'factura-' . $order->id . '.pdf';
+                Storage::disk('public')->put('orders/' . $fileName, $dompdf->output());
+                $pdfUrl = asset('storage/orders/' . $fileName);
+            }
             
 
-            //NOTA DE ENTREGA PDF
+            //ORDEN DE ENTREGA PDF
             $pdfContentNota = view('orderPdf', compact(
                 'order',
                 'totalOrden',
@@ -861,7 +862,21 @@ class SaleController extends Controller
 
     public function showByOrder($id)
     {
-        $order = SalesOrder::with(['user', 'tenant', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment', 'payments.images', 'electronicDocuments'])->find($id);
+        $order = SalesOrder::with([
+            'user',
+            'tenant',
+            'details',
+            'details.variant',
+            'details.variant.product',
+            'details.taxes',
+            'payments',
+            'payments.payment',
+            'payments.images',
+            'electronicDocuments',
+            'adjustmentNotes',
+            'retentions',
+            'returns.items',
+        ])->find($id);
         // Calcular el total de la orden
         $totalOrden = $order->details->sum(function ($detalle) {
             return $detalle->amount;
@@ -938,6 +953,13 @@ class SaleController extends Controller
     {
         $order = SalesOrder::with(['user', 'details', 'details.variant.product', 'details.taxes', 'payments.payment'])->findOrFail($id);
 
+        if ($type === 'invoice' && ($order->document_issue_mode ?? 'delivery_note') === 'electronic_invoice') {
+            return $this->downloadElectronicInvoicePdf(
+                $order,
+                (string) $request->query('disposition', 'attachment')
+            );
+        }
+
         $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
         $emissionCurrencyCode = $this->resolveEmissionCurrencyCode((string) $request->query('currency_code', ''), $orderCurrencyCode);
 
@@ -997,17 +1019,6 @@ class SaleController extends Controller
         $qrCodeImage = $writer->write($qrCode);
         $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
 
-        $invoiceHtml = view('fiscalOrderPdf', compact(
-            'order',
-            'totalOrden',
-            'totalTaxes',
-            'totalGeneral',
-            'totalPagado',
-            'imageBase64',
-            'qrCodeBase64',
-            'dollarRate'
-        ))->with($pdfCurrencyContext)->render();
-
         $deliveryHtml = view('orderPdf', compact(
             'order',
             'totalOrden',
@@ -1020,13 +1031,27 @@ class SaleController extends Controller
             'tienda'
         ))->with($pdfCurrencyContext)->render();
 
-        $invoiceOutput = $this->renderPdfOutput($invoiceHtml);
         $deliveryOutput = $this->renderPdfOutput($deliveryHtml);
 
         $invoiceRelative = 'orders/factura-' . $order->id . '.pdf';
         $deliveryRelative = 'orders/NotaEntrega-' . $order->id . '.pdf';
 
-        Storage::disk('public')->put($invoiceRelative, $invoiceOutput);
+        if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
+            $invoiceHtml = view('fiscalOrderPdf', compact(
+                'order',
+                'totalOrden',
+                'totalTaxes',
+                'totalGeneral',
+                'totalPagado',
+                'imageBase64',
+                'qrCodeBase64',
+                'dollarRate'
+            ))->with($pdfCurrencyContext)->render();
+
+            $invoiceOutput = $this->renderPdfOutput($invoiceHtml);
+            Storage::disk('public')->put($invoiceRelative, $invoiceOutput);
+        }
+
         Storage::disk('public')->put($deliveryRelative, $deliveryOutput);
 
         return [
@@ -1054,6 +1079,10 @@ class SaleController extends Controller
     private function downloadRenderedPdfByCurrency(SalesOrder $order, string $type, string $emissionCurrencyCode)
     {
         $order->loadMissing(['details.taxes', 'details.variant.product', 'payments.payment', 'tenant']);
+
+        if ($type === 'invoice' && ($order->document_issue_mode ?? 'delivery_note') === 'electronic_invoice') {
+            return $this->downloadElectronicInvoicePdf($order, (string) request()->query('disposition', 'attachment'));
+        }
 
         $serverIp = request()->getHost();
         $imagePath = storage_path('app/public/products/infblack.png');
@@ -1097,6 +1126,49 @@ class SaleController extends Controller
         return response($output, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ]);
+    }
+
+    private function downloadElectronicInvoicePdf(SalesOrder $order, string $disposition = 'attachment')
+    {
+        $order->loadMissing('electronicDocuments');
+
+        $document = $order->electronicDocuments->sortByDesc('id')->first();
+        if (!$document) {
+            abort(404, 'No existe factura fiscal emitida por la imprenta autorizada para esta venta.');
+        }
+
+        $service = app(TheFactoryHkaService::class);
+        if (!$service->isConfigured()) {
+            abort(422, 'La integración de facturación digital no está configurada en el servidor.');
+        }
+
+        $response = $service->downloadDocumentFile([
+            'serie' => $document->serie,
+            'tipoDocumento' => $document->tipo_documento ?: '01',
+            'numeroDocumento' => $document->numero_documento,
+            'tipoArchivo' => 'pdf',
+        ]);
+
+        if (!($response['ok'] ?? false) || empty($response['content'])) {
+            abort(422, 'No fue posible descargar la factura fiscal desde la imprenta autorizada. ' . ($response['message'] ?? 'Error desconocido.'));
+        }
+
+        $document->update([
+            'mensaje' => (string) ($response['message'] ?? $document->mensaje),
+            'response_payload' => Arr::except((array) ($response['data'] ?? []), ['archivo']) ?: $document->response_payload,
+        ]);
+
+        $safeDisposition = $disposition === 'inline' ? 'inline' : 'attachment';
+        $fileName = implode('-', array_filter([
+            'factura-fiscal',
+            trim((string) ($document->serie ?? '')) !== '' ? trim((string) $document->serie) : null,
+            trim((string) ($document->numero_documento ?? '')),
+        ])) . '.pdf';
+
+        return response((string) $response['content'], 200, [
+            'Content-Type' => (string) ($response['mime_type'] ?? 'application/pdf'),
+            'Content-Disposition' => $safeDisposition . '; filename="' . $fileName . '"',
         ]);
     }
 
@@ -1654,6 +1726,7 @@ class SaleController extends Controller
 
             $payload = $service->buildInvoicePayloadFromOrder($order);
             $response = $service->emitDocument($payload);
+            $internalNumber = app(FiscalCorrelativeService::class)->next((int) $order->tenant_id, 'invoice', 'FAC');
 
             ElectronicDocument::create([
                 'tenant_id' => $order->tenant_id,
@@ -1663,6 +1736,7 @@ class SaleController extends Controller
                 'tipo_documento' => (string) Arr::get($payload, 'encabezado.identificacionDocumento.tipoDocumento', '01'),
                 'serie' => (string) Arr::get($payload, 'encabezado.identificacionDocumento.serie', ''),
                 'numero_documento' => (string) Arr::get($response, 'data.resultado.numeroDocumento', Arr::get($payload, 'encabezado.identificacionDocumento.numeroDocumento')),
+                'internal_number' => $internalNumber,
                 'numero_control' => (string) Arr::get($response, 'data.resultado.numeroControl', ''),
                 'transaccion_id' => (string) Arr::get($response, 'data.resultado.transaccionId', Arr::get($payload, 'encabezado.identificacionDocumento.transaccionId')),
                 'estado_documento' => (string) Arr::get($response, 'data.resultado.autorizado', Arr::get($response, 'data.resultado.imprentaDigital', '')),

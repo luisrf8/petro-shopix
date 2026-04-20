@@ -74,12 +74,12 @@
                 </select>
             </div>
             <a id="publicDownloadInvoiceBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
-            <a id="publicDownloadDeliveryBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Descargar nota de entrega</a>
+            <a id="publicDownloadDeliveryBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Descargar orden de entrega</a>
             @if($storeWhatsappUrl)
                 <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
             @endif
             @if($customerWhatsappUrl)
-                <a href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0">WhatsApp cliente</a>
+                <a id="public-order-customer-whatsapp" href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0" data-order-user-id="{{ $order->user->id }}">WhatsApp cliente</a>
             @endif
         </div>
         
@@ -206,6 +206,27 @@
 
                 currencySelect.addEventListener('change', syncDownloadUrls);
                 syncDownloadUrls();
+            })();
+
+            (() => {
+                const customerWhatsappBtn = document.getElementById('public-order-customer-whatsapp');
+
+                if (!customerWhatsappBtn) {
+                    return;
+                }
+
+                try {
+                    const rawUser = localStorage.getItem('shopix_ecomm_user');
+                    const customerUser = rawUser ? JSON.parse(rawUser) : null;
+                    const orderUserId = String(customerWhatsappBtn.dataset.orderUserId || '');
+                    const currentUserId = String(customerUser?.id ?? '');
+
+                    if (orderUserId !== '' && currentUserId !== '' && orderUserId === currentUserId) {
+                        customerWhatsappBtn.classList.add('d-none');
+                    }
+                } catch (error) {
+                    console.warn('No se pudo resolver el usuario autenticado del storefront.', error);
+                }
             })();
         </script>
 </body>

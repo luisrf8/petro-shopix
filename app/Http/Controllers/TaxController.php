@@ -11,7 +11,7 @@ class TaxController extends Controller
     /** Mostrar vista con impuestos */
     public function index()
     {
-        $taxes = Tax::all();
+        $taxes = Tax::query()->orderBy('name')->get();
         return view('taxes', compact('taxes'));
     }
 
@@ -19,14 +19,16 @@ class TaxController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'code' => 'required|unique:taxes,code',
+            'code' => 'nullable|string|max:20|unique:taxes,code',
             'name' => 'required',
-            'rate' => 'required|numeric|min:0',
+            'rate' => 'required|numeric|gt:0',
             'description' => 'nullable'
         ]);
 
+        $code = $this->resolveTaxCode((string) $request->input('code', ''), (string) $request->input('name', ''));
+
         $tax = Tax::create([
-            'code' => strtoupper($request->code),
+            'code' => $code,
             'name' => $request->name,
             'rate' => $request->rate,
             'description' => $request->description,
@@ -44,21 +46,15 @@ class TaxController extends Controller
     {
         $request->validate([
             'name' => 'required',
-            'rate' => 'required|numeric|min:0',
+            'rate' => 'required|numeric|gt:0',
             'description' => 'nullable'
         ]);
 
-        // Validar cambio de código
-        if ($request->code && $request->code !== $tax->code) {
-            $request->validate([
-                'code' => 'required|unique:taxes,code'
-            ]);
-        }
-
         $oldData = $tax->toArray(); // Guardar datos antiguos para el log
+        $code = $this->resolveTaxCode((string) $request->input('code', $tax->code), (string) $request->input('name', $tax->name), (int) $tax->id);
 
         $tax->update([
-            'code' => strtoupper($request->code ?? $tax->code),
+            'code' => $code,
             'name' => $request->name,
             'rate' => $request->rate,
             'description' => $request->description,
@@ -75,11 +71,11 @@ class TaxController extends Controller
     public function toggleStatus(Request $request, Tax $tax)
     {
         $request->validate([
-            'is_active' => 'required|in:0,1'
+            'is_active' => 'required|boolean'
         ]);
 
-        $oldStatus = $tax->is_active;
-        $tax->update(['is_active' => $request->is_active]);
+        $oldStatus = (bool) $tax->is_active;
+        $tax->update(['is_active' => (bool) $request->boolean('is_active')]);
 
         $userId = auth()->id();
         $description = "Cambio estado de impuesto {$tax->name} ({$tax->code}) de " 
@@ -87,6 +83,40 @@ class TaxController extends Controller
                         . " a " . ($tax->is_active ? 'Activo' : 'Inactivo');
                         DB::statement("CALL log_change(?, ?, ?, ?)", ['taxes', 'update', $userId, $description]);
 
-        return response()->json(['message' => 'Estado de impuesto actualizado'], 200);
+        return response()->json([
+            'success' => true,
+            'message' => 'Estado de impuesto actualizado',
+            'is_active' => (bool) $tax->is_active,
+        ], 200);
+    }
+
+    private function resolveTaxCode(string $requestedCode, string $name, ?int $ignoreTaxId = null): string
+    {
+        $baseCode = strtoupper(trim($requestedCode));
+
+        if ($baseCode === '') {
+            $transliterated = function_exists('iconv') ? iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $name) : $name;
+            $baseCode = strtoupper((string) preg_replace('/[^A-Z0-9]+/i', '', (string) $transliterated));
+        }
+
+        if ($baseCode === '') {
+            $baseCode = 'TAX';
+        }
+
+        $candidate = substr($baseCode, 0, 20);
+        $suffix = 1;
+
+        while (
+            Tax::query()
+                ->when($ignoreTaxId, fn ($query) => $query->where('id', '!=', $ignoreTaxId))
+                ->where('code', $candidate)
+                ->exists()
+        ) {
+            $suffixText = (string) $suffix;
+            $candidate = substr($baseCode, 0, max(0, 20 - strlen($suffixText))) . $suffixText;
+            $suffix++;
+        }
+
+        return $candidate;
     }
 }

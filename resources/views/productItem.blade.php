@@ -226,6 +226,15 @@
               <div class="card mt-3">
                 <div class="card-body">
                   <h5 class="mb-3">Impuestos del producto</h5>
+                  @if(!$canEditProductTaxes)
+                    <div class="alert alert-warning text-white bg-warning mb-3" role="alert">
+                      Las alícuotas de productos existentes están bloqueadas. Debes habilitar la autorización de imprenta para modificarlas.
+                    </div>
+                  @elseif(!empty($productTaxChangeReference))
+                    <div class="alert alert-info mb-3" role="alert">
+                      Habilitación vigente de imprenta: {{ $productTaxChangeReference }}
+                    </div>
+                  @endif
                   <div id="taxContainer" class="d-flex flex-wrap gap-3">
                     @foreach ($taxes as $tax)
                       <div class="form-check">
@@ -234,6 +243,7 @@
                           type="checkbox"
                           value="{{ $tax->id }}"
                           id="tax{{ $tax->id }}"
+                          {{ !$canEditProductTaxes ? 'disabled' : '' }}
                           {{ $product->taxes->contains($tax->id) ? 'checked' : '' }}
                         >
                         <label class="form-check-label" for="tax{{ $tax->id }}">
@@ -272,7 +282,7 @@
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Precio base</label>
-                            <input type="number" class="form-control border" data-existing-price value="{{ number_format((float) $variant->price, 2, '.', '') }}">
+                            <input type="number" class="form-control border" data-existing-price min="0.01" step="0.01" value="{{ number_format((float) $variant->price, 2, '.', '') }}">
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Desc. variante %</label>
@@ -280,7 +290,7 @@
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Stock</label>
-                            <input type="number" class="form-control border" data-existing-stock value="{{ $variant->stock }}">
+                            <input type="number" class="form-control border" data-existing-stock min="0" step="1" value="{{ $variant->stock }}">
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Código barras</label>
@@ -461,6 +471,16 @@
 
     function formatProductItemSize(bytes) {
       return `${(Number(bytes || 0) / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function parsePositiveProductAmount(value) {
+      const amount = Number(value);
+      return Number.isFinite(amount) && amount > 0 ? amount : null;
+    }
+
+    function parseProductInteger(value, minimum = 0) {
+      const amount = Number(value);
+      return Number.isInteger(amount) && amount >= minimum ? amount : null;
     }
 
     function loadProductImageElement(file) {
@@ -798,7 +818,7 @@
         </div>
         <div class="col-lg-2 col-md-6">
           <label class="form-label">Precio</label>
-          <input type="number" class="form-control" data-new-price step="0.01">
+          <input type="number" class="form-control" data-new-price min="0.01" step="0.01">
         </div>
         <div class="col-lg-2 col-md-6">
           <label class="form-label">Desc. %</label>
@@ -806,7 +826,7 @@
         </div>
         <div class="col-lg-2 col-md-6">
           <label class="form-label">Stock</label>
-          <input type="number" class="form-control" data-new-stock>
+          <input type="number" class="form-control" data-new-stock min="0" step="1">
         </div>
         <div class="col-lg-2 col-md-6">
           <label class="form-label">Código barras</label>
@@ -866,12 +886,12 @@
     const rows = Array.from(document.querySelectorAll('#newVariantContainer .new-variant-row'));
     rows.forEach((row, index) => {
       const size = row.querySelector('[data-new-size]')?.value?.trim();
-      const price = row.querySelector('[data-new-price]')?.value;
+      const price = parsePositiveProductAmount(row.querySelector('[data-new-price]')?.value);
       const discount_percentage = row.querySelector('[data-new-discount]')?.value;
-      const stock = row.querySelector('[data-new-stock]')?.value;
+      const stock = parseProductInteger(row.querySelector('[data-new-stock]')?.value, 0);
       const barcode = row.querySelector('[data-new-barcode]')?.value?.trim();
 
-      if (size && price && stock) {
+      if (size && price !== null && stock !== null) {
         variants.push({ size, price, discount_percentage: discount_percentage || 0, stock, barcode });
         const imageInput = row.querySelector('.new-variant-image');
         if (imageInput?.files?.[0]) {
@@ -915,6 +935,11 @@
   document.getElementById('saveProductTaxesBtn')?.addEventListener('click', function () {
     if (!inlineProductId) return;
 
+    if (!@json((bool) ($canEditProductTaxes ?? false))) {
+      alert('Las alícuotas del producto están bloqueadas hasta contar con habilitación de imprenta.');
+      return;
+    }
+
     const selectedTaxIds = [...document.querySelectorAll('.tax-checkbox:checked')].map(cb => cb.value);
 
     fetch(`/products/${inlineProductId}/taxes`, {
@@ -944,10 +969,29 @@
       if (!variantId || !row) return;
 
       const formData = new FormData();
-      formData.append('size', row.querySelector('[data-existing-size]')?.value || '');
-      formData.append('price', row.querySelector('[data-existing-price]')?.value || '0');
+      const size = row.querySelector('[data-existing-size]')?.value?.trim() || '';
+      const price = parsePositiveProductAmount(row.querySelector('[data-existing-price]')?.value);
+      const stock = parseProductInteger(row.querySelector('[data-existing-stock]')?.value, 0);
+
+      if (!size) {
+        alert('La variante debe tener un nombre.');
+        return;
+      }
+
+      if (price === null) {
+        alert('El precio de la variante debe ser mayor a cero.');
+        return;
+      }
+
+      if (stock === null) {
+        alert('El stock de la variante no puede ser negativo.');
+        return;
+      }
+
+      formData.append('size', size);
+      formData.append('price', String(price));
       formData.append('discount_percentage', row.querySelector('[data-existing-discount]')?.value || '0');
-      formData.append('stock', row.querySelector('[data-existing-stock]')?.value || '0');
+      formData.append('stock', String(stock));
       formData.append('barcode', row.querySelector('[data-existing-barcode]')?.value || '');
 
       const imageInput = row.querySelector('.existing-variant-image-input');
@@ -1046,21 +1090,23 @@ async function deleteProduct(productId) {
 
 document.getElementById('editProductForm').addEventListener('submit', function(event) {
   event.preventDefault(); // Evitar que se recargue la página
-  console.log("Formulario enviado");
-    // Crear un objeto con los datos del formulario
     let formData = new FormData(this);
 
-    const productId = document.querySelector('.card').getAttribute('data-product-id');
-    console.log("productId", productId);
+    const productId = inlineProductId;
+    if (!productId) {
+      alert('No se pudo identificar el producto a actualizar.');
+      return;
+    }
 
-    // Realizar la solicitud fetch con el body en formato JSON
     fetch(`/api/products/${productId}`, {
         method: 'POST',
         headers: {
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
             'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
         },
-        body: formData, // Convertir el objeto a JSON
+        credentials: 'same-origin',
+        body: formData,
     })
     .then(async response => {
         const payload = await response.json().catch(() => ({}));

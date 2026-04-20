@@ -8,15 +8,19 @@ use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\PurchaseOrder;
+use App\Models\SalesAdjustmentNote;
 use App\Models\SalesOrder;
+use App\Models\SalesRetention;
 use App\Models\StoreExpense;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\TheFactoryHkaService;
 use App\Support\TenantCurrency;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 
 class ReportController extends Controller
 {
@@ -26,6 +30,7 @@ class ReportController extends Controller
         $tenant = Tenant::find($user->tenant_id);
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $selectedCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) $request->query('currency_code', $baseCurrencyCode));
+        $selectedSalesBookSource = (string) $request->query('sales_book_source', 'shopix');
 
         $expenseCategories = StoreExpense::query()
             ->where('tenant_id', $user->tenant_id)
@@ -40,6 +45,7 @@ class ReportController extends Controller
             'expenseCategories' => $expenseCategories,
             'baseCurrencyCode' => $baseCurrencyCode,
             'selectedCurrencyCode' => $selectedCurrencyCode,
+            'selectedSalesBookSource' => in_array($selectedSalesBookSource, ['shopix', 'hka'], true) ? $selectedSalesBookSource : 'shopix',
         ]);
     }
 
@@ -527,6 +533,46 @@ class ReportController extends Controller
         );
     }
 
+    public function salesBookPdf(Request $request)
+    {
+        [$rows, $summary] = $this->buildSalesBookData($request);
+
+        return $this->renderPdf(
+            'reports.pdf.sales-book',
+            compact('rows', 'summary'),
+            'libro_ventas'
+        );
+    }
+
+    public function salesBookExcel(Request $request)
+    {
+        [$rows, $summary] = $this->buildSalesBookData($request);
+
+        $csvRows = $rows->map(function ($row) {
+            return [
+                (string) $row['sale_date'],
+                (string) $row['order_id'],
+                (string) $row['customer_name'],
+                (string) $row['document_label'],
+                (string) $row['document_number'],
+                (string) $row['control_number'],
+                number_format((float) $row['taxable_base'], 2, '.', ''),
+                number_format((float) $row['tax_total'], 2, '.', ''),
+                number_format((float) $row['total_amount'], 2, '.', ''),
+                number_format((float) $row['credit_notes_total'], 2, '.', ''),
+                number_format((float) $row['debit_notes_total'], 2, '.', ''),
+                number_format((float) $row['retentions_total'], 2, '.', ''),
+                number_format((float) $row['net_total'], 2, '.', ''),
+            ];
+        })->all();
+
+        return $this->downloadCsv(
+            'libro_ventas',
+            ['Fecha', 'Orden_ID', 'Cliente', 'Documento', 'Numero', 'Control', 'Base_' . ($summary['currency_code'] ?? 'USD'), 'IVA_' . ($summary['currency_code'] ?? 'USD'), 'Total_' . ($summary['currency_code'] ?? 'USD'), 'Notas_Credito', 'Notas_Debito', 'Retenciones', 'Neto'],
+            $csvRows
+        );
+    }
+
     public function storeExpensesPdf(Request $request)
     {
         [$rows, $summary] = $this->buildStoreExpensesReportData($request);
@@ -752,6 +798,177 @@ class ReportController extends Controller
         ];
 
         return [$rows, $summary];
+    }
+
+    private function buildSalesBookData(Request $request): array
+    {
+        $user = auth()->user();
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+        $salesBookSource = in_array((string) $request->query('sales_book_source', 'shopix'), ['shopix', 'hka'], true)
+            ? (string) $request->query('sales_book_source', 'shopix')
+            : 'shopix';
+
+        $orders = SalesOrder::with(['user', 'details.taxes', 'electronicDocuments', 'adjustmentNotes', 'retentions'])
+            ->where('tenant_id', $user->tenant_id)
+            ->whereDate('date', '>=', $startDate->toDateString())
+            ->whereDate('date', '<=', $endDate->toDateString())
+            ->where('status', '!=', 2)
+            ->orderBy('date')
+            ->orderBy('id')
+            ->get();
+
+        $rows = $orders->map(function (SalesOrder $order) use ($currency, $user) {
+            $latestElectronicDocument = $order->electronicDocuments->sortByDesc('id')->first();
+            $taxableBase = (float) $order->details->sum('amount');
+            $taxTotal = (float) $order->details->flatMap->taxes->sum('tax_amount');
+            $totalAmount = $taxableBase + $taxTotal;
+            $creditNotesTotal = (float) $order->adjustmentNotes
+                ->where('note_type', 'credit')
+                ->sum('amount');
+            $debitNotesTotal = (float) $order->adjustmentNotes
+                ->where('note_type', 'debit')
+                ->sum('amount');
+            $retentionsTotal = (float) $order->retentions->sum('retained_amount');
+
+            $taxableBase = TenantCurrency::convertAmount($taxableBase, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $taxTotal = TenantCurrency::convertAmount($taxTotal, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $totalAmount = TenantCurrency::convertAmount($totalAmount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $creditNotesTotal = TenantCurrency::convertAmount($creditNotesTotal, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $debitNotesTotal = TenantCurrency::convertAmount($debitNotesTotal, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $retentionsTotal = TenantCurrency::convertAmount($retentionsTotal, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+
+            return [
+                'sale_date' => Carbon::parse($order->date)->format('d/m/Y'),
+                'order_id' => (int) $order->id,
+                'customer_name' => (string) ($order->user->name ?? 'N/A'),
+                'document_label' => $latestElectronicDocument ? 'Factura digital' : 'Orden de entrega',
+                'document_type' => (string) ($latestElectronicDocument->tipo_documento ?? '04'),
+                'document_series' => (string) ($latestElectronicDocument->serie ?? ''),
+                'document_number' => (string) ($latestElectronicDocument->numero_documento ?? $order->id),
+                'control_number' => (string) ($latestElectronicDocument->numero_control ?? '-'),
+                'status_label' => (bool) ($latestElectronicDocument?->is_annulled ?? false) ? 'Anulado' : 'Activo',
+                'status_origin' => 'shopix',
+                'taxable_base' => $taxableBase,
+                'tax_total' => $taxTotal,
+                'total_amount' => $totalAmount,
+                'credit_notes_total' => $creditNotesTotal,
+                'debit_notes_total' => $debitNotesTotal,
+                'retentions_total' => $retentionsTotal,
+                'net_total' => $totalAmount - $creditNotesTotal + $debitNotesTotal - $retentionsTotal,
+            ];
+        })->values();
+
+        if ($salesBookSource === 'hka') {
+            $rows = $this->syncSalesBookRowsWithHka($rows, $startDate, $endDate);
+        }
+
+        $summary = [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'rows_count' => (int) $rows->count(),
+            'taxable_base' => (float) $rows->sum('taxable_base'),
+            'tax_total' => (float) $rows->sum('tax_total'),
+            'total_amount' => (float) $rows->sum('total_amount'),
+            'credit_notes_total' => (float) $rows->sum('credit_notes_total'),
+            'debit_notes_total' => (float) $rows->sum('debit_notes_total'),
+            'retentions_total' => (float) $rows->sum('retentions_total'),
+            'net_total' => (float) $rows->sum('net_total'),
+            'currency_code' => $currency['code'],
+            'source' => $salesBookSource,
+        ];
+
+        return [$rows, $summary];
+    }
+
+    private function syncSalesBookRowsWithHka($rows, Carbon $startDate, Carbon $endDate)
+    {
+        $service = app(TheFactoryHkaService::class);
+        if (!$service->isConfigured()) {
+            return $rows;
+        }
+
+        $statusMap = [];
+        foreach (['01', '02', '03'] as $documentType) {
+            foreach ($this->fetchHkaDocumentsByType($service, $documentType, $startDate, $endDate) as $document) {
+                $key = $this->buildFiscalRowKey(
+                    (string) Arr::get($document, 'tipoDocumento', $documentType),
+                    (string) Arr::get($document, 'serie', ''),
+                    (string) Arr::get($document, 'numeroDocumento', '')
+                );
+
+                if ($key === '') {
+                    continue;
+                }
+
+                $statusMap[$key] = [
+                    'status_label' => (string) (Arr::get($document, 'estadoDocumento') ?: (Arr::get($document, 'fechaAnulacion') ? 'Anulado' : 'Registrado en HKA')),
+                    'control_number' => (string) (Arr::get($document, 'numeroControl') ?: '-'),
+                    'is_annulled' => trim((string) Arr::get($document, 'fechaAnulacion', '')) !== '',
+                    'status_origin' => 'hka',
+                ];
+            }
+        }
+
+        return $rows->map(function (array $row) use ($statusMap) {
+            $key = $this->buildFiscalRowKey(
+                (string) ($row['document_type'] ?? ''),
+                (string) ($row['document_series'] ?? ''),
+                (string) ($row['document_number'] ?? '')
+            );
+
+            if ($key !== '' && isset($statusMap[$key])) {
+                $row['status_label'] = $statusMap[$key]['status_label'];
+                $row['status_origin'] = $statusMap[$key]['status_origin'];
+                if (($row['control_number'] ?? '-') === '-' && trim((string) $statusMap[$key]['control_number']) !== '') {
+                    $row['control_number'] = $statusMap[$key]['control_number'];
+                }
+            }
+
+            return $row;
+        })->values();
+    }
+
+    private function fetchHkaDocumentsByType(TheFactoryHkaService $service, string $documentType, Carbon $startDate, Carbon $endDate): array
+    {
+        $documents = [];
+
+        for ($page = 1; $page <= 20; $page++) {
+            $response = $service->listDocuments([
+                'TipoDocumento' => $documentType,
+                'FechaInicio' => $startDate->format('d/m/Y'),
+                'FechaFin' => $endDate->format('d/m/Y'),
+                'NumPagina' => $page,
+            ]);
+
+            if (!($response['ok'] ?? false)) {
+                break;
+            }
+
+            $pageDocuments = Arr::get($response, 'data.documentos', []);
+            if (!is_array($pageDocuments) || empty($pageDocuments)) {
+                break;
+            }
+
+            $documents = array_merge($documents, $pageDocuments);
+
+            $totalPages = (int) Arr::get($response, 'data.totalPaginas', 1);
+            if ($page >= max($totalPages, 1)) {
+                break;
+            }
+        }
+
+        return $documents;
+    }
+
+    private function buildFiscalRowKey(string $documentType, string $series, string $documentNumber): string
+    {
+        $normalizedNumber = preg_replace('/\D+/', '', $documentNumber) ?: trim($documentNumber);
+        if ($normalizedNumber === '') {
+            return '';
+        }
+
+        return implode('|', [trim($documentType), trim($series), $normalizedNumber]);
     }
 
     private function resolveReportCurrencyContext(Request $request, int $tenantId): array

@@ -249,6 +249,132 @@
       background-color: #fff;
     }
 
+    .product-card-link {
+      color: inherit;
+    }
+
+    .product-card-media {
+      position: relative;
+    }
+
+    .product-card-body {
+      padding: 0.95rem 0.95rem 0.9rem;
+      display: grid;
+      gap: 0.72rem;
+    }
+
+    .product-card-copy {
+      display: grid;
+      gap: 0.26rem;
+    }
+
+    .product-card-title {
+      font-size: 1rem;
+      line-height: 1.2;
+      margin: 0;
+      color: #111827;
+    }
+
+    .product-card-description {
+      color: #6b7280;
+      font-size: 0.84rem;
+      line-height: 1.35;
+      margin: 0;
+    }
+
+    .product-variant-strip {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding-bottom: 0.1rem;
+      margin: 0 -0.15rem;
+      scroll-snap-type: x proximity;
+      scrollbar-width: thin;
+    }
+
+    .product-variant-strip::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .product-variant-strip::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 999px;
+    }
+
+    .product-variant-chip {
+      min-width: 122px;
+      border: 1px solid #cfd8e3;
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+      border-radius: 14px;
+      padding: 0.58rem 0.72rem;
+      display: grid;
+      gap: 0.3rem;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+      scroll-snap-align: start;
+      flex: 0 0 auto;
+    }
+
+    .product-variant-chip.product-variant-more {
+      place-content: center;
+      text-align: center;
+      color: var(--tenant-primary);
+      background: linear-gradient(180deg, rgba(var(--tenant-accent-rgb), 0.12), rgba(var(--tenant-primary-rgb), 0.08));
+      border-style: dashed;
+    }
+
+    .product-variant-chip.product-variant-more strong {
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    .product-variant-chip.product-variant-more small {
+      color: #475569;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .product-variant-size {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: var(--tenant-primary);
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .product-variant-price {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.45rem;
+      font-size: 0.84rem;
+      color: #111827;
+    }
+
+    .product-variant-price strong {
+      font-size: 0.98rem;
+      color: #0f172a;
+    }
+
+    .product-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65rem;
+      color: #475569;
+      font-size: 0.8rem;
+    }
+
+    .product-card-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-weight: 700;
+      color: var(--tenant-primary);
+    }
+
     .landing-media-image {
       border-radius: 14px !important;
     }
@@ -593,9 +719,23 @@
       .category-card {
         height: 220px;
       }
+
+      .product-card-body {
+        padding: 0.85rem 0.85rem 0.82rem;
+        gap: 0.65rem;
+      }
     }
 
     @media (max-width: 575.98px) {
+      .page-shell {
+        padding-top: 5.7rem;
+      }
+
+      #productos.py-3 {
+        padding-top: 0.85rem !important;
+        padding-bottom: 1.35rem !important;
+      }
+
       .category-card {
         height: 190px;
       }
@@ -611,7 +751,79 @@
 
       .card-product img,
       .card-product .d-flex.align-items-center.justify-content-center {
-        height: 220px !important;
+        height: 210px !important;
+      }
+
+      .card-product {
+        border-radius: 18px;
+      }
+
+      .product-card-title {
+        font-size: 0.98rem;
+      }
+
+      .product-card-description {
+        font-size: 0.81rem;
+      }
+
+      .product-variant-strip {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.42rem;
+        margin-inline: 0;
+        overflow-x: visible;
+        padding-bottom: 0;
+        scroll-snap-type: none;
+      }
+
+      .product-variant-chip {
+        min-width: 0;
+        width: 100%;
+        padding: 0.42rem 0.3rem;
+        border-radius: 11px;
+        flex: initial;
+        gap: 0.18rem;
+      }
+
+      .product-variant-size {
+        justify-content: center;
+        font-size: 0.66rem;
+        gap: 0.18rem;
+      }
+
+      .product-variant-price {
+        justify-content: center;
+        font-size: 0.68rem;
+        gap: 0.18rem;
+      }
+
+      .product-variant-price strong {
+        font-size: 0.72rem;
+      }
+
+      .product-variant-chip.product-variant-more strong {
+        font-size: 0.82rem;
+      }
+
+      .product-variant-chip.product-variant-more small {
+        font-size: 0.62rem;
+      }
+
+      .product-card-footer {
+        font-size: 0.76rem;
+      }
+
+      .products-summary {
+        margin-bottom: 0.55rem;
+      }
+
+      .product-item,
+      .package-item {
+        margin-bottom: 0.9rem !important;
+      }
+
+      #products-container {
+        --bs-gutter-x: 0.7rem;
       }
     }
 
@@ -727,11 +939,6 @@
           <h2 class="section-title text-start mb-0">Catálogo de productos</h2>
           <p class="text-muted mb-0">Vista organizada por categorías para navegar más rápido.</p>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
-          <a href="#" class="btn btn-dark" data-shopix-open-auth>
-            <i class="bi bi-person-circle me-1"></i> Iniciar sesión
-          </a>
-        </div>
       </div>
 
       <div class="products-layout">
@@ -776,43 +983,56 @@
         </aside>
 
         <div>
-          <div class="products-summary">
-            <span id="products-counter">Mostrando {{ $products->count() }} resultado{{ $products->count() == 1 ? '' : 's' }}</span>
-          </div>
-
           <div class="row" id="products-container">
             @foreach($products as $product)
-              <div class="col-12 col-sm-6 col-md-4 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
+              <div class="col-6 col-sm-6 col-md-4 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
                 <a href="{{ route('tenant.public.product', [
                     'tenant' => $tenant->slug,
                     'product' => $product->id
-                  ]) }}" class="text-decoration-none d-block h-100">
+                  ]) }}" class="product-card-link text-decoration-none d-block h-100">
                   <div class="card card-product h-100">
-                    @if(isset($product->images[0]))
-                      <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top landing-media-image" style="height: 300px; object-fit: cover;">
-                    @else
-                      <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
-                        <i class="bi bi-image text-muted fs-1"></i>
+                    <div class="product-card-media">
+                      @if(isset($product->images[0]))
+                        <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top landing-media-image" style="height: 300px; object-fit: cover;">
+                      @else
+                        <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
+                          <i class="bi bi-image text-muted fs-1"></i>
+                        </div>
+                      @endif
+                    </div>
+                    <div class="card-body product-card-body text-start">
+                      <div class="product-card-copy">
+                        <h5 class="product-card-title fw-bold">{{ $product->name }}</h5>
+                        <p class="product-card-description">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta tienda.', 84) }}</p>
                       </div>
-                    @endif
-                    <div class="card-body text-start">
-                      <h5 class="fw-bold text-dark mb-1">{{ $product->name }}</h5>
-                      <p class="text-muted small mb-2">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta tienda.', 84) }}</p>
-                      <div class="d-flex flex-row gap-1 m-0 flex-wrap">
-                        @foreach ($product->variants as $variant)
+                      <div class="product-variant-strip" aria-label="Variantes disponibles de {{ $product->name }}">
+                        @foreach ($product->variants->take(2) as $variant)
                           @php
                             $productDiscount = (float) ($product->discount_percentage ?? 0);
                             $variantDiscount = (float) ($variant->discount_percentage ?? 0);
                             $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
                           @endphp
-                          <div class="small btn btn-outline-secondary p-2 rounded-3 d-inline-flex align-items-center gap-1">
-                            <span class="fw-semibold">{{ $variant->size }}</span>
-                            <span class="price-neo-chip">
+                          <div class="product-variant-chip">
+                            <span class="product-variant-size">
+                              <i class="bi bi-tag"></i>
+                              {{ $variant->size }}
+                            </span>
+                            <span class="product-variant-price">
+                              <small>{{ $baseCurrencySymbol }}</small>
                               <strong>{{ number_format($effectiveVariantPrice, 2) }}</strong>
-                              <span>{{ $baseCurrencySymbol }}</span>
                             </span>
                           </div>
                         @endforeach
+                        @if ($product->variants->count() > 2)
+                          <div class="product-variant-chip product-variant-more">
+                            <strong>+{{ $product->variants->count() - 2 }}</strong>
+                            <small>ver más</small>
+                          </div>
+                        @endif
+                      </div>
+                      <div class="product-card-footer">
+                        <span>{{ $product->variants->count() }} variante{{ $product->variants->count() === 1 ? '' : 's' }}</span>
+                        <span class="product-card-cta">Ver producto <i class="bi bi-arrow-right-short"></i></span>
                       </div>
                     </div>
                   </div>

@@ -41,10 +41,10 @@ class ProductVariantController extends Controller
         $request->validate([
             'product_id' => 'required|integer|exists:products,id',
             'variants' => 'required|array',
-            'variants.*.size' => 'required|string|max:10',
-            'variants.*.price' => 'required|numeric',
+            'variants.*.size' => 'required|string|max:255',
+            'variants.*.price' => 'required|numeric|gt:0',
             'variants.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'variants.*.stock' => 'required|integer',
+            'variants.*.stock' => 'required|integer|min:0',
             'variants.*.barcode' => 'nullable|string|max:100',
             'variant_images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
         ]);
@@ -57,7 +57,7 @@ class ProductVariantController extends Controller
 
             $createdVariant = ProductVariant::create([
                 'product_id' => $request->product_id,
-                'size' => $variant['size'],
+                'size' => trim((string) $variant['size']),
                 'price' => $variant['price'],
                 'discount_percentage' => (float) ($variant['discount_percentage'] ?? 0),
                 'stock' => $variant['stock'],
@@ -107,10 +107,10 @@ class ProductVariantController extends Controller
         ];
 
         $request->validate([
-            'size' => 'required|string|max:10',
-            'price' => 'required|numeric',
+            'size' => 'required|string|max:255',
+            'price' => 'required|numeric|gt:0',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'stock' => 'required|integer',
+            'stock' => 'required|integer|min:0',
             'barcode' => 'nullable|string|max:100',
             'image' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
         ]);
@@ -120,7 +120,7 @@ class ProductVariantController extends Controller
     
         // Actualizar la variante con los datos proporcionados
         $productVariant->update([
-            'size' => $request->input('size'),
+            'size' => trim((string) $request->input('size')),
             'price' => $request->input('price'),
             'discount_percentage' => $request->input('discount_percentage', 0),
             'stock' => $request->input('stock'),

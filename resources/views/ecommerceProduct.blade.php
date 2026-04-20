@@ -72,6 +72,9 @@
       font-family: 'SF Pro Text', 'Google Sans', 'Inter', sans-serif;
       background-color: #f3f4f6;
       color: #111827;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
 
     .landing-header {
@@ -162,7 +165,6 @@
       width: 100px;
       height: 50px;
       object-fit: contain;
-      filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 1px rgba(2, 6, 23, 0.9));
     }
 
     .section-muted {
@@ -210,10 +212,12 @@
 
     footer.bg-dark {
       background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary)) !important;
+      margin-top: auto;
     }
 
     .page-shell {
       padding-top: 6.2rem;
+      flex: 1 0 auto;
     }
 
     .spotlight-card {
@@ -278,10 +282,10 @@
     }
 
     .product-detail-card {
-      max-width: 90vw;
-      min-height: 80vh;
-      margin: 16px auto 28px;
-      padding: 36px;
+      max-width: min(1360px, calc(100vw - 32px));
+      min-height: auto;
+      margin: 12px auto 20px;
+      padding: 20px;
       border-radius: 24px;
       border: 1px solid #e5e7eb;
       box-shadow: 0 20px 40px rgba(15, 23, 42, 0.1);
@@ -290,44 +294,155 @@
 
     .product-detail-layout {
       display: grid;
-      grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
-      gap: 2rem;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+      grid-template-areas:
+        "gallery meta"
+        "gallery content";
+      gap: 1.1rem 1.2rem;
       align-items: start;
     }
 
     .product-gallery-shell {
+      grid-area: gallery;
       display: grid;
-      grid-template-columns: 92px minmax(0, 1fr);
-      gap: 1rem;
+      grid-template-columns: 78px minmax(0, 1fr);
+      grid-template-areas: "status main";
+      gap: 0.9rem;
+      min-width: 0;
       align-items: start;
     }
 
+    .product-meta-card {
+      grid-area: meta;
+    }
+
     .product-content-shell {
+      grid-area: content;
       display: flex;
       flex-direction: column;
-      gap: 1rem;
+      gap: 0.75rem;
       min-width: 0;
     }
 
-    .main-image {
-      max-height: 640px;
+    .product-gallery-main {
+      grid-area: main;
+      position: relative;
+      min-width: 0;
       width: 100%;
-      object-fit: cover;
-      border-radius: 18px;
-      border: 1px solid #e5e7eb;
+      max-width: 680px;
+      justify-self: start;
     }
 
-    .product-gallery-main .d-flex.align-items-center.justify-content-center.rounded-3 {
+    .product-gallery-track {
+      display: flex;
+      gap: 0.75rem;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      padding-bottom: 0;
+    }
+
+    .product-gallery-track::-webkit-scrollbar {
+      display: none;
+    }
+
+    .product-gallery-slide {
+      flex: 0 0 100%;
+      scroll-snap-align: center;
       border: 1px solid #e5e7eb;
       border-radius: 18px;
-      background-color: #f8fafc !important;
+      overflow: hidden;
+      background: #f8fafc;
+      aspect-ratio: 1 / 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      max-height: min(68vh, 640px);
+    }
+
+    .product-gallery-slide img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .product-gallery-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.78);
+      background: rgba(15, 23, 42, 0.58);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+      backdrop-filter: blur(8px);
+    }
+
+    .product-gallery-arrow:hover,
+    .product-gallery-arrow:focus {
+      background: rgba(15, 23, 42, 0.78);
+      color: #fff;
+    }
+
+    .product-gallery-arrow.prev {
+      left: 0.75rem;
+    }
+
+    .product-gallery-arrow.next {
+      right: 0.75rem;
+    }
+
+    .product-gallery-status {
+      grid-area: status;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      gap: 0.55rem;
+      width: 78px;
+    }
+
+    .product-gallery-counter {
+      border-radius: 999px;
+      background: #111827;
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 0.28rem 0.68rem;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .product-gallery-thumbs {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      padding-bottom: 0;
+      max-height: min(68vh, 640px);
+    }
+
+    .product-gallery-thumbs::-webkit-scrollbar {
+      display: none;
     }
 
     .product-meta-card {
       border: 1px solid #e2e8f0;
       border-radius: 18px;
       background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-      padding: 1.2rem 1.25rem;
+      padding: 0.9rem 1rem;
       margin-bottom: 0;
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
     }
@@ -342,15 +457,14 @@
       border: 1px solid #e2e8f0;
       border-radius: 18px;
       background: #ffffff;
-      padding: 1.2rem 1.25rem;
+      padding: 0.8rem 0.9rem;
     }
 
     .variant-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.45rem;
     }
 
     .secure-box {
@@ -375,24 +489,25 @@
     }
 
     .thumbnail-image {
-      width: 80px;
-      height: 80px;
+      width: 74px;
+      height: 74px;
       object-fit: cover;
       border: 2px solid #d1d5db;
-      border-radius: 8px;
+      border-radius: 12px;
       cursor: pointer;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, transform 0.2s ease;
+      flex: 0 0 auto;
     }
 
     .thumbnail-image:hover,
     .thumbnail-image.active {
       border-color: var(--tenant-primary);
+      transform: translateY(-1px);
     }
 
     .variant-item {
       list-style-type: disc;
       margin-left: 20px;
-      padding: 5px 0;
       color: #333;
     }
     
@@ -435,9 +550,9 @@
 
     .variant-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 0.55rem;
-      margin-bottom: 0.35rem;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 0.5rem;
+      margin-bottom: 0.2rem;
     }
 
     .variant-button {
@@ -446,8 +561,8 @@
       margin-right: 0;
       margin-bottom: 0;
       border: 1px solid #d8e1ee;
-      border-radius: 12px;
-      padding: 0.45rem;
+      border-radius: 14px;
+      padding: 0.55rem;
       background: linear-gradient(165deg, #ffffff 0%, #f8fbff 100%);
       box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
     }
@@ -467,9 +582,9 @@
     }
 
     .variant-media {
-      width: 80px;
-      height: 80px;
-      border-radius: 8px;
+      width: 54px;
+      height: 54px;
+      border-radius: 10px;
       border: 1px solid #d5dbe5;
       background: #fff;
       overflow: hidden;
@@ -556,14 +671,15 @@
     .detail-actions {
       display: flex;
       flex-wrap: wrap;
-      justify-content: center;
-      gap: 0.75rem;
-      padding-top: 1rem;
+      justify-content: flex-start;
+      gap: 0.65rem;
+      padding-top: 0.7rem;
       border-top: 1px solid #e5e7eb;
     }
 
     .detail-actions .btn {
-      min-width: 190px;
+      min-width: 0;
+      flex: 1 1 180px;
     }
 
     .variant-badge {
@@ -613,11 +729,21 @@
 
       .product-detail-layout {
         grid-template-columns: 1fr;
-        gap: 1.5rem;
+        grid-template-areas:
+          "meta"
+          "gallery"
+          "content";
+        gap: 0rem;
       }
 
       .product-gallery-shell {
-        grid-template-columns: 1fr;
+        gap: 0.45rem;
+      }
+
+      .product-content-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
       }
 
       .spotlight-card {
@@ -626,30 +752,6 @@
 
       .spotlight-title {
         font-size: clamp(1.25rem, 6vw, 1.8rem);
-      }
-
-      .product-gallery-main {
-        order: 1;
-        width: 100%;
-      }
-
-      .product-gallery-thumbs {
-        order: 2;
-        width: 100%;
-        margin-right: 0;
-      }
-
-      #thumbnail-gallery {
-        display: flex !important;
-        flex-direction: row !important;
-        gap: 0.5rem;
-        overflow-x: auto;
-        padding-bottom: 0.25rem;
-      }
-
-      #thumbnail-gallery .thumbnail-image,
-      #thumbnail-gallery .border.rounded-3 {
-        flex: 0 0 auto;
       }
 
       .page-toolbar {
@@ -661,14 +763,129 @@
       }
 
       .product-detail-card {
-        padding: 16px;
-        border-radius: 18px;
+        max-width: 100%;
+        margin: 0;
+        padding: 12px 12px 18px;
+        border-radius: 0;
+        min-height: auto;
+        border-left: 0;
+        border-right: 0;
       }
 
-      .product-meta-card,
       .variant-section-card,
       .secure-box {
-        padding: 1rem;
+        padding: 0;
+        margin: 0;
+      }
+
+      .product-meta-card {
+        padding: 0.85rem 0.95rem;
+        margin-bottom: 0;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        box-shadow: none;
+      }
+
+      .product-meta-card .h4 {
+        font-size: 1rem;
+        line-height: 1.15;
+      }
+
+      .product-meta-subtitle {
+        font-size: 0.78rem;
+        line-height: 1.3;
+      }
+
+      .product-gallery-shell {
+        gap: 0.55rem;
+      }
+
+      .product-gallery-status {
+        justify-content: flex-end;
+        align-items: center;
+        min-height: 0;
+      }
+
+      .product-gallery-thumbs {
+      }
+
+      .product-gallery-slide {
+        border-radius: 16px;
+      }
+
+      .product-gallery-counter {
+        position: static;
+        padding: 0.34rem 0.62rem;
+        box-shadow: none;
+      }
+
+      .product-gallery-arrow {
+        width: 38px;
+        height: 38px;
+      }
+
+      .product-gallery-arrow.prev {
+        left: 0.5rem;
+      }
+
+      .product-gallery-arrow.next {
+        right: 0.5rem;
+      }
+
+      .thumbnail-image {
+        width: 54px;
+        height: 54px;
+        border-radius: 10px;
+      }
+
+      .product-gallery-thumbs {
+        gap: 0.45rem;
+        padding-right: 0.1rem;
+      }
+
+      .variant-grid {
+        display: flex;
+        gap: 0.55rem;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        padding-bottom: 0.25rem;
+        margin-inline: -0.1rem;
+      }
+
+      .variant-button {
+        flex: 0 0 132px;
+        scroll-snap-align: start;
+      }
+
+      .variant-chip-top {
+        margin-bottom: 0.32rem;
+      }
+
+      .variant-media {
+        width: 48px;
+        height: 48px;
+      }
+
+      .variant-header {
+        margin-bottom: 0.55rem;
+      }
+
+      .variant-section-card {
+        margin-top: 0;
+      }
+
+      .variant-preview-pill {
+        margin-bottom: 0.5rem;
+        padding: 0.32rem 0.62rem;
+      }
+
+      .detail-actions {
+        position: sticky;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(10px);
+        padding: 0.75rem 0 0;
       }
 
       .detail-actions .btn {
@@ -738,55 +955,62 @@
   <section class="py-10 section-muted page-shell">
       <div class="product-detail-card">
         <div class="product-detail-layout">
+          <div class="product-meta-card">
+            <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+              <h2 class="h4 fw-bold mb-0">{{ $product->name }}</h2>
+            </div>
+            <p class="product-meta-subtitle">{{ $product->description }}</p>
+          </div>
+
           <div class="product-gallery-shell">
-            <div class="product-gallery-thumbs">
-              <div class="d-flex flex-column gap-2" id="thumbnail-gallery">
+            <div class="product-gallery-main flex-grow-1">
+              <button type="button" class="btn product-gallery-arrow prev" id="product-gallery-prev" aria-label="Imagen anterior">
+                <i class="bi bi-chevron-left"></i>
+              </button>
+              <div class="product-gallery-track" id="product-gallery-track">
                 @if(count($product->images) > 0)
                   @foreach($product->images as $index => $image)
-                    <img 
-                      src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}" 
-                      alt="Miniatura {{ $index + 1 }}" 
-                      class="thumbnail-image {{ $index === 0 ? 'active' : '' }}" 
-                      data-main-src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}"
-                    >
+                    <div class="product-gallery-slide" data-gallery-slide data-index="{{ $index }}" data-image-src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}">
+                      <img
+                        src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}"
+                        alt="Imagen {{ $index + 1 }} de {{ $product->name }}"
+                      >
+                    </div>
                   @endforeach
                 @else
-                   <div class="d-flex align-items-center justify-content-center border rounded-3" style="width: 80px; height: 80px; background-color: #eee;">
-                    <i class="bi bi-image text-muted fs-3"></i>
+                  <div class="product-gallery-slide" data-gallery-slide data-index="0" data-image-src="{{ asset('assets/img/shopix5.png') }}">
+                    <div class="d-flex align-items-center justify-content-center w-100 h-100 bg-light">
+                      <i class="bi bi-image text-muted fs-1"></i>
+                    </div>
                   </div>
                 @endif
               </div>
+              <button type="button" class="btn product-gallery-arrow next" id="product-gallery-next" aria-label="Imagen siguiente">
+                <i class="bi bi-chevron-right"></i>
+              </button>
             </div>
-            
-            <div class="product-gallery-main flex-grow-1">
-              @if(isset($product->images[0]))
-                <img 
-                  src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" 
-                  alt="Imagen Principal de {{ $product->name }}" 
-                  class="main-image" 
-                  id="main-product-image"
-                >
-              @else
-                <div class="d-flex align-items-center justify-content-center rounded-3" style="height: 500px; background-color: #eee;">
-                  <i class="bi bi-image text-muted fs-1"></i>
-                </div>
-              @endif
+
+            <div class="product-gallery-status">
+              <div class="product-gallery-thumbs" id="thumbnail-gallery">
+                @if(count($product->images) > 0)
+                  @foreach($product->images as $index => $image)
+                    <img
+                      src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}"
+                      alt="Miniatura {{ $index + 1 }}"
+                      class="thumbnail-image {{ $index === 0 ? 'active' : '' }}"
+                      data-main-src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}"
+                      data-gallery-index="{{ $index }}"
+                    >
+                  @endforeach
+                @endif
+              </div>
             </div>
           </div>
 
           <div class="product-content-shell">
-            <div class="product-meta-card">
-              <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
-                <h2 class="h4 fw-bold mb-0">{{ $product->name }}</h2>
-                <span class="badge text-bg-light border variant-badge">{{ $product->variants->count() }} variante{{ $product->variants->count() == 1 ? '' : 's' }}</span>
-              </div>
-              <p class="product-meta-subtitle">{{ $product->description }}</p>
-            </div>
-
             <div class="variant-section-card">
               <div class="variant-header">
-                <h5 class="fw-semibold mb-0">Selecciona una variante</h5>
-                <small class="text-muted">Elige talla o presentación</small>
+                <h5 class="fw-semibold mb-0 d-none d-md-block">Selecciona una variante</h5>
               </div>
               <div id="selected-variant-indicator" class="variant-preview-pill d-none">
                 <i class="bi bi-stars"></i>
@@ -839,12 +1063,6 @@
               </div>
             </div>
 
-            <div class="secure-box">
-              <div class="item"><i class="bi bi-shield-lock"></i><span>Proceso de compra protegido para el usuario.</span></div>
-              <div class="item"><i class="bi bi-credit-card"></i><span>Información clara de precio por variante seleccionada.</span></div>
-              <div class="item"><i class="bi bi-chat-dots"></i><span>Soporte directo por carrito o WhatsApp según configuración.</span></div>
-            </div>
-
             @if($cartEnabled)
               <div class="detail-actions">
                 <button
@@ -853,13 +1071,6 @@
                   disabled
                 >
                   <i class="bi bi-cart-plus me-2"></i> Agregar al carrito
-                </button>
-                <button
-                  id="open-cart-button"
-                  class="btn btn-outline-dark btn-lg"
-                  type="button"
-                >
-                  <i class="bi bi-cart3 me-2"></i> Ver carrito
                 </button>
               </div>
             @else
@@ -926,20 +1137,69 @@
           });
         });
 
-        const mainImage = document.getElementById('main-product-image');
+        const galleryTrack = document.getElementById('product-gallery-track');
+        const gallerySlides = Array.from(document.querySelectorAll('[data-gallery-slide]'));
+        const galleryPrevButton = document.getElementById('product-gallery-prev');
+        const galleryNextButton = document.getElementById('product-gallery-next');
+        const galleryCounter = document.getElementById('product-gallery-counter');
         const thumbnails = document.querySelectorAll('.thumbnail-image');
+        let currentGalleryIndex = 0;
 
-        if (mainImage) {
+        function updateGalleryUi(index) {
+          currentGalleryIndex = Math.max(0, Math.min(index, Math.max(gallerySlides.length - 1, 0)));
+
+          thumbnails.forEach(thumbnail => {
+            thumbnail.classList.toggle('active', Number(thumbnail.dataset.galleryIndex) === currentGalleryIndex);
+          });
+
+          if (galleryCounter) {
+            galleryCounter.textContent = `${currentGalleryIndex + 1}/${Math.max(gallerySlides.length, 1)}`;
+          }
+        }
+
+        function scrollToGalleryIndex(index) {
+          const target = gallerySlides[index];
+          if (!target || !galleryTrack) {
+            return;
+          }
+
+          target.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+          updateGalleryUi(index);
+        }
+
+        if (galleryTrack && gallerySlides.length > 0) {
             thumbnails.forEach(thumbnail => {
                 thumbnail.addEventListener('click', () => {
-                    // Cambiar la imagen principal
-                    mainImage.src = thumbnail.dataset.mainSrc;
-
-                    // Actualizar el estado activo de las miniaturas
-                    thumbnails.forEach(t => t.classList.remove('active'));
-                    thumbnail.classList.add('active');
+                    scrollToGalleryIndex(Number(thumbnail.dataset.galleryIndex || 0));
                 });
             });
+
+            galleryPrevButton?.addEventListener('click', () => {
+              scrollToGalleryIndex(Math.max(currentGalleryIndex - 1, 0));
+            });
+
+            galleryNextButton?.addEventListener('click', () => {
+              scrollToGalleryIndex(Math.min(currentGalleryIndex + 1, gallerySlides.length - 1));
+            });
+
+            galleryTrack.addEventListener('scroll', () => {
+              const trackCenter = galleryTrack.scrollLeft + (galleryTrack.clientWidth / 2);
+              let nearestIndex = 0;
+              let nearestDistance = Number.POSITIVE_INFINITY;
+
+              gallerySlides.forEach((slide, index) => {
+                const slideCenter = slide.offsetLeft + (slide.clientWidth / 2);
+                const distance = Math.abs(slideCenter - trackCenter);
+                if (distance < nearestDistance) {
+                  nearestDistance = distance;
+                  nearestIndex = index;
+                }
+              });
+
+              updateGalleryUi(nearestIndex);
+            }, { passive: true });
+
+            updateGalleryUi(0);
         }
         const variantButtons = document.querySelectorAll('.variant-button:not([disabled])');
         const cartEnabled = @json((bool) ($cartEnabled ?? false));
@@ -991,12 +1251,10 @@
                   imageSrc: button.dataset.imageSrc || null,
                 };
 
-                if (mainImage && selectedVariant.imageSrc) {
-                  mainImage.src = selectedVariant.imageSrc;
+                if (selectedVariant.imageSrc) {
                   const matchingThumb = Array.from(thumbnails).find(t => t.dataset.mainSrc === selectedVariant.imageSrc);
-                  thumbnails.forEach(t => t.classList.remove('active'));
                   if (matchingThumb) {
-                    matchingThumb.classList.add('active');
+                    scrollToGalleryIndex(Number(matchingThumb.dataset.galleryIndex || 0));
                   }
                 }
 

@@ -29,8 +29,18 @@ class PaymentMethodController extends Controller
             ->get();
 
         // Obtener el último valor de la tasa del dólar
-        $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
-        $euroRate = EuroRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
+        $dollarRate = DollarRate::where('tenant_id', $user->tenant_id)->latest('created_at')->first();
+        $euroRate = EuroRate::where('tenant_id', $user->tenant_id)->latest('created_at')->first();
+        $dollarRateHistory = DollarRate::where('tenant_id', $user->tenant_id)
+            ->latest('date')
+            ->latest('id')
+            ->limit(50)
+            ->get();
+        $euroRateHistory = EuroRate::where('tenant_id', $user->tenant_id)
+            ->latest('date')
+            ->latest('id')
+            ->limit(50)
+            ->get();
         $baseCurrencyCode = strtoupper((string) optional(Tenant::find($user->tenant_id))->base_currency ?: 'USD');
 
         // Agrupar métodos de pago por moneda
@@ -38,7 +48,7 @@ class PaymentMethodController extends Controller
             return $paymentMethod->currency->name; // Agrupar por el nombre de la moneda
         });
 
-        return view('paymentMethods', compact('currencies', 'groupedPaymentMethods', 'dollarRate', 'euroRate', 'baseCurrencyCode'));
+        return view('paymentMethods', compact('currencies', 'groupedPaymentMethods', 'dollarRate', 'euroRate', 'dollarRateHistory', 'euroRateHistory', 'baseCurrencyCode'));
     }
     // Crear un nuevo método de pago
     public function create(Request $request)
@@ -224,27 +234,25 @@ class PaymentMethodController extends Controller
         DB::raw("SET @user_id = " . auth()->id());
 
         $validator = Validator::make($request->all(), [
-            'rate' => 'required|numeric',
+            'tenant_id' => 'required|integer|exists:tenants,id',
+            'rate' => 'required|numeric|gt:0',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 400);
         }
 
-        $rate = DollarRate::where('tenant_id', $request->tenant_id)->first();
-        $previousRate = $rate ? (float) $rate->rate : null;
+        $tenantId = (int) $request->tenant_id;
+        $previousRate = DollarRate::where('tenant_id', $tenantId)->latest('created_at')->value('rate');
 
-        if (!$rate) {
-            $rate = new DollarRate();
-            $rate->tenant_id = $request->tenant_id; // ✅ se asigna manualmente
-        }
-
-        $rate->rate = $request->rate;
-        $rate->date = Carbon::now()->format('Y-m-d');
-        $rate->save();
+        $rate = DollarRate::create([
+            'tenant_id' => $tenantId,
+            'rate' => $request->rate,
+            'date' => Carbon::now()->format('Y-m-d'),
+        ]);
 
         AuditLogger::logEvent('paymentMethods', 'DOLLAR_RATE_UPDATED', 'Actualización de tasa del dólar.', (int) (auth()->id() ?? 0), [
-            'tenant_id' => (int) $request->tenant_id,
+            'tenant_id' => $tenantId,
             'previous_rate' => $previousRate,
             'new_rate' => (float) $rate->rate,
         ]);
@@ -257,7 +265,8 @@ class PaymentMethodController extends Controller
 
     public function getDollarRate()
     {
-        $dollarRate = DollarRate::latest('created_at')->first();
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $dollarRate = DollarRate::where('tenant_id', $tenantId)->latest('created_at')->first();
         return response()->json(['message' => 'Tasa del dólar obtenida exitosamente', 'data' => $dollarRate], 201);
     }
 
@@ -266,27 +275,25 @@ class PaymentMethodController extends Controller
         DB::raw("SET @user_id = " . auth()->id());
 
         $validator = Validator::make($request->all(), [
-            'rate' => 'required|numeric',
+            'tenant_id' => 'required|integer|exists:tenants,id',
+            'rate' => 'required|numeric|gt:0',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 400);
         }
 
-        $rate = EuroRate::where('tenant_id', $request->tenant_id)->first();
-        $previousRate = $rate ? (float) $rate->rate : null;
+        $tenantId = (int) $request->tenant_id;
+        $previousRate = EuroRate::where('tenant_id', $tenantId)->latest('created_at')->value('rate');
 
-        if (!$rate) {
-            $rate = new EuroRate();
-            $rate->tenant_id = $request->tenant_id;
-        }
-
-        $rate->rate = $request->rate;
-        $rate->date = Carbon::now()->format('Y-m-d');
-        $rate->save();
+        $rate = EuroRate::create([
+            'tenant_id' => $tenantId,
+            'rate' => $request->rate,
+            'date' => Carbon::now()->format('Y-m-d'),
+        ]);
 
         AuditLogger::logEvent('paymentMethods', 'EURO_RATE_UPDATED', 'Actualización de tasa del euro.', (int) (auth()->id() ?? 0), [
-            'tenant_id' => (int) $request->tenant_id,
+            'tenant_id' => $tenantId,
             'previous_rate' => $previousRate,
             'new_rate' => (float) $rate->rate,
         ]);

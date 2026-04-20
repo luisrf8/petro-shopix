@@ -19,7 +19,7 @@
             </div>
             <div class="mb-3">
               <label class="form-label">Porcentaje (%)</label>
-              <input type="number" step="0.01" class="form-control" name="rate" required>
+              <input type="number" step="0.01" min="0.01" class="form-control" name="rate" required>
             </div>
             <button class="btn btn-dark">Guardar</button>
           </form>
@@ -55,8 +55,8 @@
                 <td>{{ $tax->name }}</td>
                 <td>{{ $tax->rate }} %</td>
                 <td>
-                  <span class="badge {{ $tax->is_active ? 'bg-success':'bg-secondary' }}">
-                    {{ $tax->is_active ? 'Activo':'Inactivo' }}
+                  <span class="badge {{ (bool) $tax->is_active ? 'bg-success':'bg-secondary' }}">
+                    {{ (bool) $tax->is_active ? 'Activo':'Inactivo' }}
                   </span>
                 </td>
                 <td>
@@ -71,8 +71,8 @@
                 <td>
                   <a href="javascript:;" class="toggle-status-tax"
                     data-id="{{ $tax->id }}"
-                    data-status="{{ $tax->is_active ? 'active':'inactive' }}">
-                    {{ $tax->is_active ? 'Inactivar':'Activar' }}
+                    data-status="{{ (bool) $tax->is_active ? '1':'0' }}">
+                    {{ (bool) $tax->is_active ? 'Inactivar':'Activar' }}
                   </a>
                 </td>
               </tr>
@@ -101,7 +101,7 @@
             </div>
             <div class="mb-3">
               <label class="form-label">Porcentaje (%)</label>
-              <input type="number" step="0.01" class="form-control" id="editTaxRate" name="rate">
+              <input type="number" step="0.01" min="0.01" class="form-control" id="editTaxRate" name="rate">
             </div>
             <button class="btn btn-info">Guardar</button>
           </form>
@@ -117,17 +117,33 @@
   const authUser = @json($authUser);
   const tenantId = Number(authUser.tenant_id);
 
+  function resolveTaxError(payload, fallback) {
+    if (payload?.errors) {
+      return Object.values(payload.errors).flat().join('\n');
+    }
+
+    return payload?.message || fallback;
+  }
+
   // CREATE
-  document.getElementById('createTaxForm').addEventListener('submit', e => {
+  document.getElementById('createTaxForm').addEventListener('submit', async e => {
     e.preventDefault();
     let formData = new FormData(e.target);
     formData.append('tenant_id', tenantId);
 
-    fetch('/taxes/create', {
+    const response = await fetch('/taxes/create', {
       method: 'POST',
       headers: {'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value},
       body: formData
-    }).then(r => r.status===201 ? location.reload() : alert('Error'));
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 201) {
+      location.reload();
+      return;
+    }
+
+    alert(resolveTaxError(payload, 'No se pudo crear el impuesto.'));
   });
 
   // FILL EDIT FORM
@@ -140,32 +156,48 @@
   });
 
   // UPDATE
-  document.getElementById('editTaxForm').addEventListener('submit', e => {
+  document.getElementById('editTaxForm').addEventListener('submit', async e => {
     e.preventDefault();
     let formData = new FormData(e.target);
     let id = formData.get('id');
 
-    fetch(`/taxes/update/${id}`, {
+    const response = await fetch(`/taxes/update/${id}`, {
       method: 'POST',
       headers: {'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value},
       body: formData
-    }).then(r => r.status===200 ? location.reload() : alert('Error'));
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (response.status === 200) {
+      location.reload();
+      return;
+    }
+
+    alert(resolveTaxError(payload, 'No se pudo actualizar el impuesto.'));
   });
 
   // TOGGLE STATE
   document.querySelectorAll('.toggle-status-tax').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       let id = btn.dataset.id;
-      let newStatus = btn.dataset.status === 'active' ? 0 : 1;
+      let newStatus = btn.dataset.status === '1' ? 0 : 1;
 
-      fetch(`/taxes/toggle/${id}`, {
+      const response = await fetch(`/taxes/toggle/${id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
         },
         body: JSON.stringify({is_active: newStatus})
-      }).then(r => r.status===200 ? location.reload() : alert('Error'));
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 200 && payload.success) {
+        location.reload();
+        return;
+      }
+
+      alert(resolveTaxError(payload, 'No se pudo actualizar el estado del impuesto.'));
     });
   });
 </script>

@@ -17,6 +17,7 @@ class ElectronicDocument extends Model
         'tipo_documento',
         'serie',
         'numero_documento',
+        'internal_number',
         'numero_control',
         'transaccion_id',
         'estado_documento',
@@ -53,5 +54,15 @@ class ElectronicDocument extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function adjustmentNotes()
+    {
+        return $this->hasMany(SalesAdjustmentNote::class);
+    }
+
+    public function retentions()
+    {
+        return $this->hasMany(SalesRetention::class);
     }
 }

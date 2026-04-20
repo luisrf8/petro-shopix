@@ -54,6 +54,9 @@ class Tenant extends Model
         'instagram',
         'facebook',
         'electronic_invoicing_enabled',
+        'special_taxpayer',
+        'printer_tax_change_enabled',
+        'printer_tax_change_reference',
         'restrict_delivery_city_to_tenant',
     ];
 
@@ -61,6 +64,8 @@ class Tenant extends Model
         'is_active' => 'boolean',
         'working_days' => 'array',
         'electronic_invoicing_enabled' => 'boolean',
+        'special_taxpayer' => 'boolean',
+        'printer_tax_change_enabled' => 'boolean',
         'restrict_delivery_city_to_tenant' => 'boolean',
     ];
 

@@ -38,4 +38,14 @@ class SalesOrder extends Model
     {
         return $this->hasMany(ElectronicDocument::class);
     }
+
+    public function adjustmentNotes()
+    {
+        return $this->hasMany(SalesAdjustmentNote::class)->orderByDesc('note_date')->orderByDesc('id');
+    }
+
+    public function retentions()
+    {
+        return $this->hasMany(SalesRetention::class)->orderByDesc('retention_date')->orderByDesc('id');
+    }
 }

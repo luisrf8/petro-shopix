@@ -331,6 +331,16 @@
         });
     }
 
+    function parsePositiveCreateProductAmount(value) {
+        const amount = Number(value);
+        return Number.isFinite(amount) && amount > 0 ? amount : null;
+    }
+
+    function parseCreateProductInteger(value, minimum = 0) {
+        const amount = Number(value);
+        return Number.isInteger(amount) && amount >= minimum ? amount : null;
+    }
+
     async function optimizeProductImage(file) {
         const rasterTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
         if (!rasterTypes.includes((file.type || '').toLowerCase())) {
@@ -406,7 +416,7 @@
                 </div>
                 <div class="col-lg-2 col-md-6">
                     <label class="form-label mb-1">Precio</label>
-                    <input type="number" class="form-control" name="variantPrice[]" step="0.01" required>
+                    <input type="number" class="form-control" name="variantPrice[]" min="0.01" step="0.01" required>
                 </div>
                 <div class="col-lg-2 col-md-6">
                     <label class="form-label mb-1">Desc. %</label>
@@ -414,7 +424,7 @@
                 </div>
                 <div class="col-lg-2 col-md-6">
                     <label class="form-label mb-1">Stock</label>
-                    <input type="number" class="form-control" name="variantStock[]" required>
+                    <input type="number" class="form-control" name="variantStock[]" min="0" step="1" required>
                 </div>
                 <div class="col-lg-2 col-md-6">
                     <label class="form-label mb-1">Código de barras</label>
@@ -515,12 +525,12 @@
         const rows = Array.from(document.querySelectorAll('#variantContainer .variant-row'));
 
         rows.forEach((row, index) => {
-            const name = row.querySelector('input[name="variantName[]"]').value;
-            const price = row.querySelector('input[name="variantPrice[]"]').value;
+            const name = row.querySelector('input[name="variantName[]"]').value.trim();
+            const price = parsePositiveCreateProductAmount(row.querySelector('input[name="variantPrice[]"]').value);
             const discount = row.querySelector('input[name="variantDiscount[]"]').value;
-            const stock = row.querySelector('input[name="variantStock[]"]').value;
+            const stock = parseCreateProductInteger(row.querySelector('input[name="variantStock[]"]').value, 0);
             const barcode = row.querySelector('input[name="variantBarcode[]"]').value;
-            if (name && price && stock) {
+            if (name && price !== null && stock !== null) {
                 variants.push({
                     name,
                     price,

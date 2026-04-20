@@ -18,6 +18,82 @@
           </button>
         </div>
       </div>
+      <div class="row mt-4 g-4">
+        <div class="col-12 col-xl-6">
+          <div class="card h-100">
+            <div class="card-header pb-0 p-3 d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-0">Histórico BCV USD</h6>
+                <p class="text-sm text-muted mb-0">Registro de solo lectura. No se puede editar ni eliminar.</p>
+              </div>
+              <span class="badge bg-gradient-dark">Inmutable</span>
+            </div>
+            <div class="card-body px-0 pt-3 pb-0">
+              <div class="table-responsive">
+                <table class="table align-items-center mb-0">
+                  <thead>
+                    <tr>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fecha BCV</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Tasa</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Registrada</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @forelse($dollarRateHistory as $rateItem)
+                      <tr>
+                        <td><p class="text-sm mb-0 px-3">{{ optional($rateItem->date)->format('d/m/Y') ?? 'Sin fecha' }}</p></td>
+                        <td><p class="text-sm mb-0">{{ number_format((float) $rateItem->rate, 4) }} Bs</p></td>
+                        <td><p class="text-sm text-secondary mb-0">{{ optional($rateItem->created_at)->format('d/m/Y H:i') ?? 'Sin registro' }}</p></td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="3" class="text-center text-muted py-4">Sin histórico registrado.</td>
+                      </tr>
+                    @endforelse
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-xl-6">
+          <div class="card h-100">
+            <div class="card-header pb-0 p-3 d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-0">Histórico BCV EUR</h6>
+                <p class="text-sm text-muted mb-0">Registro de solo lectura. No se puede editar ni eliminar.</p>
+              </div>
+              <span class="badge bg-gradient-dark">Inmutable</span>
+            </div>
+            <div class="card-body px-0 pt-3 pb-0">
+              <div class="table-responsive">
+                <table class="table align-items-center mb-0">
+                  <thead>
+                    <tr>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fecha BCV</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Tasa</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Registrada</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @forelse($euroRateHistory as $rateItem)
+                      <tr>
+                        <td><p class="text-sm mb-0 px-3">{{ optional($rateItem->date)->format('d/m/Y') ?? 'Sin fecha' }}</p></td>
+                        <td><p class="text-sm mb-0">{{ number_format((float) $rateItem->rate, 4) }} Bs</p></td>
+                        <td><p class="text-sm text-secondary mb-0">{{ optional($rateItem->created_at)->format('d/m/Y H:i') ?? 'Sin registro' }}</p></td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="3" class="text-center text-muted py-4">Sin histórico registrado.</td>
+                      </tr>
+                    @endforelse
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <!-- Monedas Section -->
       <div class="col-md-12 mb-lg-0 mb-4">
         <div class="card mt-4 mb-4">
@@ -83,7 +159,7 @@
                 @csrf
                 <div class="mb-3">
                   <label for="euroRate" class="form-label">Tasa de Cambio</label>
-                  <input type="number" step="0.01" class="form-control border border-1 p-2" id="euroRate" name="rate" required>
+                  <input type="number" step="0.01" min="0.01" class="form-control border border-1 p-2" id="euroRate" name="rate" required>
                 </div>
                 <div class="d-flex flex-row-reverse">
                   <button type="submit" class="btn btn-info">Actualizar</button>
@@ -194,7 +270,7 @@
                 @csrf
                 <div class="mb-3">
                   <label for="dollarRate" class="form-label">Tasa de Cambio</label>
-                  <input type="number" step="0.01" class="form-control border border-1 p-2" id="dollarRate" name="rate" required>
+                  <input type="number" step="0.01" min="0.01" class="form-control border border-1 p-2" id="dollarRate" name="rate" required>
                 </div>
                 <div class="d-flex flex-row-reverse">
                   <button type="submit" class="btn btn-info">Actualizar</button>
