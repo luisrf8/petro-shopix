@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use App\Support\ImageStorage;
 use App\Support\AuditLogger;
+use App\Support\ActionReason;
 
 class PaymentMethodController extends Controller
 {
@@ -177,10 +178,21 @@ class PaymentMethodController extends Controller
     
         // Buscar el método de pago
         $paymentMethod = PaymentMethod::findOrFail($id);
+        $reason = null;
+        if ((bool) $paymentMethod->status) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para inactivar el metodo de pago.');
+        }
     
         // Actualizar el estado
         $paymentMethod->status = !$paymentMethod->status;
         $paymentMethod->save();
+
+        if (!(bool) $paymentMethod->status) {
+            ActionReason::log('payment_methods', 'PAYMENT_METHOD_DEACTIVATED', (string) $reason, [
+                'payment_method_id' => $paymentMethod->id,
+                'tenant_id' => $paymentMethod->tenant_id,
+            ]);
+        }
     
         // Responder con un mensaje de éxito
         $message = $request->is_active ? 'Método de pago activado exitosamente' : 'Método de pago inactivado exitosamente';
@@ -194,6 +206,10 @@ class PaymentMethodController extends Controller
 
         // Buscar la moneda
         $currency = Currency::findOrFail($id);
+        $reason = null;
+        if ((bool) $currency->status) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para inactivar la moneda.');
+        }
     
         // Cambiar el estado de la moneda
         $currency->status = !$currency->status;
@@ -202,6 +218,10 @@ class PaymentMethodController extends Controller
         // Si la moneda se desactiva, desactivar también sus métodos de pago
         if ($currency->status == 0) {
             PaymentMethod::where('currency_id', $currency->id)->update(['status' => 0]);
+
+            ActionReason::log('currencies', 'CURRENCY_DEACTIVATED', (string) $reason, [
+                'currency_id' => $currency->id,
+            ]);
         }
     
         // Responder con un mensaje de éxito

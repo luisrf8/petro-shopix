@@ -7,6 +7,8 @@ use App\Models\SalesOrder;
 use App\Models\Tenant;
 use App\Services\FiscalCorrelativeService;
 use App\Services\TheFactoryHkaService;
+use App\Support\ActionReason;
+use App\Support\PdfDownload;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -228,6 +230,10 @@ class ElectronicInvoicingController extends Controller
             return back()->with('error', 'No existe documento electrónico para enviar por correo.');
         }
 
+        if ((bool) $document->is_annulled) {
+            return back()->with('error', 'La factura electrónica fue anulada y ya no puede reenviarse.');
+        }
+
         $emails = collect(explode(',', (string) ($validated['emails'] ?? '')))
             ->map(fn ($email) => trim($email))
             ->filter(fn ($email) => $email !== '')
@@ -275,6 +281,10 @@ class ElectronicInvoicingController extends Controller
             return back()->with('error', 'No existe documento electrónico para descargar.');
         }
 
+        if ((bool) $document->is_annulled) {
+            return back()->with('error', 'La factura electrónica fue anulada y ya no puede visualizarse ni descargarse.');
+        }
+
         $response = $this->service->downloadDocumentFile([
             'serie' => $document->serie,
             'tipoDocumento' => $document->tipo_documento ?: '01',
@@ -306,6 +316,11 @@ class ElectronicInvoicingController extends Controller
 
         $validated = $request->validate([
             'motivo_anulacion' => 'required|string|max:255',
+        ]);
+
+        ActionReason::log('electronic_invoices', 'INVOICE_ANNULMENT_REQUESTED', trim((string) $validated['motivo_anulacion']), [
+            'sales_order_id' => $order->id,
+            'tenant_id' => $order->tenant_id,
         ]);
 
         $document = $order->electronicDocuments()->latest('id')->first();
@@ -456,7 +471,6 @@ class ElectronicInvoicingController extends Controller
 
     private function buildDownloadedFileResponse(ElectronicDocument $document, string $content, string $mimeType, string $extension, string $disposition)
     {
-        $safeDisposition = $disposition === 'inline' ? 'inline' : 'attachment';
         $fileName = implode('-', array_filter([
             'factura',
             trim((string) ($document->serie ?? '')) !== '' ? trim((string) $document->serie) : null,
@@ -465,7 +479,7 @@ class ElectronicInvoicingController extends Controller
 
         return response($content, 200, [
             'Content-Type' => $mimeType,
-            'Content-Disposition' => $safeDisposition . '; filename="' . $fileName . '"',
+            'Content-Disposition' => PdfDownload::buildDispositionHeader(request(), $fileName, $disposition),
         ]);
     }
 

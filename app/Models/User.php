@@ -25,6 +25,12 @@ class User extends Authenticatable implements JWTSubject
         'email_verified_at',
         'password',
         'tenant_id',
+        'country_id',
+        'state_id',
+        'city_id',
+        'address',
+        'latitude',
+        'longitude',
         'role_id',
         'phone_number',
         'dni',
@@ -55,6 +61,8 @@ class User extends Authenticatable implements JWTSubject
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'latitude' => 'float',
+        'longitude' => 'float',
         'help_disable_global' => 'boolean',
         'help_disabled_routes' => 'array',
     ];
@@ -118,6 +126,16 @@ class User extends Authenticatable implements JWTSubject
                     'Registrar entradas de inventario y consultar historiales.',
                     'Preparar y despachar pedidos asignados a almacen.',
                     'No modifica configuracion comercial de la tienda.',
+                ],
+            ],
+            'delivery' => [
+                'name' => 'Delivery',
+                'aliases' => ['delivery', 'repartidor'],
+                'description' => 'Gestiona despachos, entregas y seguimiento operativo del reparto.',
+                'permissions' => [
+                    'Consultar pedidos pendientes de entrega y su detalle.',
+                    'Actualizar el estado de despacho y entrega.',
+                    'No administra configuracion comercial ni pagos.',
                 ],
             ],
         ];
@@ -195,11 +213,11 @@ class User extends Authenticatable implements JWTSubject
     public function assignableStoreRoleKeys(): array
     {
         if ($this->isOwner()) {
-            return ['admin', 'seller', 'warehouse'];
+            return ['admin', 'seller', 'warehouse', 'delivery'];
         }
 
         if ($this->isAdmin()) {
-            return ['seller', 'warehouse'];
+            return ['seller', 'warehouse', 'delivery'];
         }
 
         return [];

@@ -820,6 +820,232 @@
       </script>
     @endif
     <script>
+      window.shopixRequestActionReason = function (message) {
+        const promptMessage = message || 'Indica el motivo de esta accion:';
+        const value = window.prompt(promptMessage, '');
+        if (value === null) {
+          return null;
+        }
+
+        const trimmed = value.trim();
+        if (!trimmed) {
+          window.alert('Debes indicar un motivo para continuar.');
+          return null;
+        }
+
+        return trimmed;
+      };
+
+      window.shopixBindReasonFormPrompts = function () {
+        document.querySelectorAll('form[data-requires-action-reason="true"]').forEach((form) => {
+          if (form.dataset.reasonBound === 'true') {
+            return;
+          }
+
+          form.dataset.reasonBound = 'true';
+          form.addEventListener('submit', (event) => {
+            const hiddenFieldName = form.dataset.reasonField || 'action_reason';
+            let hiddenField = form.querySelector(`input[name="${hiddenFieldName}"]`);
+            if (!hiddenField) {
+              hiddenField = document.createElement('input');
+              hiddenField.type = 'hidden';
+              hiddenField.name = hiddenFieldName;
+              form.appendChild(hiddenField);
+            }
+
+            if (hiddenField.value && hiddenField.value.trim() !== '') {
+              return;
+            }
+
+            const reason = window.shopixRequestActionReason(form.dataset.reasonPrompt || 'Indica el motivo de esta accion:');
+            if (!reason) {
+              event.preventDefault();
+              return;
+            }
+
+            hiddenField.value = reason;
+          });
+        });
+      };
+
+      document.addEventListener('DOMContentLoaded', () => {
+        window.shopixBindReasonFormPrompts();
+      });
+
+      window.shopixNormalizeEditableDecimalValue = function (value) {
+        const source = String(value || '')
+          .replace(/\s+/g, '')
+          .replace(/[^\d.,]/g, '');
+
+        if (!source) {
+          return { text: '', numeric: '' };
+        }
+
+        const lastDot = source.lastIndexOf('.');
+        const lastComma = source.lastIndexOf(',');
+        let decimalIndex = -1;
+        let decimalSeparator = '';
+
+        if (lastDot !== -1 && lastComma !== -1) {
+          decimalIndex = Math.max(lastDot, lastComma);
+          decimalSeparator = source[decimalIndex];
+        } else if (lastComma !== -1) {
+          const fraction = source.slice(lastComma + 1).replace(/[^\d]/g, '');
+          if (fraction.length <= 2 || source.endsWith(',')) {
+            decimalIndex = lastComma;
+            decimalSeparator = ',';
+          }
+        } else if (lastDot !== -1) {
+          const fraction = source.slice(lastDot + 1).replace(/[^\d]/g, '');
+          if (fraction.length <= 2 || source.endsWith('.')) {
+            decimalIndex = lastDot;
+            decimalSeparator = '.';
+          }
+        }
+
+        let integerPart = '';
+        let decimalPart = '';
+        let hasTrailingDecimal = false;
+
+        if (decimalIndex !== -1) {
+          integerPart = source.slice(0, decimalIndex).replace(/[^\d]/g, '');
+          decimalPart = source.slice(decimalIndex + 1).replace(/[^\d]/g, '').slice(0, 2);
+          hasTrailingDecimal = source.endsWith(decimalSeparator) && decimalPart.length === 0;
+        } else {
+          integerPart = source.replace(/[^\d]/g, '');
+        }
+
+        integerPart = integerPart.replace(/^0+(?=\d)/, '');
+
+        if (!integerPart && (decimalPart || hasTrailingDecimal)) {
+          integerPart = '0';
+        }
+
+        const text = decimalIndex !== -1
+          ? `${integerPart || '0'}${(decimalPart || hasTrailingDecimal) ? '.' : ''}${decimalPart}`
+          : integerPart;
+
+        const numeric = decimalIndex !== -1
+          ? `${integerPart || '0'}${decimalPart ? `.${decimalPart}` : ''}`
+          : integerPart;
+
+        return { text, numeric };
+      };
+
+      window.shopixParseDecimalInput = function (value) {
+        const normalized = window.shopixNormalizeEditableDecimalValue(value).numeric;
+        const parsed = Number.parseFloat(normalized);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+
+      window.shopixFormatDecimalInputValue = function (value, places = 2) {
+        const numeric = Number(value);
+        const fractionDigits = Number.isInteger(places) && places >= 0 ? places : 2;
+        return new Intl.NumberFormat('en-US', {
+          minimumFractionDigits: fractionDigits,
+          maximumFractionDigits: fractionDigits,
+        }).format(Number.isFinite(numeric) ? numeric : 0);
+      };
+
+      window.shopixActivateDecimalInputs = function (root = document) {
+        root.querySelectorAll('input[data-decimal-friendly="true"]').forEach((input) => {
+          if (input.dataset.decimalFriendlyReady === '1') {
+            return;
+          }
+
+          input.dataset.decimalFriendlyReady = '1';
+          const step = String(input.getAttribute('step') || '0.01');
+          if (!input.dataset.decimalPlaces) {
+            input.dataset.decimalPlaces = step.includes('.') ? String(step.split('.')[1].length) : '2';
+          }
+
+          input.type = 'text';
+          input.setAttribute('inputmode', 'decimal');
+          input.setAttribute('autocomplete', 'off');
+
+          const parsed = window.shopixParseDecimalInput(input.value);
+          if (parsed !== null) {
+            input.value = window.shopixFormatDecimalInputValue(parsed, Number(input.dataset.decimalPlaces || 2));
+          }
+        });
+      };
+
+      document.addEventListener('DOMContentLoaded', () => {
+        window.shopixActivateDecimalInputs();
+      });
+
+      document.addEventListener('focusin', (event) => {
+        const input = event.target.closest('input[data-decimal-friendly="true"]');
+        if (!input) {
+          return;
+        }
+
+        const normalized = window.shopixNormalizeEditableDecimalValue(input.value).text;
+        if (normalized && input.value !== normalized) {
+          input.value = normalized;
+        }
+      });
+
+      document.addEventListener('input', (event) => {
+        const input = event.target.closest('input[data-decimal-friendly="true"]');
+        if (!input) {
+          return;
+        }
+
+        const selectionStart = input.selectionStart ?? String(input.value || '').length;
+        const beforeCursor = String(input.value || '').slice(0, selectionStart);
+        const normalizedValue = window.shopixNormalizeEditableDecimalValue(input.value);
+        const normalizedBeforeCursor = window.shopixNormalizeEditableDecimalValue(beforeCursor);
+
+        if (!normalizedValue.text) {
+          input.value = '';
+          return;
+        }
+
+        if (input.value !== normalizedValue.text) {
+          input.value = normalizedValue.text;
+          const nextCaret = normalizedBeforeCursor.text.length;
+          requestAnimationFrame(() => {
+            try {
+              input.setSelectionRange(nextCaret, nextCaret);
+            } catch (error) {
+            }
+          });
+        }
+      });
+
+      document.addEventListener('blur', (event) => {
+        const input = event.target.closest('input[data-decimal-friendly="true"]');
+        if (!input) {
+          return;
+        }
+
+        if (!String(input.value || '').trim()) {
+          input.value = '';
+          return;
+        }
+
+        const parsed = window.shopixParseDecimalInput(input.value);
+        if (parsed === null) {
+          input.value = '';
+          return;
+        }
+
+        input.value = window.shopixFormatDecimalInputValue(parsed, Number(input.dataset.decimalPlaces || 2));
+      }, true);
+
+      document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) {
+          return;
+        }
+
+        form.querySelectorAll('input[data-decimal-friendly="true"]').forEach((input) => {
+          const normalized = window.shopixNormalizeEditableDecimalValue(input.value).numeric;
+          input.value = normalized;
+        });
+      }, true);
+
       (function () {
         const nativeFetch = window.fetch ? window.fetch.bind(window) : null;
         if (!nativeFetch) {

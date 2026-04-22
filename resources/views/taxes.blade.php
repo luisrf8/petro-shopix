@@ -19,7 +19,7 @@
             </div>
             <div class="mb-3">
               <label class="form-label">Porcentaje (%)</label>
-              <input type="number" step="0.01" min="0.01" class="form-control" name="rate" required>
+              <input type="number" step="0.01" min="0.01" class="form-control" name="rate" required data-decimal-friendly="true">
             </div>
             <button class="btn btn-dark">Guardar</button>
           </form>
@@ -101,7 +101,7 @@
             </div>
             <div class="mb-3">
               <label class="form-label">Porcentaje (%)</label>
-              <input type="number" step="0.01" min="0.01" class="form-control" id="editTaxRate" name="rate">
+              <input type="number" step="0.01" min="0.01" class="form-control" id="editTaxRate" name="rate" data-decimal-friendly="true">
             </div>
             <button class="btn btn-info">Guardar</button>
           </form>
@@ -181,6 +181,10 @@
     btn.addEventListener('click', async () => {
       let id = btn.dataset.id;
       let newStatus = btn.dataset.status === '1' ? 0 : 1;
+      const reason = newStatus === 0 ? window.shopixRequestActionReason('Indica el motivo para inactivar este impuesto.') : '';
+      if (newStatus === 0 && !reason) {
+        return;
+      }
 
       const response = await fetch(`/taxes/toggle/${id}`, {
         method: 'POST',
@@ -188,7 +192,7 @@
           'Content-Type': 'application/json',
           'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
         },
-        body: JSON.stringify({is_active: newStatus})
+        body: JSON.stringify({is_active: newStatus, action_reason: reason})
       });
 
       const payload = await response.json().catch(() => ({}));

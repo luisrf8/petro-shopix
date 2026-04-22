@@ -430,6 +430,64 @@
                                     </div>
                                     <small class="text-muted">Si se desactiva, la tienda puede registrar envíos a cualquier ciudad.</small>
                                 </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold d-block">Activar delivery de la tienda</label>
+                                    <input type="hidden" name="delivery_enabled" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
+                                            id="delivery_enabled"
+                                            name="delivery_enabled"
+                                            value="1"
+                                            {{ (bool) ($tenant->delivery_enabled ?? false) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="delivery_enabled">
+                                            Permitir pedidos con delivery
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Si está apagado, la tienda solo permitirá retiro en tienda.</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Modelo de cobro del delivery</label>
+                                    <select name="delivery_fee_mode" class="form-control p-2 border border-radius-lg">
+                                        <option value="free" {{ ($tenant->delivery_fee_mode ?? 'free') === 'free' ? 'selected' : '' }}>Gratis</option>
+                                        <option value="fixed" {{ ($tenant->delivery_fee_mode ?? 'free') === 'fixed' ? 'selected' : '' }}>Tarifa fija</option>
+                                        <option value="distance" {{ ($tenant->delivery_fee_mode ?? 'free') === 'distance' ? 'selected' : '' }}>Tarifa por km</option>
+                                    </select>
+                                </div>
+
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Monto fijo del delivery</label>
+                                        <input type="number" step="0.01" min="0" class="form-control p-2 border border-radius-lg" name="delivery_fixed_fee" value="{{ number_format((float) ($tenant->delivery_fixed_fee ?? 0), 2, '.', '') }}" placeholder="0.00" data-decimal-friendly="true">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Monto por km</label>
+                                        <input type="number" step="0.01" min="0" class="form-control p-2 border border-radius-lg" name="delivery_fee_per_km" value="{{ number_format((float) ($tenant->delivery_fee_per_km ?? 0), 2, '.', '') }}" placeholder="0.00" data-decimal-friendly="true">
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold d-block">Notificaciones operativas de delivery</label>
+                                    <input type="hidden" name="delivery_notifications_enabled" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
+                                            id="delivery_notifications_enabled"
+                                            name="delivery_notifications_enabled"
+                                            value="1"
+                                            {{ (bool) ($tenant->delivery_notifications_enabled ?? true) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="delivery_notifications_enabled">
+                                            Avisar al equipo de almacén y delivery cuando un pedido quede listo
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">Úsalo junto al rol <strong>delivery</strong> para despachos y reparto.</small>
+                                </div>
                             </div>
 
                             {{-- TAB 2 --}}
@@ -888,7 +946,13 @@
     </script>
 <script>
   let map, marker;
-    const tenantAiImageEndpoint = "{{ route('tenant.ai-image') }}";
+        const tenantAiImageEndpoint = "{{ route('tenant.ai-image', [], false) }}";
+        const tenantUpdateEndpoint = "{{ route('tenant.update', [], false) }}";
+    const tenantCsrfRefreshEndpoint = "{{ route('csrf.token', [], false) }}";
+    let tenantCsrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                || document.querySelector('#tenantForm input[name="_token"]')?.value
+                || document.querySelector('#editUserForm input[name="_token"]')?.value
+                || '';
     const TENANT_SAFE_IMAGE_BYTES = 1200 * 1024;
     const TENANT_IMAGE_MAX_DIMENSION = 2200;
     let aiModalInstance = null;
@@ -936,6 +1000,31 @@
         if (button.dataset.originalHtml) {
             button.innerHTML = button.dataset.originalHtml;
         }
+    }
+
+    async function refreshTenantCsrfToken() {
+        const response = await fetch(tenantCsrfRefreshEndpoint, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'include',
+        });
+
+        const data = await response.json().catch(() => ({}));
+        const nextToken = data?.csrf_token || '';
+
+        if (!response.ok || !nextToken) {
+            throw new Error('No se pudo renovar el token CSRF.');
+        }
+
+        tenantCsrfToken = nextToken;
+        document.querySelector('meta[name="csrf-token"]')?.setAttribute('content', nextToken);
+        document.querySelector('#tenantForm input[name="_token"]')?.setAttribute('value', nextToken);
+        document.querySelector('#editUserForm input[name="_token"]')?.setAttribute('value', nextToken);
+
+        return nextToken;
     }
 
     function loadTenantImageElement(file) {
@@ -1242,8 +1331,9 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'X-CSRF-TOKEN': tenantCsrfToken,
                 },
+                credentials: 'same-origin',
                 body: JSON.stringify({
                     type,
                     prompt,
@@ -1362,7 +1452,7 @@ function initMap() {
     const planRequestReferenceInput = document.getElementById('plan_request_reference');
     const planRequestProofInput = document.getElementById('plan_request_proof');
     const planRequestNotesInput = document.getElementById('plan_request_notes');
-    const tenantPlanPaymentRequestEndpoint = "{{ route('tenant.planPayment.request') }}";
+    const tenantPlanPaymentRequestEndpoint = "{{ route('tenant.planPayment.request', [], false) }}";
     const tenantPlanDaysRemaining = {{ is_null($currentPlanDaysRemaining) ? 'null' : (int) $currentPlanDaysRemaining }};
     const tenantHasPendingPlanPayment = {{ $pendingPlanPayment ? 'true' : 'false' }};
 
@@ -1545,9 +1635,10 @@ function initMap() {
                 const response = await fetch(tenantPlanPaymentRequestEndpoint, {
                     method: 'POST',
                     headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                        'X-CSRF-TOKEN': tenantCsrfToken,
                         'Accept': 'application/json'
                     },
+                    credentials: 'same-origin',
                     body: requestData,
                 });
 
@@ -1794,15 +1885,18 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
         }
         setTenantSubmitLoading(submitBtn, true, 'Guardando...');
 
-        const formData = new FormData(form);
-
         try {
-            const response = await fetch("{{ route('tenant.update') }}", {
+            const formData = new FormData(form);
+            formData.set('_token', await refreshTenantCsrfToken());
+
+            const response = await fetch(tenantUpdateEndpoint, {
                 method: "POST",
                 headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json'
+                    'X-CSRF-TOKEN': tenantCsrfToken,
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
                 },
+                credentials: 'include',
                 body: formData
             });
 

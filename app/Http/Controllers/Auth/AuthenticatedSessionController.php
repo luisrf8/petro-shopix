@@ -325,6 +325,12 @@ class AuthenticatedSessionController extends Controller
             'password' => 'required|string|min:8|confirmed',
             'dni' => 'nullable|string|max:100',
             'phone_number' => 'nullable|string|max:50',
+            'country_id' => 'nullable|integer|exists:countries,id',
+            'state_id' => 'nullable|integer|exists:states,id',
+            'city_id' => 'nullable|integer|exists:cities,id',
+            'address' => 'nullable|string|max:500',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
         ]);
 
         $dni = trim((string) $request->input('dni', ''));
@@ -340,6 +346,12 @@ class AuthenticatedSessionController extends Controller
             'role_id' => $this->resolveCustomerRoleId(),
             'dni' => $dni,
             'phone_number' => trim((string) $request->input('phone_number', '')) ?: null,
+            'country_id' => $request->input('country_id') ?: null,
+            'state_id' => $request->input('state_id') ?: null,
+            'city_id' => $request->input('city_id') ?: null,
+            'address' => trim((string) $request->input('address', '')) ?: null,
+            'latitude' => $request->filled('latitude') ? (float) $request->input('latitude') : null,
+            'longitude' => $request->filled('longitude') ? (float) $request->input('longitude') : null,
         ]);
     
         // Generar el token JWT para el usuario recién creado
@@ -400,9 +412,25 @@ class AuthenticatedSessionController extends Controller
 
         $validated = $request->validate([
             'phone_number' => ['nullable', 'string', 'max:50'],
+            'country_id' => ['nullable', 'integer', 'exists:countries,id'],
+            'state_id' => ['nullable', 'integer', 'exists:states,id'],
+            'city_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'latitude' => ['nullable', 'numeric'],
+            'longitude' => ['nullable', 'numeric'],
         ]);
 
         $user->phone_number = trim((string) ($validated['phone_number'] ?? '')) ?: null;
+        $user->country_id = !empty($validated['country_id']) ? (int) $validated['country_id'] : null;
+        $user->state_id = !empty($validated['state_id']) ? (int) $validated['state_id'] : null;
+        $user->city_id = !empty($validated['city_id']) ? (int) $validated['city_id'] : null;
+        $user->address = trim((string) ($validated['address'] ?? '')) ?: null;
+        $user->latitude = array_key_exists('latitude', $validated) && $validated['latitude'] !== null
+            ? (float) $validated['latitude']
+            : null;
+        $user->longitude = array_key_exists('longitude', $validated) && $validated['longitude'] !== null
+            ? (float) $validated['longitude']
+            : null;
         $user->save();
 
         return response()->json([

@@ -214,7 +214,7 @@
                     </div>
                     <div class="col-md-4">
                       <label for="productDiscountPercentage" class="form-label">Descuento (%)</label>
-                      <input type="number" class="form-control border" id="productDiscountPercentage" name="discount_percentage" min="0" max="100" step="0.01" value="{{ number_format((float) ($product->discount_percentage ?? 0), 2, '.', '') }}">
+                      <input type="number" class="form-control border" id="productDiscountPercentage" name="discount_percentage" min="0" max="100" step="0.01" value="{{ number_format((float) ($product->discount_percentage ?? 0), 2, '.', '') }}" data-decimal-friendly="true">
                     </div>
                     <div class="col-md-4 d-flex align-items-end">
                       <button type="submit" class="btn btn-dark w-100" id="saveChangesBtn">Guardar Cambios</button>
@@ -282,11 +282,11 @@
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Precio base</label>
-                            <input type="number" class="form-control border" data-existing-price min="0.01" step="0.01" value="{{ number_format((float) $variant->price, 2, '.', '') }}">
+                            <input type="number" class="form-control border" data-existing-price min="0.01" step="0.01" value="{{ number_format((float) $variant->price, 2, '.', '') }}" data-decimal-friendly="true">
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Desc. variante %</label>
-                            <input type="number" class="form-control border" data-existing-discount min="0" max="100" step="0.01" value="{{ number_format((float) ($variant->discount_percentage ?? 0), 2, '.', '') }}">
+                            <input type="number" class="form-control border" data-existing-discount min="0" max="100" step="0.01" value="{{ number_format((float) ($variant->discount_percentage ?? 0), 2, '.', '') }}" data-decimal-friendly="true">
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Stock</label>
@@ -313,6 +313,7 @@
                             <small class="text-muted">Precio final: {{ number_format($effectivePrice, 2) }} $</small>
                           </div>
                           <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-outline-dark btn-sm open-existing-variant-ai-btn" data-variant-id="{{ $variant->id }}">IA imagen</button>
                             <button type="button" class="btn btn-dark btn-sm save-existing-variant-btn" data-variant-id="{{ $variant->id }}">Guardar variante</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm generate-variant-codes-btn" data-variant-id="{{ $variant->id }}">Generar códigos</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm open-qr-modal-btn" data-qr-title="QR variante {{ $variant->size }}" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="showVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Ver QR</button>
@@ -360,6 +361,7 @@
                     </div>
 
                     <div class="mt-3">
+                      <div class="alert alert-light border py-2 px-3 small mb-3" id="productAiBaseHint">Sin imagen base seleccionada.</div>
                       <input type="file" id="productAiReferenceImage" class="d-none" accept=".png,.jpg,.jpeg,.webp">
                       <div class="d-flex gap-2 align-items-end">
                         <button type="button" class="btn btn-outline-dark ai-attach-btn" id="productAiAttachBtn" title="Adjuntar imagen">📎</button>
@@ -419,6 +421,8 @@
     let productAiModalInstance = null;
     let productAiHistory = [];
     let productAiLatestResult = null;
+    let productAiTarget = null;
+    let productAiShouldReturnToAddImageModal = false;
 
     function showProductToast(message, type = 'info') {
       let container = document.getElementById('shopixToastContainer');
@@ -474,7 +478,9 @@
     }
 
     function parsePositiveProductAmount(value) {
-      const amount = Number(value);
+      const amount = window.shopixParseDecimalInput
+        ? window.shopixParseDecimalInput(value)
+        : Number(value);
       return Number.isFinite(amount) && amount > 0 ? amount : null;
     }
 
@@ -593,6 +599,84 @@
       return optimized;
     }
 
+    function productAiCreateFileFromBase64(base64Data, mimeType, fileName = 'producto-gemini.png') {
+      const bytes = atob(base64Data);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i += 1) {
+        arr[i] = bytes.charCodeAt(i);
+      }
+      const blob = new Blob([arr], { type: mimeType || 'image/png' });
+      return new File([blob], fileName, { type: mimeType || 'image/png' });
+    }
+
+    function productAiSetTarget(target = {}) {
+      productAiTarget = {
+        input: target.input || null,
+        inputId: target.inputId || null,
+        preview: target.preview || null,
+        previewId: target.previewId || null,
+        existingImageUrl: target.existingImageUrl || '',
+        title: target.title || 'imagen de producto',
+      };
+      productAiShouldReturnToAddImageModal = Boolean(target.returnToAddImageModal);
+      document.getElementById('productAiBaseHint').textContent = productAiTarget.existingImageUrl || productAiTarget.input?.files?.[0]
+        ? `Se usará como base la ${productAiTarget.title} actual si no adjuntas otra.`
+        : 'Sin imagen base seleccionada.';
+    }
+
+    function productAiGetTargetInput() {
+      return productAiTarget?.input || (productAiTarget?.inputId ? document.getElementById(productAiTarget.inputId) : null);
+    }
+
+    function productAiGetTargetPreview() {
+      return productAiTarget?.preview || (productAiTarget?.previewId ? document.getElementById(productAiTarget.previewId) : null);
+    }
+
+    function productAiReadFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = String(reader.result || '');
+          const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+          resolve({ data: base64, mime: file.type || 'image/png' });
+        };
+        reader.onerror = () => reject(new Error('No se pudo leer la imagen base.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function productAiReadRemoteImage(url) {
+      if (!url) return null;
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      const file = new File([blob], 'imagen-base', { type: blob.type || 'image/png' });
+      return productAiReadFileAsBase64(file);
+    }
+
+    function openProductAiForTarget(target) {
+      productAiHistory = [];
+      productAiLatestResult = null;
+      document.getElementById('productAiPrompt').value = '';
+      document.getElementById('productAiReferenceImage').value = '';
+      document.getElementById('productAiAttachedName').textContent = 'Sin imagen adjunta';
+      document.getElementById('productAiChat').innerHTML = '';
+      productAiSetTarget(target);
+      productAiAppendMessage('assistant', `Describe cómo debe verse la ${productAiTarget?.title || 'imagen'} y generaré una versión.`);
+      productAiRenderPreview();
+      productAiSetLoading(false);
+
+      if (productAiShouldReturnToAddImageModal) {
+        const addImageModalEl = document.getElementById('addImageModal');
+        const addImageModalInstance = bootstrap.Modal.getOrCreateInstance(addImageModalEl);
+        addImageModalEl.addEventListener('hidden.bs.modal', () => productAiModalInstance.show(), { once: true });
+        addImageModalInstance.hide();
+        return;
+      }
+
+      productAiModalInstance.show();
+    }
+
     function productAiAppendMessage(role, content) {
       const chatBox = document.getElementById('productAiChat');
       const item = document.createElement('div');
@@ -632,49 +716,48 @@
       useBtn.disabled = false;
     }
 
-    function productAiGetReferenceData() {
-      const input = document.getElementById('productAiReferenceImage');
-      const file = input?.files?.[0];
-      if (!file) {
-        return Promise.resolve(null);
+    async function productAiGetReferenceData() {
+      const attachedFile = document.getElementById('productAiReferenceImage')?.files?.[0] || null;
+      if (attachedFile) {
+        return productAiReadFileAsBase64(attachedFile);
       }
 
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = String(reader.result || '');
-          const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-          resolve({ data: base64, mime: file.type || 'image/png' });
-        };
-        reader.onerror = () => reject(new Error('No se pudo leer la imagen adjunta.'));
-        reader.readAsDataURL(file);
-      });
+      const targetInput = productAiGetTargetInput();
+      const targetFile = targetInput?.files?.[0] || null;
+      if (targetFile) {
+        return productAiReadFileAsBase64(targetFile);
+      }
+
+      if (productAiTarget?.existingImageUrl) {
+        return productAiReadRemoteImage(productAiTarget.existingImageUrl);
+      }
+
+      return null;
     }
 
     async function productAiApplyToInput(base64Data, mimeType, fileName = 'producto-gemini.png') {
-      const input = document.getElementById('image');
-      const preview = document.getElementById('addImagePreview');
-      if (!input || !preview || !base64Data) {
+      const input = productAiGetTargetInput();
+      const preview = productAiGetTargetPreview();
+      if (!input || !base64Data) {
         return;
       }
 
-      const bytes = atob(base64Data);
-      const arr = new Uint8Array(bytes.length);
-      for (let i = 0; i < bytes.length; i += 1) {
-        arr[i] = bytes.charCodeAt(i);
-      }
-      const blob = new Blob([arr], { type: mimeType || 'image/png' });
-      const file = new File([blob], fileName, { type: mimeType || 'image/png' });
-
+      const file = productAiCreateFileFromBase64(base64Data, mimeType, fileName);
       const dt = new DataTransfer();
       dt.items.add(file);
       input.files = dt.files;
 
-      await optimizeProductImageInput('image');
+      if (input.id) {
+        await optimizeProductImageInput(input.id);
+      } else {
+        await optimizeProductImageInputForElement(input);
+      }
 
       const optimizedFile = input.files?.[0] || file;
-      preview.src = URL.createObjectURL(optimizedFile);
-      preview.style.display = 'block';
+      if (preview) {
+        preview.src = URL.createObjectURL(optimizedFile);
+        preview.style.display = 'block';
+      }
     }
 
     async function productAiSend() {
@@ -818,11 +901,11 @@
         </div>
         <div class="col-lg-2 col-md-6">
           <label class="form-label">Precio</label>
-          <input type="number" class="form-control" data-new-price min="0.01" step="0.01">
+          <input type="number" class="form-control" data-new-price min="0.01" step="0.01" data-decimal-friendly="true">
         </div>
         <div class="col-lg-2 col-md-6">
           <label class="form-label">Desc. %</label>
-          <input type="number" class="form-control" data-new-discount min="0" max="100" step="0.01" value="0">
+          <input type="number" class="form-control" data-new-discount min="0" max="100" step="0.01" value="0" data-decimal-friendly="true">
         </div>
         <div class="col-lg-2 col-md-6">
           <label class="form-label">Stock</label>
@@ -837,7 +920,8 @@
           <input type="file" class="form-control new-variant-image" accept="image/*">
         </div>
       </div>
-      <div class="d-flex justify-content-end mt-2">
+      <div class="d-flex justify-content-end gap-2 mt-2">
+        <button type="button" class="btn btn-outline-dark btn-sm open-new-variant-ai-btn">IA imagen</button>
         <button type="button" class="btn btn-outline-danger btn-sm remove-new-variant-btn">Eliminar</button>
       </div>
     `;
@@ -845,6 +929,13 @@
     row.querySelector('.remove-new-variant-btn')?.addEventListener('click', () => row.remove());
     row.querySelector('.new-variant-image')?.addEventListener('change', async function () {
       await optimizeProductImageInputForElement(this);
+    });
+    row.querySelector('.open-new-variant-ai-btn')?.addEventListener('click', () => {
+      const imageInput = row.querySelector('.new-variant-image');
+      openProductAiForTarget({
+        input: imageInput,
+        title: 'imagen de variante',
+      });
     });
 
     container.appendChild(row);
@@ -873,6 +964,23 @@
       if (preview && file) {
         preview.src = URL.createObjectURL(file);
       }
+    });
+  });
+
+  document.querySelectorAll('.open-existing-variant-ai-btn').forEach((button) => {
+    button.addEventListener('click', function () {
+      const variantId = this.getAttribute('data-variant-id');
+      const row = document.querySelector(`[data-existing-variant-row="${variantId}"]`);
+      const input = row?.querySelector('.existing-variant-image-input');
+      const preview = document.getElementById(`variantPreview-${variantId}`);
+      if (!row || !input) return;
+
+      openProductAiForTarget({
+        input,
+        preview,
+        title: 'imagen de variante',
+        existingImageUrl: preview?.getAttribute('src') || '',
+      });
     });
   });
 
@@ -1309,6 +1417,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const productAiModalEl = document.getElementById('productAiModal');
   const addImageModalInstance = bootstrap.Modal.getOrCreateInstance(addImageModalEl);
   productAiModalInstance = bootstrap.Modal.getOrCreateInstance(productAiModalEl);
+  const variantImageSelector = document.getElementById('variantImageSelector');
+
+  const resolveAddImageBaseUrl = () => {
+    const selectedVariantId = variantImageSelector?.value || '';
+    if (selectedVariantId) {
+      return document.getElementById(`variantPreview-${selectedVariantId}`)?.getAttribute('src') || '';
+    }
+
+    return document.getElementById('mainImage')?.getAttribute('src') || '';
+  };
 
   document.getElementById('image').addEventListener('change', async function () {
     await optimizeProductImageInput('image');
@@ -1338,22 +1456,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('openProductAiBtn').addEventListener('click', () => {
-    productAiHistory = [];
-    productAiLatestResult = null;
-    document.getElementById('productAiPrompt').value = '';
-    document.getElementById('productAiReferenceImage').value = '';
-    document.getElementById('productAiAttachedName').textContent = 'Sin imagen adjunta';
-    document.getElementById('productAiChat').innerHTML = '';
-    productAiAppendMessage('assistant', 'Hola, te ayudo a generar la imagen de tu producto. ¿Qué deseas crear?');
-    productAiRenderPreview();
-    productAiSetLoading(false);
-
-    addImageModalEl.addEventListener('hidden.bs.modal', () => productAiModalInstance.show(), { once: true });
-    addImageModalInstance.hide();
+    openProductAiForTarget({
+      inputId: 'image',
+      previewId: 'addImagePreview',
+      existingImageUrl: resolveAddImageBaseUrl(),
+      title: variantImageSelector?.value ? 'imagen de la variante seleccionada' : 'imagen principal del producto',
+      returnToAddImageModal: true,
+    });
   });
 
   productAiModalEl.addEventListener('hidden.bs.modal', () => {
-    addImageModalInstance.show();
+    if (productAiShouldReturnToAddImageModal) {
+      addImageModalInstance.show();
+    }
+    productAiShouldReturnToAddImageModal = false;
   });
 
   document.getElementById('removeBgBtn').addEventListener('click', removeBackgroundFromUpload);
@@ -1371,16 +1487,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('productAiDownloadBtn').addEventListener('click', () => {
     if (!productAiLatestResult) return;
-    const bytes = atob(productAiLatestResult.base64Data);
-    const arr = new Uint8Array(bytes.length);
-    for (let i = 0; i < bytes.length; i += 1) {
-      arr[i] = bytes.charCodeAt(i);
-    }
-    const blob = new Blob([arr], { type: productAiLatestResult.mimeType || 'image/png' });
+    const file = productAiCreateFileFromBase64(
+      productAiLatestResult.base64Data,
+      productAiLatestResult.mimeType,
+      productAiLatestResult.fileName || 'producto-gemini.png'
+    );
+    const blob = new Blob([file], { type: productAiLatestResult.mimeType || 'image/png' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = productAiLatestResult.fileName || 'producto-gemini.png';
+    link.download = file.name;
     document.body.appendChild(link);
     link.click();
     link.remove();

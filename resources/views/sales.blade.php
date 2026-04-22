@@ -18,9 +18,296 @@
 
     .admin-cart-fab {
         position: fixed;
-        right: 16px;
-        bottom: 16px;
+        right: max(16px, env(safe-area-inset-right));
+        bottom: max(16px, env(safe-area-inset-bottom));
+        left: auto !important;
         z-index: 1080;
+        box-shadow: 0 14px 28px rgba(15, 23, 42, 0.22);
+    }
+
+    .sale-flow-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .sale-flow-hero {
+        padding: 1.35rem 1.4rem;
+        border: 1px solid #dbe4f0;
+        border-radius: 24px;
+        background: radial-gradient(circle at top right, rgba(96, 165, 250, 0.18), transparent 24%), linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        box-shadow: 0 24px 50px -38px rgba(15, 23, 42, 0.45);
+    }
+
+    .sale-flow-eyebrow {
+        font-size: 0.74rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        font-weight: 800;
+        color: #2563eb;
+        margin-bottom: 0.4rem;
+    }
+
+    .sale-flow-hero h1 {
+        margin-bottom: 0.35rem;
+    }
+
+    .sale-step-panel {
+        border: 1px solid #dbe4f0;
+        border-radius: 24px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        box-shadow: 0 22px 45px -40px rgba(15, 23, 42, 0.45);
+        padding: 1.2rem;
+    }
+
+    .sale-step-title {
+        font-size: clamp(1.35rem, 2vw, 1.8rem);
+        font-weight: 800;
+        margin-bottom: 0.2rem;
+        color: #0f172a;
+    }
+
+    .sale-step-copy {
+        color: #64748b;
+        margin-bottom: 1rem;
+    }
+
+    .sale-info-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.8rem;
+        margin-bottom: 1rem;
+    }
+
+    .sale-info-pill {
+        border: 1px solid #dbe4f0;
+        border-radius: 18px;
+        padding: 0.85rem 1rem;
+        background: #fff;
+    }
+
+    .sale-info-pill small {
+        display: block;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .sale-section-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        background: #fff;
+        padding: 1rem;
+        box-shadow: 0 18px 35px -34px rgba(15, 23, 42, 0.32);
+        margin-bottom: 0.9rem;
+    }
+
+    .sale-section-card h6,
+    .sale-section-card h5 {
+        font-weight: 800;
+    }
+
+    .sale-section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.85rem;
+    }
+
+    .sale-section-header p {
+        margin: 0;
+        color: #64748b;
+    }
+
+    .sale-catalog-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .sale-products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+    }
+
+    .sale-products-grid .product-item,
+    .sale-products-grid .package-item {
+        width: 100%;
+    }
+
+    .sale-step-actions {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .sale-step-actions .btn {
+        min-width: 120px;
+    }
+
+    .sale-flow-stepper {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.8rem;
+    }
+
+    .sale-flow-step {
+        position: relative;
+        padding: 1rem 1.05rem;
+        border: 1px solid #dbe4f0;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 16px 32px -28px rgba(15, 23, 42, 0.28);
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .sale-flow-step.is-active {
+        border-color: rgba(37, 99, 235, 0.45);
+        background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(239,246,255,0.98) 100%);
+        box-shadow: 0 22px 38px -30px rgba(37, 99, 235, 0.45);
+        transform: translateY(-1px);
+    }
+
+    .sale-flow-step.is-complete {
+        border-color: rgba(15, 118, 110, 0.28);
+        background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(240,253,250,0.96) 100%);
+    }
+
+    .sale-flow-step-number {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        font-weight: 800;
+        background: #e2e8f0;
+        color: #0f172a;
+        margin-bottom: 0.65rem;
+    }
+
+    .sale-flow-step.is-active .sale-flow-step-number {
+        background: #2563eb;
+        color: #fff;
+    }
+
+    .sale-flow-step.is-complete .sale-flow-step-number {
+        background: #0f766e;
+        color: #fff;
+    }
+
+    .sale-flow-step-title {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 0.18rem;
+    }
+
+    .sale-flow-step-copy-small {
+        color: #64748b;
+        font-size: 0.88rem;
+        line-height: 1.35;
+    }
+
+    .sale-step-panel-step1 {
+        border: 1px solid #dbe4f0;
+        border-radius: 24px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        box-shadow: 0 22px 45px -40px rgba(15, 23, 42, 0.45);
+        padding: 1.2rem;
+    }
+
+    .sale-toolbar-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.9rem;
+        margin-bottom: 1rem;
+    }
+
+    .sale-toolbar-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 18px 35px -34px rgba(15, 23, 42, 0.32);
+        padding: 1rem;
+    }
+
+    .sale-toolbar-card h6 {
+        font-weight: 800;
+        margin-bottom: 0.3rem;
+    }
+
+    .sale-toolbar-card p {
+        color: #64748b;
+        margin-bottom: 0.8rem;
+    }
+
+    #categoriesContainer {
+        padding-bottom: 0.35rem !important;
+    }
+
+    .category-item .card,
+    .product-item .card,
+    .package-item .card {
+        border: 1px solid #dbe4f0;
+        border-radius: 22px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        box-shadow: 0 20px 40px -36px rgba(15, 23, 42, 0.38);
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .category-item .card:hover,
+    .product-item .card:hover,
+    .package-item .card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(37, 99, 235, 0.26);
+        box-shadow: 0 26px 45px -34px rgba(37, 99, 235, 0.24);
+    }
+
+    .category-item .card-header {
+        border-bottom: 0;
+        background: transparent;
+    }
+
+    .category-item .icon-shape,
+    .package-item .icon-shape,
+    .product-item .icon-shape {
+        border: 1px solid rgba(15, 23, 42, 0.08) !important;
+        box-shadow: 0 18px 34px -28px rgba(15, 23, 42, 0.38) !important;
+    }
+
+    .product-item .card-body,
+    .package-item .card-body {
+        padding: 1rem;
+    }
+
+    .variant-row {
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 0.7rem 0.85rem;
+        background: #fff;
+        margin-top: 0.6rem;
+    }
+
+    .variant-row .variant-label {
+        margin: 0 !important;
+    }
+
+    #cart.offcanvas-admin-desktop {
+        border: 1px solid #dbe4f0;
+        border-radius: 24px;
+        box-shadow: 0 22px 45px -40px rgba(15, 23, 42, 0.45);
+    }
+
+    #cart.offcanvas-admin-desktop .offcanvas-header {
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     }
 
     #cart {
@@ -89,6 +376,29 @@
             height: auto !important;
             aspect-ratio: 1 / 1;
         }
+
+        .sale-flow-hero,
+        .sale-step-panel,
+        .sale-section-card {
+            border-radius: 18px;
+        }
+
+        .sale-step-actions .btn {
+            flex: 1 1 150px;
+        }
+
+        .sale-flow-stepper {
+            grid-template-columns: 1fr;
+        }
+
+        .sale-step-panel-step1,
+        .sale-toolbar-card {
+            border-radius: 18px;
+        }
+
+        .sale-products-grid {
+            grid-template-columns: 1fr;
+        }
     }
   </style>
   @extends('layouts.app')
@@ -100,6 +410,7 @@
         <button type="button"
             id="openAdminCartBtn"
             class="btn btn-dark admin-cart-fab d-xl-none"
+            style="position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); left: auto; z-index: 1080; box-shadow: 0 14px 28px rgba(15, 23, 42, 0.22);"
             data-bs-toggle="offcanvas"
             data-bs-target="#cart"
             aria-controls="cart">
@@ -108,23 +419,58 @@
             <span class="badge bg-light text-dark ms-2" id="adminCartCount">0</span>
         </button>
 
+        <div class="sale-flow-shell">
+        <div class="sale-flow-hero">
+            <div class="sale-flow-eyebrow">Venta asistida</div>
+            <h1>Flujo de Venta</h1>
+            <p class="text-muted mb-0">Selecciona productos, registra pagos y confirma la orden en un flujo más claro y compacto.</p>
+        </div>
+        <div class="sale-flow-stepper" id="saleFlowStepper">
+            <div class="sale-flow-step is-active" data-sale-step="1">
+                <div class="sale-flow-step-number">1</div>
+                <div class="sale-flow-step-title">Selección</div>
+                <div class="sale-flow-step-copy-small">Categorías, productos y paquetes en una sola vista de trabajo.</div>
+            </div>
+            <div class="sale-flow-step" data-sale-step="2">
+                <div class="sale-flow-step-number">2</div>
+                <div class="sale-flow-step-title">Pago</div>
+                <div class="sale-flow-step-copy-small">Montos, referencias y monedas con lectura más clara.</div>
+            </div>
+            <div class="sale-flow-step" data-sale-step="3">
+                <div class="sale-flow-step-number">3</div>
+                <div class="sale-flow-step-title">Confirmación</div>
+                <div class="sale-flow-step-copy-small">Cliente, entrega y estado inicial antes de registrar la venta.</div>
+            </div>
+        </div>
         <div class="row g-4">
         <div class="col-12 col-xl-8">
-            <h1>Flujo de Venta</h1>
             <span id="baseRate" data-rate="{{ number_format($baseRateToBs ?? 0, 2, '.', '') }}"></span>
             <span id="customerId" data-rate="{{ $customerId}}"></span>
             <form id="purchaseForm">
                 @csrf
                 <!-- Paso 1: Selección del Ítem -->
-                <div id="step1" class="step">
-                    <!-- Input de Búsqueda -->
-                    <div class="">
+                <div id="step1" class="step sale-step-panel-step1">
+                    <div class="sale-step-title">Paso 1: Selección de productos</div>
+                    <p class="sale-step-copy">Explora el catálogo, agrega por código o arma combos sin salir del mismo flujo.</p>
+
+                    <div class="sale-toolbar-grid">
+                    <div class="sale-toolbar-card">
+                        <h6>Categorías</h6>
+                        <p>Filtra la vista para acelerar la selección.</p>
                         <input 
                             type="text" 
                             id="searchCategory" 
                             class="form-control border border-1 p-2 bg-white" 
                             placeholder="Buscar categoría..." 
                             onkeyup="filterCategories()">
+                    </div>
+                    </div>
+                    <div class="sale-section-card">
+                    <div class="sale-section-header">
+                        <div>
+                            <h6 class="mb-1">Explorar por categoría</h6>
+                            <p>Accesos rápidos para moverte entre catálogo y paquetes.</p>
+                        </div>
                     </div>
                     <div id="categoriesContainer" class="d-flex overflow-auto gap-3 py-3 mb-2" style="scroll-snap-type: x mandatory;">
                         <div class="category-item flex-shrink-0" style="width: 200px; scroll-snap-align: start;" data-category="all" onclick="filterProductsByCategory('all')">
@@ -176,7 +522,10 @@
                             </div>
                         @endif
                     </div>
-                    <div class="mb-3">
+                    </div>
+                    <div class="sale-toolbar-card mb-3">
+                        <h6>Productos y búsqueda rápida</h6>
+                        <p>Busca productos por nombre o agrega por QR / código de barras.</p>
                         <input 
                             type="text" 
                             id="searchInput" 
@@ -185,7 +534,7 @@
                             onkeyup="filterProducts()">
                     </div>
 
-                    <div class="card border mb-3">
+                    <div class="sale-toolbar-card mb-3">
                         <div class="card-body">
                             <h6 class="mb-2">Agregar por QR / Código de barras</h6>
                             <div class="d-flex gap-2 flex-wrap">
@@ -197,9 +546,13 @@
                     </div>
 
                                 @if(isset($materialPackages) && $materialPackages->count() > 0)
-                                    <div id="materialPackagesSection" class="card border mb-3 material-packages-section" data-category="packages">
-                                        <div class="card-body">
-                                            <h6 class="mb-3">Paquetes / Listas de materiales</h6>
+                                    <div id="materialPackagesSection" class="sale-section-card mb-3 material-packages-section" data-category="packages">
+                                        <div class="sale-section-header">
+                                            <div>
+                                                <h6 class="mb-1">Paquetes / Listas de materiales</h6>
+                                                <p>Combos rápidos con precio fijo o composición flexible.</p>
+                                            </div>
+                                        </div>
                                             <div class="row g-3">
                                                 @foreach($materialPackages as $package)
                                                     @php
@@ -259,11 +612,17 @@
                                                     </div>
                                                 @endforeach
                                             </div>
-                                        </div>
                                     </div>
                                 @endif
 
-                    <div id="itemSelector" class="row row-cols-1 row-cols-md-3 g-3">
+                    <div class="sale-section-card">
+                    <div class="sale-section-header">
+                        <div>
+                            <h6 class="mb-1">Productos del catálogo</h6>
+                            <p>Selecciona variantes, revisa stock y agrega al carrito sin salir del flujo.</p>
+                        </div>
+                    </div>
+                    <div id="itemSelector" class="row row-cols-1 row-cols-md-3 g-3 sale-products-grid">
                         @foreach($productItems as $item)
                             <div class="col product-item" data-category="{{ $item->category_id }}" data-name="{{ strtolower($item->name) }}">
                                 <div class="card h-100">
@@ -289,6 +648,13 @@
                                                 $productDiscount = (float) ($item->discount_percentage ?? 0);
                                                 $variantDiscount = (float) ($variant->discount_percentage ?? 0);
                                                 $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+                                                $variantCardImagePath = optional($variant->images->first())->path;
+                                                $productCardImagePath = optional($item->images->first())->path;
+                                                $variantCardImage = $variantCardImagePath
+                                                    ? (\App\Support\ImageStorage::url($variantCardImagePath) ?? asset('assets/img/shopix5.png'))
+                                                    : ($productCardImagePath
+                                                        ? (\App\Support\ImageStorage::url($productCardImagePath) ?? asset('assets/img/shopix5.png'))
+                                                        : asset('assets/img/shopix5.png'));
                                             @endphp
                                             <div class="d-flex gap-5 justify-content-between align-items-center variant-row">
                                                 <label for="variant_{{ $variant->id }}" class="d-block mt-2 variant-label" style="cursor: pointer;" data-product-name="{{ $item->name }}">
@@ -296,6 +662,7 @@
                                                     data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}" data-stock="{{ $variant->stock }}"
                                                     data-product-name="{{ $item->name }}"
                                                     data-size="{{ $variant->size }}"
+                                                    data-image-src="{{ $variantCardImage }}"
                                                     data-taxes="{{ $item->taxes }}">
                                                     <span>
                                                         {{$variant->size}} |
@@ -311,7 +678,7 @@
                                                     <i class="check-icon d-none ms-2 text-success fas fa-check"></i>
                                                 </label>
                                                 <i class="material-symbols-rounded text-info" style="cursor: pointer"
-                                                    onclick="showProductDetails('{{ $item->name }}', '{{ $item->description }}', '{{ isset($item->images) && count($item->images) > 0 ? (\App\Support\ImageStorage::url($item->images[0]->path) ?? asset('assets/img/shopix5.png')) : '' }}', '{{ number_format($effectiveVariantPrice, 2, '.', '') }}', '{{ $variant->stock }}', '{{ $variant->size }}')">
+                                                    onclick="showProductDetails('{{ $item->name }}', '{{ $item->description }}', '{{ $variantCardImage }}', '{{ number_format($effectiveVariantPrice, 2, '.', '') }}', '{{ $variant->stock }}', '{{ $variant->size }}')">
                                                     info
                                                 </i>
                                             </div>
@@ -322,19 +689,26 @@
                             </div>
                         @endforeach
                     </div>
+                    </div>
                 </div>
-                <div id="step2" class="step d-none">
-                    <h4>Paso 2: Selecciona Métodos de Pago</h4>
-                    <div id="totalAmountDisplay" class="mt-3">
-                        <strong>Total a pagar: </strong><span id="totalAmountValue">0.00</span>{{ $baseCurrencySymbol ?? '$' }}
+                <div id="step2" class="step d-none sale-step-panel">
+                    <div class="sale-step-title">Paso 2: Métodos de pago</div>
+                    <p class="sale-step-copy">Registra montos, referencias y comprobantes con una lectura más clara del total pendiente.</p>
+                    <div class="sale-info-strip">
+                        <div class="sale-info-pill">
+                            <small>Total</small>
+                            <div><span id="totalAmountValue">0.00</span>{{ $baseCurrencySymbol ?? '$' }}</div>
+                        </div>
+                        <div class="sale-info-pill">
+                            <small>Tasa BCV</small>
+                            <div><span id="baseRateDisplay" data-rate="{{ number_format($baseRateToBs ?? 0, 2, '.', '') }}">{{ number_format($baseRateToBs ?? 0, 2) }}</span> Bs.</div>
+                        </div>
+                        <div class="sale-info-pill">
+                            <small>Total Bs</small>
+                            <div><span id="totalAmountBsValue">0.00</span> Bs</div>
+                        </div>
                     </div>
-                    <div class="">
-                        <strong>Tasa BCV: </strong><span id="baseRateDisplay" data-rate="{{ number_format($baseRateToBs ?? 0, 2, '.', '') }}">{{ number_format($baseRateToBs ?? 0, 2) }} Bs.</span>
-                    </div>
-                    <div class="">
-                        <strong>Total a pagar: </strong><span id="totalAmountBsValue">0.00</span>Bs 
-                    </div>
-                    <div class="mt-2">
+                    <div class="sale-section-card mt-2">
                         @php
                             // Buscar el impuesto IGTF dentro de $taxes
                             $igtfTax = null;
@@ -360,7 +734,7 @@
                             </strong>
                         @endif
                     </div>
-                    <div id="paymentMethods" class="mb-3">
+                    <div id="paymentMethods" class="mb-3 sale-section-card">
                         @php
                             $groupedMethods = $paymentMethods->groupBy(fn($m) => $m->currency->code);
                         @endphp
@@ -420,7 +794,7 @@
                         @endforeach
                     </div>
 
-                    <div id="paymentSummary" class="mt-3">
+                    <div id="paymentSummary" class="mt-3 sale-section-card">
                         <strong>Total ingresado: </strong> {{ $baseCurrencySymbol ?? '$' }} <span id="totalPaid">0.00</span><br>
                         <span class="text-danger paymentMessage"></span>
                     </div>
@@ -430,17 +804,17 @@
                             <!-- Los métodos de pago seleccionados se agregarán aquí dinámicamente -->
                         </ul>
                     </div>
-                    <div class="d-flex justify-content-between w-100 align-items-center">
+                    <div class="sale-step-actions w-100 align-items-center">
                         <button type="button" class="btn btn-secondary mt-3" id="backToStep1">Atrás</button>
                         <button type="button" class="btn btn-info mt-3" id="toStep3" disabled>Siguiente</button>
                     </div>
                 </div>
 
-                <div id="step3" class="step d-none">
-                    <h4>Paso 3: Confirmación</h4>
-                    <p>Resumen de la compra y confirmación.</p>
+                <div id="step3" class="step d-none sale-step-panel">
+                    <div class="sale-step-title">Paso 3: Confirmación</div>
+                    <p class="sale-step-copy">Revisa cliente, entrega, documento y estado inicial antes de registrar la venta.</p>
 
-                    <div class="card p-3 mb-3">
+                    <div class="sale-section-card">
                         <h6 class="mb-2">Cliente para esta venta</h6>
                         <div class="d-flex gap-4 flex-wrap mb-2">
                             <div class="form-check">
@@ -490,7 +864,7 @@
                         </div>
                     </div>
 
-                    <div class="card p-3 mb-3">
+                    <div class="sale-section-card">
                         <h6 class="mb-3">Tipo de entrega</h6>
                         <div class="d-flex gap-4 flex-wrap">
                             <div class="form-check">
@@ -498,10 +872,17 @@
                                 <label class="form-check-label" for="delivery_pickup">Retiro en tienda</label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="radio" name="delivery_type" id="delivery_shipping" value="shipping">
+                                <input class="form-check-input" type="radio" name="delivery_type" id="delivery_shipping" value="shipping" {{ (bool) ($tenant->delivery_enabled ?? false) ? '' : 'disabled' }}>
                                 <label class="form-check-label" for="delivery_shipping">Envío</label>
                             </div>
                         </div>
+                        <small class="text-muted d-block mt-2" id="deliveryModeHelper">
+                            @if((bool) ($tenant->delivery_enabled ?? false))
+                                Modelo activo: {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
+                            @else
+                                El delivery está desactivado para esta tienda. Solo se permite retiro en tienda.
+                            @endif
+                        </small>
 
                         <div class="mt-3 d-none" id="deliveryAddressContainer">
                             <label class="form-label">Ubicación de envío</label>
@@ -524,11 +905,15 @@
                                 <div class="col-12">
                                     <input type="text" id="deliveryAddressDetail" class="form-control border border-1 p-2 bg-white" placeholder="Dirección exacta (calle, referencia, etc.)">
                                 </div>
+                                <div class="col-12 col-md-4 d-none" id="deliveryDistanceContainer">
+                                    <label class="form-label mb-1" for="deliveryDistanceKm">Distancia estimada (km)</label>
+                                    <input type="number" min="0" step="0.01" id="deliveryDistanceKm" class="form-control border border-1 p-2 bg-white" placeholder="Ej: 6.5">
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="card p-3 mb-3">
+                    <div class="sale-section-card">
                         <h6 class="mb-3">Documento de la venta</h6>
                         <div class="d-flex gap-4 flex-wrap">
                             <div class="form-check">
@@ -545,7 +930,7 @@
                         @endif
                     </div>
 
-                    <div class="card p-3 mb-3">
+                    <div class="sale-section-card">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="mb-0">Estado inicial de la venta</h6>
                             <div class="form-check m-0">
@@ -567,10 +952,10 @@
                         </div>
                     </div>
 
-                    <div id="summaryContainer" class="mt-3 card p-4"></div> <!-- Aquí se insertará el resumen -->
+                    <div id="summaryContainer" class="mt-3 sale-section-card"></div>
                     <span class="text-danger paymentMessage"></span>
 
-                    <div class="d-flex justify-content-between w-100 align-items-center">
+                    <div class="sale-step-actions w-100 align-items-center">
                         <button type="button" class="btn btn-secondary mt-3" id="backToStep2">Atrás</button>
                         <button type="button" class="btn btn-success mt-3" id="confirmPurchase">Confirmar</button>
                     </div>
@@ -591,6 +976,10 @@
                     <ul id="cartList" class="list-group gap-1"></ul>
                     <div class="mt-3">
                         <strong>Sub Total:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="cartSubTotal">0.00</span>
+                    </div>
+                    <div class="mt-3">
+                        <strong>Delivery:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="cartDeliveryFee">0.00</span>
+                        <small class="text-muted d-block" id="cartDeliveryMode">Retiro en tienda</small>
                     </div>
                     <div class="mt-3 igtf-class" style="display: none;">
                         <strong>Total sin IGTF:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="cartTotalIGTF">0.00</span>
@@ -614,6 +1003,7 @@
             </div>
         </div>
         </div>
+    </div>
     </div>
 <!-- Modal para Detalles del Producto -->
 <div class="modal fade" id="productDetailModal" tabindex="-1" aria-labelledby="productDetailModalLabel" aria-hidden="true">
@@ -723,10 +1113,12 @@
         const euroRateToBs = Number(@json($euroRate->rate ?? 0));
         const tenantElectronicInvoicingEnabled = @json((bool) ($tenant->electronic_invoicing_enabled ?? false));
         const tenantSpecialTaxpayer = @json((bool) ($tenant->special_taxpayer ?? false));
+        const tenantDeliveryConfig = @json(\App\Support\DeliveryManager::settings($tenant));
         const existingCustomersForSale = @json(($existingCustomersForSale ?? collect())->values());
         
         const authUser = @json($authUser);
         let selectedExistingCustomerId = Number(existingCustomersForSale?.[0]?.id || 0);
+        let currentDeliveryFee = 0;
         @php
             $materialPackagesPayload = ($materialPackages ?? collect())->map(function ($package) {
                 return [
@@ -746,6 +1138,8 @@
                                 $variantBasePrice = (float) ($variant->price ?? 0);
                                 $variantProductDiscount = (float) ($variant->product->discount_percentage ?? 0);
                                 $variantOwnDiscount = (float) ($variant->discount_percentage ?? 0);
+                                $variantImagePath = optional($variant->images->first())->path;
+                                $productImagePath = optional($variant->product->images->first())->path;
 
                                 return [
                                     'variant_id' => (int) $variant->id,
@@ -753,6 +1147,11 @@
                                     'variant_stock' => (float) ($variant->stock ?? 0),
                                     'variant_price' => $variantBasePrice * ((100 - $variantProductDiscount) / 100) * ((100 - $variantOwnDiscount) / 100),
                                     'product_name' => $variant->product->name ?? 'Producto',
+                                    'image_src' => $variantImagePath
+                                        ? (\App\Support\ImageStorage::url($variantImagePath) ?? asset('assets/img/shopix5.png'))
+                                        : ($productImagePath
+                                            ? (\App\Support\ImageStorage::url($productImagePath) ?? asset('assets/img/shopix5.png'))
+                                            : asset('assets/img/shopix5.png')),
                                     'taxes' => ($variant->product && $variant->product->taxes)
                                         ? $variant->product->taxes->map(function ($tax) {
                                             return [
@@ -766,6 +1165,9 @@
                             ->values()
                             ->toArray();
 
+                        $itemVariantImagePath = optional($item->variant->images->first())->path;
+                        $itemProductImagePath = optional($item->variant->product->images->first())->path;
+
                         return [
                             'variant_id' => $item->product_variant_id,
                             'selection_mode' => $item->selection_mode ?? 'variant',
@@ -773,6 +1175,11 @@
                             'variant_stock' => (float) ($item->variant->stock ?? 0),
                             'variant_price' => (float) $effectivePrice,
                             'product_name' => $item->variant->product->name ?? 'Producto',
+                            'image_src' => $itemVariantImagePath
+                                ? (\App\Support\ImageStorage::url($itemVariantImagePath) ?? asset('assets/img/shopix5.png'))
+                                : ($itemProductImagePath
+                                    ? (\App\Support\ImageStorage::url($itemProductImagePath) ?? asset('assets/img/shopix5.png'))
+                                    : asset('assets/img/shopix5.png')),
                             'quantity' => (float) ($item->quantity ?? 0),
                             'selectable_variants' => (($item->selection_mode ?? 'variant') === 'product')
                                 ? $selectableVariants
@@ -782,6 +1189,11 @@
                                     'variant_stock' => (float) ($item->variant->stock ?? 0),
                                     'variant_price' => (float) $effectivePrice,
                                     'product_name' => $item->variant->product->name ?? 'Producto',
+                                    'image_src' => $itemVariantImagePath
+                                        ? (\App\Support\ImageStorage::url($itemVariantImagePath) ?? asset('assets/img/shopix5.png'))
+                                        : ($itemProductImagePath
+                                            ? (\App\Support\ImageStorage::url($itemProductImagePath) ?? asset('assets/img/shopix5.png'))
+                                            : asset('assets/img/shopix5.png')),
                                     'taxes' => ($item->variant && $item->variant->product && $item->variant->product->taxes)
                                         ? $item->variant->product->taxes->map(function ($tax) {
                                             return [
@@ -885,6 +1297,7 @@
                         variant_stock: Number(choice.variant_stock || 0),
                         variant_price: Number(choice.variant_price || 0),
                         product_name: choice.product_name || component.product_name || 'Producto',
+                        image_src: choice.image_src || component.image_src || null,
                         taxes: Array.isArray(choice.taxes) ? choice.taxes : [],
                         quantity: 0,
                     }));
@@ -947,8 +1360,13 @@
                     return `
                         <div class="row g-2 align-items-center mb-2">
                             <div class="col-12 col-md-6">
-                                <small class="text-muted d-block">Variante</small>
-                                <strong>${choice.product_name} ${choice.variant_size || ''}</strong>
+                                <div class="d-flex align-items-center gap-2">
+                                    <img src="${choice.image_src || '/assets/img/shopix5.png'}" alt="${choice.product_name || 'Producto'}" style="width:56px;height:56px;object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;flex-shrink:0;" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
+                                    <div>
+                                        <small class="text-muted d-block">Variante</small>
+                                        <strong>${choice.product_name} ${choice.variant_size || ''}</strong>
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-6 col-md-3">
                                 <small class="text-muted d-block">Stock</small>
@@ -1032,6 +1450,7 @@
                         product_name: choice.product_name,
                         variant_size: choice.variant_size,
                         variant_price: Number(choice.variant_price || 0),
+                        image_src: choice.image_src || null,
                         taxes: Array.isArray(choice.taxes) ? choice.taxes : [],
                     });
                 }
@@ -1073,6 +1492,7 @@
                         stock: Number(row.stock || 0),
                         quantity: row.qty,
                         line_discount_percentage: combinedLineDiscount,
+                        imageSrc: row.image_src || null,
                         taxes: row.taxes || [],
                         taxRate,
                         taxAmount,
@@ -1140,6 +1560,7 @@
                         stock: Number(component.variant_stock || 999999),
                         quantity: componentQty,
                         line_discount_percentage: combinedLineDiscount,
+                        imageSrc: component.image_src || null,
                         taxes,
                         taxRate,
                         taxAmount,
@@ -1205,6 +1626,7 @@
             const stock = parseInt(checkbox.getAttribute('data-stock')) || 0;
             const price = parseFloat(checkbox.getAttribute('data-price')) || 0;
             const taxesString = checkbox.getAttribute('data-taxes');
+            const imageSrc = checkbox.getAttribute('data-image-src') || '';
 
             // Convertir a JSON
             const taxes = taxesString ? JSON.parse(taxesString) : [];
@@ -1230,6 +1652,7 @@
                     stock,
                     quantity: 1,
                     line_discount_percentage: 0,
+                    imageSrc,
                     taxes,
                     taxRate: totalTaxRate,
                     taxAmount,
@@ -1248,6 +1671,95 @@
             }
 
             renderCart();
+        }
+
+        function getAdminDeliveryModeLabel(mode, distanceKm = null) {
+            if (!tenantDeliveryConfig?.enabled) {
+                return 'Retiro en tienda';
+            }
+
+            if (mode === 'distance') {
+                return distanceKm && distanceKm > 0
+                    ? `Delivery por km (${distanceKm.toFixed(2)} km)`
+                    : 'Delivery por km';
+            }
+
+            if (mode === 'fixed') {
+                return 'Delivery con tarifa fija';
+            }
+
+            if (mode === 'free') {
+                return 'Delivery gratis';
+            }
+
+            return 'Retiro en tienda';
+        }
+
+        function getAdminDeliveryChargeContext(strict = false) {
+            const selectedType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
+            const distanceInput = document.getElementById('deliveryDistanceKm');
+            const distanceValue = Number(distanceInput?.value || 0);
+
+            if (selectedType !== 'shipping') {
+                return {
+                    valid: true,
+                    fee: 0,
+                    mode: 'pickup',
+                    distanceKm: null,
+                    label: 'Retiro en tienda',
+                };
+            }
+
+            if (!tenantDeliveryConfig?.enabled) {
+                return {
+                    valid: false,
+                    fee: 0,
+                    mode: 'pickup',
+                    distanceKm: null,
+                    label: 'Retiro en tienda',
+                    message: 'La tienda no tiene delivery activo.',
+                };
+            }
+
+            const normalizedMode = tenantDeliveryConfig.mode || 'free';
+            if (normalizedMode === 'fixed') {
+                return {
+                    valid: true,
+                    fee: Number(tenantDeliveryConfig.fixed_fee || 0),
+                    mode: normalizedMode,
+                    distanceKm: null,
+                    label: getAdminDeliveryModeLabel(normalizedMode),
+                };
+            }
+
+            if (normalizedMode === 'distance') {
+                if (distanceValue <= 0) {
+                    return {
+                        valid: !strict,
+                        fee: 0,
+                        mode: normalizedMode,
+                        distanceKm: null,
+                        label: getAdminDeliveryModeLabel(normalizedMode),
+                        message: 'Debes indicar la distancia estimada del delivery en kilómetros.',
+                    };
+                }
+
+                return {
+                    valid: true,
+                    fee: Number(tenantDeliveryConfig.fee_per_km || 0) * distanceValue,
+                    mode: normalizedMode,
+                    distanceKm: distanceValue,
+                    label: getAdminDeliveryModeLabel(normalizedMode, distanceValue),
+                };
+            }
+
+            return {
+                valid: true,
+                fee: 0,
+                mode: 'free',
+                distanceKm: null,
+                label: getAdminDeliveryModeLabel('free'),
+            };
         }
 
 function updateQuantity(id, newQty) {
@@ -1279,6 +1791,8 @@ function updateQuantity(id, newQty) {
             const cartTotalBs = document.getElementById('cartTotalBs');
             const cartSubTotalBs = document.getElementById('cartSubTotalBs');
             const cartTotalIGTF = document.getElementById('cartTotalIGTF');
+            const cartDeliveryFee = document.getElementById('cartDeliveryFee');
+            const cartDeliveryMode = document.getElementById('cartDeliveryMode');
             const totalAmountValue = document.getElementById('totalAmountValue');
             const totalAmountBsValue = document.getElementById('totalAmountBsValue');
             const toStep2Btn = document.getElementById('toStep2');
@@ -1290,14 +1804,18 @@ function updateQuantity(id, newQty) {
                 li.className = 'list-group-item d-flex justify-content-between align-items-start flex-column';
 
                 const textDiv = document.createElement('div');
+                textDiv.className = 'd-flex gap-2 w-100';
                 textDiv.innerHTML = `
-                    <strong>${item.productName} ${item.productSize}</strong><br>
-                    Subtotal: ${(item.price * item.quantity).toFixed(2)} ${baseCurrencyCode}
-                    <br>
-                    Impuestos:<br>
-                    ${item.taxes.map(tax => `• ${tax.name} (${parseFloat(tax.rate)}%)`).join('<br>')}
-                    <br>
-                    <strong>Total con Impuestos: ${(item.totalPrice * item.quantity).toFixed(2)} ${baseCurrencyCode}</strong>
+                    <img src="${item.imageSrc || '/assets/img/shopix5.png'}" alt="${item.productName}" style="width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;flex-shrink:0;" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
+                    <div>
+                        <strong>${item.productName} ${item.productSize}</strong><br>
+                        Subtotal: ${(item.price * item.quantity).toFixed(2)} ${baseCurrencyCode}
+                        <br>
+                        Impuestos:<br>
+                        ${item.taxes.map(tax => `• ${tax.name} (${parseFloat(tax.rate)}%)`).join('<br>')}
+                        <br>
+                        <strong>Total con Impuestos: ${(item.totalPrice * item.quantity).toFixed(2)} ${baseCurrencyCode}</strong>
+                    </div>
                 `;
 
 
@@ -1368,14 +1886,23 @@ function updateQuantity(id, newQty) {
                 document.querySelectorAll('.igtf-class').forEach(el => el.style.display = 'none');
             }
 
-            totalAmount = totalItemsWithTaxes + tax;
-            totalSinIGTF = totalItemsWithTaxes;
+            const deliveryContext = getAdminDeliveryChargeContext(false);
+            currentDeliveryFee = Number(deliveryContext.fee || 0);
+
+            totalAmount = totalItemsWithTaxes + currentDeliveryFee + tax;
+            totalSinIGTF = totalItemsWithTaxes + currentDeliveryFee;
             console.log("Total sin IGTF:", totalSinIGTF);
             cartTotal.textContent = totalAmount.toFixed(2); 
             cartSubTotal.textContent = subTotalAmount.toFixed(2);
             cartTotalBs.textContent = (totalAmount * baseRateToBs ).toFixed(2); 
             cartSubTotalBs.textContent = (subTotalAmount * baseRateToBs ).toFixed(2);
             cartTotalIGTF.textContent = totalSinIGTF.toFixed(2);
+            if (cartDeliveryFee) {
+                cartDeliveryFee.textContent = currentDeliveryFee.toFixed(2);
+            }
+            if (cartDeliveryMode) {
+                cartDeliveryMode.textContent = deliveryContext.label || 'Retiro en tienda';
+            }
             totalAmountValue.textContent = totalAmount.toFixed(2); // Asegúrate de mostrar un número válido
             totalAmountBsValue.textContent = (totalAmount * baseRateToBs ).toFixed(2); // Asegúrate de mostrar un número válido
             toStep2Btn.disabled = selectedItems.length === 0;
@@ -1818,9 +2345,11 @@ function updateQuantity(id, newQty) {
         });
 
         syncSaleStatusSelectAll();
+        setSaleFlowStep(1);
         document.getElementById('toStep2').addEventListener('click', function() {
             document.getElementById('step1').classList.add('d-none');
             document.getElementById('step2').classList.remove('d-none');
+            setSaleFlowStep(2);
 
             // Deshabilitar inputs y ocultar botones de eliminar
             document.querySelectorAll('.qty-edit').forEach(input => {
@@ -1839,6 +2368,7 @@ function updateQuantity(id, newQty) {
         document.getElementById('backToStep1').addEventListener('click', function() {
             document.getElementById('step2').classList.add('d-none');
             document.getElementById('step1').classList.remove('d-none');
+            setSaleFlowStep(1);
             document.getElementById('toStep2').classList.remove('d-none');
 
             // Habilitar inputs y mostrar botones de eliminar
@@ -1891,7 +2421,7 @@ function updateQuantity(id, newQty) {
             return `
                 <div class="d-flex flex-row gap-2 align-items-center" data-payment-entry-row="${entryId}">
                     <label class="m-0">Monto:</label>
-                    <input type="number" step="0.01" min="0.01" class="form-control payment-input border border-1 p-2"
+                    <input type="text" inputmode="decimal" autocomplete="off" class="form-control payment-input border border-1 p-2"
                         data-method-id="${methodId}"
                         data-entry-id="${entryId}"
                         data-currency="${currency}"
@@ -1919,6 +2449,128 @@ function updateQuantity(id, newQty) {
             });
 
             validatePaymentDetails();
+        }
+
+        function parseAmountInputValue(value) {
+            const normalized = normalizeEditableAmountValue(value).numeric;
+            const parsed = Number.parseFloat(normalized);
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function normalizeEditableAmountValue(value) {
+            const source = String(value || '')
+                .replace(/\s+/g, '')
+                .replace(/[^\d.,]/g, '');
+
+            if (!source) {
+                return { text: '', numeric: '' };
+            }
+
+            const lastDot = source.lastIndexOf('.');
+            const lastComma = source.lastIndexOf(',');
+            let decimalIndex = -1;
+            let decimalSeparator = '';
+
+            if (lastDot !== -1 && lastComma !== -1) {
+                decimalIndex = Math.max(lastDot, lastComma);
+                decimalSeparator = source[decimalIndex];
+            } else if (lastComma !== -1) {
+                const fraction = source.slice(lastComma + 1).replace(/[^\d]/g, '');
+                if (fraction.length <= 2) {
+                    decimalIndex = lastComma;
+                    decimalSeparator = ',';
+                }
+            } else if (lastDot !== -1) {
+                const fraction = source.slice(lastDot + 1).replace(/[^\d]/g, '');
+                if (fraction.length <= 2 || source.endsWith('.')) {
+                    decimalIndex = lastDot;
+                    decimalSeparator = '.';
+                }
+            }
+
+            let integerPart = '';
+            let decimalPart = '';
+            let hasTrailingDecimal = false;
+
+            if (decimalIndex !== -1) {
+                integerPart = source.slice(0, decimalIndex).replace(/[^\d]/g, '');
+                decimalPart = source.slice(decimalIndex + 1).replace(/[^\d]/g, '').slice(0, 2);
+                hasTrailingDecimal = source.endsWith(decimalSeparator) && decimalPart.length === 0;
+            } else {
+                integerPart = source.replace(/[^\d]/g, '');
+            }
+
+            integerPart = integerPart.replace(/^0+(?=\d)/, '');
+
+            if (!integerPart && (decimalPart || hasTrailingDecimal)) {
+                integerPart = '0';
+            }
+
+            const text = decimalIndex !== -1
+                ? `${integerPart || '0'}${(decimalPart || hasTrailingDecimal) ? '.' : ''}${decimalPart}`
+                : integerPart;
+
+            const numeric = decimalIndex !== -1
+                ? `${integerPart || '0'}${decimalPart ? `.${decimalPart}` : ''}`
+                : integerPart;
+
+            return { text, numeric };
+        }
+
+        function formatAmountDisplay(value) {
+            const numeric = Number(value || 0);
+            return new Intl.NumberFormat('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }).format(Number.isFinite(numeric) ? numeric : 0);
+        }
+
+        function syncFormattedPaymentInput(input, applyFormatting = false) {
+            if (!input || !input.classList.contains('payment-input')) {
+                return 0;
+            }
+
+            const numericValue = parseAmountInputValue(input.value);
+            input.dataset.rawValue = String(numericValue);
+
+            if (applyFormatting) {
+                input.value = numericValue > 0 ? formatAmountDisplay(numericValue) : '';
+            }
+
+            return numericValue;
+        }
+
+        function sanitizeLiveAdminMoneyInput(input) {
+            if (!input || !input.classList.contains('payment-input')) {
+                return 0;
+            }
+
+            const selectionStart = input.selectionStart ?? String(input.value || '').length;
+            const beforeCursor = String(input.value || '').slice(0, selectionStart);
+            const normalizedValue = normalizeEditableAmountValue(input.value);
+            const normalizedBeforeCursor = normalizeEditableAmountValue(beforeCursor);
+
+            if (!normalizedValue.text) {
+                input.dataset.rawValue = '0';
+                input.value = '';
+                return 0;
+            }
+
+            const numericValue = parseAmountInputValue(normalizedValue.text);
+            input.dataset.rawValue = String(numericValue);
+
+            if (input.value !== normalizedValue.text) {
+                input.value = normalizedValue.text;
+                const nextCaret = normalizedBeforeCursor.text.length;
+                requestAnimationFrame(() => {
+                    try {
+                        input.setSelectionRange(nextCaret, nextCaret);
+                    } catch (error) {
+                    }
+                });
+            }
+
+            return numericValue;
         }
 
         function removePaymentEntry(methodId, entryId) {
@@ -1973,7 +2625,7 @@ function updateQuantity(id, newQty) {
 
             if (payment) {
                 if (input.classList.contains('payment-input')) {
-                    const enteredAmount = parseFloat(input.value) || 0;
+                    const enteredAmount = sanitizeLiveAdminMoneyInput(input);
                     payment.amount = convertAmountToBaseCurrency(enteredAmount, currency);
                 } else if (input.classList.contains('payment-reference-input')) {
                     payment.reference = input.value;
@@ -2064,6 +2716,14 @@ function updateQuantity(id, newQty) {
             deliveryCountriesLoaded = true;
         }
 
+        function setSaleFlowStep(step) {
+            document.querySelectorAll('[data-sale-step]').forEach((item) => {
+                const itemStep = Number(item.dataset.saleStep || 0);
+                item.classList.toggle('is-active', itemStep === step);
+                item.classList.toggle('is-complete', itemStep < step);
+            });
+        }
+
         function buildDeliveryAddress() {
             const countrySelect = document.getElementById('deliveryCountry');
             const stateSelect = document.getElementById('deliveryState');
@@ -2101,6 +2761,7 @@ function updateQuantity(id, newQty) {
             const container = document.getElementById('summaryContainer');
             const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
             const deliveryAddressData = buildDeliveryAddress();
+            const deliveryContext = getAdminDeliveryChargeContext(false);
             const deliveryPreferenceLabel = deliveryType === 'shipping' ? 'Envío' : 'Retiro en tienda';
             const saleDocumentMode = document.querySelector('input[name="sale_document_mode"]:checked')?.value || 'delivery_note';
             const saleDocumentModeLabel = saleDocumentMode === 'electronic_invoice' ? 'Facturación digital' : 'Orden de entrega';
@@ -2139,6 +2800,10 @@ function updateQuantity(id, newQty) {
             const totalDivBs = document.createElement('p');
             totalDivBs.innerHTML = `<strong>Total a pagar Bs:</strong> Bs${(totalAmount * baseRateToBs).toFixed(2)}`;
             container.appendChild(totalDivBs);
+
+            const deliveryFeeDiv = document.createElement('p');
+            deliveryFeeDiv.innerHTML = `<strong>Costo delivery:</strong> ${baseCurrencySymbol}${Number(deliveryContext.fee || 0).toFixed(2)} <span class="text-muted">(${deliveryContext.label || 'Retiro en tienda'})</span>`;
+            container.appendChild(deliveryFeeDiv);
 
             const deliveryDiv = document.createElement('p');
             deliveryDiv.innerHTML = `<strong>Entrega:</strong> ${deliveryPreferenceLabel}`;
@@ -2296,6 +2961,27 @@ function updateQuantity(id, newQty) {
             toStep3Button.disabled = disableStep3;
         }
 
+        document.addEventListener('focusin', function (event) {
+            const input = event.target.closest('.payment-input');
+            if (!input) {
+                return;
+            }
+
+            const normalizedValue = normalizeEditableAmountValue(input.value).text;
+            if (normalizedValue && input.value !== normalizedValue) {
+                input.value = normalizedValue;
+            }
+        });
+
+        document.addEventListener('focusout', function (event) {
+            const input = event.target.closest('.payment-input');
+            if (!input) {
+                return;
+            }
+
+            syncFormattedPaymentInput(input, true);
+        });
+
 
         //Funciones para paso 3
         document.getElementById('toStep3').addEventListener('click', function() {
@@ -2304,6 +2990,7 @@ function updateQuantity(id, newQty) {
             renderSummary(); // Mostrar el resumen
             document.getElementById('cart').classList.add('d-none');
             document.getElementById('step3').classList.remove('d-none');
+            setSaleFlowStep(3);
             document.getElementById('openAdminCartBtn')?.classList.add('d-none');
             console.log('Resumen:', selectedItems);
             console.log('Pagos:', payments);
@@ -2311,6 +2998,7 @@ function updateQuantity(id, newQty) {
         document.getElementById('backToStep2').addEventListener('click', function() {
             document.getElementById('step3').classList.add('d-none');
             document.getElementById('step2').classList.remove('d-none');
+            setSaleFlowStep(2);
             document.getElementById('cart').classList.remove('d-none');
             document.getElementById('openAdminCartBtn')?.classList.remove('d-none');
 
@@ -2319,6 +3007,8 @@ function updateQuantity(id, newQty) {
         function updateDeliveryAddressVisibility() {
             const selectedType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
             const addressContainer = document.getElementById('deliveryAddressContainer');
+            const distanceContainer = document.getElementById('deliveryDistanceContainer');
+            const distanceInput = document.getElementById('deliveryDistanceKm');
             const countrySelect = document.getElementById('deliveryCountry');
             const stateSelect = document.getElementById('deliveryState');
             const citySelect = document.getElementById('deliveryCity');
@@ -2326,16 +3016,22 @@ function updateQuantity(id, newQty) {
 
             if (selectedType === 'shipping') {
                 addressContainer.classList.remove('d-none');
+                const shouldShowDistance = tenantDeliveryConfig?.enabled && (tenantDeliveryConfig.mode === 'distance');
+                distanceContainer?.classList.toggle('d-none', !shouldShowDistance);
                 ensureDeliveryCountriesLoaded().catch(() => {
                     alert('No se pudieron cargar los países para el envío.');
                 });
             } else {
                 addressContainer.classList.add('d-none');
+                distanceContainer?.classList.add('d-none');
                 if (countrySelect) countrySelect.value = '';
                 if (stateSelect) resetLocationSelect(stateSelect, 'Estado (parte del país)', true);
                 if (citySelect) resetLocationSelect(citySelect, 'Ciudad', true);
                 if (addressDetailInput) addressDetailInput.value = '';
+                if (distanceInput) distanceInput.value = '';
             }
+
+            renderCart();
 
             if (!document.getElementById('step3').classList.contains('d-none')) {
                 renderSummary();
@@ -2374,6 +3070,13 @@ function updateQuantity(id, newQty) {
         });
 
         document.getElementById('deliveryAddressDetail').addEventListener('input', function () {
+            if (!document.getElementById('step3').classList.contains('d-none')) {
+                renderSummary();
+            }
+        });
+
+        document.getElementById('deliveryDistanceKm')?.addEventListener('input', function () {
+            renderCart();
             if (!document.getElementById('step3').classList.contains('d-none')) {
                 renderSummary();
             }
@@ -2471,6 +3174,7 @@ function updateQuantity(id, newQty) {
     const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
     const saleDocumentMode = document.querySelector('input[name="sale_document_mode"]:checked')?.value || 'delivery_note';
     const deliveryAddressData = buildDeliveryAddress();
+    const deliveryContext = getAdminDeliveryChargeContext(true);
     const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
     const newCustomerName = (document.getElementById('newCustomerName')?.value || '').trim();
     const newCustomerEmail = (document.getElementById('newCustomerEmail')?.value || '').trim();
@@ -2479,6 +3183,13 @@ function updateQuantity(id, newQty) {
 
     if (deliveryType === 'shipping' && !deliveryAddressData.valid) {
         alert(deliveryAddressData.message || 'Debes indicar la dirección cuando la entrega es por envío.');
+        button.disabled = false;
+        button.innerHTML = originalText;
+        return;
+    }
+
+    if (!deliveryContext.valid) {
+        alert(deliveryContext.message || 'Debes completar la información del delivery.');
         button.disabled = false;
         button.innerHTML = originalText;
         return;
@@ -2525,6 +3236,7 @@ function updateQuantity(id, newQty) {
         delivery_type: deliveryType,
         delivery_address: deliveryType === 'shipping' ? deliveryAddressData.address : 'Tienda',
         delivery_city_id: deliveryType === 'shipping' ? Number(deliveryAddressData.cityId || 0) : null,
+        delivery_distance_km: deliveryType === 'shipping' ? deliveryContext.distanceKm : null,
         create_new_customer: shouldCreateNewCustomer,
         customer_new: shouldCreateNewCustomer
             ? {

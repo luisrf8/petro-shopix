@@ -58,6 +58,11 @@ class Tenant extends Model
         'printer_tax_change_enabled',
         'printer_tax_change_reference',
         'restrict_delivery_city_to_tenant',
+        'delivery_enabled',
+        'delivery_fee_mode',
+        'delivery_fixed_fee',
+        'delivery_fee_per_km',
+        'delivery_notifications_enabled',
     ];
 
     protected $casts = [
@@ -67,6 +72,10 @@ class Tenant extends Model
         'special_taxpayer' => 'boolean',
         'printer_tax_change_enabled' => 'boolean',
         'restrict_delivery_city_to_tenant' => 'boolean',
+        'delivery_enabled' => 'boolean',
+        'delivery_fixed_fee' => 'float',
+        'delivery_fee_per_km' => 'float',
+        'delivery_notifications_enabled' => 'boolean',
     ];
 
     // Relaciones

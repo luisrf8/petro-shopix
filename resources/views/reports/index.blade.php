@@ -51,7 +51,7 @@
                         </div>
                         <div class="col-md-4">
                             <label for="min_pending_balance" class="form-label">Saldo pendiente mínimo (cuentas por cobrar)</label>
-                            <input type="number" id="min_pending_balance" name="min_pending_balance" min="0" step="0.01" value="{{ request('min_pending_balance', '0') }}" class="form-control border border-1 p-2" placeholder="0.00">
+                            <input type="number" id="min_pending_balance" name="min_pending_balance" min="0" step="0.01" value="{{ request('min_pending_balance', '0') }}" class="form-control border border-1 p-2" placeholder="0.00" data-decimal-friendly="true">
                         </div>
                         <div class="col-md-4">
                             <label for="sales_book_source" class="form-label">Fuente del libro de ventas</label>

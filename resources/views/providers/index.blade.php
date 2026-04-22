@@ -68,7 +68,7 @@
                       data-provider-payment-currency="{{ strtoupper((string) ($provider->payment_currency_code ?: ($baseCurrencyCode ?? 'USD'))) }}"
                       data-provider-notes="{{ $provider->notes }}"
                       data-provider-active="{{ (int) $provider->is_active }}">Editar</button>
-                    <form method="POST" action="{{ route('providers.toggleStatus', $provider) }}">
+                    <form method="POST" action="{{ route('providers.toggleStatus', $provider) }}" @if($provider->is_active) data-requires-action-reason="true" data-reason-field="action_reason" data-reason-prompt="Indica el motivo para inactivar este proveedor." @endif>
                       @csrf
                       <button type="submit" class="btn btn-outline-secondary btn-sm mb-0">{{ $provider->is_active ? 'Inactivar' : 'Activar' }}</button>
                     </form>

@@ -6,8 +6,10 @@
     @php
       $roleName = strtolower((string) optional(auth()->user()->role)->name);
       $currentUser = auth()->user();
+      $edoc = $order->latest_electronic_document;
+      $hasAnnulledInvoice = (bool) ($order->has_annulled_invoice ?? false);
       $canApproveSale = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
-      $canApproveDelivery = $currentUser?->hasStoreRole('owner', 'admin', 'warehouse') ?? false;
+      $canApproveDelivery = $currentUser?->hasStoreRole('owner', 'admin', 'warehouse', 'delivery') ?? false;
       $canRegisterReturn = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canApprovePayments = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canDownloadPdfs = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
@@ -36,6 +38,15 @@
     @endphp
     <div class="container-fluid">
       <h1 class="order-page-title">Detalles de la Orden Nro {{ $order->id }}</h1>
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <span class="badge bg-gradient-dark">Orden #{{ $order->id }}</span>
+        @if($edoc && $edoc->numero_documento)
+          <span class="badge {{ $hasAnnulledInvoice ? 'bg-gradient-danger' : 'bg-gradient-success' }}">Factura #{{ $edoc->numero_documento }}</span>
+        @endif
+        @if($hasAnnulledInvoice)
+          <span class="badge bg-gradient-danger">Orden con factura anulada</span>
+        @endif
+      </div>
       <input type="text" id="user-name" class="d-none" value="{{ $order->user->name }}" readonly>
       <input type="text" id="user-email" class="d-none" value="{{ $order->user->email }}" readonly>
       <input type="text" id="user-phone" class="d-none" value="{{ $order->user->phone_number ?? 'No registrado' }}" readonly>
@@ -97,8 +108,12 @@
               @endif
             </select>
           </div>
-          <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
-          <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Descargar orden de entrega</a>
+          @if(!$hasAnnulledInvoice)
+          <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-dark mb-0">Descargar factura PDF</a>
+          @else
+          <span class="btn btn-outline-danger mb-0 disabled" aria-disabled="true">Factura anulada</span>
+          @endif
+          <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-dark mb-0">Descargar orden de entrega</a>
           @endif
           @if($canCommunicateCustomer && $storeWhatsappUrl)
             <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
@@ -144,10 +159,6 @@
           <h6 class="mb-0">Facturación electrónica (The Factory HKA)</h6>
         </div>
         <div class="card-body">
-          @php
-            $edoc = $order->latest_electronic_document;
-          @endphp
-
           <div class="row g-2">
             <div class="col-md-2">
               <form method="POST" action="{{ route('sales.electronic.emit', $order->id) }}">
@@ -165,23 +176,22 @@
               <form method="POST" action="{{ route('sales.electronic.download', $order->id) }}">
                 @csrf
                 <input type="hidden" name="tipo_archivo" value="pdf">
-                <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mb-0">Descargar PDF</button>
+                <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mb-0" {{ $hasAnnulledInvoice ? 'disabled' : '' }}>Descargar PDF</button>
               </form>
             </div>
             <div class="col-md-2">
-              <a href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?disposition=inline" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm w-100 mb-0">Imprimir factura</a>
+              <a href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?disposition=inline" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm w-100 mb-0 {{ $hasAnnulledInvoice ? 'disabled' : '' }}" {{ $hasAnnulledInvoice ? 'aria-disabled=true tabindex=-1' : '' }}>Imprimir factura</a>
             </div>
             <div class="col-md-2">
               <form method="POST" action="{{ route('sales.electronic.sendEmail', $order->id) }}">
                 @csrf
                 <input type="hidden" name="emails" value="{{ $order->user->email ?? '' }}">
-                <button type="submit" class="btn btn-outline-success btn-sm w-100 mb-0">Enviar correo</button>
+                <button type="submit" class="btn btn-outline-success btn-sm w-100 mb-0" {{ $hasAnnulledInvoice ? 'disabled' : '' }}>Enviar correo</button>
               </form>
             </div>
             <div class="col-md-2">
-              <form method="POST" action="{{ route('sales.electronic.annul', $order->id) }}" onsubmit="return confirm('¿Confirmas la anulación del documento electrónico?');">
+              <form method="POST" action="{{ route('sales.electronic.annul', $order->id) }}" data-requires-action-reason="true" data-reason-field="motivo_anulacion" data-reason-prompt="Indica el motivo de la anulación de esta factura." onsubmit="return confirm('¿Confirmas la anulación del documento electrónico?');">
                 @csrf
-                <input type="hidden" name="motivo_anulacion" value="Anulación solicitada desde Shopix">
                 <button type="submit" class="btn btn-outline-danger btn-sm w-100 mb-0" {{ $edoc && $edoc->is_annulled ? 'disabled' : '' }}>Anular</button>
               </form>
             </div>
@@ -253,7 +263,7 @@
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Monto</label>
-                  <input type="number" name="amount" min="0.01" step="0.01" class="form-control border border-1 p-2" required>
+                  <input type="number" name="amount" min="0.01" step="0.01" class="form-control border border-1 p-2" required data-decimal-friendly="true">
                 </div>
                 <div class="col-12">
                   <label class="form-label">Motivo</label>
@@ -324,15 +334,15 @@
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Tasa (%)</label>
-                  <input type="number" name="retention_rate" min="0" max="100" step="0.01" class="form-control border border-1 p-2" required>
+                  <input type="number" name="retention_rate" min="0" max="100" step="0.01" class="form-control border border-1 p-2" required data-decimal-friendly="true">
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Base imponible</label>
-                  <input type="number" name="taxable_base" min="0.01" step="0.01" class="form-control border border-1 p-2" value="{{ number_format($orderGrossTotal, 2, '.', '') }}" required>
+                  <input type="number" name="taxable_base" min="0.01" step="0.01" class="form-control border border-1 p-2" value="{{ number_format($orderGrossTotal, 2, '.', '') }}" required data-decimal-friendly="true">
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Monto retenido</label>
-                  <input type="number" name="retained_amount" min="0.01" step="0.01" class="form-control border border-1 p-2">
+                  <input type="number" name="retained_amount" min="0.01" step="0.01" class="form-control border border-1 p-2" data-decimal-friendly="true">
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Comprobante</label>
@@ -690,6 +700,12 @@ function restoreText(selectElement, originalText) {
 
 function updateOrderStatus(selectElement, orderId) {
     const status = selectElement.value;
+  const reason = status === '2'
+    ? window.shopixRequestActionReason('Indica el motivo para negar o cancelar la orden.')
+    : '';
+  if (status === '2' && !reason) {
+    return;
+  }
     const originalText = showLoading(selectElement);
 
     fetch(`/api/order/${orderId}/status/update`, {
@@ -698,7 +714,7 @@ function updateOrderStatus(selectElement, orderId) {
             'X-CSRF-TOKEN': '{{ csrf_token() }}',
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status: status })
+        body: JSON.stringify({ status: status, action_reason: reason })
     })
     .then(response => response.json())
     .then(data => {
@@ -725,6 +741,12 @@ function updateOrderStatus(selectElement, orderId) {
 
 function updateDeliverStatus(selectElement, paymentId) {
     const status = selectElement.value;
+  const reason = status === '2'
+    ? window.shopixRequestActionReason('Indica el motivo para cancelar o revertir la entrega.')
+    : '';
+  if (status === '2' && !reason) {
+    return;
+  }
     const originalText = showLoading(selectElement);
 
     fetch(`/api/deliver/${paymentId}/status/update`, {
@@ -733,7 +755,7 @@ function updateDeliverStatus(selectElement, paymentId) {
             'X-CSRF-TOKEN': '{{ csrf_token() }}',
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status: status })
+        body: JSON.stringify({ status: status, action_reason: reason })
     })
     .then(response => response.json())
     .then(data => {
@@ -748,6 +770,12 @@ function updateDeliverStatus(selectElement, paymentId) {
 
 function updatePaymentStatus(selectElement, paymentId) {
     const status = selectElement.value;
+  const reason = status === '3'
+    ? window.shopixRequestActionReason('Indica el motivo para cancelar este pago.')
+    : '';
+  if (status === '3' && !reason) {
+    return;
+  }
     const originalText = showLoading(selectElement);
 
     fetch(`/api/payment/${paymentId}/status/update`, {
@@ -756,7 +784,7 @@ function updatePaymentStatus(selectElement, paymentId) {
             'X-CSRF-TOKEN': '{{ csrf_token() }}',
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ status: status })
+        body: JSON.stringify({ status: status, action_reason: reason })
     })
     .then(response => response.json())
     .then(data => {
@@ -775,7 +803,7 @@ if (returnForm) {
     event.preventDefault();
 
     const orderId = document.getElementById('orderId').value;
-    const reason = document.getElementById('returnReason').value;
+    const reason = document.getElementById('returnReason').value.trim();
     const items = [];
 
     document.querySelectorAll('.return-quantity').forEach(input => {
@@ -790,6 +818,11 @@ if (returnForm) {
 
     if (items.length === 0) {
       alert('Debe especificar al menos un producto para devolver.');
+      return;
+    }
+
+    if (!reason) {
+      alert('Debes indicar el motivo de la devolución.');
       return;
     }
 
@@ -833,8 +866,8 @@ if (returnForm) {
     const invoiceBase = invoiceBtn.dataset.baseUrl || invoiceBtn.getAttribute('href') || '';
     const deliveryBase = deliveryBtn.dataset.baseUrl || deliveryBtn.getAttribute('href') || '';
 
-    invoiceBtn.href = `${invoiceBase}?currency_code=${currencyCode}`;
-    deliveryBtn.href = `${deliveryBase}?currency_code=${currencyCode}`;
+    invoiceBtn.href = `${invoiceBase}?currency_code=${currencyCode}&disposition=inline`;
+    deliveryBtn.href = `${deliveryBase}?currency_code=${currencyCode}&disposition=inline`;
   };
 
   currencySelect.addEventListener('change', syncDownloadUrls);

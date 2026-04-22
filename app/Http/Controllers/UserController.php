@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use App\Support\ActionReason;
 
 class UserController extends Controller
 {
@@ -104,13 +105,25 @@ class UserController extends Controller
     /**
      * Activar o inactivar un usuario.
      */
-    public function toggleStatus($id)
+    public function toggleStatus(Request $request, $id)
     {
         DB::raw("SET @user_id = " . auth()->id());
 
         $user = User::findOrFail($id);
+        $reason = null;
+        if ((bool) $user->is_active) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para inactivar el usuario.');
+        }
+
         $user->is_active = !$user->is_active; // Cambia el estado
         $user->save();
+
+        if (!(bool) $user->is_active) {
+            ActionReason::log('users', 'USER_DEACTIVATED', (string) $reason, [
+                'affected_user_id' => $user->id,
+                'tenant_id' => $user->tenant_id,
+            ]);
+        }
 
         return response()->json(['status' => 'success', 'new_status' => $user->is_active], 200);
     

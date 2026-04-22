@@ -47,6 +47,9 @@ use Illuminate\Support\Arr;
 use App\Support\WorkflowNotifier;
 use App\Support\ImageStorage;
 use App\Support\TenantCurrency;
+use App\Support\ActionReason;
+use App\Support\DeliveryManager;
+use App\Support\PdfDownload;
 use App\Services\FiscalCorrelativeService;
 use App\Services\TheFactoryHkaService;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -105,9 +108,10 @@ class SaleController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'delivery_type' => 'nullable|in:pickup,shipping',
+            'delivery_type' => 'nullable|in:pickup,delivery,shipping',
             'delivery_address' => 'nullable|string|max:500',
             'delivery_city_id' => 'nullable|integer|exists:cities,id',
+            'delivery_distance_km' => 'nullable|numeric|min:0',
             'sale_document_mode' => 'nullable|in:delivery_note,electronic_invoice',
             'create_new_customer' => 'nullable|boolean',
             'customer_existing_id' => 'nullable|integer|required_unless:create_new_customer,true',
@@ -171,9 +175,10 @@ class SaleController extends Controller
         $markPaymentsPaid = (bool) ($validated['mark_payments_paid'] ?? false);
         $markSaleCompleted = (bool) ($validated['mark_sale_completed'] ?? false);
         $requestedDocumentMode = (string) ($validated['sale_document_mode'] ?? 'delivery_note');
+        $deliveryDistanceKm = isset($validated['delivery_distance_km']) ? (float) $validated['delivery_distance_km'] : null;
 
-        if ($deliveryType === 'shipping' && $deliveryAddress === '') {
-            return response()->json(['error' => 'La dirección es obligatoria para entregas por envío.'], 422);
+        if (in_array($deliveryType, ['delivery', 'shipping'], true) && $deliveryAddress === '') {
+            return response()->json(['error' => 'La dirección es obligatoria para delivery o envío.'], 422);
         }
 
         $tienda = Tenant::find($tenantId);
@@ -181,17 +186,21 @@ class SaleController extends Controller
             return response()->json(['error' => 'No se encontró la tienda asociada a la venta.'], 422);
         }
 
-        if ($deliveryType === 'shipping' && (bool) ($tienda->restrict_delivery_city_to_tenant ?? true)) {
+        if ($deliveryType === 'delivery' && (bool) ($tienda->restrict_delivery_city_to_tenant ?? true)) {
             $deliveryCityId = (int) ($validated['delivery_city_id'] ?? 0);
             $shippingCityValidation = $this->validateShippingCityAgainstTenant($tienda, $deliveryCityId);
 
             if (!($shippingCityValidation['ok'] ?? false)) {
-                return response()->json(['error' => (string) ($shippingCityValidation['message'] ?? 'Solo se permiten envíos a la ciudad de la tienda.')], 422);
+                return response()->json(['error' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la tienda.')], 422);
             }
         }
 
-        $preference = $deliveryType === 'shipping' ? 'Envío' : 'Retiro en tienda';
-        $address = $deliveryType === 'shipping' ? $deliveryAddress : 'Tienda';
+        $preference = match ($deliveryType) {
+            'delivery' => 'Delivery tienda',
+            'shipping' => 'Envío externo',
+            default => 'Retiro en tienda',
+        };
+        $address = $deliveryType !== 'pickup' ? $deliveryAddress : 'Tienda';
 
         if (!$customerId) {
             return response()->json(['error' => 'ID de cliente no válido.'], 400);
@@ -207,6 +216,8 @@ class SaleController extends Controller
         }
 
         $documentIssueMode = $requestedDocumentMode === 'electronic_invoice' ? 'electronic_invoice' : 'delivery_note';
+
+        $itemsSubtotal = 0.0;
 
         // Crear orden de venta
         $salesOrder = SalesOrder::create([
@@ -243,6 +254,7 @@ class SaleController extends Controller
                 'price' => $unitPrice,
                 'amount' => $unitPrice * $item['quantity'],
             ]);
+            $itemsSubtotal += (float) $salesDetail->amount;
             // ===========================
             //   GUARDAR TAXES POR ITEM
             // ===========================
@@ -265,6 +277,16 @@ class SaleController extends Controller
             $productVariant->stock -= $item['quantity'];
             $productVariant->save();
         }
+
+        try {
+            $deliveryPricing = DeliveryManager::calculate($tienda, $deliveryType, $itemsSubtotal, $deliveryDistanceKm);
+        } catch (\RuntimeException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 422);
+        }
+        $salesOrder->delivery_fee = $deliveryPricing['fee'];
+        $salesOrder->delivery_fee_mode = $deliveryPricing['mode'];
+        $salesOrder->delivery_distance_km = $deliveryPricing['distance_km'];
+        $salesOrder->save();
 
         // Crear pagos
         $approvedPayments = collect();
@@ -314,7 +336,7 @@ class SaleController extends Controller
             $imageBase64 = 'data:image/png;base64,' . $imageData;
 
             // Totales
-            $totalOrden = $order->details->sum('amount');
+            $totalOrden = (float) $order->gross_total;
             $totalTaxes = $order->details->flatMap->taxes->sum('tax_amount');
             $totalPagado = $order->payments->sum('amount');
             $totalGeneral = $totalOrden + $totalTaxes;
@@ -387,6 +409,10 @@ class SaleController extends Controller
             $pdfUrlNota = null;
         }
 
+        if ($deliveryType === 'delivery' && $markSaleCompleted) {
+            $this->notifyDeliveryTeamIfEnabled($tienda, $salesOrder, 'Pedido listo para despacho desde venta interna.');
+        }
+
         return response()->json([
             'message' => $approvedPayments->isNotEmpty()
                 ? 'Venta registrada exitosamente con pagos aprobados.'
@@ -453,7 +479,7 @@ class SaleController extends Controller
         return (int) Role::query()->firstOrCreate(['name' => 'user'])->id;
     }
 
-    public function downloadPdf($id)
+    public function downloadPdf(Request $request, $id)
     {
         $order = SalesOrder::with([
             'user',
@@ -461,7 +487,7 @@ class SaleController extends Controller
             'payments.payment'
         ])->findOrFail($id);
 
-        $totalOrden = $order->details->sum('amount');
+        $totalOrden = (float) $order->gross_total;
         $totalPagado = $order->payments->sum('amount');
 
         $serverIp = request()->getHost();
@@ -491,7 +517,7 @@ class SaleController extends Controller
 
         return response($dompdf->output(), 200)
             ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="orden-' . $order->id . '.pdf"');
+            ->header('Content-Disposition', PdfDownload::buildDispositionHeader($request, 'orden-' . $order->id . '.pdf'));
     }
 
     public function storeEcommerceSale(Request $request)
@@ -533,22 +559,31 @@ class SaleController extends Controller
         }
 
         $deliveryType = strtolower(trim((string) $request->input('delivery_type', '')));
-        if (!in_array($deliveryType, ['pickup', 'shipping'], true)) {
-            $deliveryType = strtolower(trim((string) $preference)) === 'envío' ? 'shipping' : 'pickup';
+        if (!in_array($deliveryType, ['pickup', 'delivery', 'shipping'], true)) {
+            $normalizedPreference = strtolower(trim((string) $preference));
+            $deliveryType = match ($normalizedPreference) {
+                'delivery', 'delivery tienda', 'envío', 'envio' => 'delivery',
+                'envío externo', 'envio externo', 'shipping' => 'shipping',
+                default => 'pickup',
+            };
         }
 
-        if ($deliveryType === 'shipping' && empty(trim((string) $address))) {
-            return response()->json(['error' => 'La dirección es obligatoria para entregas por envío.'], 422);
+        if (in_array($deliveryType, ['delivery', 'shipping'], true) && empty(trim((string) $address))) {
+            return response()->json(['error' => 'La dirección es obligatoria para delivery o envío.'], 422);
         }
 
-        if ($deliveryType === 'shipping' && (bool) ($tenantForSale->restrict_delivery_city_to_tenant ?? true)) {
+        if ($deliveryType === 'delivery' && (bool) ($tenantForSale->restrict_delivery_city_to_tenant ?? true)) {
             $deliveryCityId = (int) $request->input('delivery_city_id', 0);
             $shippingCityValidation = $this->validateShippingCityAgainstTenant($tenantForSale, $deliveryCityId);
 
             if (!($shippingCityValidation['ok'] ?? false)) {
-                return response()->json(['error' => (string) ($shippingCityValidation['message'] ?? 'Solo se permiten envíos a la ciudad de la tienda.')], 422);
+                return response()->json(['error' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la tienda.')], 422);
             }
         }
+
+        $deliveryDistanceKm = $request->filled('delivery_distance_km')
+            ? (float) $request->input('delivery_distance_km')
+            : null;
 
         $saleCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenantForSale);
 
@@ -563,6 +598,8 @@ class SaleController extends Controller
             'sale_currency_code' => $saleCurrencyCode,
         ]);
     
+        $itemsSubtotal = 0.0;
+
         // Crear detalles de la venta y actualizar stock
         foreach ($groupedData as $detail) {
             SalesOrderDetail::create([
@@ -572,6 +609,7 @@ class SaleController extends Controller
                 'price' => $detail['price'],
                 'amount' => $detail['amount'],
             ]);
+            $itemsSubtotal += (float) $detail['amount'];
     
             // Actualizar el stock
             $productVariant = ProductVariant::find($detail['product_variant_id']);
@@ -582,6 +620,16 @@ class SaleController extends Controller
                 return response()->json(['error' => 'Stock insuficiente para el producto: ' . $productVariant->id], 400);
             }
         }
+
+        try {
+            $deliveryPricing = DeliveryManager::calculate($tenantForSale, $deliveryType, $itemsSubtotal, $deliveryDistanceKm);
+        } catch (\RuntimeException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 422);
+        }
+        $salesOrder->delivery_fee = $deliveryPricing['fee'];
+        $salesOrder->delivery_fee_mode = $deliveryPricing['mode'];
+        $salesOrder->delivery_distance_km = $deliveryPricing['distance_km'];
+        $salesOrder->save();
     
         // Crear pagos
         foreach ($paymentDetails as $paymentDetail) {
@@ -635,17 +683,23 @@ class SaleController extends Controller
             'user', 
             'details', 
             'details.variant', 
-            'payments' // Agregamos la relación de pagos
+            'payments',
+            'electronicDocuments',
+            'returns.items',
         ])->where('tenant_id', $user->tenant_id)->orderBy('id', 'desc')->get();
 
         foreach ($salesOrders as $order) {
             $order->total_items = $order->details->sum('quantity');
+            $order->has_returns = $order->returns->isNotEmpty();
+            $order->latest_electronic_document = $order->electronicDocuments->sortByDesc('id')->first();
+            $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
         }
 
         $isSeller = $user?->hasStoreRole('seller') ?? false;
         $isWarehouse = $user?->hasStoreRole('warehouse') ?? false;
-        $canApprovePayments = !$isWarehouse;
-        $canDeliverOrders = $isSeller || $isWarehouse || ($user?->isAdmin() ?? false) || ($user?->isOwner() ?? false);
+        $isDelivery = $user?->hasStoreRole('delivery') ?? false;
+        $canApprovePayments = !($isWarehouse || $isDelivery);
+        $canDeliverOrders = $isSeller || $isWarehouse || $isDelivery || ($user?->isAdmin() ?? false) || ($user?->isOwner() ?? false);
         $pageTitle = 'VENTAS REALIZADAS';
         $isPendingDeliveryView = false;
     
@@ -656,7 +710,7 @@ class SaleController extends Controller
     {
         $user = auth()->user();
 
-        $salesOrders = SalesOrder::with(['user', 'details', 'details.variant', 'payments'])
+        $salesOrders = SalesOrder::with(['user', 'details', 'details.variant', 'payments', 'electronicDocuments', 'returns.items'])
             ->where('tenant_id', $user->tenant_id)
             ->where('deliver_status', 0)
             ->where(function ($query) {
@@ -670,12 +724,16 @@ class SaleController extends Controller
 
         foreach ($salesOrders as $order) {
             $order->total_items = $order->details->sum('quantity');
+            $order->has_returns = $order->returns->isNotEmpty();
+            $order->latest_electronic_document = $order->electronicDocuments->sortByDesc('id')->first();
+            $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
         }
 
         $isSeller = $user?->hasStoreRole('seller') ?? false;
         $isWarehouse = $user?->hasStoreRole('warehouse') ?? false;
-        $canApprovePayments = !$isWarehouse;
-        $canDeliverOrders = $isSeller || $isWarehouse || ($user?->isAdmin() ?? false) || ($user?->isOwner() ?? false);
+        $isDelivery = $user?->hasStoreRole('delivery') ?? false;
+        $canApprovePayments = !($isWarehouse || $isDelivery);
+        $canDeliverOrders = $isSeller || $isWarehouse || $isDelivery || ($user?->isAdmin() ?? false) || ($user?->isOwner() ?? false);
         $pageTitle = 'PEDIDOS PENDIENTES DE ENTREGA';
         $isPendingDeliveryView = true;
 
@@ -693,7 +751,7 @@ class SaleController extends Controller
             ->get()
             ->map(function (SalesOrder $order) {
                 $order->total_items = (int) $order->details->sum('quantity');
-                $order->order_total_amount = (float) $order->details->sum('amount');
+                $order->order_total_amount = (float) $order->gross_total;
                 $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
                 $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount, 2));
 
@@ -720,7 +778,7 @@ class SaleController extends Controller
             ->get()
             ->map(function (SalesOrder $order) {
                 $order->total_items = (int) $order->details->sum('quantity');
-                $order->order_total_amount = (float) $order->details->sum('amount');
+                $order->order_total_amount = (float) $order->gross_total;
                 $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
                 $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount, 2));
 
@@ -835,7 +893,7 @@ class SaleController extends Controller
             ->orderByDesc('id')
             ->get()
             ->map(function ($order) {
-                $total = (float) $order->details->sum('amount');
+                $total = (float) $order->gross_total;
 
                 return [
                     'id' => $order->id,
@@ -878,9 +936,7 @@ class SaleController extends Controller
             'returns.items',
         ])->find($id);
         // Calcular el total de la orden
-        $totalOrden = $order->details->sum(function ($detalle) {
-            return $detalle->amount;
-        });
+        $totalOrden = (float) $order->gross_total;
         // Calcular el total pagado
         $totalPagado = $order->payments->sum(function ($payment) {
             return $payment->amount;
@@ -889,7 +945,7 @@ class SaleController extends Controller
             return $item->price * $item->quantity;
         });
         
-        $totalOrden = $order->details->sum('amount') - $totalDevuelto;
+        $totalOrden = $order->totalAfterReturns((float) $totalDevuelto);
         $totalPagado = $order->payments->sum('amount');
         $saldo = $totalOrden - $totalPagado; // si es negativo, se debe dar vuelto
         $order->saldo = $saldo; // Agregar saldo al objeto de la orden
@@ -898,6 +954,7 @@ class SaleController extends Controller
         $order->total_orden = $totalOrden; // Agregar total de la orden al objeto de la orden
         $order->has_returns = $order->returns->isNotEmpty(); // Verificar si tiene devoluciones
         $order->latest_electronic_document = $order->electronicDocuments->sortByDesc('id')->first();
+        $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
         $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
         $orderCurrencySymbol = TenantCurrency::resolveCurrencySymbol($orderCurrencyCode);
 
@@ -905,15 +962,33 @@ class SaleController extends Controller
     }
     public function showPublicOrder($id)
     {
-        $order = SalesOrder::with(['user', 'tenant', 'details', 'details.variant','details.variant.product', 'payments', 'payments.payment', 'payments.images'])->find($id);
+        $order = SalesOrder::with([
+            'user',
+            'tenant',
+            'details',
+            'details.variant',
+            'details.variant.product',
+            'payments',
+            'payments.payment',
+            'payments.images',
+            'electronicDocuments',
+            'returns.items',
+        ])->find($id);
         // Calcular el total de la orden
-        $totalOrden = $order->details->sum(function ($detalle) {
-            return $detalle->amount;
-        });
+        $totalOrden = (float) $order->gross_total;
         // Calcular el total pagado
         $totalPagado = $order->payments->sum(function ($payment) {
             return $payment->amount;
         });
+
+        $totalDevuelto = $order->returns->flatMap->items->sum(function ($item) {
+            return $item->price * $item->quantity;
+        });
+
+        $order->total_devuelto = $totalDevuelto;
+        $order->has_returns = $order->returns->isNotEmpty();
+        $order->latest_electronic_document = $order->electronicDocuments->sortByDesc('id')->first();
+        $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
 
         $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
         $orderCurrencySymbol = TenantCurrency::resolveCurrencySymbol($orderCurrencyCode);
@@ -955,6 +1030,7 @@ class SaleController extends Controller
 
         if ($type === 'invoice' && ($order->document_issue_mode ?? 'delivery_note') === 'electronic_invoice') {
             return $this->downloadElectronicInvoicePdf(
+                $request,
                 $order,
                 (string) $request->query('disposition', 'attachment')
             );
@@ -964,14 +1040,17 @@ class SaleController extends Controller
         $emissionCurrencyCode = $this->resolveEmissionCurrencyCode((string) $request->query('currency_code', ''), $orderCurrencyCode);
 
         if ($request->has('currency_code')) {
-            return $this->downloadRenderedPdfByCurrency($order, $type, $emissionCurrencyCode);
+            return $this->downloadRenderedPdfByCurrency($request, $order, $type, $emissionCurrencyCode);
         }
 
         $assets = $this->ensureAssociatedPdfAssets($order);
         $filePath = $type === 'delivery' ? $assets['delivery_path'] : $assets['invoice_path'];
         $fileName = basename($filePath);
 
-        return response()->download($filePath, $fileName, ['Content-Type' => 'application/pdf']);
+        return response()->file($filePath, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $fileName, (string) $request->query('disposition', 'attachment')),
+        ]);
     }
 
     private function ensureAssociatedPdfAssets(SalesOrder $order): array
@@ -1002,7 +1081,7 @@ class SaleController extends Controller
         $imageData = file_exists($imagePath) ? base64_encode(file_get_contents($imagePath)) : '';
         $imageBase64 = $imageData !== '' ? 'data:image/png;base64,' . $imageData : null;
 
-        $totalOrden = (float) $order->details->sum('amount');
+        $totalOrden = (float) $order->gross_total;
         $totalTaxes = (float) $order->details->flatMap->taxes->sum('tax_amount');
         $totalPagado = (float) $order->payments->sum('amount');
         $totalGeneral = $totalOrden + $totalTaxes;
@@ -1076,12 +1155,12 @@ class SaleController extends Controller
         return $dompdf->output();
     }
 
-    private function downloadRenderedPdfByCurrency(SalesOrder $order, string $type, string $emissionCurrencyCode)
+    private function downloadRenderedPdfByCurrency(Request $request, SalesOrder $order, string $type, string $emissionCurrencyCode)
     {
         $order->loadMissing(['details.taxes', 'details.variant.product', 'payments.payment', 'tenant']);
 
         if ($type === 'invoice' && ($order->document_issue_mode ?? 'delivery_note') === 'electronic_invoice') {
-            return $this->downloadElectronicInvoicePdf($order, (string) request()->query('disposition', 'attachment'));
+            return $this->downloadElectronicInvoicePdf($request, $order, (string) $request->query('disposition', 'attachment'));
         }
 
         $serverIp = request()->getHost();
@@ -1089,7 +1168,7 @@ class SaleController extends Controller
         $imageData = file_exists($imagePath) ? base64_encode(file_get_contents($imagePath)) : '';
         $imageBase64 = $imageData !== '' ? 'data:image/png;base64,' . $imageData : null;
 
-        $totalOrden = (float) $order->details->sum('amount');
+        $totalOrden = (float) $order->gross_total;
         $totalTaxes = (float) $order->details->flatMap->taxes->sum('tax_amount');
         $totalPagado = (float) $order->payments->sum('amount');
         $totalGeneral = $totalOrden + $totalTaxes;
@@ -1125,17 +1204,21 @@ class SaleController extends Controller
 
         return response($output, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+            'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $fileName, (string) $request->query('disposition', 'attachment')),
         ]);
     }
 
-    private function downloadElectronicInvoicePdf(SalesOrder $order, string $disposition = 'attachment')
+    private function downloadElectronicInvoicePdf(Request $request, SalesOrder $order, string $disposition = 'attachment')
     {
         $order->loadMissing('electronicDocuments');
 
         $document = $order->electronicDocuments->sortByDesc('id')->first();
         if (!$document) {
             abort(404, 'No existe factura fiscal emitida por la imprenta autorizada para esta venta.');
+        }
+
+        if ((bool) $document->is_annulled) {
+            abort(410, 'La factura fiscal de esta venta fue anulada y ya no puede visualizarse ni descargarse.');
         }
 
         $service = app(TheFactoryHkaService::class);
@@ -1159,7 +1242,6 @@ class SaleController extends Controller
             'response_payload' => Arr::except((array) ($response['data'] ?? []), ['archivo']) ?: $document->response_payload,
         ]);
 
-        $safeDisposition = $disposition === 'inline' ? 'inline' : 'attachment';
         $fileName = implode('-', array_filter([
             'factura-fiscal',
             trim((string) ($document->serie ?? '')) !== '' ? trim((string) $document->serie) : null,
@@ -1168,7 +1250,7 @@ class SaleController extends Controller
 
         return response((string) $response['content'], 200, [
             'Content-Type' => (string) ($response['mime_type'] ?? 'application/pdf'),
-            'Content-Disposition' => $safeDisposition . '; filename="' . $fileName . '"',
+            'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $fileName, $disposition),
         ]);
     }
 
@@ -1417,6 +1499,11 @@ class SaleController extends Controller
             return response()->json(['message' => 'No autorizado para cambiar el estado de la orden.'], 403);
         }
 
+        $reason = null;
+        if ((int) $request->status === 2) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para negar o cancelar la orden.');
+        }
+
         // Recuperar la orden con sus relaciones
         $order = SalesOrder::with([
             'user', 
@@ -1429,6 +1516,13 @@ class SaleController extends Controller
         $order->status = $request->status;
         $order->save();
 
+        if ((int) $order->status === 2) {
+            ActionReason::log('sales_orders', 'ORDER_CANCELLED', (string) $reason, [
+                'order_id' => $order->id,
+                'tenant_id' => $order->tenant_id,
+            ]);
+        }
+
         WorkflowNotifier::notifyUser($order->user, [
             'title' => 'Estado de pedido actualizado',
             'message' => 'Tu pedido #' . $order->id . ' cambió de estado.',
@@ -1439,14 +1533,10 @@ class SaleController extends Controller
         ]);
 
         if ((int) $order->status === 1) {
-            WorkflowNotifier::notifyTenantRoles((int) $order->tenant_id, ['almacen'], [
-                'title' => 'Pedido listo para entrega',
-                'message' => 'El pedido #' . $order->id . ' fue aprobado y está listo para gestionar entrega.',
-                'type' => 'delivery-pending',
-                'tenant_id' => $order->tenant_id,
-                'order_id' => $order->id,
-                'action' => 'prepare_delivery',
-            ]);
+            $order->loadMissing('tenant');
+            if ($order->tenant) {
+                $this->notifyDeliveryTeamIfEnabled($order->tenant, $order, 'El pedido #' . $order->id . ' fue aprobado y está listo para gestionar entrega.');
+            }
 
             $this->attemptElectronicEmission($order);
         }
@@ -1461,7 +1551,7 @@ class SaleController extends Controller
             $imageBase64 = 'data:image/png;base64,' . $imageData;
     
             // Calcular totales
-            $totalOrden = $order->details->sum('amount');
+            $totalOrden = (float) $order->gross_total;
             $totalPagado = $order->payments->sum('amount');
     
             // Generar el código QR correctamente con Endroid QR Code
@@ -1554,8 +1644,13 @@ class SaleController extends Controller
         DB::raw("SET @user_id = " . auth()->id());
 
         $user = auth()->user();
-        if (!$user?->hasStoreRole('owner', 'admin', 'warehouse')) {
+        if (!$user?->hasStoreRole('owner', 'admin', 'warehouse', 'delivery')) {
             return response()->json(['message' => 'No autorizado para cambiar el estado de entrega.'], 403);
+        }
+
+        $reason = null;
+        if ((int) $request->status === 2) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para revertir la entrega.');
         }
 
         // Recuperar la orden con sus relaciones
@@ -1569,6 +1664,13 @@ class SaleController extends Controller
         // Actualizar el estado de la orden
         $order->deliver_status = $request->status;
         $order->save();
+
+        if ((int) $order->deliver_status === 2) {
+            ActionReason::log('sales_orders', 'DELIVERY_REVERTED', (string) $reason, [
+                'order_id' => $order->id,
+                'tenant_id' => $order->tenant_id,
+            ]);
+        }
 
         WorkflowNotifier::notifyUser($order->user, [
             'title' => 'Actualización de entrega',
@@ -1614,12 +1716,24 @@ class SaleController extends Controller
             return response()->json(['message' => 'No autorizado para cambiar el estado de pagos.'], 403);
         }
 
+        $reason = null;
+        if ((int) $request->status === 3) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para marcar el pago como rechazado o pendiente.');
+        }
+
         // Buscar el pago
         $payment = Payment::findOrFail($id);
         // Cambiar el estado del pago
         $payment->status = $request->status;
         $payment->save();
         $payment->loadMissing(['salesOrder.user']);
+
+        if ((int) $payment->status === 3) {
+            ActionReason::log('payments', 'PAYMENT_REVERTED', (string) $reason, [
+                'payment_id' => $payment->id,
+                'order_id' => $payment->sales_order_id,
+            ]);
+        }
 
         if ($payment->salesOrder) {
             $orderId = $payment->salesOrder->id;
@@ -1800,6 +1914,24 @@ class SaleController extends Controller
             ->value('id') ?? 0);
     }
 
+    private function notifyDeliveryTeamIfEnabled(Tenant $tenant, SalesOrder $order, string $message): void
+    {
+        $settings = DeliveryManager::settings($tenant);
+
+        if (!$settings['notifications_enabled']) {
+            return;
+        }
+
+        WorkflowNotifier::notifyTenantRoles((int) $tenant->id, ['almacen', 'delivery'], [
+            'title' => 'Pedido listo para entrega',
+            'message' => $message,
+            'type' => 'delivery-pending',
+            'tenant_id' => $tenant->id,
+            'order_id' => $order->id,
+            'action' => 'prepare_delivery',
+        ]);
+    }
+
     public function processReturn(Request $request, $orderId)
     {
         DB::raw("SET @user_id = " . auth()->id());
@@ -1811,7 +1943,7 @@ class SaleController extends Controller
 
         $order = SalesOrder::with('details')->findOrFail($orderId);
         $itemsToReturn = $request->input('items'); // array de items con id y cantidad
-        $reason = $request->input('reason');
+        $reason = ActionReason::require($request, 'reason', 'Debes indicar el motivo de la devolucion.');
 
         if (empty($itemsToReturn)) {
             return response()->json(['error' => 'No se especificaron productos a devolver.'], 400);
@@ -1846,6 +1978,11 @@ class SaleController extends Controller
         // Marcar la orden como que tiene devolución
         $order->has_returns = true;
         $order->save();
+
+        ActionReason::log('sales_returns', 'RETURN_CREATED', $reason, [
+            'sales_order_id' => $order->id,
+            'tenant_id' => $order->tenant_id,
+        ]);
 
         return response()->json(['message' => 'Devolución registrada exitosamente.']);
     }

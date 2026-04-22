@@ -15,6 +15,7 @@ use App\Models\StoreExpense;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\TheFactoryHkaService;
+use App\Support\PdfDownload;
 use App\Support\TenantCurrency;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
@@ -211,7 +212,7 @@ class ReportController extends Controller
             ->get();
 
         $orders->transform(function ($order) use ($currency, $user) {
-            $order->report_total_amount = TenantCurrency::convertAmount((float) $order->details->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $order->report_total_amount = TenantCurrency::convertAmount((float) $order->gross_total, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
             $order->report_total_paid = TenantCurrency::convertAmount((float) $order->payments->where('status', 1)->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id);
             return $order;
         });
@@ -258,7 +259,7 @@ class ReportController extends Controller
                 (string) ($order->user->name ?? 'N/A'),
                 $status,
                 (string) $order->details->sum('quantity'),
-                number_format(TenantCurrency::convertAmount((float) $order->details->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
+                number_format(TenantCurrency::convertAmount((float) $order->gross_total, $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
                 number_format(TenantCurrency::convertAmount((float) $order->payments->where('status', 1)->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
             ];
         })->all();
@@ -354,7 +355,7 @@ class ReportController extends Controller
                 'name' => 'Ventas',
                 'metrics' => [
                     'Ordenes en rango' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->count(),
-                    'Monto vendido' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->with('details')->get()->sum(fn ($order) => $order->details->sum('amount')),
+                    'Monto vendido' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->with('details')->get()->sum(fn ($order) => (float) $order->gross_total),
                     'Pagos aprobados' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->with('payments')->get()->sum(fn ($order) => $order->payments->where('status', 1)->sum('amount')),
                 ],
             ],
@@ -417,7 +418,7 @@ class ReportController extends Controller
                 'name' => 'Ventas',
                 'metrics' => [
                     'Ordenes en rango' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->count(),
-                    'Monto vendido' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->with('details')->get()->sum(fn ($order) => $order->details->sum('amount')),
+                    'Monto vendido' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->with('details')->get()->sum(fn ($order) => (float) $order->gross_total),
                     'Pagos aprobados' => SalesOrder::where('tenant_id', $user->tenant_id)->whereDate('date', '>=', $startDate->toDateString())->whereDate('date', '<=', $endDate->toDateString())->with('payments')->get()->sum(fn ($order) => $order->payments->where('status', 1)->sum('amount')),
                 ],
             ],
@@ -639,7 +640,7 @@ class ReportController extends Controller
 
         return response($dompdf->output(), 200)
             ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="' . $fileName . '"');
+            ->header('Content-Disposition', PdfDownload::buildDispositionHeader(request(), $fileName));
     }
 
     private function downloadCsv(string $prefix, array $header, array $rows)
@@ -738,7 +739,7 @@ class ReportController extends Controller
             ->orderByDesc('id')
             ->get()
             ->map(function (SalesOrder $order) use ($currency, $user) {
-                $order->order_total_amount = (float) $order->details->sum('amount');
+                $order->order_total_amount = (float) $order->gross_total;
                 $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
                 $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount, 2));
 

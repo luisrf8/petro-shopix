@@ -35,6 +35,9 @@
     $orderCurrencyCode = in_array($orderCurrencyCode, ['USD', 'EUR', 'VES'], true) ? $orderCurrencyCode : 'USD';
     $emissionCurrencyCode = strtoupper(trim((string) ($emissionCurrencyCode ?? $orderCurrencyCode)));
     $emissionCurrencyCode = in_array($emissionCurrencyCode, ['USD', 'EUR', 'VES'], true) ? $emissionCurrencyCode : $orderCurrencyCode;
+    $itemsSubtotal = (float) ($itemsSubtotal ?? $order->items_subtotal);
+    $deliveryFee = (float) ($deliveryFee ?? $order->delivery_fee_amount);
+    $orderTotal = (float) ($totalOrden ?? ($itemsSubtotal + $deliveryFee));
 @endphp
 <table width="100%" style="border-collapse: collapse; border: none;">
     <tr>
@@ -92,9 +95,24 @@
         </tbody>
     </table>
 
-    {{--
-    <p><strong>Total Orden:</strong> ${{ number_format($totalOrden, 2) }}</p>
-     --}}
+    <table style="margin-top: 12px; width: 55%; margin-left: auto;">
+        <tbody>
+            <tr>
+                <td><strong>Subtotal productos</strong></td>
+                <td style="text-align: right;">{{ number_format($displayAmount($itemsSubtotal), 2) }} {{ $emissionCurrencyCode }}</td>
+            </tr>
+            @if($deliveryFee > 0)
+                <tr>
+                    <td><strong>Delivery</strong></td>
+                    <td style="text-align: right;">{{ number_format($displayAmount($deliveryFee), 2) }} {{ $emissionCurrencyCode }}</td>
+                </tr>
+            @endif
+            <tr>
+                <td><strong>Total orden</strong></td>
+                <td style="text-align: right;">{{ number_format($displayAmount($orderTotal), 2) }} {{ $emissionCurrencyCode }}</td>
+            </tr>
+        </tbody>
+    </table>
 
 
     <!-- Detalles de pagos -->

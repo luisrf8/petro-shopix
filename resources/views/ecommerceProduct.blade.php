@@ -401,6 +401,29 @@
       right: 0.75rem;
     }
 
+    .product-gallery-fullscreen-btn {
+      position: absolute;
+      top: 0.85rem;
+      right: 0.85rem;
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.82);
+      background: rgba(15, 23, 42, 0.62);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+      backdrop-filter: blur(8px);
+    }
+
+    .product-gallery-fullscreen-btn:hover,
+    .product-gallery-fullscreen-btn:focus {
+      background: rgba(15, 23, 42, 0.82);
+      color: #fff;
+    }
+
     .product-gallery-status {
       grid-area: status;
       display: flex;
@@ -436,6 +459,106 @@
 
     .product-gallery-thumbs::-webkit-scrollbar {
       display: none;
+    }
+
+    .product-gallery-fullscreen-image {
+      width: 100%;
+      max-height: 82vh;
+      object-fit: contain;
+      border-radius: 18px;
+      background: #fff;
+    }
+
+    .product-gallery-fullscreen-stage {
+      position: relative;
+      width: min(100%, 1180px);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 170px);
+      padding: 1rem 4.5rem 0;
+    }
+
+    .product-gallery-fullscreen-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 52px;
+      height: 52px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 18px 30px -18px rgba(15, 23, 42, 0.7);
+      z-index: 2;
+    }
+
+    .product-gallery-fullscreen-arrow.prev {
+      left: 0.75rem;
+    }
+
+    .product-gallery-fullscreen-arrow.next {
+      right: 0.75rem;
+    }
+
+    .product-gallery-fullscreen-arrow:hover,
+    .product-gallery-fullscreen-arrow:focus {
+      background: #0f172a;
+      color: #fff;
+    }
+
+    .product-gallery-fullscreen-meta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-top: 0.85rem;
+      flex-wrap: wrap;
+    }
+
+    .product-gallery-fullscreen-counter {
+      border-radius: 999px;
+      background: #111827;
+      color: #fff;
+      font-size: 0.84rem;
+      font-weight: 700;
+      padding: 0.38rem 0.82rem;
+      line-height: 1;
+    }
+
+    .product-gallery-fullscreen-thumbs {
+      display: flex;
+      gap: 0.7rem;
+      overflow-x: auto;
+      padding: 0.25rem 0.1rem 0.1rem;
+      scrollbar-width: none;
+      max-width: min(100%, 760px);
+    }
+
+    .product-gallery-fullscreen-thumbs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .product-gallery-fullscreen-thumb {
+      width: 72px;
+      height: 72px;
+      border-radius: 16px;
+      object-fit: cover;
+      border: 2px solid transparent;
+      cursor: pointer;
+      flex: 0 0 auto;
+      background: #fff;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .product-gallery-fullscreen-thumb.active {
+      border-color: #111827;
+      box-shadow: 0 18px 28px -20px rgba(15, 23, 42, 0.7);
+      transform: translateY(-2px);
     }
 
     .product-meta-card {
@@ -692,6 +815,34 @@
         background: transparent;
       }
 
+      .product-gallery-fullscreen-stage {
+        min-height: calc(100vh - 150px);
+        padding: 0.25rem 2.8rem 0;
+      }
+
+      .product-gallery-fullscreen-arrow {
+        width: 42px;
+        height: 42px;
+      }
+
+      .product-gallery-fullscreen-arrow.prev {
+        left: 0.25rem;
+      }
+
+      .product-gallery-fullscreen-arrow.next {
+        right: 0.25rem;
+      }
+
+      .product-gallery-fullscreen-image {
+        max-height: 68vh;
+      }
+
+      .product-gallery-fullscreen-thumb {
+        width: 60px;
+        height: 60px;
+        border-radius: 14px;
+      }
+
       .landing-header.is-scrolled {
         background: rgba(255, 255, 255, 0.95);
       }
@@ -798,16 +949,27 @@
       }
 
       .product-gallery-shell {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+          "main"
+          "status";
         gap: 0.55rem;
       }
 
+      .product-gallery-main {
+        max-width: none;
+        width: 100%;
+      }
+
       .product-gallery-status {
-        justify-content: flex-end;
+        width: 100%;
+        justify-content: center;
         align-items: center;
         min-height: 0;
       }
 
       .product-gallery-thumbs {
+        display: none !important;
       }
 
       .product-gallery-slide {
@@ -964,6 +1126,9 @@
 
           <div class="product-gallery-shell">
             <div class="product-gallery-main flex-grow-1">
+              <button type="button" class="btn product-gallery-fullscreen-btn" id="product-gallery-fullscreen" aria-label="Ver imagen en pantalla completa">
+                <i class="bi bi-arrows-fullscreen"></i>
+              </button>
               <button type="button" class="btn product-gallery-arrow prev" id="product-gallery-prev" aria-label="Imagen anterior">
                 <i class="bi bi-chevron-left"></i>
               </button>
@@ -990,7 +1155,7 @@
               </button>
             </div>
 
-            <div class="product-gallery-status">
+            <div class="product-gallery-status d-none d-md-flex">
               <div class="product-gallery-thumbs" id="thumbnail-gallery">
                 @if(count($product->images) > 0)
                   @foreach($product->images as $index => $image)
@@ -1003,6 +1168,50 @@
                     >
                   @endforeach
                 @endif
+              </div>
+            </div>
+
+            <div class="modal fade" id="productGalleryFullscreenModal" tabindex="-1" aria-labelledby="productGalleryFullscreenModalLabel" aria-hidden="true">
+              <div class="modal-dialog modal-fullscreen modal-dialog-centered">
+                <div class="modal-content border-0 bg-white">
+                  <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title" id="productGalleryFullscreenModalLabel">Vista completa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                  </div>
+                  <div class="modal-body pt-2">
+                    <div class="product-gallery-fullscreen-stage" id="product-gallery-fullscreen-stage">
+                      <button type="button" class="product-gallery-fullscreen-arrow prev" id="product-gallery-fullscreen-prev" aria-label="Imagen anterior">
+                        <i class="bi bi-chevron-left"></i>
+                      </button>
+                      <img id="product-gallery-fullscreen-image" src="" alt="Imagen ampliada del producto" class="product-gallery-fullscreen-image">
+                      <button type="button" class="product-gallery-fullscreen-arrow next" id="product-gallery-fullscreen-next" aria-label="Imagen siguiente">
+                        <i class="bi bi-chevron-right"></i>
+                      </button>
+                    </div>
+                    <div class="product-gallery-fullscreen-meta">
+                      <div class="product-gallery-fullscreen-counter" id="product-gallery-fullscreen-counter">1/1</div>
+                      <div class="product-gallery-fullscreen-thumbs" id="product-gallery-fullscreen-thumbs">
+                        @if(count($product->images) > 0)
+                          @foreach($product->images as $index => $image)
+                            <img
+                              src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}"
+                              alt="Miniatura ampliada {{ $index + 1 }}"
+                              class="product-gallery-fullscreen-thumb {{ $index === 0 ? 'active' : '' }}"
+                              data-fullscreen-gallery-index="{{ $index }}"
+                            >
+                          @endforeach
+                        @else
+                          <img
+                            src="{{ asset('assets/img/shopix5.png') }}"
+                            alt="Miniatura ampliada"
+                            class="product-gallery-fullscreen-thumb active"
+                            data-fullscreen-gallery-index="0"
+                          >
+                        @endif
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1143,7 +1352,16 @@
         const galleryNextButton = document.getElementById('product-gallery-next');
         const galleryCounter = document.getElementById('product-gallery-counter');
         const thumbnails = document.querySelectorAll('.thumbnail-image');
+        const fullscreenButton = document.getElementById('product-gallery-fullscreen');
+        const fullscreenModalElement = document.getElementById('productGalleryFullscreenModal');
+        const fullscreenImage = document.getElementById('product-gallery-fullscreen-image');
+        const fullscreenPrevButton = document.getElementById('product-gallery-fullscreen-prev');
+        const fullscreenNextButton = document.getElementById('product-gallery-fullscreen-next');
+        const fullscreenCounter = document.getElementById('product-gallery-fullscreen-counter');
+        const fullscreenThumbs = Array.from(document.querySelectorAll('[data-fullscreen-gallery-index]'));
+        const fullscreenStage = document.getElementById('product-gallery-fullscreen-stage');
         let currentGalleryIndex = 0;
+        let fullscreenTouchStartX = null;
 
         function updateGalleryUi(index) {
           currentGalleryIndex = Math.max(0, Math.min(index, Math.max(gallerySlides.length - 1, 0)));
@@ -1167,6 +1385,47 @@
           updateGalleryUi(index);
         }
 
+        function openGalleryFullscreen(index = currentGalleryIndex) {
+          const target = gallerySlides[index];
+          const targetImage = target?.querySelector('img');
+          const imageSrc = targetImage?.getAttribute('src') || target?.dataset.imageSrc || '';
+
+          if (!fullscreenModalElement || !fullscreenImage || !imageSrc || typeof bootstrap === 'undefined' || !bootstrap?.Modal) {
+            return;
+          }
+
+          currentGalleryIndex = Math.max(0, Math.min(index, Math.max(gallerySlides.length - 1, 0)));
+          fullscreenImage.src = imageSrc;
+          fullscreenImage.alt = targetImage?.getAttribute('alt') || 'Imagen ampliada del producto';
+          if (fullscreenCounter) {
+            fullscreenCounter.textContent = `${currentGalleryIndex + 1}/${Math.max(gallerySlides.length, 1)}`;
+          }
+          fullscreenThumbs.forEach((thumb) => {
+            const thumbIndex = Number(thumb.dataset.fullscreenGalleryIndex || 0);
+            const isActive = thumbIndex === currentGalleryIndex;
+            thumb.classList.toggle('active', isActive);
+            if (isActive) {
+              thumb.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }
+          });
+          if (fullscreenPrevButton) {
+            fullscreenPrevButton.disabled = currentGalleryIndex <= 0;
+          }
+          if (fullscreenNextButton) {
+            fullscreenNextButton.disabled = currentGalleryIndex >= gallerySlides.length - 1;
+          }
+          bootstrap.Modal.getOrCreateInstance(fullscreenModalElement).show();
+        }
+
+        function moveFullscreenGallery(step) {
+          const nextIndex = Math.max(0, Math.min(currentGalleryIndex + step, gallerySlides.length - 1));
+          if (nextIndex === currentGalleryIndex) {
+            return;
+          }
+
+          openGalleryFullscreen(nextIndex);
+        }
+
         if (galleryTrack && gallerySlides.length > 0) {
             thumbnails.forEach(thumbnail => {
                 thumbnail.addEventListener('click', () => {
@@ -1181,6 +1440,65 @@
             galleryNextButton?.addEventListener('click', () => {
               scrollToGalleryIndex(Math.min(currentGalleryIndex + 1, gallerySlides.length - 1));
             });
+
+            fullscreenButton?.addEventListener('click', () => {
+              openGalleryFullscreen(currentGalleryIndex);
+            });
+
+            fullscreenPrevButton?.addEventListener('click', () => {
+              moveFullscreenGallery(-1);
+            });
+
+            fullscreenNextButton?.addEventListener('click', () => {
+              moveFullscreenGallery(1);
+            });
+
+            fullscreenThumbs.forEach((thumb) => {
+              thumb.addEventListener('click', () => {
+                openGalleryFullscreen(Number(thumb.dataset.fullscreenGalleryIndex || 0));
+              });
+            });
+
+            gallerySlides.forEach((slide, index) => {
+              slide.addEventListener('click', () => {
+                openGalleryFullscreen(index);
+              });
+            });
+
+            fullscreenModalElement?.addEventListener('keydown', (event) => {
+              if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                moveFullscreenGallery(-1);
+              } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                moveFullscreenGallery(1);
+              }
+            });
+
+            fullscreenStage?.addEventListener('touchstart', (event) => {
+              fullscreenTouchStartX = event.changedTouches?.[0]?.clientX ?? null;
+            }, { passive: true });
+
+            fullscreenStage?.addEventListener('touchend', (event) => {
+              const endX = event.changedTouches?.[0]?.clientX ?? null;
+              if (fullscreenTouchStartX === null || endX === null) {
+                fullscreenTouchStartX = null;
+                return;
+              }
+
+              const deltaX = endX - fullscreenTouchStartX;
+              fullscreenTouchStartX = null;
+
+              if (Math.abs(deltaX) < 35) {
+                return;
+              }
+
+              if (deltaX > 0) {
+                moveFullscreenGallery(-1);
+              } else {
+                moveFullscreenGallery(1);
+              }
+            }, { passive: true });
 
             galleryTrack.addEventListener('scroll', () => {
               const trackCenter = galleryTrack.scrollLeft + (galleryTrack.clientWidth / 2);

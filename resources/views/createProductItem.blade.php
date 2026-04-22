@@ -208,11 +208,14 @@
 
                     <div class="mb-3">
                         <label for="productDiscount" class="form-label">Descuento del producto (%)</label>
-                        <input type="number" id="productDiscount" name="productDiscount" min="0" max="100" step="0.01" value="0" class="form-control">
+                        <input type="number" id="productDiscount" name="productDiscount" min="0" max="100" step="0.01" value="0" class="form-control" data-decimal-friendly="true">
                     </div>
 
                     <div class="mb-3">
-                        <label for="productImages" class="form-label">Galería principal del producto</label>
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+                            <label for="productImages" class="form-label mb-0">Galería principal del producto</label>
+                            <button type="button" class="btn btn-outline-dark btn-sm" id="openCreateProductAiBtn">Generar con IA</button>
+                        </div>
                         <input type="file" id="productImages" name="images[]" class="form-control" multiple accept="image/*">
                         <small class="text-muted d-block mt-1">Estas imágenes son del producto general. Cada variante puede tener su propia imagen abajo.</small>
                     </div>
@@ -256,6 +259,43 @@
         </form>
     </div>
 </div>
+
+<div class="modal fade" id="createProductAiModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Generar imagen con IA</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="createProductAiPreviewWrapper" class="mb-3 d-none">
+                    <label class="form-label fw-bold mb-2">Resultado actual</label>
+                    <img id="createProductAiPreview" src="#" class="img-fluid rounded border" alt="Imagen generada por IA">
+                </div>
+                <div id="createProductAiChat" class="border rounded p-3 bg-white mb-3" style="min-height:180px; max-height:280px; overflow:auto;"></div>
+                <div id="createProductAiLoading" class="mt-2 d-none">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2 text-dark" role="status"></div>
+                        <span>Generando imagen...</span>
+                    </div>
+                </div>
+                <div class="alert alert-light border py-2 px-3 small mb-3" id="createProductAiBaseHint">Sin imagen base seleccionada.</div>
+                <input type="file" id="createProductAiReferenceImage" class="d-none" accept=".png,.jpg,.jpeg,.webp">
+                <div class="d-flex gap-2 align-items-end">
+                    <button type="button" class="btn btn-outline-dark" id="createProductAiAttachBtn" title="Adjuntar imagen">📎</button>
+                    <textarea id="createProductAiPrompt" class="form-control" rows="2" placeholder="Escribe tu mensaje para la IA..."></textarea>
+                    <button type="button" class="btn btn-dark" id="createProductAiSendBtn" title="Enviar">➤</button>
+                </div>
+                <small class="text-muted d-block mt-1" id="createProductAiAttachedName">Sin imagen adjunta</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-outline-dark" id="createProductAiDownloadBtn" disabled>Descargar</button>
+                <button type="button" class="btn btn-outline-success" id="createProductAiUseBtn" disabled>Usar esta imagen</button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -263,6 +303,10 @@
     const PRODUCT_SAFE_IMAGE_BYTES = 1.2 * 1024 * 1024;
     const PRODUCT_SAFE_TOTAL_UPLOAD_BYTES = 8 * 1024 * 1024;
     const createProductEndpoint = @json(route('products.createWeb'));
+    const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
+    let createProductAiHistory = [];
+    let createProductAiLatestResult = null;
+    let createProductAiTarget = null;
 
     function showShopixToast(message, type = 'info') {
         let container = document.getElementById('shopixToastContainer');
@@ -332,7 +376,9 @@
     }
 
     function parsePositiveCreateProductAmount(value) {
-        const amount = Number(value);
+        const amount = window.shopixParseDecimalInput
+            ? window.shopixParseDecimalInput(value)
+            : Number(value);
         return Number.isFinite(amount) && amount > 0 ? amount : null;
     }
 
@@ -404,6 +450,202 @@
         inputEl.files = dt.files;
     }
 
+    function createDataTransferWithFiles(files = []) {
+        const dt = new DataTransfer();
+        files.forEach((file) => dt.items.add(file));
+        return dt;
+    }
+
+    function appendFilesToInput(inputEl, files = []) {
+        const dt = new DataTransfer();
+        Array.from(inputEl?.files || []).forEach((file) => dt.items.add(file));
+        files.forEach((file) => dt.items.add(file));
+        inputEl.files = dt.files;
+    }
+
+    function fileFromBase64(base64Data, mimeType, fileName) {
+        const bytes = atob(base64Data);
+        const buffer = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i += 1) {
+            buffer[i] = bytes.charCodeAt(i);
+        }
+        return new File([new Blob([buffer], { type: mimeType || 'image/png' })], fileName, {
+            type: mimeType || 'image/png',
+        });
+    }
+
+    function appendCreateProductAiMessage(role, content) {
+        const chatBox = document.getElementById('createProductAiChat');
+        if (!chatBox) return;
+
+        const item = document.createElement('div');
+        item.className = `mb-2 p-2 rounded ${role === 'assistant' ? 'bg-light border' : 'bg-dark text-white'}`;
+        item.textContent = content;
+        chatBox.appendChild(item);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function setCreateProductAiLoading(isLoading) {
+        document.getElementById('createProductAiLoading')?.classList.toggle('d-none', !isLoading);
+        document.getElementById('createProductAiSendBtn').disabled = isLoading;
+        document.getElementById('createProductAiAttachBtn').disabled = isLoading;
+    }
+
+    function renderCreateProductAiPreview() {
+        const wrapper = document.getElementById('createProductAiPreviewWrapper');
+        const preview = document.getElementById('createProductAiPreview');
+        const downloadBtn = document.getElementById('createProductAiDownloadBtn');
+        const useBtn = document.getElementById('createProductAiUseBtn');
+
+        if (!createProductAiLatestResult) {
+            wrapper.classList.add('d-none');
+            downloadBtn.disabled = true;
+            useBtn.disabled = true;
+            return;
+        }
+
+        preview.src = `data:${createProductAiLatestResult.mimeType};base64,${createProductAiLatestResult.base64Data}`;
+        wrapper.classList.remove('d-none');
+        downloadBtn.disabled = false;
+        useBtn.disabled = false;
+    }
+
+    async function dataUrlFromRemoteImage(url) {
+        if (!url) return null;
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        const blob = await response.blob();
+
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ''));
+            reader.onerror = () => reject(new Error('No se pudo leer la imagen actual.'));
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    async function getCreateProductAiReferenceData() {
+        const attachedFile = document.getElementById('createProductAiReferenceImage')?.files?.[0] || null;
+        const targetFile = createProductAiTarget?.input?.files?.[0] || null;
+        const sourceFile = attachedFile || targetFile;
+
+        if (sourceFile) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = String(reader.result || '');
+                    const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+                    resolve({ data: base64, mime: sourceFile.type || 'image/png' });
+                };
+                reader.onerror = () => reject(new Error('No se pudo leer la imagen base.'));
+                reader.readAsDataURL(sourceFile);
+            });
+        }
+
+        if (createProductAiTarget?.existingImageUrl) {
+            const dataUrl = await dataUrlFromRemoteImage(createProductAiTarget.existingImageUrl);
+            if (!dataUrl) return null;
+            const mime = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/)?.[1] || 'image/png';
+            return {
+                data: dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl,
+                mime,
+            };
+        }
+
+        return null;
+    }
+
+    function openCreateProductAiModal(target) {
+        createProductAiTarget = target;
+        createProductAiHistory = [];
+        createProductAiLatestResult = null;
+        document.getElementById('createProductAiPrompt').value = '';
+        document.getElementById('createProductAiReferenceImage').value = '';
+        document.getElementById('createProductAiAttachedName').textContent = 'Sin imagen adjunta';
+        document.getElementById('createProductAiChat').innerHTML = '';
+        document.getElementById('createProductAiBaseHint').textContent = target?.existingImageUrl || target?.input?.files?.[0]
+            ? `Se usará como base la ${target.label || 'imagen actual'} si no adjuntas otra.`
+            : 'Sin imagen base seleccionada.';
+        appendCreateProductAiMessage('assistant', `Describe cómo debe verse la ${target?.label || 'imagen'} y generaré una versión inicial.`);
+        renderCreateProductAiPreview();
+        setCreateProductAiLoading(false);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('createProductAiModal')).show();
+    }
+
+    async function sendCreateProductAiPrompt() {
+        const promptInput = document.getElementById('createProductAiPrompt');
+        const prompt = String(promptInput.value || '').trim();
+        if (!prompt) {
+            showShopixToast('Escribe un mensaje para generar la imagen.', 'warning');
+            return;
+        }
+
+        appendCreateProductAiMessage('user', prompt);
+        createProductAiHistory.push({ role: 'user', content: prompt });
+        setCreateProductAiLoading(true);
+
+        try {
+            const referenceData = await getCreateProductAiReferenceData();
+            const response = await fetch(tenantAiImageEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || document.querySelector('input[name="_token"]')?.value || '',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    type: 'product',
+                    image_operation: 'generate',
+                    prompt,
+                    messages: createProductAiHistory,
+                    reference_image_data: referenceData?.data || null,
+                    reference_image_mime: referenceData?.mime || null,
+                }),
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.success || !payload.data) {
+                throw new Error(payload.error || payload.message || 'No se pudo generar la imagen.');
+            }
+
+            createProductAiLatestResult = {
+                base64Data: payload.data,
+                mimeType: payload.mime_type || 'image/png',
+                fileName: 'producto-generado-ia.png',
+            };
+            renderCreateProductAiPreview();
+            appendCreateProductAiMessage('assistant', 'Listo. Puedes usar esta imagen o seguir refinando el resultado.');
+            createProductAiHistory.push({ role: 'assistant', content: 'Imagen generada correctamente.' });
+            promptInput.value = '';
+        } catch (error) {
+            appendCreateProductAiMessage('assistant', 'No pude generar esa imagen. Ajusta el mensaje o cambia la base.');
+            showShopixToast(error.message || 'No se pudo generar la imagen.', 'error');
+        } finally {
+            setCreateProductAiLoading(false);
+        }
+    }
+
+    async function applyCreateProductAiResult() {
+        if (!createProductAiLatestResult || !createProductAiTarget?.input) return;
+
+        const file = fileFromBase64(
+            createProductAiLatestResult.base64Data,
+            createProductAiLatestResult.mimeType,
+            createProductAiLatestResult.fileName || 'producto-generado-ia.png'
+        );
+
+        if (createProductAiTarget.multiple) {
+            appendFilesToInput(createProductAiTarget.input, [file]);
+        } else {
+            createProductAiTarget.input.files = createDataTransferWithFiles([file]).files;
+        }
+
+        await optimizeInputFiles(createProductAiTarget.input);
+        createProductAiTarget.input.dispatchEvent(new Event('change', { bubbles: true }));
+        appendCreateProductAiMessage('assistant', 'La imagen se aplicó al formulario.');
+    }
+
     function createVariantRow() {
         const container = document.getElementById('variantContainer');
         const row = document.createElement('div');
@@ -416,11 +658,11 @@
                 </div>
                 <div class="col-lg-2 col-md-6">
                     <label class="form-label mb-1">Precio</label>
-                    <input type="number" class="form-control" name="variantPrice[]" min="0.01" step="0.01" required>
+                    <input type="number" class="form-control" name="variantPrice[]" min="0.01" step="0.01" required data-decimal-friendly="true">
                 </div>
                 <div class="col-lg-2 col-md-6">
                     <label class="form-label mb-1">Desc. %</label>
-                    <input type="number" class="form-control" name="variantDiscount[]" min="0" max="100" step="0.01" value="0">
+                    <input type="number" class="form-control" name="variantDiscount[]" min="0" max="100" step="0.01" value="0" data-decimal-friendly="true">
                 </div>
                 <div class="col-lg-2 col-md-6">
                     <label class="form-label mb-1">Stock</label>
@@ -437,7 +679,10 @@
             </div>
             <div class="d-flex justify-content-between align-items-center mt-2">
                 <img class="variant-preview" alt="Preview variante">
-                <button type="button" class="btn btn-outline-danger btn-sm remove-variant-btn">Eliminar</button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-dark btn-sm open-create-variant-ai-btn">IA imagen</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-variant-btn">Eliminar</button>
+                </div>
             </div>
         `;
 
@@ -446,6 +691,15 @@
 
         const imageInput = row.querySelector('.variant-image-input');
         const preview = row.querySelector('.variant-preview');
+        row.querySelector('.open-create-variant-ai-btn')?.addEventListener('click', () => {
+            openCreateProductAiModal({
+                input: imageInput,
+                preview,
+                multiple: false,
+                label: 'imagen de variante',
+                existingImageUrl: preview.getAttribute('src') || '',
+            });
+        });
         imageInput.addEventListener('change', async (event) => {
             await optimizeInputFiles(event.target);
             const file = event.target.files?.[0];
@@ -493,6 +747,51 @@
             img.style.borderRadius = '10px';
             preview.appendChild(img);
         });
+    });
+
+    document.getElementById('openCreateProductAiBtn').addEventListener('click', () => {
+        const firstPreview = document.querySelector('#imagePreview img');
+        openCreateProductAiModal({
+            input: document.getElementById('productImages'),
+            multiple: true,
+            label: 'imagen del producto',
+            existingImageUrl: firstPreview?.getAttribute('src') || '',
+        });
+    });
+
+    document.getElementById('createProductAiAttachBtn').addEventListener('click', () => {
+        document.getElementById('createProductAiReferenceImage').click();
+    });
+
+    document.getElementById('createProductAiReferenceImage').addEventListener('change', function() {
+        const file = this.files?.[0];
+        document.getElementById('createProductAiAttachedName').textContent = file ? `Adjunto: ${file.name}` : 'Sin imagen adjunta';
+    });
+
+    document.getElementById('createProductAiSendBtn').addEventListener('click', sendCreateProductAiPrompt);
+    document.getElementById('createProductAiPrompt').addEventListener('keydown', function(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            sendCreateProductAiPrompt();
+        }
+    });
+
+    document.getElementById('createProductAiUseBtn').addEventListener('click', applyCreateProductAiResult);
+    document.getElementById('createProductAiDownloadBtn').addEventListener('click', () => {
+        if (!createProductAiLatestResult) return;
+        const file = fileFromBase64(
+            createProductAiLatestResult.base64Data,
+            createProductAiLatestResult.mimeType,
+            createProductAiLatestResult.fileName || 'producto-generado-ia.png'
+        );
+        const url = URL.createObjectURL(file);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = file.name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
     });
 
     document.getElementById('addVariantBtn').addEventListener('click', createVariantRow);

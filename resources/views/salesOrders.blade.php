@@ -30,11 +30,13 @@
                     <thead class="text-center">
                       <tr>
                         <th># Orden</th>
+                        <th># Factura</th>
                         <th>Fecha</th>
                         <th>Usuario</th>
                         <th>Entrega</th>
                         <th># Productos</th>
                         <th>Documento</th>
+                        <th>Factura fiscal</th>
                         <th>Estado</th>
                         <th>Devolución</th>
                         <th>Acciones</th>
@@ -43,7 +45,27 @@
                     <tbody class="text-center">
                       @foreach($salesOrders as $order)
                         <tr>
-                          <td>{{ $order->id }}</td>
+                          <td>
+                            <div class="fw-semibold">#{{ $order->id }}</div>
+                            @if($order->has_annulled_invoice ?? false)
+                              <span class="badge bg-gradient-danger mt-1">Orden con factura anulada</span>
+                            @endif
+                          </td>
+                          <td>
+                            @php
+                              $edoc = $order->latest_electronic_document;
+                            @endphp
+                            @if($edoc)
+                              <div class="fw-semibold">{{ $edoc->numero_documento ?: '-' }}</div>
+                              @if($edoc->is_annulled)
+                                <span class="badge bg-gradient-danger mt-1">Anulada</span>
+                              @else
+                                <span class="badge bg-gradient-success mt-1">Activa</span>
+                              @endif
+                            @else
+                              <span class="text-muted">-</span>
+                            @endif
+                          </td>
                           <td>{{ $order->date }}</td>
                           <td>{{ $order->user ? $order->user->name : 'Usuario no asignado' }}</td>
                           <td class="text-center">
@@ -58,6 +80,15 @@
                             <span class="badge badge-sm {{ $mode === 'electronic_invoice' ? 'bg-gradient-success' : 'bg-gradient-secondary' }}">
                               {{ $mode === 'electronic_invoice' ? 'Factura digital' : 'Orden de entrega' }}
                             </span>
+                          </td>
+                          <td>
+                            @if($edoc)
+                              <span class="badge badge-sm {{ $edoc->is_annulled ? 'bg-gradient-danger' : 'bg-gradient-success' }}">
+                                {{ $edoc->is_annulled ? 'Anulada' : 'Vigente' }}
+                              </span>
+                            @else
+                              <span class="badge badge-sm bg-gradient-secondary">Sin emitir</span>
+                            @endif
                           </td>
                           <td class="text-center">
                             <span class="badge badge-sm

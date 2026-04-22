@@ -6,6 +6,7 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Support\ImageStorage;
+use App\Support\ActionReason;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -195,6 +196,10 @@ class CategoryController extends Controller
         }
 
         $category = Category::where('tenant_id', $tenantId)->findOrFail($id);
+        $reason = null;
+        if ((bool) $category->is_active) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para inactivar la categoria.');
+        }
     
         // Cambiar el estado de la categoría
         $category->is_active = !$category->is_active;
@@ -205,6 +210,11 @@ class CategoryController extends Controller
             Product::where('tenant_id', $tenantId)
                 ->where('category_id', $category->id)
                 ->update(['is_active' => 0]);
+
+            ActionReason::log('categories', 'CATEGORY_DEACTIVATED', (string) $reason, [
+                'category_id' => $category->id,
+                'tenant_id' => $tenantId,
+            ]);
         }
     
         return response()->json([

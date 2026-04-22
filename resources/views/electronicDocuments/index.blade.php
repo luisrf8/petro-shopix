@@ -113,8 +113,12 @@
                 <td>
                   <div class="d-flex gap-2 flex-wrap">
                     <a href="{{ route('sales.showByOrder', $row->sales_order_id) }}" class="btn btn-outline-dark btn-sm mb-0">Ver orden</a>
-                    <a href="{{ route('sales.orders.pdfs', ['id' => $row->sales_order_id, 'type' => 'invoice']) }}" class="btn btn-outline-secondary btn-sm mb-0">PDF</a>
-                    <a href="{{ route('sales.orders.pdfs', ['id' => $row->sales_order_id, 'type' => 'invoice']) }}?disposition=inline" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm mb-0">Imprimir</a>
+                    @if(!$row->is_annulled)
+                      <a href="{{ route('sales.orders.pdfs', ['id' => $row->sales_order_id, 'type' => 'invoice']) }}" class="btn btn-outline-secondary btn-sm mb-0">PDF</a>
+                      <a href="{{ route('sales.orders.pdfs', ['id' => $row->sales_order_id, 'type' => 'invoice']) }}?disposition=inline" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm mb-0">Imprimir</a>
+                    @else
+                      <span class="btn btn-outline-danger btn-sm mb-0 disabled" aria-disabled="true">Factura anulada</span>
+                    @endif
                     @if($canRetry)
                       <form method="POST" action="{{ route('electronic.documents.retry', $row->id) }}">
                         @csrf

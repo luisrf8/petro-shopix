@@ -150,7 +150,7 @@
                           data-customer-dni="{{ $customer->dni }}"
                           data-customer-active="{{ (int) $customer->is_active }}"
                         >Editar</button>
-                        <form method="POST" action="{{ route('customers.toggleStatus', $customer) }}">
+                        <form method="POST" action="{{ route('customers.toggleStatus', $customer) }}" @if($customer->is_active) data-requires-action-reason="true" data-reason-field="action_reason" data-reason-prompt="Indica el motivo para inactivar este cliente." @endif>
                           @csrf
                           <button type="submit" class="btn btn-outline-secondary btn-sm mb-0">{{ $customer->is_active ? 'Inactivar' : 'Activar' }}</button>
                         </form>

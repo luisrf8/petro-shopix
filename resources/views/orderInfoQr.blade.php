@@ -9,6 +9,195 @@
   <link href="{{ asset('assets/css/nucleo-icons.css') }}" rel="stylesheet">
   <link href="{{ asset('assets/css/material-dashboard.css?v=3.2.0') }}" rel="stylesheet">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <style>
+    :root {
+        --order-bg: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+        --order-card: rgba(255, 255, 255, 0.88);
+        --order-border: rgba(148, 163, 184, 0.22);
+        --order-text: #0f172a;
+        --order-muted: #475569;
+        --order-shadow: 0 24px 70px -44px rgba(15, 23, 42, 0.5);
+    }
+
+    body {
+        min-height: 100vh;
+        background: var(--order-bg);
+        color: var(--order-text);
+    }
+
+    .order-shell {
+        max-width: 1240px;
+        margin: 0 auto;
+    }
+
+    .glass-card {
+        border: 1px solid var(--order-border);
+        background: var(--order-card);
+        backdrop-filter: blur(18px);
+        border-radius: 28px;
+        box-shadow: var(--order-shadow);
+    }
+
+    .hero-panel {
+        padding: 1.5rem;
+        position: relative;
+        overflow: hidden;
+        background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 28%), rgba(255, 255, 255, 0.92);
+    }
+
+    .hero-panel::after {
+        content: '';
+        position: absolute;
+        inset: auto -60px -80px auto;
+        width: 220px;
+        height: 220px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(14, 165, 233, 0.18), transparent 68%);
+    }
+
+    .eyebrow {
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #1d4ed8;
+        margin-bottom: 0.6rem;
+    }
+
+    .hero-title {
+        font-size: clamp(1.8rem, 4vw, 3rem);
+        line-height: 1;
+        font-weight: 800;
+        margin-bottom: 0.75rem;
+    }
+
+    .hero-subtitle,
+    .meta-copy {
+        color: var(--order-muted);
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.5rem 0.85rem;
+        border-radius: 999px;
+        background: #e2e8f0;
+        color: #0f172a;
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+
+    .metric-card {
+        padding: 1rem 1.1rem;
+        height: 100%;
+    }
+
+    .metric-label {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        font-weight: 700;
+    }
+
+    .metric-value {
+        font-size: 1.35rem;
+        font-weight: 800;
+        margin-top: 0.35rem;
+    }
+
+    .timeline-card,
+    .section-card {
+        padding: 1.35rem;
+    }
+
+    .order-timeline-steps {
+        display: grid;
+        gap: 0.95rem;
+    }
+
+    .order-timeline-step {
+        position: relative;
+        padding: 1rem 1rem 1rem 3rem;
+        margin: 0;
+        border: 1px solid #e2e8f0;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.96);
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .order-timeline-step::before {
+        content: '';
+        position: absolute;
+        top: 1.1rem;
+        left: 1rem;
+        width: 0.9rem;
+        height: 0.9rem;
+        border-radius: 999px;
+        background: #0f172a;
+        box-shadow: 0 0 0 6px rgba(15, 23, 42, 0.08);
+    }
+
+    .order-timeline-step.pending::before {
+        background: #f59e0b;
+    }
+
+    .order-timeline-step.success::before {
+        background: #16a34a;
+    }
+
+    .order-timeline-step.danger::before {
+        background: #dc2626;
+    }
+
+    .order-timeline-title {
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+    }
+
+    .order-timeline-description {
+        color: var(--order-muted);
+        margin-bottom: 0.2rem;
+    }
+
+    .soft-table thead th {
+        border-bottom: 1px solid #e2e8f0;
+        color: #64748b;
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    .soft-table tbody td {
+        border-bottom: 1px solid #eef2f7;
+        vertical-align: middle;
+    }
+
+    .soft-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    @media (max-width: 768px) {
+        body {
+            padding: 1rem !important;
+        }
+
+        .hero-panel,
+        .timeline-card,
+        .section-card,
+        .metric-card {
+            border-radius: 22px;
+        }
+    }
+  </style>
 </head>
 
 <body class="g-sidenav-show bg-gray-100 p-4">
@@ -33,141 +222,271 @@
         $customerWhatsappUrl = $customerPhone !== ''
             ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', sobre la orden #' . $order->id . '.')
             : null;
+        $deliveryLabel = $order->status == 0 ? 'Pendiente' : ($order->status == 1 ? 'Entregado' : ($order->status == 2 ? 'Cancelado' : 'Devolución'));
+        $approvalLabel = $order->status == 0 ? 'En proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado');
+        $paymentBalance = max(0, (float) $totalOrden - (float) $totalPagado);
+        $paymentStepTone = $totalPagado >= $totalOrden && $totalOrden > 0 ? 'success' : ($totalPagado > 0 ? 'pending' : 'danger');
+        $invoiceDocument = $order->latest_electronic_document;
+        $timelineSteps = [
+            [
+                'tone' => 'success',
+                'title' => 'Orden creada',
+                'description' => 'La orden fue registrada el ' . ($order->date ?: 'sin fecha disponible') . '.',
+                'meta' => 'Entrega: ' . ($order->preference ?: 'Sin preferencia definida'),
+            ],
+            [
+                'tone' => $paymentStepTone,
+                'title' => 'Pagos y validación',
+                'description' => $totalPagado > 0
+                    ? 'Se registraron pagos por ' . (($orderCurrencySymbol ?? '$') . number_format($totalPagado, 2)) . '. Saldo pendiente: ' . (($orderCurrencySymbol ?? '$') . number_format($paymentBalance, 2)) . '.'
+                    : 'Aún no hay pagos confirmados para esta orden.',
+                'meta' => $approvalLabel,
+            ],
+            [
+                'tone' => $order->status == 1 ? 'success' : ($order->status == 0 ? 'pending' : 'danger'),
+                'title' => 'Entrega y despacho',
+                'description' => 'Estado actual: ' . $deliveryLabel . '.',
+                'meta' => 'Dirección: ' . ($order->address ?: 'No registrada'),
+            ],
+            [
+                'tone' => $order->has_annulled_invoice ? 'danger' : ($invoiceDocument ? 'success' : 'pending'),
+                'title' => 'Factura digital',
+                'description' => $order->has_annulled_invoice
+                    ? 'La última factura electrónica fue anulada y no debe reutilizarse.'
+                    : ($invoiceDocument
+                        ? 'Factura electrónica emitida: ' . ($invoiceDocument->numero_documento ?: 'sin correlativo visible') . '.'
+                        : 'La factura electrónica todavía no ha sido emitida.'),
+                'meta' => $invoiceDocument?->created_at ? 'Actualizada ' . $invoiceDocument->created_at->format('d/m/Y H:i') : 'Sin actualización registrada',
+            ],
+        ];
+
+        if ($order->has_returns) {
+            $timelineSteps[] = [
+                'tone' => 'danger',
+                'title' => 'Devoluciones registradas',
+                'description' => 'Esta orden tiene devoluciones por ' . (($orderCurrencySymbol ?? '$') . number_format($order->total_devuelto ?? 0, 2)) . '.',
+                'meta' => 'Revisa el detalle inferior para validar cantidades devueltas.',
+            ];
+        }
     @endphp
-    <div class="container-fluid">
-        <div class="d-block d-md-none text-center">
-        </div>
-        <div class="d-flex flex-wrap justify-content-between align-items-center">
-            <h1 class="text-center">Orden Nro {{ $order->id }}</h1>
-        </div>
-        
-        <p><strong>Cliente:</strong> {{ $order->user->name }} | <strong>Teléfono:</strong> {{ $order->user->phone_number ?? 'No registrado' }}</p>
-        <p><strong>Moneda de la venta:</strong> {{ $orderCurrencyCode ?? 'USD' }}</p>
-        <p><strong>Entrega:</strong> {{ $order->preference }} | <strong>Dirección:</strong> {{ $order->address }}</p>
-        
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            <strong>Entregado:</strong>
-            <span class="btn btn-sm {{ $order->status == 0 ? 'btn-outline-warning' : ($order->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}">
-                {{ $order->status == 0 ? 'Pendiente' : ($order->status == 1 ? 'Entregado' : ($order->status == 2 ? 'Cancelado' : 'Devolución')) }}
-            </span>
-        </div>
-        
-        <div class="d-flex flex-wrap gap-2">
-            <p><strong>Fecha:</strong> {{ $order->date }}</p>
-            <div class="d-flex align-items-center gap-2">
-                <strong>Estado:</strong>
-                <span class="btn btn-sm {{ $order->status == 0 ? 'btn-outline-warning' : ($order->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}">
-                    {{ $order->status == 0 ? 'En Proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado') }}
-                </span>
+    <div class="order-shell">
+        <div class="glass-card hero-panel mb-4">
+            <div class="row g-4 align-items-start position-relative" style="z-index:1;">
+                <div class="col-lg-7">
+                    <div class="eyebrow">Seguimiento inteligente de tu orden</div>
+                    <div class="hero-title">Orden #{{ $order->id }}</div>
+                    <p class="hero-subtitle mb-3">Consulta pagos, factura, entrega y devoluciones desde un solo panel claro y optimizado para móvil.</p>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <span class="status-pill">{{ $approvalLabel }}</span>
+                        <span class="status-pill">{{ $deliveryLabel }}</span>
+                        <span class="status-pill">{{ $orderCurrencyCode ?? 'USD' }}</span>
+                        @if($order->has_annulled_invoice)
+                            <span class="status-pill" style="background:#fee2e2; color:#991b1b;">Factura anulada</span>
+                        @endif
+                    </div>
+                    <div class="meta-copy">
+                        {{ $order->user->name }} · {{ $order->user->phone_number ?? 'Sin teléfono' }}<br>
+                        {{ $order->preference ?: 'Entrega no definida' }} · {{ $order->address ?: 'Sin dirección registrada' }}
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="quick-actions justify-content-lg-end">
+                        <button type="button" id="public-order-back" class="btn btn-outline-secondary mb-0">Volver</button>
+                        <a id="publicDownloadInvoiceBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-dark mb-0 {{ $order->has_annulled_invoice ? 'disabled' : '' }}" @if($order->has_annulled_invoice) aria-disabled="true" @endif>Factura PDF</a>
+                        <a id="publicDownloadDeliveryBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Orden de entrega</a>
+                        @if($storeWhatsappUrl)
+                            <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
+                        @endif
+                        @if($customerWhatsappUrl)
+                            <a id="public-order-customer-whatsapp" href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0" data-order-user-id="{{ $order->user->id }}">WhatsApp cliente</a>
+                        @endif
+                    </div>
+                    <div class="d-flex align-items-center gap-2 mt-3 justify-content-lg-end flex-wrap">
+                        <label for="public-order-download-currency" class="mb-0 text-sm fw-semibold">Moneda de emisión</label>
+                        <select id="public-order-download-currency" class="form-select form-select-sm border border-1 p-2" style="min-width: 190px; max-width: 220px;">
+                            <option value="{{ $orderCurrencyCode ?? 'USD' }}">{{ $orderCurrencyCode ?? 'USD' }} (venta)</option>
+                            @if(($orderCurrencyCode ?? 'USD') !== 'VES')
+                                <option value="VES">VES / Bolívares</option>
+                            @endif
+                        </select>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="d-flex flex-wrap gap-2 mt-3">
-            <button type="button" id="public-order-back" class="btn btn-outline-secondary mb-0">Volver</button>
-            <div class="d-flex align-items-center gap-2">
-                <label for="public-order-download-currency" class="mb-0 text-sm fw-semibold">Moneda de emisión</label>
-                <select id="public-order-download-currency" class="form-select form-select-sm border border-1 p-2" style="min-width: 170px;">
-                    <option value="{{ $orderCurrencyCode ?? 'USD' }}">{{ $orderCurrencyCode ?? 'USD' }} (moneda de la venta)</option>
-                    @if(($orderCurrencyCode ?? 'USD') !== 'VES')
-                        <option value="VES">VES / Bolívares</option>
-                    @endif
-                </select>
-            </div>
-            <a id="publicDownloadInvoiceBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-dark mb-0">Descargar factura PDF</a>
-            <a id="publicDownloadDeliveryBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Descargar orden de entrega</a>
-            @if($storeWhatsappUrl)
-                <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
-            @endif
-            @if($customerWhatsappUrl)
-                <a id="public-order-customer-whatsapp" href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0" data-order-user-id="{{ $order->user->id }}">WhatsApp cliente</a>
-            @endif
-        </div>
-        
-        <!-- Tabla de Detalles de la Orden -->
-        <div class="card mt-4">
-            <div class="card-header">
-                <h6 class="mb-0">Productos en la Orden</h6>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Producto</th>
-                                <th>Cantidad</th>
-                                <th>Variante</th>
-                                <th>Precio Unitario</th>
-                                <th>Subtotal</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($order->details as $detalle)
-                            <tr>
-                                <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
-                                <td>{{ $detalle->quantity }}</td>
-                                <td>{{ $detalle->variant->size ?? '' }}</td>
-                                <td>{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</td>
-                                <td>{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->amount, 2) }}</td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="glass-card metric-card">
+                    <div class="metric-label">Total orden</div>
+                    <div class="metric-value">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalOrden, 2) }}</div>
                 </div>
-                <p><strong>Total Orden:</strong> {{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalOrden, 2) }}</p>
+            </div>
+            <div class="col-md-3">
+                <div class="glass-card metric-card">
+                    <div class="metric-label">Total pagado</div>
+                    <div class="metric-value">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalPagado, 2) }}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="glass-card metric-card">
+                    <div class="metric-label">Saldo pendiente</div>
+                    <div class="metric-value">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($paymentBalance, 2) }}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="glass-card metric-card">
+                    <div class="metric-label">Factura</div>
+                    <div class="metric-value" style="font-size:1rem;">{{ $invoiceDocument?->numero_documento ?: ($order->has_annulled_invoice ? 'Anulada' : 'Pendiente') }}</div>
+                </div>
             </div>
         </div>
-        
-        <!-- Tabla de Pagos -->
-        <div class="card mt-4">
-            <div class="card-header">
-                <h6 class="mb-0">Pagos Registrados</h6>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Moneda</th>
-                                <th>Método de Pago</th>
-                                <th>Monto</th>
-                                <th>Beneficiario</th>
-                                <th>Banco</th>
-                                <th>Referencia</th>
-                                <th>Comprobante</th>
-                                <th>Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($order->payments as $payment)
-                            @php
-                                $paymentCurrencyCode = strtoupper(trim((string) ($payment->currency ?? '')));
-                                $paymentSymbol = $resolveCurrencySymbol($paymentCurrencyCode);
-                            @endphp
-                            <tr>
-                                <td>{{ $payment->currency }}</td>
-                                <td>{{ $payment->payment->name}}</td>
-                                <td>{{ $paymentSymbol }}{{ number_format($payment->amount, 2) }}{{ $paymentSymbol === '' && $paymentCurrencyCode !== '' ? ' ' . $paymentCurrencyCode : '' }}</td>
-                                <td>{{ $payment->payment->admin_name }}</td>
-                                <td>{{ $payment->payment->bank }}</td>
-                                <td>{{ $payment->reference ?? 'N/A' }}</td>
-                                                                <td>
-                                                                        @if($payment->images->isNotEmpty())
-                                                                            <a href="{{ \App\Support\ImageStorage::url($payment->images->first()->image_path) ?? '#' }}" target="_blank" class="btn btn-sm btn-outline-dark mb-0">Ver imagen</a>
-                                                                        @else
-                                                                            <span class="text-muted">Sin imagen</span>
-                                                                        @endif
-                                                                </td>
-                                <td>
-                                    <span class="btn btn-sm {{ $payment->status == 0 ? 'btn-outline-warning' : ($payment->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}">
-                                        {{ $payment->status == 0 ? 'En Proceso' : ($payment->status == 1 ? 'Pagado' : 'Cancelado') }}
-                                    </span>
-                                </td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="glass-card timeline-card h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="mb-1">Estado de la orden</h5>
+                            <p class="meta-copy mb-0">Una lectura rápida del avance real de tu compra.</p>
+                        </div>
+                    </div>
+
+                    <div class="order-timeline-steps">
+                        @foreach($timelineSteps as $step)
+                            <div class="order-timeline-step {{ $step['tone'] }}">
+                                <div class="order-timeline-title">{{ $step['title'] }}</div>
+                                <div class="order-timeline-description">{{ $step['description'] }}</div>
+                                <small class="text-muted d-block">{{ $step['meta'] }}</small>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
-                <p><strong>Total Pagado:</strong> {{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalPagado, 2) }}</p>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="glass-card section-card mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="mb-1">Productos de la orden</h5>
+                            <p class="meta-copy mb-0">Detalle de artículos, cantidades y subtotales.</p>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table soft-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th>Cantidad</th>
+                                    <th>Variante</th>
+                                    <th>Precio</th>
+                                    <th>Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($order->details as $detalle)
+                                    <tr>
+                                        <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
+                                        <td>{{ $detalle->quantity }}</td>
+                                        <td>{{ $detalle->variant->size ?? 'General' }}</td>
+                                        <td>{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</td>
+                                        <td>{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->amount, 2) }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="glass-card section-card mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="mb-1">Pagos registrados</h5>
+                            <p class="meta-copy mb-0">Comprobantes, método y estado de conciliación.</p>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table soft-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Moneda</th>
+                                    <th>Método</th>
+                                    <th>Monto</th>
+                                    <th>Beneficiario</th>
+                                    <th>Referencia</th>
+                                    <th>Comprobante</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($order->payments as $payment)
+                                    @php
+                                        $paymentCurrencyCode = strtoupper(trim((string) ($payment->currency ?? '')));
+                                        $paymentSymbol = $resolveCurrencySymbol($paymentCurrencyCode);
+                                    @endphp
+                                    <tr>
+                                        <td>{{ $payment->currency }}</td>
+                                        <td>
+                                            {{ $payment->payment->name }}<br>
+                                            <small class="text-muted">{{ $payment->payment->bank }}</small>
+                                        </td>
+                                        <td>{{ $paymentSymbol }}{{ number_format($payment->amount, 2) }}{{ $paymentSymbol === '' && $paymentCurrencyCode !== '' ? ' ' . $paymentCurrencyCode : '' }}</td>
+                                        <td>{{ $payment->payment->admin_name }}</td>
+                                        <td>{{ $payment->reference ?? 'N/A' }}</td>
+                                        <td>
+                                            @if($payment->images->isNotEmpty())
+                                                <a href="{{ \App\Support\ImageStorage::url($payment->images->first()->image_path) ?? '#' }}" target="_blank" class="btn btn-sm btn-outline-dark mb-0">Ver imagen</a>
+                                            @else
+                                                <span class="text-muted">Sin imagen</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <span class="status-pill" style="background:{{ $payment->status == 1 ? '#dcfce7' : ($payment->status == 0 ? '#fef3c7' : '#fee2e2') }}; color:{{ $payment->status == 1 ? '#166534' : ($payment->status == 0 ? '#92400e' : '#991b1b') }};">
+                                                {{ $payment->status == 0 ? 'En proceso' : ($payment->status == 1 ? 'Pagado' : 'Cancelado') }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-4">Aún no hay pagos registrados para esta orden.</td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                @if($order->has_returns)
+                    <div class="glass-card section-card">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h5 class="mb-1">Devoluciones</h5>
+                                <p class="meta-copy mb-0">Monto acumulado devuelto: {{ $orderCurrencySymbol ?? '$' }}{{ number_format($order->total_devuelto ?? 0, 2) }}</p>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table soft-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Motivo</th>
+                                        <th>Items</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($order->returns as $return)
+                                        <tr>
+                                            <td>{{ optional($return->created_at)->format('d/m/Y H:i') ?? 'Sin fecha' }}</td>
+                                            <td>{{ $return->return_reason ?? 'Sin motivo registrado' }}</td>
+                                            <td>{{ $return->items->sum('quantity') }}</td>
+                                            <td>{{ $orderCurrencySymbol ?? '$' }}{{ number_format($return->total_refund ?? 0, 2) }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                @endif
             </div>
         </div>
     </div>

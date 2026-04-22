@@ -913,6 +913,10 @@
         const currentStatus = this.getAttribute('data-status');
         // Alternar el estado
         const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+        const reason = newStatus === 'inactive' ? window.shopixRequestActionReason('Indica el motivo para inactivar esta categoría.') : '';
+        if (newStatus === 'inactive' && !reason) {
+          return;
+        }
 
         // Hacer la petición AJAX para cambiar el estado
         fetch(`api/categories/${categoryId}/toggle-status`, {
@@ -925,6 +929,7 @@
             body: JSON.stringify({
               is_active: newStatus === 'active' ? 1 : 0,
               tenant_id: tenantId,
+              action_reason: reason,
             })
         })
           .then(response => {

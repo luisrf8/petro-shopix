@@ -38,6 +38,10 @@
     $emissionCurrencySymbol = (string) ($emissionCurrencySymbol ?? ($emissionCurrencyCode === 'EUR' ? '€' : ($emissionCurrencyCode === 'VES' ? 'Bs' : '$')));
     $emissionConversionFactor = (float) ($emissionConversionFactor ?? 1);
     $emissionRateToBs = (float) ($emissionRateToBs ?? 0);
+    $itemsSubtotal = (float) ($itemsSubtotal ?? $order->items_subtotal);
+    $deliveryFee = (float) ($deliveryFee ?? $order->delivery_fee_amount);
+    $taxTotalAmount = (float) ($totalTaxes ?? $order->details->flatMap->taxes->sum('tax_amount'));
+    $invoiceGrandTotal = (float) ($totalGeneral ?? ($itemsSubtotal + $deliveryFee + $taxTotalAmount));
     $displayAmount = function ($value) use ($emissionConversionFactor) {
         return (float) $value * $emissionConversionFactor;
     };
@@ -84,8 +88,17 @@
                     <td></td>
                     <td></td>
                     <td><strong>Sub Total</strong></td>
-                    <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($totalOrden), 2) }}</td>
+                    <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($itemsSubtotal), 2) }}</td>
                 </tr>
+            @if($deliveryFee > 0)
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td><strong>Delivery</strong></td>
+                    <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($deliveryFee), 2) }}</td>
+                </tr>
+            @endif
             @foreach($order->details as $detalle)
                 @foreach($detalle->taxes as $tax)
                 <tr>
@@ -103,7 +116,7 @@
                     <td></td>
                     <td></td>
                     <td><strong>Total</strong></td>
-                    <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($totalGeneral), 2) }}</td>
+                    <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($invoiceGrandTotal), 2) }}</td>
                 </tr>
         </tbody>
     </table>
@@ -117,7 +130,7 @@
 
 
     @php
-        $displayTotalGeneral = $displayAmount($totalGeneral);
+        $displayTotalGeneral = $displayAmount($invoiceGrandTotal);
     @endphp
     @if($emissionCurrencyCode === 'VES')
         <p>Monto expresado en bolívares (VES).</p>

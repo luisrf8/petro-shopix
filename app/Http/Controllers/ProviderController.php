@@ -6,6 +6,7 @@ use App\Models\Provider;
 use Illuminate\Http\Request;
 use App\Models\Tenant;
 use App\Support\TenantCurrency;
+use App\Support\ActionReason;
 
 class ProviderController extends Controller
 {
@@ -101,13 +102,25 @@ class ProviderController extends Controller
         return back()->with('success', 'Proveedor actualizado correctamente.');
     }
 
-    public function toggleStatus(Provider $provider)
+    public function toggleStatus(Request $request, Provider $provider)
     {
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if((int) $provider->tenant_id !== $tenantId, 404);
 
+        $reason = null;
+        if ((bool) $provider->is_active) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para inactivar el proveedor.');
+        }
+
         $provider->is_active = !$provider->is_active;
         $provider->save();
+
+        if (!(bool) $provider->is_active) {
+            ActionReason::log('providers', 'PROVIDER_DEACTIVATED', (string) $reason, [
+                'provider_id' => $provider->id,
+                'tenant_id' => $provider->tenant_id,
+            ]);
+        }
 
         return back()->with('success', 'Estado del proveedor actualizado correctamente.');
     }

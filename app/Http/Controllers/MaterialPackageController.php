@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Models\TenantPlanPayment;
+use App\Support\ActionReason;
 
 class MaterialPackageController extends Controller
 {
@@ -136,13 +137,25 @@ class MaterialPackageController extends Controller
         }
     }
 
-    public function toggleStatus($id)
+    public function toggleStatus(Request $request, $id)
     {
         $user = auth()->user();
         $package = MaterialPackage::where('tenant_id', $user->tenant_id)->findOrFail($id);
 
+        $reason = null;
+        if ((bool) $package->is_active) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para desactivar el paquete.');
+        }
+
         $package->is_active = !$package->is_active;
         $package->save();
+
+        if (!(bool) $package->is_active) {
+            ActionReason::log('material_packages', 'PACKAGE_DEACTIVATED', (string) $reason, [
+                'package_id' => $package->id,
+                'tenant_id' => $package->tenant_id,
+            ]);
+        }
 
         return redirect()->route('materials.index')->with('success', 'Estado del paquete actualizado.');
     }

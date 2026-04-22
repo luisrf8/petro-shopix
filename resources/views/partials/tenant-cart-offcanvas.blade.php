@@ -720,13 +720,24 @@
             <label class="form-check-label" for="delivery-pickup">Retiro en tienda</label>
           </div>
           <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="tenant-delivery-type" id="delivery-store" value="delivery" {{ (bool) ($tenant->delivery_enabled ?? false) ? '' : 'disabled' }}>
+            <label class="form-check-label" for="delivery-store">Delivery</label>
+          </div>
+          <div class="form-check form-check-inline">
             <input class="form-check-input" type="radio" name="tenant-delivery-type" id="delivery-shipping" value="shipping">
             <label class="form-check-label" for="delivery-shipping">Envío</label>
           </div>
+          <small class="text-muted d-block mt-2">
+            @if((bool) ($tenant->delivery_enabled ?? false))
+              Delivery tienda: {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
+            @else
+              El delivery de la tienda está desactivado. El envío externo sigue disponible.
+            @endif
+          </small>
         </div>
 
         <div class="mb-3 d-none" id="tenant-shipping-address-container">
-          <label class="form-label">Dirección de envío</label>
+          <label class="form-label">Dirección para delivery o envío</label>
           <div class="row g-2">
             <div class="col-12 col-md-4">
               <select id="tenant-shipping-country" class="form-select">
@@ -745,6 +756,16 @@
             </div>
             <div class="col-12">
               <input type="text" id="tenant-shipping-address-detail" class="form-control" placeholder="Dirección exacta (calle, referencia, etc.)">
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-shipping-use-profile-location">Usar ubicación guardada</button>
+              <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-shipping-use-current-location">Usar ubicación actual</button>
+              <small class="text-muted w-100" id="tenant-shipping-location-status">Aún no se ha fijado una ubicación exacta.</small>
+              <input type="hidden" id="tenant-shipping-latitude">
+              <input type="hidden" id="tenant-shipping-longitude">
+            </div>
+            <div class="col-12 col-md-4 d-none" id="tenant-shipping-distance-wrap">
+              <input type="number" min="0" step="0.01" id="tenant-shipping-distance" class="form-control" placeholder="Distancia estimada (km)">
             </div>
           </div>
         </div>
@@ -907,13 +928,24 @@
                   <label class="form-check-label" for="tenant-pro-delivery-pickup">Retiro en tienda</label>
                 </div>
                 <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-store" value="delivery" {{ (bool) ($tenant->delivery_enabled ?? false) ? '' : 'disabled' }}>
+                  <label class="form-check-label" for="tenant-pro-delivery-store">Delivery</label>
+                </div>
+                <div class="form-check form-check-inline">
                   <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-shipping" value="shipping">
                   <label class="form-check-label" for="tenant-pro-delivery-shipping">Envío</label>
                 </div>
+                <small class="text-muted d-block mt-2">
+                  @if((bool) ($tenant->delivery_enabled ?? false))
+                    Delivery tienda: {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
+                  @else
+                    El delivery de la tienda está desactivado. El envío externo sigue disponible.
+                  @endif
+                </small>
               </div>
 
               <div class="mt-3 d-none" id="tenant-pro-shipping-address-container">
-                <label class="form-label">Dirección de envío</label>
+                <label class="form-label">Dirección para delivery o envío</label>
                 <div class="row g-2">
                   <div class="col-12 col-md-4">
                     <select id="tenant-pro-shipping-country" class="form-select">
@@ -932,6 +964,16 @@
                   </div>
                   <div class="col-12">
                     <input type="text" id="tenant-pro-shipping-address-detail" class="form-control" placeholder="Dirección exacta (calle, referencia, etc.)">
+                  </div>
+                  <div class="col-12 d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-shipping-use-profile-location">Usar ubicación guardada</button>
+                    <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-shipping-use-current-location">Usar ubicación actual</button>
+                    <small class="text-muted w-100" id="tenant-pro-shipping-location-status">Aún no se ha fijado una ubicación exacta.</small>
+                    <input type="hidden" id="tenant-pro-shipping-latitude">
+                    <input type="hidden" id="tenant-pro-shipping-longitude">
+                  </div>
+                  <div class="col-12 col-md-4 d-none" id="tenant-pro-shipping-distance-wrap">
+                    <input type="number" min="0" step="0.01" id="tenant-pro-shipping-distance" class="form-control" placeholder="Distancia estimada (km)">
                   </div>
                 </div>
               </div>
@@ -969,9 +1011,127 @@
   </div>
 </div>
 
+<div class="modal fade" id="tenantPackageFlavorModal" tabindex="-1" aria-labelledby="tenantPackageFlavorModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="tenantPackageFlavorModalLabel">Seleccionar sabores del combo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="tenant-package-flavor-summary" class="mb-3"></div>
+        <div id="tenant-package-flavor-rows" class="d-flex flex-column gap-3"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-dark" id="tenant-confirm-package-flavor-btn">Agregar al carrito</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+@php
+  $tenantPublicPackagePayload = ($materialPackages ?? collect())->map(function ($package) {
+    return [
+      'id' => $package->id,
+      'name' => $package->name,
+      'discount_percentage' => (float) ($package->discount_percentage ?? 0),
+      'package_price' => !is_null($package->package_price) ? (float) $package->package_price : null,
+      'items' => $package->items->map(function ($item) {
+        $basePrice = (float) ($item->variant->price ?? 0);
+        $productDiscount = (float) ($item->variant->product->discount_percentage ?? 0);
+        $variantDiscount = (float) ($item->variant->discount_percentage ?? 0);
+        $effectivePrice = $basePrice * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+
+        $selectableVariants = collect($item->variant->product->variants ?? [])
+          ->where('stock', '>', 0)
+          ->map(function ($variant) {
+            $variantBasePrice = (float) ($variant->price ?? 0);
+            $variantProductDiscount = (float) ($variant->product->discount_percentage ?? 0);
+            $variantOwnDiscount = (float) ($variant->discount_percentage ?? 0);
+            $variantImagePath = optional($variant->images->first())->path;
+            $productImagePath = optional($variant->product->images->first())->path;
+
+            return [
+              'variant_id' => (int) $variant->id,
+              'variant_size' => (string) ($variant->size ?? ''),
+              'variant_stock' => (float) ($variant->stock ?? 0),
+              'variant_price' => $variantBasePrice * ((100 - $variantProductDiscount) / 100) * ((100 - $variantOwnDiscount) / 100),
+              'product_name' => $variant->product->name ?? 'Producto',
+              'image_src' => $variantImagePath
+                ? (\App\Support\ImageStorage::url($variantImagePath) ?? asset('assets/img/shopix5.png'))
+                : ($productImagePath
+                    ? (\App\Support\ImageStorage::url($productImagePath) ?? asset('assets/img/shopix5.png'))
+                    : asset('assets/img/shopix5.png')),
+              'taxes' => ($variant->product && $variant->product->taxes)
+                ? $variant->product->taxes->map(function ($tax) {
+                    return [
+                      'name' => $tax->name,
+                      'rate' => (float) $tax->rate,
+                    ];
+                  })->values()->toArray()
+                : [],
+            ];
+          })
+          ->values()
+          ->toArray();
+
+        $itemVariantImagePath = optional($item->variant->images->first())->path;
+        $itemProductImagePath = optional($item->variant->product->images->first())->path;
+
+        return [
+          'variant_id' => (int) $item->product_variant_id,
+          'selection_mode' => (string) ($item->selection_mode ?? 'variant'),
+          'variant_size' => (string) ($item->variant->size ?? ''),
+          'variant_stock' => (float) ($item->variant->stock ?? 0),
+          'variant_price' => (float) $effectivePrice,
+          'product_name' => $item->variant->product->name ?? 'Producto',
+          'image_src' => $itemVariantImagePath
+            ? (\App\Support\ImageStorage::url($itemVariantImagePath) ?? asset('assets/img/shopix5.png'))
+            : ($itemProductImagePath
+                ? (\App\Support\ImageStorage::url($itemProductImagePath) ?? asset('assets/img/shopix5.png'))
+                : asset('assets/img/shopix5.png')),
+          'quantity' => (float) ($item->quantity ?? 0),
+          'selectable_variants' => (($item->selection_mode ?? 'variant') === 'product')
+            ? $selectableVariants
+            : [[
+                'variant_id' => (int) $item->product_variant_id,
+                'variant_size' => (string) ($item->variant->size ?? ''),
+                'variant_stock' => (float) ($item->variant->stock ?? 0),
+                'variant_price' => (float) $effectivePrice,
+                'product_name' => $item->variant->product->name ?? 'Producto',
+                'image_src' => $itemVariantImagePath
+                  ? (\App\Support\ImageStorage::url($itemVariantImagePath) ?? asset('assets/img/shopix5.png'))
+                  : ($itemProductImagePath
+                      ? (\App\Support\ImageStorage::url($itemProductImagePath) ?? asset('assets/img/shopix5.png'))
+                      : asset('assets/img/shopix5.png')),
+                'taxes' => ($item->variant && $item->variant->product && $item->variant->product->taxes)
+                  ? $item->variant->product->taxes->map(function ($tax) {
+                      return [
+                        'name' => $tax->name,
+                        'rate' => (float) $tax->rate,
+                      ];
+                    })->values()->toArray()
+                  : [],
+              ]],
+          'taxes' => ($item->variant && $item->variant->product && $item->variant->product->taxes)
+            ? $item->variant->product->taxes->map(function ($tax) {
+                return [
+                  'name' => $tax->name,
+                  'rate' => (float) $tax->rate,
+                ];
+              })->values()->toArray()
+            : [],
+        ];
+      })->values()->toArray(),
+    ];
+  })->values()->toArray();
+@endphp
+
 <script>
   (() => {
     const tenantSlug = @json($tenant->slug);
+    const tenantPackages = @json($tenantPublicPackagePayload);
     const cartEnabled = @json((bool) ($cartEnabled ?? false));
     const tenantName = @json($tenant->name);
     const tenantPhoneCode = @json($tenant->phone_code ?? '');
@@ -979,6 +1139,7 @@
     const tenantCountryId = @json($tenant->country ?? null);
     const tenantStateId = @json($tenant->state ?? null);
     const tenantCityId = @json($tenant->city ?? null);
+    const tenantDeliveryConfig = @json(\App\Support\DeliveryManager::settings($tenant));
     const shopixDebug = true;
 
     function cartDebug(...args) {
@@ -999,14 +1160,33 @@
     const shippingStateSelect = document.getElementById('tenant-shipping-state');
     const shippingCitySelect = document.getElementById('tenant-shipping-city');
     const shippingAddressDetailInput = document.getElementById('tenant-shipping-address-detail');
+    const shippingDistanceInput = document.getElementById('tenant-shipping-distance');
+    const shippingDistanceWrap = document.getElementById('tenant-shipping-distance-wrap');
+    const shippingLatitudeInput = document.getElementById('tenant-shipping-latitude');
+    const shippingLongitudeInput = document.getElementById('tenant-shipping-longitude');
+    const shippingLocationStatus = document.getElementById('tenant-shipping-location-status');
+    const shippingUseProfileLocationBtn = document.getElementById('tenant-shipping-use-profile-location');
+    const shippingUseCurrentLocationBtn = document.getElementById('tenant-shipping-use-current-location');
     const deliveryTypeInputs = document.querySelectorAll('input[name="tenant-delivery-type"]');
+    const tenantPackageFlavorModalElement = document.getElementById('tenantPackageFlavorModal');
+    const tenantPackageFlavorSummary = document.getElementById('tenant-package-flavor-summary');
+    const tenantPackageFlavorRows = document.getElementById('tenant-package-flavor-rows');
+    const tenantConfirmPackageFlavorBtn = document.getElementById('tenant-confirm-package-flavor-btn');
 
     const proShippingCountrySelect = document.getElementById('tenant-pro-shipping-country');
     const proShippingStateSelect = document.getElementById('tenant-pro-shipping-state');
     const proShippingCitySelect = document.getElementById('tenant-pro-shipping-city');
     const proShippingAddressDetailInput = document.getElementById('tenant-pro-shipping-address-detail');
+    const proShippingDistanceInput = document.getElementById('tenant-pro-shipping-distance');
+    const proShippingDistanceWrap = document.getElementById('tenant-pro-shipping-distance-wrap');
+    const proShippingLatitudeInput = document.getElementById('tenant-pro-shipping-latitude');
+    const proShippingLongitudeInput = document.getElementById('tenant-pro-shipping-longitude');
+    const proShippingLocationStatus = document.getElementById('tenant-pro-shipping-location-status');
+    const proShippingUseProfileLocationBtn = document.getElementById('tenant-pro-shipping-use-profile-location');
+    const proShippingUseCurrentLocationBtn = document.getElementById('tenant-pro-shipping-use-current-location');
 
     let countriesCache = null;
+    let pendingPackageSelection = null;
 
     async function fetchJson(url) {
       const response = await fetch(url, {
@@ -1063,11 +1243,13 @@
       return selectedOption ? selectedOption.text.trim() : '';
     }
 
-    function buildShippingAddress(countrySelect, stateSelect, citySelect, detailInput) {
+    function buildShippingAddress(countrySelect, stateSelect, citySelect, detailInput, latitudeInput = null, longitudeInput = null) {
       const countryId = countrySelect?.value || '';
       const stateId = stateSelect?.value || '';
       const cityId = citySelect?.value || '';
       const detail = (detailInput?.value || '').trim();
+      const latitude = latitudeInput?.value ? Number(latitudeInput.value) : null;
+      const longitude = longitudeInput?.value ? Number(longitudeInput.value) : null;
 
       if (!countryId || !stateId || !cityId) {
         return { valid: false, message: 'Selecciona país, estado y ciudad para el envío.' };
@@ -1086,7 +1268,83 @@
         valid: true,
         cityId: Number(cityId),
         address: parts.join(', '),
+        latitude: Number.isFinite(latitude) ? latitude : null,
+        longitude: Number.isFinite(longitude) ? longitude : null,
       };
+    }
+
+    function renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput) {
+      if (!statusElement) {
+        return;
+      }
+
+      const latitude = latitudeInput?.value ? Number(latitudeInput.value) : null;
+      const longitude = longitudeInput?.value ? Number(longitudeInput.value) : null;
+
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        statusElement.textContent = `Ubicación exacta fijada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        return;
+      }
+
+      statusElement.textContent = 'Aún no se ha fijado una ubicación exacta.';
+    }
+
+    function applyUserLocationToShippingForm(user, countrySelect, stateSelect, citySelect, detailInput, latitudeInput, longitudeInput, statusElement) {
+      if (!user) {
+        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+        return;
+      }
+
+      if (detailInput && typeof user.address === 'string' && user.address.trim() !== '') {
+        detailInput.value = user.address.trim();
+      }
+
+      if (latitudeInput) {
+        latitudeInput.value = user.latitude ?? '';
+      }
+
+      if (longitudeInput) {
+        longitudeInput.value = user.longitude ?? '';
+      }
+
+      renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+
+      initLocationSelectors(countrySelect, stateSelect, citySelect, {
+        countryId: user.country_id || tenantCountryId,
+        stateId: user.state_id || tenantStateId,
+        cityId: user.city_id || tenantCityId,
+      }).catch(() => {
+      });
+    }
+
+    function requestCurrentUserLocation(latitudeInput, longitudeInput, statusElement) {
+      if (!navigator.geolocation) {
+        alert('Tu dispositivo no permite obtener ubicación desde el navegador.');
+        return;
+      }
+
+      if (statusElement) {
+        statusElement.textContent = 'Obteniendo ubicación actual...';
+      }
+
+      navigator.geolocation.getCurrentPosition((position) => {
+        if (latitudeInput) {
+          latitudeInput.value = String(position.coords.latitude || '');
+        }
+
+        if (longitudeInput) {
+          longitudeInput.value = String(position.coords.longitude || '');
+        }
+
+        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+      }, () => {
+        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+        alert('No se pudo obtener tu ubicación actual. Revisa los permisos de la app o del navegador.');
+      }, {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0,
+      });
     }
 
     async function initLocationSelectors(countrySelect, stateSelect, citySelect, defaults = {}) {
@@ -1186,6 +1444,11 @@
         return;
       }
 
+      if (type === 'add-package') {
+        openTenantPackageSelector(event.detail?.packageId, event.detail?.packageQty);
+        return;
+      }
+
       if (type === 'open-cart') {
         openTenantCartOffcanvas();
         return;
@@ -1235,18 +1498,123 @@
       return cart.reduce((sum, item) => sum + (Number(item.price) * Number(item.qty)), 0);
     }
 
+    function getTenantDeliveryModeLabel(mode, distanceKm = null) {
+      if (!tenantDeliveryConfig?.enabled) {
+        return 'Retiro en tienda';
+      }
+
+      if (mode === 'distance') {
+        return distanceKm && distanceKm > 0
+          ? `Delivery por km (${distanceKm.toFixed(2)} km)`
+          : 'Delivery por km';
+      }
+
+      if (mode === 'fixed') {
+        return 'Delivery con tarifa fija';
+      }
+
+      if (mode === 'free') {
+        return 'Delivery gratis';
+      }
+
+      return 'Retiro en tienda';
+    }
+
+    function getTenantDeliveryContext(deliveryType, distanceInput, strict = false) {
+      const normalizedType = ['delivery', 'shipping'].includes(deliveryType) ? deliveryType : 'pickup';
+      const distanceKm = Number(distanceInput?.value || 0);
+
+      if (normalizedType === 'pickup') {
+        return {
+          valid: true,
+          fee: 0,
+          mode: 'pickup',
+          distanceKm: null,
+          label: 'Retiro en tienda',
+        };
+      }
+
+      if (normalizedType === 'shipping') {
+        return {
+          valid: true,
+          fee: 0,
+          mode: 'shipping',
+          distanceKm: null,
+          label: 'Envio por tercero',
+        };
+      }
+
+      if (!tenantDeliveryConfig?.enabled) {
+        return {
+          valid: false,
+          fee: 0,
+          mode: 'pickup',
+          distanceKm: null,
+          label: 'Retiro en tienda',
+          message: 'La tienda no tiene delivery activo.',
+        };
+      }
+
+      if (tenantDeliveryConfig.mode === 'fixed') {
+        return {
+          valid: true,
+          fee: Number(tenantDeliveryConfig.fixed_fee || 0),
+          mode: 'fixed',
+          distanceKm: null,
+          label: getTenantDeliveryModeLabel('fixed'),
+        };
+      }
+
+      if (tenantDeliveryConfig.mode === 'distance') {
+        if (distanceKm <= 0) {
+          return {
+            valid: !strict,
+            fee: 0,
+            mode: 'distance',
+            distanceKm: null,
+            label: getTenantDeliveryModeLabel('distance'),
+            message: 'Debes indicar la distancia estimada del delivery en kilómetros.',
+          };
+        }
+
+        return {
+          valid: true,
+          fee: Number(tenantDeliveryConfig.fee_per_km || 0) * distanceKm,
+          mode: 'distance',
+          distanceKm,
+          label: getTenantDeliveryModeLabel('distance', distanceKm),
+        };
+      }
+
+      return {
+        valid: true,
+        fee: 0,
+        mode: 'free',
+        distanceKm: null,
+        label: getTenantDeliveryModeLabel('free'),
+      };
+    }
+
     function getTotalQty(cart) {
       return cart.reduce((sum, item) => sum + Number(item.qty), 0);
     }
 
     function updateDeliveryAddressVisibility() {
       const selectedDeliveryType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value;
-      const isShipping = selectedDeliveryType === 'shipping';
+      const isAddressRequired = ['delivery', 'shipping'].includes(selectedDeliveryType);
+      const isStoreDelivery = selectedDeliveryType === 'delivery';
       if (shippingAddressContainer) {
-        shippingAddressContainer.classList.toggle('d-none', !isShipping);
+        shippingAddressContainer.classList.toggle('d-none', !isAddressRequired);
+      }
+      if (shippingDistanceWrap) {
+        shippingDistanceWrap.classList.toggle('d-none', !(isStoreDelivery && tenantDeliveryConfig?.enabled && tenantDeliveryConfig.mode === 'distance'));
       }
 
-      if (isShipping && shippingCountrySelect && !shippingCountrySelect.options.length) {
+      if (!isStoreDelivery && shippingDistanceInput) {
+        shippingDistanceInput.value = '';
+      }
+
+      if (isAddressRequired && shippingCountrySelect && !shippingCountrySelect.options.length) {
         initLocationSelectors(shippingCountrySelect, shippingStateSelect, shippingCitySelect, {
           countryId: tenantCountryId,
           stateId: tenantStateId,
@@ -1289,7 +1657,7 @@
           <div class="tenant-cart-item-card">
             <div class="d-flex justify-content-between gap-2 align-items-start">
               <div class="d-flex gap-2">
-                <img src="${imageSrc}" alt="${escapeHtml(item.productName || 'Producto')}" class="tenant-cart-item-thumb">
+                <img src="${imageSrc}" alt="${escapeHtml(item.productName || 'Producto')}" class="tenant-cart-item-thumb" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
                 <div>
                 <div class="tenant-cart-item-name">${item.productName}</div>
                 <div class="tenant-cart-item-variant">Variante: ${item.variantSize}</div>
@@ -1336,6 +1704,256 @@
       saveCart(cart);
     }
 
+    function getSelectableVariantsForPackageComponent(component) {
+      const selectableVariants = Array.isArray(component.selectable_variants) ? component.selectable_variants : [];
+      if (selectableVariants.length > 0) {
+        return selectableVariants;
+      }
+
+      return [{
+        variant_id: Number(component.variant_id),
+        variant_size: component.variant_size || '',
+        variant_stock: Number(component.variant_stock || 0),
+        variant_price: Number(component.variant_price || 0),
+        product_name: component.product_name || 'Producto',
+        image_src: component.image_src || '/assets/img/shopix5.png',
+        taxes: Array.isArray(component.taxes) ? component.taxes : [],
+      }];
+    }
+
+    function buildPackagePriceScale(pkg) {
+      const packageDiscount = Math.max(0, Math.min(100, Number(pkg.discount_percentage || 0)));
+      const packageBaseTotal = (pkg.items || []).reduce((sum, row) => {
+        const rowQty = Number(row.quantity || 0);
+        const rowBasePrice = Number(row.variant_price || 0);
+        return sum + (rowBasePrice * ((100 - packageDiscount) / 100) * rowQty);
+      }, 0);
+
+      const targetPackageTotal = (pkg.package_price !== null && pkg.package_price !== undefined)
+        ? (Number(pkg.package_price) || 0)
+        : packageBaseTotal;
+
+      const priceScale = packageBaseTotal > 0 ? (targetPackageTotal / packageBaseTotal) : 1;
+
+      return {
+        packageDiscount,
+        combinedLineMultiplier: ((100 - packageDiscount) / 100) * priceScale,
+      };
+    }
+
+    function addFixedTenantPackageToCart(pkg, packQty) {
+      const priceConfig = buildPackagePriceScale(pkg);
+
+      (pkg.items || []).forEach(component => {
+        const quantity = Number(component.quantity || 0) * packQty;
+        if (quantity <= 0) {
+          return;
+        }
+
+        addItem({
+          variantId: Number(component.variant_id),
+          productId: Number(component.variant_id),
+          productName: `${component.product_name} [${pkg.name}]`,
+          variantSize: component.variant_size,
+          imageSrc: component.image_src || null,
+          price: Number(component.variant_price || 0) * priceConfig.combinedLineMultiplier,
+          qty: quantity,
+        });
+      });
+
+      openTenantCartOffcanvas();
+      alert(`Paquete "${pkg.name}" agregado al carrito.`);
+    }
+
+    function renderTenantPackageFlavorModal() {
+      if (!pendingPackageSelection || !tenantPackageFlavorSummary || !tenantPackageFlavorRows) {
+        return;
+      }
+
+      const pkg = pendingPackageSelection.package;
+      tenantPackageFlavorSummary.innerHTML = `
+        <div class="alert alert-light border mb-0">
+          <strong>${escapeHtml(pkg.name || 'Paquete')}</strong><br>
+          Cantidad de paquetes: ${pendingPackageSelection.packageQty}
+        </div>
+      `;
+
+      tenantPackageFlavorRows.innerHTML = '';
+      pendingPackageSelection.components.forEach((component, componentIndex) => {
+        const choicesHtml = component.choices.map((choice, choiceIndex) => `
+          <div class="row g-2 align-items-center mb-2">
+            <div class="col-12 col-md-6">
+              <div class="d-flex align-items-center gap-2">
+                <img src="${escapeHtml(choice.image_src || '/assets/img/shopix5.png')}" alt="${escapeHtml(choice.product_name || 'Producto')}" style="width:56px;height:56px;object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;flex-shrink:0;" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
+                <div>
+                  <small class="text-muted d-block">Variante</small>
+                  <strong>${escapeHtml(choice.product_name || 'Producto')} ${escapeHtml(choice.variant_size || '')}</strong>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <small class="text-muted d-block">Stock</small>
+              <span>${choice.variant_stock}</span>
+            </div>
+            <div class="col-6 col-md-3">
+              <small class="text-muted d-block">Cantidad</small>
+              <input
+                type="number"
+                min="0"
+                max="${choice.variant_stock}"
+                step="0.01"
+                class="form-control form-control-sm"
+                value="${choice.quantity}"
+                data-tenant-package-component-index="${componentIndex}"
+                data-tenant-package-choice-index="${choiceIndex}">
+            </div>
+          </div>
+        `).join('');
+
+        tenantPackageFlavorRows.insertAdjacentHTML('beforeend', `
+          <div class="card border">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+                <h6 class="mb-0">${escapeHtml(component.product_name || 'Producto')}</h6>
+                <span class="badge bg-dark">Requerido: ${component.required_qty}</span>
+              </div>
+              ${choicesHtml}
+            </div>
+          </div>
+        `);
+      });
+    }
+
+    function openTenantPackageSelector(packageId, packageQty) {
+      const pkg = tenantPackages.find(row => Number(row.id) === Number(packageId));
+      if (!pkg) {
+        alert('No se encontró el paquete.');
+        return;
+      }
+
+      const packQty = Math.max(1, parseInt(packageQty || '1', 10));
+      const hasFlexibleComponents = (pkg.items || []).some(component => String(component.selection_mode || 'variant') === 'product');
+
+      if (!hasFlexibleComponents) {
+        addFixedTenantPackageToCart(pkg, packQty);
+        return;
+      }
+
+      const components = (pkg.items || []).map((component, index) => {
+        const requiredQty = (parseFloat(component.quantity) || 0) * packQty;
+        const choices = getSelectableVariantsForPackageComponent(component)
+          .filter(choice => Number(choice.variant_stock || 0) > 0)
+          .map(choice => ({
+            variant_id: Number(choice.variant_id),
+            variant_size: String(choice.variant_size || ''),
+            variant_stock: Number(choice.variant_stock || 0),
+            variant_price: Number(choice.variant_price || 0),
+            product_name: choice.product_name || component.product_name || 'Producto',
+            image_src: choice.image_src || component.image_src || null,
+            taxes: Array.isArray(choice.taxes) ? choice.taxes : [],
+            quantity: 0,
+          }));
+
+        if (choices.length > 0 && requiredQty > 0) {
+          const preferredIndex = choices.findIndex(choice => Number(choice.variant_id) === Number(component.variant_id));
+          if (preferredIndex >= 0) {
+            choices[preferredIndex].quantity = requiredQty;
+          } else {
+            choices[0].quantity = requiredQty;
+          }
+        }
+
+        return {
+          component_id: `${pkg.id}_${index}`,
+          product_name: component.product_name || 'Producto',
+          required_qty: requiredQty,
+          choices,
+        };
+      }).filter(component => component.required_qty > 0 && component.choices.length > 0);
+
+      if (components.length === 0) {
+        alert('Este paquete no tiene variantes disponibles con stock.');
+        return;
+      }
+
+      pendingPackageSelection = {
+        package: pkg,
+        packageQty: packQty,
+        components,
+      };
+
+      renderTenantPackageFlavorModal();
+      if (tenantPackageFlavorModalElement && typeof bootstrap !== 'undefined' && bootstrap?.Modal) {
+        bootstrap.Modal.getOrCreateInstance(tenantPackageFlavorModalElement).show();
+      }
+    }
+
+    function confirmTenantPackageFlavorSelection() {
+      if (!pendingPackageSelection) {
+        return;
+      }
+
+      const pkg = pendingPackageSelection.package;
+      const selectedRows = [];
+      const priceConfig = buildPackagePriceScale(pkg);
+
+      for (const component of pendingPackageSelection.components) {
+        const totalSelectedQty = component.choices.reduce((sum, choice) => sum + Number(choice.quantity || 0), 0);
+        if (Math.round(totalSelectedQty * 1000) !== Math.round(Number(component.required_qty || 0) * 1000)) {
+          alert(`Debes completar exactamente ${component.required_qty} unidades para ${component.product_name}.`);
+          return;
+        }
+
+        for (const choice of component.choices) {
+          const qty = Number(choice.quantity || 0);
+          if (qty <= 0) {
+            continue;
+          }
+
+          selectedRows.push({
+            variant_id: Number(choice.variant_id),
+            qty,
+            stock: Number(choice.variant_stock || 0),
+            product_name: choice.product_name,
+            variant_size: choice.variant_size,
+            variant_price: Number(choice.variant_price || 0),
+            image_src: choice.image_src || null,
+          });
+        }
+      }
+
+      const cart = getCart();
+      for (const row of selectedRows) {
+        const price = row.variant_price * priceConfig.combinedLineMultiplier;
+        const existing = cart.find(item => Number(item.variantId) === Number(row.variant_id) && Number(item.price) === Number(price));
+        const nextQty = Number(existing?.qty || 0) + row.qty;
+        if (nextQty > Number(row.stock || existing?.stock || 0)) {
+          alert(`Stock insuficiente para ${row.product_name} ${row.variant_size || ''}.`);
+          return;
+        }
+      }
+
+      selectedRows.forEach(row => {
+        addItem({
+          variantId: Number(row.variant_id),
+          productId: Number(row.variant_id),
+          productName: `${row.product_name} [${pkg.name}]`,
+          variantSize: row.variant_size,
+          imageSrc: row.image_src || null,
+          price: row.variant_price * priceConfig.combinedLineMultiplier,
+          qty: row.qty,
+        });
+      });
+
+      if (tenantPackageFlavorModalElement && typeof bootstrap !== 'undefined' && bootstrap?.Modal) {
+        bootstrap.Modal.getOrCreateInstance(tenantPackageFlavorModalElement).hide();
+      }
+
+      pendingPackageSelection = null;
+      openTenantCartOffcanvas();
+      alert(`Paquete "${pkg.name}" agregado al carrito.`);
+    }
+
     function changeQty(index, nextQty) {
       const cart = getCart();
       if (!cart[index]) {
@@ -1369,18 +1987,28 @@
       }
 
       const deliveryType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup';
-      const isShipping = deliveryType === 'shipping';
+      const isStoreDelivery = deliveryType === 'delivery';
+      const isThirdPartyShipping = deliveryType === 'shipping';
+      const requiresAddress = isStoreDelivery || isThirdPartyShipping;
       const shippingAddressResult = buildShippingAddress(
         shippingCountrySelect,
         shippingStateSelect,
         shippingCitySelect,
-        shippingAddressDetailInput
+        shippingAddressDetailInput,
+        shippingLatitudeInput,
+        shippingLongitudeInput
       );
       const authUser = getAuthUser();
       const customerName = (authUser?.name || '').trim();
 
-      if (isShipping && !shippingAddressResult.valid) {
+      if (requiresAddress && !shippingAddressResult.valid) {
         alert(shippingAddressResult.message);
+        return;
+      }
+
+      const deliveryContext = getTenantDeliveryContext(deliveryType, shippingDistanceInput, true);
+      if (!deliveryContext.valid) {
+        alert(deliveryContext.message || 'Debes completar la información del delivery.');
         return;
       }
 
@@ -1404,9 +2032,18 @@
 
       lines.push('');
       lines.push(`Subtotal: ${getSubtotal(cart).toFixed(2)} ${getBaseCurrencySymbol()}`);
-      lines.push(`Entrega: ${isShipping ? 'Envío' : 'Retiro en tienda'}`);
-      if (isShipping) {
-        lines.push(`Dirección de envío: ${shippingAddressResult.address}`);
+      lines.push(`Entrega: ${isStoreDelivery ? 'Delivery tienda' : (isThirdPartyShipping ? 'Envío por tercero' : 'Retiro en tienda')}`);
+      if (isStoreDelivery) {
+        lines.push(`Costo delivery: ${Number(deliveryContext.fee || 0).toFixed(2)} ${getBaseCurrencySymbol()} (${deliveryContext.label || 'Retiro en tienda'})`);
+      }
+      if (requiresAddress) {
+        lines.push(`Dirección: ${shippingAddressResult.address}`);
+        if (deliveryContext.distanceKm) {
+          lines.push(`Distancia estimada: ${deliveryContext.distanceKm.toFixed(2)} km`);
+        }
+        if (shippingAddressResult.latitude !== null && shippingAddressResult.longitude !== null) {
+          lines.push(`Ubicación exacta: https://www.google.com/maps?q=${shippingAddressResult.latitude},${shippingAddressResult.longitude}`);
+        }
       }
 
       const message = encodeURIComponent(lines.join('\n'));
@@ -1498,7 +2135,7 @@
 
     function validateCheckoutStepOne() {
       const deliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
-      if (deliveryType !== 'shipping') {
+      if (!['delivery', 'shipping'].includes(deliveryType)) {
         return true;
       }
 
@@ -1506,11 +2143,19 @@
         proShippingCountrySelect,
         proShippingStateSelect,
         proShippingCitySelect,
-        proShippingAddressDetailInput
+        proShippingAddressDetailInput,
+        proShippingLatitudeInput,
+        proShippingLongitudeInput
       );
 
       if (!deliveryAddressResult.valid) {
         alert(deliveryAddressResult.message);
+        return false;
+      }
+
+      const deliveryContext = getTenantDeliveryContext(deliveryType, proShippingDistanceInput, true);
+      if (!deliveryContext.valid) {
+        alert(deliveryContext.message || 'Debes completar la información del delivery.');
         return false;
       }
 
@@ -1642,7 +2287,7 @@
             </div>
             <div class="col-12 col-md-4">
               <label class="form-label small mb-1">Monto</label>
-              <input type="number" step="0.01" min="0.01" class="form-control pro-payment-amount" placeholder="0.00">
+              <input type="text" inputmode="decimal" autocomplete="off" class="form-control pro-payment-amount" placeholder="0.00">
             </div>
             <div class="col-10 col-md-3">
               <label class="form-label small mb-1">Referencia *</label>
@@ -1683,6 +2328,128 @@
         return 'BS';
       }
       return normalized;
+    }
+
+    function parseProPaymentAmountValue(value) {
+      const normalized = normalizeEditableProPaymentValue(value).numeric;
+      const parsed = Number.parseFloat(normalized);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function normalizeEditableProPaymentValue(value) {
+      const source = String(value || '')
+        .replace(/\s+/g, '')
+        .replace(/[^\d.,]/g, '');
+
+      if (!source) {
+        return { text: '', numeric: '' };
+      }
+
+      const lastDot = source.lastIndexOf('.');
+      const lastComma = source.lastIndexOf(',');
+      let decimalIndex = -1;
+      let decimalSeparator = '';
+
+      if (lastDot !== -1 && lastComma !== -1) {
+        decimalIndex = Math.max(lastDot, lastComma);
+        decimalSeparator = source[decimalIndex];
+      } else if (lastComma !== -1) {
+        const fraction = source.slice(lastComma + 1).replace(/[^\d]/g, '');
+        if (fraction.length <= 2) {
+          decimalIndex = lastComma;
+          decimalSeparator = ',';
+        }
+      } else if (lastDot !== -1) {
+        const fraction = source.slice(lastDot + 1).replace(/[^\d]/g, '');
+        if (fraction.length <= 2 || source.endsWith('.')) {
+          decimalIndex = lastDot;
+          decimalSeparator = '.';
+        }
+      }
+
+      let integerPart = '';
+      let decimalPart = '';
+      let hasTrailingDecimal = false;
+
+      if (decimalIndex !== -1) {
+        integerPart = source.slice(0, decimalIndex).replace(/[^\d]/g, '');
+        decimalPart = source.slice(decimalIndex + 1).replace(/[^\d]/g, '').slice(0, 2);
+        hasTrailingDecimal = source.endsWith(decimalSeparator) && decimalPart.length === 0;
+      } else {
+        integerPart = source.replace(/[^\d]/g, '');
+      }
+
+      integerPart = integerPart.replace(/^0+(?=\d)/, '');
+
+      if (!integerPart && (decimalPart || hasTrailingDecimal)) {
+        integerPart = '0';
+      }
+
+      const text = decimalIndex !== -1
+        ? `${integerPart || '0'}${(decimalPart || hasTrailingDecimal) ? '.' : ''}${decimalPart}`
+        : integerPart;
+
+      const numeric = decimalIndex !== -1
+        ? `${integerPart || '0'}${decimalPart ? `.${decimalPart}` : ''}`
+        : integerPart;
+
+      return { text, numeric };
+    }
+
+    function formatProPaymentAmountValue(value) {
+      const numeric = Number(value || 0);
+      return new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Number.isFinite(numeric) ? numeric : 0);
+    }
+
+    function syncProPaymentAmountInput(input, applyFormatting = false) {
+      if (!input || !input.classList.contains('pro-payment-amount')) {
+        return 0;
+      }
+
+      const numericValue = parseProPaymentAmountValue(input.value);
+      input.dataset.rawValue = String(numericValue);
+
+      if (applyFormatting) {
+        input.value = numericValue > 0 ? formatProPaymentAmountValue(numericValue) : '';
+      }
+
+      return numericValue;
+    }
+
+    function sanitizeLiveMoneyInput(input, parser, normalizer) {
+      if (!input) {
+        return 0;
+      }
+
+      const selectionStart = input.selectionStart ?? String(input.value || '').length;
+      const beforeCursor = String(input.value || '').slice(0, selectionStart);
+      const normalizedValue = normalizer(input.value);
+      const normalizedBeforeCursor = normalizer(beforeCursor);
+
+      if (!normalizedValue.text) {
+        input.dataset.rawValue = '0';
+        input.value = '';
+        return 0;
+      }
+
+      const numericValue = parser(normalizedValue.text);
+      input.dataset.rawValue = String(numericValue);
+
+      if (input.value !== normalizedValue.text) {
+        input.value = normalizedValue.text;
+        const nextCaret = normalizedBeforeCursor.text.length;
+        requestAnimationFrame(() => {
+          try {
+            input.setSelectionRange(nextCaret, nextCaret);
+          } catch (error) {
+          }
+        });
+      }
+
+      return numericValue;
     }
 
     function toBaseFromMethodAmount(method, amount) {
@@ -1825,7 +2592,7 @@
       const directBasePaymentsTotal = paymentRows.reduce((sum, row) => {
         const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
         const method = getMethodById(methodId);
-        const amountRaw = Number(row.querySelector('.pro-payment-amount')?.value || 0);
+        const amountRaw = parseProPaymentAmountValue(row.querySelector('.pro-payment-amount')?.value || 0);
         const methodCurrencyCode = normalizePaymentCurrencyCode(method?.currency?.code || method?.currency?.name || '');
 
         if (amountRaw <= 0 || methodCurrencyCode !== normalizedBaseCurrency) {
@@ -1848,12 +2615,14 @@
 
     function updateProPaymentSummary() {
       const baseSymbol = getBaseCurrencySymbol();
-      const totalBaseWithoutIgtf = getSubtotal(getCart());
+      const proDeliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+      const proDeliveryContext = getTenantDeliveryContext(proDeliveryType, proShippingDistanceInput, false);
+      const totalBaseWithoutIgtf = getSubtotal(getCart()) + Number(proDeliveryContext.fee || 0);
 
       const paymentRows = Array.from(document.querySelectorAll('[data-pro-payment-row]'));
       const paidBase = paymentRows.reduce((sum, row) => {
         const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
-        const amount = Number(row.querySelector('.pro-payment-amount')?.value || 0);
+        const amount = parseProPaymentAmountValue(row.querySelector('.pro-payment-amount')?.value || 0);
         const method = getMethodById(methodId);
         return sum + toBaseFromMethodAmount(method, amount);
       }, 0);
@@ -1952,7 +2721,8 @@
         modalFooter?.classList.add('d-none');
         submitOrderButton.disabled = true;
         paymentRowsContainer.innerHTML = '';
-        totalAmountElement.textContent = `${getSubtotal(cart).toFixed(2)} ${getBaseCurrencySymbol()}`;
+        const deliveryContext = getTenantDeliveryContext('pickup', proShippingDistanceInput, false);
+        totalAmountElement.textContent = `${(getSubtotal(cart) + Number(deliveryContext.fee || 0)).toFixed(2)} ${getBaseCurrencySymbol()}`;
 
         const loginTab = document.getElementById('tenant-login-tab');
         if (loginTab) {
@@ -2032,6 +2802,8 @@
         return;
       }
 
+      applyUserLocationToShippingForm(user, proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
+
       paymentRowsContainer.innerHTML = '';
       let rowCounter = 0;
       const addPaymentRow = () => {
@@ -2058,6 +2830,11 @@
       };
 
       paymentRowsContainer.oninput = (event) => {
+        const amountInput = event.target.closest('.pro-payment-amount');
+        if (amountInput) {
+          sanitizeLiveMoneyInput(amountInput, parseProPaymentAmountValue, normalizeEditableProPaymentValue);
+        }
+
         const imageInput = event.target.closest('.pro-payment-reference-image');
         if (imageInput) {
           const row = imageInput.closest('[data-pro-payment-row]');
@@ -2077,6 +2854,28 @@
         updateProPaymentSummary();
       };
 
+      paymentRowsContainer.onfocusin = (event) => {
+        const amountInput = event.target.closest('.pro-payment-amount');
+        if (!amountInput) {
+          return;
+        }
+
+        const normalizedValue = normalizeEditableProPaymentValue(amountInput.value).text;
+        if (normalizedValue && amountInput.value !== normalizedValue) {
+          amountInput.value = normalizedValue;
+        }
+      };
+
+      paymentRowsContainer.onfocusout = (event) => {
+        const amountInput = event.target.closest('.pro-payment-amount');
+        if (!amountInput) {
+          return;
+        }
+
+        syncProPaymentAmountInput(amountInput, true);
+        updateProPaymentSummary();
+      };
+
       paymentRowsContainer.onchange = (event) => {
         const row = event.target.closest('[data-pro-payment-row]');
         if (row) {
@@ -2085,7 +2884,8 @@
         updateProPaymentSummary();
       };
 
-      totalAmountElement.textContent = `${getSubtotal(cart).toFixed(2)} ${getBaseCurrencySymbol()}`;
+      const initialDeliveryContext = getTenantDeliveryContext(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup', proShippingDistanceInput, false);
+      totalAmountElement.textContent = `${(getSubtotal(cart) + Number(initialDeliveryContext.fee || 0)).toFixed(2)} ${getBaseCurrencySymbol()}`;
       updateProPaymentSummary();
 
       showCheckoutState();
@@ -2177,11 +2977,19 @@
         proShippingCountrySelect,
         proShippingStateSelect,
         proShippingCitySelect,
-        proShippingAddressDetailInput
+        proShippingAddressDetailInput,
+        proShippingLatitudeInput,
+        proShippingLongitudeInput
       );
 
-      if (deliveryType === 'shipping' && !deliveryAddressResult.valid) {
+      if (['delivery', 'shipping'].includes(deliveryType) && !deliveryAddressResult.valid) {
         alert(deliveryAddressResult.message);
+        return;
+      }
+
+      const proDeliveryContext = getTenantDeliveryContext(deliveryType, proShippingDistanceInput, true);
+      if (!proDeliveryContext.valid) {
+        alert(proDeliveryContext.message || 'Debes completar la información del delivery.');
         return;
       }
 
@@ -2199,7 +3007,7 @@
 
       const payments = (await Promise.all(paymentRows.map(async row => {
         const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
-        const amountRaw = Number(row.querySelector('.pro-payment-amount')?.value || 0);
+        const amountRaw = parseProPaymentAmountValue(row.querySelector('.pro-payment-amount')?.value || 0);
         const method = getMethodById(methodId);
         const amount = toBaseFromMethodAmount(method, amountRaw);
         const reference = (row.querySelector('.pro-payment-reference')?.value || '').trim();
@@ -2233,7 +3041,7 @@
       }
 
       const totalPaidBase = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-      const totalOrderBaseWithoutIgtf = getSubtotal(cart);
+      const totalOrderBaseWithoutIgtf = getSubtotal(cart) + Number(proDeliveryContext.fee || 0);
       const igtfTotals = calculateProIgtfTotals(paymentRows, totalOrderBaseWithoutIgtf);
       const totalOrderBase = igtfTotals.totalWithIgtf;
       if (totalPaidBase + 0.0001 < totalOrderBase) {
@@ -2262,8 +3070,11 @@
           body: JSON.stringify({
             customer_id: Number(user.id),
             delivery_type: deliveryType,
-            delivery_address: deliveryType === 'shipping' ? deliveryAddressResult.address : 'Tienda',
-            delivery_city_id: deliveryType === 'shipping' ? Number(deliveryAddressResult.cityId || 0) : null,
+            delivery_address: ['delivery', 'shipping'].includes(deliveryType) ? deliveryAddressResult.address : 'Tienda',
+            delivery_city_id: ['delivery', 'shipping'].includes(deliveryType) ? Number(deliveryAddressResult.cityId || 0) : null,
+            delivery_distance_km: deliveryType === 'delivery' ? proDeliveryContext.distanceKm : null,
+            delivery_latitude: ['delivery', 'shipping'].includes(deliveryType) ? deliveryAddressResult.latitude : null,
+            delivery_longitude: ['delivery', 'shipping'].includes(deliveryType) ? deliveryAddressResult.longitude : null,
             items,
             payments,
             mark_delivered: false,
@@ -2363,9 +3174,42 @@
       }
     });
 
+    tenantPackageFlavorRows?.addEventListener('input', event => {
+      const input = event.target.closest('[data-tenant-package-component-index]');
+      if (!input || !pendingPackageSelection) {
+        return;
+      }
+
+      const componentIndex = Number(input.dataset.tenantPackageComponentIndex);
+      const choiceIndex = Number(input.dataset.tenantPackageChoiceIndex);
+      const component = pendingPackageSelection.components[componentIndex];
+      const choice = component?.choices?.[choiceIndex];
+      if (!component || !choice) {
+        return;
+      }
+
+      const parsed = Math.max(0, Math.min(Number(choice.variant_stock || 0), Number.parseFloat(input.value || '0') || 0));
+      choice.quantity = parsed;
+      input.value = String(parsed);
+    });
+
+    tenantConfirmPackageFlavorBtn?.addEventListener('click', confirmTenantPackageFlavorSelection);
+
+    tenantPackageFlavorModalElement?.addEventListener('hidden.bs.modal', () => {
+      pendingPackageSelection = null;
+      if (tenantPackageFlavorSummary) {
+        tenantPackageFlavorSummary.innerHTML = '';
+      }
+      if (tenantPackageFlavorRows) {
+        tenantPackageFlavorRows.innerHTML = '';
+      }
+    });
+
     deliveryTypeInputs.forEach(input => {
       input.addEventListener('change', updateDeliveryAddressVisibility);
     });
+
+    shippingDistanceInput?.addEventListener('input', updateDeliveryAddressVisibility);
 
     checkoutButton.addEventListener('click', () => {
       closeTenantCartOffcanvas();
@@ -2403,10 +3247,13 @@
     if (cartEnabled) {
       document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach(input => {
         input.addEventListener('change', () => {
-          const isShipping = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value === 'shipping';
-          document.getElementById('tenant-pro-shipping-address-container').classList.toggle('d-none', !isShipping);
+          const currentType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+          const isAddressRequired = ['delivery', 'shipping'].includes(currentType);
+          const isStoreDelivery = currentType === 'delivery';
+          document.getElementById('tenant-pro-shipping-address-container').classList.toggle('d-none', !isAddressRequired);
+          proShippingDistanceWrap?.classList.toggle('d-none', !(isStoreDelivery && tenantDeliveryConfig?.enabled && tenantDeliveryConfig.mode === 'distance'));
 
-          if (isShipping && proShippingCountrySelect && !proShippingCountrySelect.options.length) {
+          if (isAddressRequired && proShippingCountrySelect && !proShippingCountrySelect.options.length) {
             initLocationSelectors(proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, {
               countryId: tenantCountryId,
               stateId: tenantStateId,
@@ -2415,7 +3262,19 @@
               alert('No se pudieron cargar los selectores de ubicación de envío.');
             });
           }
+
+          updateProPaymentSummary();
         });
+      });
+
+      proShippingDistanceInput?.addEventListener('input', updateProPaymentSummary);
+
+      proShippingUseProfileLocationBtn?.addEventListener('click', () => {
+        applyUserLocationToShippingForm(getAuthUser(), proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
+      });
+
+      proShippingUseCurrentLocationBtn?.addEventListener('click', () => {
+        requestCurrentUserLocation(proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
       });
 
       document.getElementById('tenant-pro-next-step')?.addEventListener('click', () => {
@@ -2437,6 +3296,14 @@
     bindLocationSelectorEvents(shippingCountrySelect, shippingStateSelect, shippingCitySelect);
     bindLocationSelectorEvents(proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect);
 
+    shippingUseProfileLocationBtn?.addEventListener('click', () => {
+      applyUserLocationToShippingForm(getAuthUser(), shippingCountrySelect, shippingStateSelect, shippingCitySelect, shippingAddressDetailInput, shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus);
+    });
+
+    shippingUseCurrentLocationBtn?.addEventListener('click', () => {
+      requestCurrentUserLocation(shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus);
+    });
+
     if (shippingCountrySelect) {
       initLocationSelectors(shippingCountrySelect, shippingStateSelect, shippingCitySelect, {
         countryId: tenantCountryId,
@@ -2446,6 +3313,8 @@
       });
     }
 
+    applyUserLocationToShippingForm(getAuthUser(), shippingCountrySelect, shippingStateSelect, shippingCitySelect, shippingAddressDetailInput, shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus);
+
     if (proShippingCountrySelect) {
       initLocationSelectors(proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, {
         countryId: tenantCountryId,
@@ -2454,6 +3323,8 @@
       }).catch(() => {
       });
     }
+
+    applyUserLocationToShippingForm(getAuthUser(), proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
 
     setProSubmitLoading(false);
     renderCart();

@@ -250,14 +250,19 @@
         const currentStatus = this.getAttribute('data-status');
         // Alternar el estado
         const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+        const reason = newStatus === 'inactive' ? window.shopixRequestActionReason('Indica el motivo para inactivar este usuario.') : '';
+        if (newStatus === 'inactive' && !reason) {
+          return;
+        }
 
         // Hacer la petición AJAX para cambiar el estado
         fetch(`api/users/${userId}/toggle-status`, {
           method: 'POST',
           headers: {
             'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+            'Content-Type': 'application/json',
           },
-          body: { is_active: newStatus === 'active' ? 1 : 0 } // Enviar el estado como JSON
+          body: JSON.stringify({ is_active: newStatus === 'active' ? 1 : 0, action_reason: reason })
         })
         .then(response => {
           if (response.status === 200) { // Valida el código de estado HTTP

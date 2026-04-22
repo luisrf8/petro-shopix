@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Tax;
 use Illuminate\Support\Facades\DB;
+use App\Support\ActionReason;
 
 class TaxController extends Controller
 {
@@ -75,6 +76,11 @@ class TaxController extends Controller
         ]);
 
         $oldStatus = (bool) $tax->is_active;
+        $reason = null;
+        if ($oldStatus && !$request->boolean('is_active')) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para inactivar el impuesto.');
+        }
+
         $tax->update(['is_active' => (bool) $request->boolean('is_active')]);
 
         $userId = auth()->id();
@@ -82,6 +88,12 @@ class TaxController extends Controller
                         . ($oldStatus ? 'Activo' : 'Inactivo') 
                         . " a " . ($tax->is_active ? 'Activo' : 'Inactivo');
                         DB::statement("CALL log_change(?, ?, ?, ?)", ['taxes', 'update', $userId, $description]);
+
+        if ($oldStatus && !(bool) $tax->is_active) {
+            ActionReason::log('taxes', 'TAX_DEACTIVATED', (string) $reason, [
+                'tax_id' => $tax->id,
+            ]);
+        }
 
         return response()->json([
             'success' => true,

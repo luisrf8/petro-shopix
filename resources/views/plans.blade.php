@@ -86,7 +86,7 @@
         </div>
         <div class="mb-3">
           <label for="createPlanPrice" class="form-label">Precio</label>
-          <input type="number" step="0.01" class="form-control border border-1 p-2" id="createPlanPrice" name="price" required>
+          <input type="number" step="0.01" class="form-control border border-1 p-2" id="createPlanPrice" name="price" required data-decimal-friendly="true">
         </div>
         <div class="mb-3">
           <label for="createPlanDuration" class="form-label">Duración (días)</label>
@@ -138,7 +138,7 @@
         </div>
         <div class="mb-3">
           <label for="editPlanPrice" class="form-label">Precio</label>
-          <input type="number" step="0.01" class="form-control border border-1 p-2" id="editPlanPrice" name="price" required>
+          <input type="number" step="0.01" class="form-control border border-1 p-2" id="editPlanPrice" name="price" required data-decimal-friendly="true">
         </div>
         <div class="mb-3">
           <label for="editPlanDuration" class="form-label">Duración (días)</label>

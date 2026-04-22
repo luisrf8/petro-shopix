@@ -42,7 +42,7 @@ class UserRedirector
             return false;
         }
 
-        return $user->hasStoreRole('owner', 'admin', 'seller', 'warehouse');
+        return $user->hasStoreRole('owner', 'admin', 'seller', 'warehouse', 'delivery');
     }
 
     public static function resolveBackofficeRedirect(?User $user): string
@@ -61,7 +61,7 @@ class UserRedirector
 
         [$isFreePlan, $isBasicPlan] = self::resolvePlanFlags($user);
 
-        if ($user->hasStoreRole('warehouse')) {
+        if ($user->hasStoreRole('warehouse', 'delivery')) {
             return '/sales-orders/pending-delivery';
         }
 

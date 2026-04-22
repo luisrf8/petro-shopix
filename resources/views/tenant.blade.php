@@ -84,9 +84,8 @@
                             @csrf
                             <button type="submit" class="btn btn-success btn-sm mb-0">Aprobar</button>
                           </form>
-                          <form method="POST" action="{{ route('tenant.planPayment.reject', ['tenant' => $pending->tenant_id, 'payment' => $pending->id]) }}">
+                          <form method="POST" action="{{ route('tenant.planPayment.reject', ['tenant' => $pending->tenant_id, 'payment' => $pending->id]) }}" data-requires-action-reason="true" data-reason-field="review_notes" data-reason-prompt="Indica el motivo para rechazar este pago de plan.">
                             @csrf
-                            <input type="hidden" name="review_notes" value="Pago rechazado por administración.">
                             <button type="submit" class="btn btn-outline-danger btn-sm mb-0">Rechazar</button>
                           </form>
                         </div>
@@ -298,9 +297,8 @@
                             @csrf
                             <button type="submit" class="btn btn-success btn-sm mb-0 w-100">Aprobar pago</button>
                           </form>
-                          <form method="POST" action="{{ route('tenant.planPayment.reject', ['tenant' => $tenant->id, 'payment' => $latestPendingPayment->id]) }}">
+                          <form method="POST" action="{{ route('tenant.planPayment.reject', ['tenant' => $tenant->id, 'payment' => $latestPendingPayment->id]) }}" data-requires-action-reason="true" data-reason-field="review_notes" data-reason-prompt="Indica el motivo para rechazar este pago de plan.">
                             @csrf
-                            <input type="hidden" name="review_notes" value="Pago rechazado por administración.">
                             <button type="submit" class="btn btn-outline-danger btn-sm mb-0 w-100">Rechazar pago</button>
                           </form>
                         </div>

@@ -216,10 +216,10 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::put('/customers/{customer}', [CustomerController::class, 'update'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('customers.update');
     Route::post('/customers/{customer}/toggle-status', [CustomerController::class, 'toggleStatus'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('customers.toggleStatus');
     Route::get('/accounts-receivable', [SaleController::class, 'viewReceivables'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('accounts.receivable.index');
-    Route::get('/paid-pending-deliveries', [SaleController::class, 'viewPaidPendingDelivery'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.paidPendingDeliveries.index');
+    Route::get('/paid-pending-deliveries', [SaleController::class, 'viewPaidPendingDelivery'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,delivery,repartidor')->name('sales.paidPendingDeliveries.index');
     Route::get('/sales-orders', [SaleController::class, 'viewOrders'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.orders');
-    Route::get('/sales-orders/pending-delivery', [SaleController::class, 'viewPendingDeliveryOrders'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('sales.orders.pendingDelivery');
-    Route::get('/sales/{id}', [SaleController::class, 'showByOrder'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.showByOrder');
+    Route::get('/sales-orders/pending-delivery', [SaleController::class, 'viewPendingDeliveryOrders'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,delivery,repartidor')->name('sales.orders.pendingDelivery');
+    Route::get('/sales/{id}', [SaleController::class, 'showByOrder'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,delivery,repartidor')->name('sales.showByOrder');
     Route::post('/sales-orders/{order}/electronic/emit', [ElectronicInvoicingController::class, 'emit'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.emit');
     Route::post('/sales-orders/{order}/electronic/status', [ElectronicInvoicingController::class, 'status'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.status');
     Route::post('/sales-orders/{order}/electronic/download', [ElectronicInvoicingController::class, 'download'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.download');
@@ -311,6 +311,14 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
 });
 
 require __DIR__.'/auth.php';
+
+Route::get('/csrf-token', function () {
+    request()->session()->regenerateToken();
+
+    return response()->json([
+        'csrf_token' => csrf_token(),
+    ]);
+})->name('csrf.token');
 
 // 🔹 RUTAS PÚBLICAS DEL TENANT (al final)
 Route::get('/{tenant:slug}', [TenantController::class, 'publicTenantindex'])->name('tenant.public');

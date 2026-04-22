@@ -40,11 +40,11 @@
               </div>
               <div class="col-12 col-md-3">
                 <label class="form-label">Descuento (%)</label>
-                <input type="number" min="0" max="100" step="0.01" class="form-control border border-1 p-2 bg-white" name="discount_percentage" value="0" placeholder="0">
+                <input type="number" min="0" max="100" step="0.01" class="form-control border border-1 p-2 bg-white" name="discount_percentage" value="0" placeholder="0" data-decimal-friendly="true">
               </div>
               <div class="col-12 col-md-3">
                 <label class="form-label">Precio fijo del paquete ($)</label>
-                <input type="number" min="0.01" step="0.01" class="form-control border border-1 p-2 bg-white" name="package_price" placeholder="Opcional">
+                <input type="number" min="0.01" step="0.01" class="form-control border border-1 p-2 bg-white" name="package_price" placeholder="Opcional" data-decimal-friendly="true">
               </div>
             </div>
 
@@ -146,7 +146,7 @@
                             Editar
                           </button>
 
-                          <form method="POST" action="{{ route('materials.toggleStatus', $package->id) }}">
+                          <form method="POST" action="{{ route('materials.toggleStatus', $package->id) }}" @if($package->is_active) data-requires-action-reason="true" data-reason-field="action_reason" data-reason-prompt="Indica el motivo para desactivar este paquete." @endif>
                             @csrf
                             <button class="btn btn-sm btn-outline-secondary mb-0" type="submit">
                               {{ $package->is_active ? 'Desactivar' : 'Activar' }}
@@ -188,11 +188,11 @@
             </div>
             <div class="col-12 col-md-3">
               <label class="form-label">Descuento (%)</label>
-              <input type="number" min="0" max="100" step="0.01" class="form-control border border-1 p-2 bg-white" name="discount_percentage" id="editPackageDiscount" value="0">
+              <input type="number" min="0" max="100" step="0.01" class="form-control border border-1 p-2 bg-white" name="discount_percentage" id="editPackageDiscount" value="0" data-decimal-friendly="true">
             </div>
             <div class="col-12 col-md-4">
               <label class="form-label">Precio fijo del paquete ($)</label>
-              <input type="number" min="0.01" step="0.01" class="form-control border border-1 p-2 bg-white" name="package_price" id="editPackagePrice" placeholder="Opcional">
+              <input type="number" min="0.01" step="0.01" class="form-control border border-1 p-2 bg-white" name="package_price" id="editPackagePrice" placeholder="Opcional" data-decimal-friendly="true">
             </div>
           </div>
 
@@ -215,6 +215,32 @@
 </div>
 @endsection
 
+@push('styles')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+<style>
+  .select2-container--default .select2-selection--single {
+    min-height: 42px;
+    border: 1px solid #d2d6da;
+    border-radius: 0.5rem;
+    padding: 0.45rem 0.75rem;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 1.5rem;
+    padding-left: 0;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 40px;
+    right: 8px;
+  }
+
+  .select2-container {
+    width: 100% !important;
+  }
+</style>
+@endpush
+
 @push('scripts')
 @php
   $packageCatalogData = ($packages ?? collect())->map(function ($package) {
@@ -235,6 +261,8 @@
     ];
   })->values()->toArray();
 @endphp
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const rowsContainer = document.getElementById('materialsRows');
@@ -292,6 +320,34 @@
 
     let rowIndex = 0;
     let editRowIndex = 0;
+
+    function initializeMaterialSelect2(rowElement) {
+      if (!rowElement || !window.jQuery || !window.jQuery.fn.select2) {
+        return;
+      }
+
+      const $row = window.jQuery(rowElement);
+      const $selects = $row.find('.js-material-variant-select, .js-material-product-select');
+      const $dropdownParent = $row.closest('.modal-content').length ? $row.closest('.modal-content') : window.jQuery(document.body);
+
+      $selects.each(function () {
+        const $select = window.jQuery(this);
+        if ($select.hasClass('select2-hidden-accessible')) {
+          $select.select2('destroy');
+        }
+
+        const placeholder = $select.hasClass('js-material-product-select')
+          ? 'Escribe para buscar un producto...'
+          : 'Escribe para buscar una variante...';
+
+        $select.select2({
+          width: '100%',
+          placeholder,
+          allowClear: true,
+          dropdownParent: $dropdownParent,
+        });
+      });
+    }
 
     function refreshRowPreview(rowElement) {
       if (!rowElement) return;
@@ -411,6 +467,7 @@
       row.className = 'border rounded p-2';
       row.innerHTML = buildRowHtml(rowIndex, seed);
       rowsContainer.appendChild(row);
+      initializeMaterialSelect2(row);
       refreshRowPreview(row);
     }
 
@@ -420,6 +477,7 @@
       row.className = 'border rounded p-2';
       row.innerHTML = buildRowHtml(editRowIndex, seed);
       editRowsContainer?.appendChild(row);
+      initializeMaterialSelect2(row);
       refreshRowPreview(row);
     }
 

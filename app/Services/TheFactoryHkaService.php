@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\SalesOrder;
+use App\Models\Tax;
 use App\Support\TenantCurrency;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -217,7 +219,6 @@ class TheFactoryHkaService
             });
         }
 
-        $taxRate = (float) ($order->details->flatMap->taxes->first()->tax_rate ?? ($order->details->first()->tax_rate ?? 0));
         $tenantBaseCurrency = $this->normalizeCurrency(TenantCurrency::resolveBaseCurrencyCode($order->tenant));
         $documentCurrency = $this->normalizeCurrency((string) ($options['moneda'] ?? config('services.thefactory_hka.default_currency', 'BSD')));
         $foreignCurrency = $this->normalizeCurrency((string) ($options['otra_moneda'] ?? $tenantBaseCurrency));
@@ -238,7 +239,7 @@ class TheFactoryHkaService
                 $lineTaxAmount = (float) ($item->tax_amount ?? 0);
             }
 
-            $lineTaxRate = (float) ($item->taxes->first()->tax_rate ?? ($item->tax_rate ?? 0));
+            $lineTaxRate = $this->resolveInvoiceTaxRateForDetail($item, $lineTaxAmount);
             $lineSubtotal = (float) $item->amount;
             $lineTotal = round($lineSubtotal + $lineTaxAmount, 2);
             $multiplier = $emitOtherCurrency ? $exchangeRate : 1;
@@ -261,7 +262,7 @@ class TheFactoryHkaService
                 'precioItem' => $this->formatAmount($lineBaseAmount * $multiplier, 2),
                 'precioAntesDescuento' => $this->formatAmount($lineBaseAmount * $multiplier, 2),
                 'codigoImpuesto' => $isExempt ? 'E' : 'G',
-                'tasaIVA' => $lineTaxAmount > 0 ? $this->formatPlainNumber($lineTaxRate > 0 ? $lineTaxRate : 16, 2) : null,
+                'tasaIVA' => $lineTaxAmount > 0 && $lineTaxRate > 0 ? $this->formatPlainNumber($lineTaxRate, 2) : null,
                 'valorIVA' => $lineTaxAmount > 0 ? $this->formatAmount($lineTaxAmount * $multiplier, 2) : null,
                 'valorTotalItem' => $this->formatAmount($lineTotal * $multiplier, 2),
                 'infoAdicionalItem' => [],
@@ -269,56 +270,24 @@ class TheFactoryHkaService
             ];
         })->all();
 
-        $taxableBaseTotal = (float) collect($order->details)->sum(function ($item) {
-            $lineTaxAmount = (float) $item->taxes->sum('tax_amount');
-            if ($lineTaxAmount <= 0) {
-                $lineTaxAmount = (float) ($item->tax_amount ?? 0);
-            }
-
-            return $lineTaxAmount > 0 ? (float) ($item->amount ?? 0) : 0.0;
-        });
-        $exemptTotal = max(0, round($subtotal - $taxableBaseTotal, 2));
+        $taxSummary = $this->summarizeInvoiceTaxes($order->details);
+        $taxableBaseTotal = (float) $taxSummary['taxable_base_total'];
+        $exemptTotal = (float) $taxSummary['exempt_total'];
         $montoTotalConIva = round($subtotal + $taxTotal, 2);
-        $totalPagar = $montoTotalConIva;
+        $igtfTotal = $this->resolveInvoiceIgtfTotal($order, $tenantBaseCurrency);
+        $documentIgtfTotal = $emitOtherCurrency ? round($igtfTotal * $exchangeRate, 2) : $igtfTotal;
+        $igtfTotalVes = $this->isBolivarCurrency($documentCurrency)
+            ? $documentIgtfTotal
+            : ($exchangeRate > 0 ? round($igtfTotal * $exchangeRate, 2) : null);
+        $totalPagar = round($montoTotalConIva + $igtfTotal, 2);
         $documentTaxableBaseTotal = $emitOtherCurrency ? round($taxableBaseTotal * $exchangeRate, 2) : $taxableBaseTotal;
         $documentExemptTotal = $emitOtherCurrency ? round($exemptTotal * $exchangeRate, 2) : $exemptTotal;
         $documentSubtotal = $emitOtherCurrency ? round($subtotal * $exchangeRate, 2) : $subtotal;
         $documentTaxTotal = $emitOtherCurrency ? round($taxTotal * $exchangeRate, 2) : $taxTotal;
         $documentMontoTotalConIva = $emitOtherCurrency ? round($montoTotalConIva * $exchangeRate, 2) : $montoTotalConIva;
         $documentTotalPagar = $emitOtherCurrency ? round($totalPagar * $exchangeRate, 2) : $totalPagar;
-        $taxesSubtotal = [];
-        if ($taxTotal > 0) {
-            $taxesSubtotal[] = [
-                'codigoTotalImp' => 'G',
-                'alicuotaImp' => $this->formatPlainNumber($taxRate > 0 ? $taxRate : 16, 2),
-                'baseImponibleImp' => $this->formatAmount($documentTaxableBaseTotal, 2),
-                'valorTotalImp' => $this->formatAmount($documentTaxTotal, 2),
-            ];
-        }
-        if ($exemptTotal > 0) {
-            $taxesSubtotal[] = [
-                'codigoTotalImp' => 'E',
-                'baseImponibleImp' => $this->formatAmount($documentExemptTotal, 2),
-                'valorTotalImp' => $this->formatAmount(0, 2),
-            ];
-        }
-
-        $foreignTaxesSubtotal = [];
-        if ($taxTotal > 0) {
-            $foreignTaxesSubtotal[] = [
-                'codigoTotalImp' => 'G',
-                'alicuotaImp' => $this->formatPlainNumber($taxRate > 0 ? $taxRate : 16, 2),
-                'baseImponibleImp' => $this->formatAmount($taxableBaseTotal, 2),
-                'valorTotalImp' => $this->formatAmount($taxTotal, 2),
-            ];
-        }
-        if ($exemptTotal > 0) {
-            $foreignTaxesSubtotal[] = [
-                'codigoTotalImp' => 'E',
-                'baseImponibleImp' => $this->formatAmount($exemptTotal, 2),
-                'valorTotalImp' => $this->formatAmount(0, 2),
-            ];
-        }
+        $taxesSubtotal = $this->buildInvoiceTaxSubtotalRows($taxSummary, $emitOtherCurrency ? $exchangeRate : 1);
+        $foreignTaxesSubtotal = $this->buildInvoiceTaxSubtotalRows($taxSummary, 1);
 
         $payments = $order->payments->map(function ($payment) use ($documentCurrency, $documentTotalPagar, $exchangeRate, $emitOtherCurrency, $order) {
             $paymentCurrency = $this->normalizeCurrency((string) ($documentCurrency));
@@ -403,8 +372,8 @@ class TheFactoryHkaService
                     'impuestosSubtotal' => $taxesSubtotal,
                     'otrosImpuestosSubtotal' => null,
                     'formasPago' => $payments,
-                    'totalIGTF' => null,
-                    'totalIGTF_VES' => null,
+                    'totalIGTF' => $documentIgtfTotal > 0 ? $this->formatAmount($documentIgtfTotal, 2) : null,
+                    'totalIGTF_VES' => $igtfTotalVes !== null && $igtfTotalVes > 0 ? $this->formatAmount($igtfTotalVes, 2) : null,
                     'montoTotalOTI' => null,
                     'montoTotalIVAyOTI' => null,
                 ],
@@ -427,6 +396,8 @@ class TheFactoryHkaService
                     'listaDescBonificacion' => null,
                     'impuestosSubtotal' => $foreignTaxesSubtotal,
                     'otrosImpuestosSubtotal' => null,
+                    'totalIGTF' => $igtfTotal > 0 ? $this->formatAmount($igtfTotal, 2) : null,
+                    'totalIGTF_VES' => $igtfTotalVes !== null && $igtfTotalVes > 0 ? $this->formatAmount($igtfTotalVes, 2) : null,
                     'montoTotalOTI' => null,
                     'montoTotalIVAyOTI' => null,
                 ] : null,
@@ -445,6 +416,171 @@ class TheFactoryHkaService
         $payload = $this->mergeWithBaseInvoicePayload($customPayload);
 
         return $this->removeNulls($payload);
+    }
+
+    private function summarizeInvoiceTaxes(Collection $details): array
+    {
+        $summary = [
+            'taxable_base_total' => 0.0,
+            'exempt_total' => 0.0,
+            'groups' => [],
+        ];
+
+        foreach ($details as $item) {
+            $lineBaseAmount = round((float) ($item->amount ?? 0), 2);
+            $lineTaxes = $item->taxes ?? collect();
+            $lineTaxTotal = (float) $lineTaxes->sum('tax_amount');
+
+            if ($lineTaxTotal <= 0) {
+                $lineTaxTotal = (float) ($item->tax_amount ?? 0);
+            }
+
+            if ($lineTaxTotal <= 0) {
+                $summary['exempt_total'] += $lineBaseAmount;
+                continue;
+            }
+
+            $summary['taxable_base_total'] += $lineBaseAmount;
+
+            if ($lineTaxes->isNotEmpty()) {
+                foreach ($lineTaxes as $tax) {
+                    $taxAmount = round((float) ($tax->tax_amount ?? 0), 2);
+                    if ($taxAmount <= 0) {
+                        continue;
+                    }
+
+                    $rate = $this->resolveInvoiceTaxRateValue((float) ($tax->tax_rate ?? 0), $lineBaseAmount, $taxAmount);
+                    $key = number_format($rate, 2, '.', '');
+
+                    if (!isset($summary['groups'][$key])) {
+                        $summary['groups'][$key] = [
+                            'rate' => $rate,
+                            'base' => 0.0,
+                            'amount' => 0.0,
+                        ];
+                    }
+
+                    $summary['groups'][$key]['base'] += $lineBaseAmount;
+                    $summary['groups'][$key]['amount'] += $taxAmount;
+                }
+
+                continue;
+            }
+
+            $rate = $this->resolveInvoiceTaxRateForDetail($item, $lineTaxTotal);
+            $key = number_format($rate, 2, '.', '');
+
+            if (!isset($summary['groups'][$key])) {
+                $summary['groups'][$key] = [
+                    'rate' => $rate,
+                    'base' => 0.0,
+                    'amount' => 0.0,
+                ];
+            }
+
+            $summary['groups'][$key]['base'] += $lineBaseAmount;
+            $summary['groups'][$key]['amount'] += $lineTaxTotal;
+        }
+
+        $summary['taxable_base_total'] = round((float) $summary['taxable_base_total'], 2);
+        $summary['exempt_total'] = round((float) $summary['exempt_total'], 2);
+        $summary['groups'] = collect($summary['groups'])
+            ->sortBy('rate')
+            ->map(function (array $group) {
+                $group['base'] = round((float) $group['base'], 2);
+                $group['amount'] = round((float) $group['amount'], 2);
+
+                return $group;
+            })
+            ->values()
+            ->all();
+
+        return $summary;
+    }
+
+    private function buildInvoiceTaxSubtotalRows(array $summary, float $multiplier = 1): array
+    {
+        $rows = collect($summary['groups'] ?? [])->map(function (array $group) use ($multiplier) {
+            return [
+                'codigoTotalImp' => 'G',
+                'alicuotaImp' => $this->formatPlainNumber((float) $group['rate'], 2),
+                'baseImponibleImp' => $this->formatAmount((float) $group['base'] * $multiplier, 2),
+                'valorTotalImp' => $this->formatAmount((float) $group['amount'] * $multiplier, 2),
+            ];
+        })->values();
+
+        if ((float) ($summary['exempt_total'] ?? 0) > 0) {
+            $rows->push([
+                'codigoTotalImp' => 'E',
+                'baseImponibleImp' => $this->formatAmount((float) $summary['exempt_total'] * $multiplier, 2),
+                'valorTotalImp' => $this->formatAmount(0, 2),
+            ]);
+        }
+
+        return $rows->all();
+    }
+
+    private function resolveInvoiceTaxRateForDetail($item, float $lineTaxAmount): float
+    {
+        $detailRate = (float) ($item->taxes->first()->tax_rate ?? ($item->tax_rate ?? 0));
+        $lineBaseAmount = (float) ($item->amount ?? 0);
+
+        return $this->resolveInvoiceTaxRateValue($detailRate, $lineBaseAmount, $lineTaxAmount);
+    }
+
+    private function resolveInvoiceTaxRateValue(float $rate, float $baseAmount, float $taxAmount): float
+    {
+        if ($rate > 0) {
+            return round($rate, 2);
+        }
+
+        if ($baseAmount > 0 && $taxAmount > 0) {
+            return round(($taxAmount / $baseAmount) * 100, 2);
+        }
+
+        return 0.0;
+    }
+
+    private function resolveInvoiceIgtfTotal(SalesOrder $order, string $tenantBaseCurrency): float
+    {
+        if (!(bool) ($order->tenant->electronic_invoicing_enabled ?? false) || (bool) ($order->tenant->special_taxpayer ?? false)) {
+            return 0.0;
+        }
+
+        $igtfRate = (float) (Tax::query()
+            ->whereRaw('LOWER(name) = ?', ['igtf'])
+            ->where(function ($query) {
+                $query->whereNull('is_active')->orWhere('is_active', 1);
+            })
+            ->value('rate') ?? 0);
+
+        if ($igtfRate <= 0) {
+            return 0.0;
+        }
+
+        $directBaseCurrencyPayments = (float) $order->payments
+            ->where('status', 1)
+            ->filter(function ($payment) use ($tenantBaseCurrency) {
+                return $this->normalizeCheckoutCurrencyCode((string) ($payment->currency ?? '')) === $tenantBaseCurrency;
+            })
+            ->sum('amount');
+
+        if ($directBaseCurrencyPayments <= 0) {
+            return 0.0;
+        }
+
+        return round($directBaseCurrencyPayments * ($igtfRate / 100), 2);
+    }
+
+    private function normalizeCheckoutCurrencyCode(?string $currencyCode): string
+    {
+        $code = strtoupper(trim((string) $currencyCode));
+
+        if (in_array($code, ['BS', 'VES', 'VED', 'VEF', 'BOLIVAR', 'BOLIVARES'], true)) {
+            return 'BS';
+        }
+
+        return $code;
     }
 
     private function request(string $method, string $path, array $payload = []): array

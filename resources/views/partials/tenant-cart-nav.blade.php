@@ -1005,6 +1005,46 @@
       }));
     }
 
+    function clearPersistedTenantAuth(shouldDispatch = true) {
+      localStorage.removeItem('shopix_ecomm_token');
+      localStorage.removeItem('shopix_ecomm_user');
+
+      if (!shouldDispatch) {
+        return;
+      }
+
+      window.dispatchEvent(new CustomEvent('shopix-auth-changed', {
+        detail: {
+          token: '',
+          user: null,
+        },
+      }));
+    }
+
+    async function resolveTenantAuthUser(token) {
+      const response = await fetch('/api/user', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data?.user?.id) {
+        return {
+          user: data.user,
+          shouldClear: false,
+        };
+      }
+
+      return {
+        user: null,
+        shouldClear: response.status === 401 || response.status === 404,
+      };
+    }
+
     function fillCustomerModalData(user) {
       const nameEl = document.getElementById('tenant-customer-name');
       const emailEl = document.getElementById('tenant-customer-email');
@@ -1401,118 +1441,173 @@
       updateNotificationPermissionUi();
     }
 
-    let currentUser = null;
-    let currentToken = '';
+    let tenantRealtimeSessionKey = '';
 
-    try {
-      const user = JSON.parse(localStorage.getItem('shopix_ecomm_user') || 'null');
-      const token = localStorage.getItem('shopix_ecomm_token') || '';
-      applyAuthState(user, token);
+    function bindRealtimeChannel(user, token) {
+      const sessionKey = `${user.id}:${token}`;
+      if (tenantRealtimeSessionKey === sessionKey) {
+        return;
+      }
+
+      tenantRealtimeSessionKey = sessionKey;
+
+      const pusherKey = @json(config('broadcasting.connections.reverb.key'));
+      if (!pusherKey) {
+        return;
+      }
+
+      const configuredHost = @json(config('broadcasting.connections.reverb.options.host'));
+      const configuredPort = Number(@json(config('broadcasting.connections.reverb.options.port')));
+      const configuredScheme = @json(config('broadcasting.connections.reverb.options.scheme'));
+      const configuredCluster = @json(config('broadcasting.connections.pusher.options.cluster'));
+
+      const browserHost = window.location.hostname;
+      const wsHost = !configuredHost || configuredHost === '127.0.0.1' || configuredHost === '0.0.0.0'
+        ? browserHost
+        : configuredHost;
+
+      const forceTLS = configuredScheme
+        ? configuredScheme === 'https'
+        : window.location.protocol === 'https:';
+
+      const wsPort = configuredPort || (forceTLS ? 443 : 80);
+
+      const pusherOptions = {
+        wsHost,
+        wsPort,
+        wssPort: wsPort,
+        forceTLS,
+        enabledTransports: ['ws', 'wss'],
+        disableStats: true,
+        authEndpoint: '/api/broadcasting/auth',
+        auth: {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+        },
+      };
+
+      if (configuredCluster) {
+        pusherOptions.cluster = configuredCluster;
+      }
+
+      const pusher = new Pusher(pusherKey, pusherOptions);
+
+      const incrementBadge = () => {
+        const current = Number(notificationsCount.textContent || 0) + 1;
+        notificationsCount.textContent = String(current);
+        notificationsCount.classList.toggle('d-none', current <= 0);
+      };
+
+      const channel = pusher.subscribe(`private-App.Models.User.${user.id}`);
+      const handleIncoming = async (notification) => {
+        showTenantToast(notification.title || 'Notificación', notification.message || '');
+        incrementBadge();
+        showBrowserNotification(notification).catch(() => {});
+
+        try {
+          const payload = await fetchNotifications(token);
+          renderNotifications(payload, token);
+        } catch (error) {
+        }
+      };
+
+      channel.bind('Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
+      channel.bind('.Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
+      pusher.connection.bind('error', () => {});
+    }
+
+    function bootstrapTenantSession(user, token) {
+      if (!token || !user?.id) {
+        tenantRealtimeSessionKey = '';
+        return;
+      }
 
       ensureServiceWorkerRegistration().catch(() => {});
 
-      if (user && user.name && token) {
-        function incrementBadge() {
-          const current = Number(notificationsCount.textContent || 0) + 1;
-          notificationsCount.textContent = String(current);
-          notificationsCount.classList.toggle('d-none', current <= 0);
-        }
-
-        function bindRealtimeChannel() {
-          const pusherKey = @json(config('broadcasting.connections.reverb.key'));
-          if (!pusherKey) {
-            return;
-          }
-
-          const configuredHost = @json(config('broadcasting.connections.reverb.options.host'));
-          const configuredPort = Number(@json(config('broadcasting.connections.reverb.options.port')));
-          const configuredScheme = @json(config('broadcasting.connections.reverb.options.scheme'));
-          const configuredCluster = @json(config('broadcasting.connections.pusher.options.cluster'));
-
-          const browserHost = window.location.hostname;
-          const wsHost = !configuredHost || configuredHost === '127.0.0.1' || configuredHost === '0.0.0.0'
-            ? browserHost
-            : configuredHost;
-
-          const forceTLS = configuredScheme
-            ? configuredScheme === 'https'
-            : window.location.protocol === 'https:';
-
-          const wsPort = configuredPort || (forceTLS ? 443 : 80);
-
-          const pusherOptions = {
-            wsHost,
-            wsPort,
-            wssPort: wsPort,
-            forceTLS,
-            enabledTransports: ['ws', 'wss'],
-            disableStats: true,
-            authEndpoint: '/api/broadcasting/auth',
-            auth: {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-              },
-            },
-          };
-
-          if (configuredCluster) {
-            pusherOptions.cluster = configuredCluster;
-          }
-
-          const pusher = new Pusher(pusherKey, pusherOptions);
-
-          const channel = pusher.subscribe(`private-App.Models.User.${user.id}`);
-          const handleIncoming = async (notification) => {
-            showTenantToast(notification.title || 'Notificación', notification.message || '');
-            incrementBadge();
-            showBrowserNotification(notification).catch(() => {});
-
-            try {
-              const payload = await fetchNotifications(token);
-              renderNotifications(payload, token);
-            } catch (error) {
-            }
-          };
-
-          channel.bind('Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
-          channel.bind('.Illuminate\\Notifications\\Events\\BroadcastNotificationCreated', handleIncoming);
-          pusher.connection.bind('error', () => {});
-        }
-        fetchNotifications(token)
-          .then(payload => renderNotifications(payload, token))
-          .catch(() => {
-            notificationsList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar notificaciones.</p>';
-          });
-
-        if (supportsBrowserNotifications() && Notification.permission === 'granted') {
-          syncBrowserPushSubscription(token, { forceRefresh: shouldForceIosPushRefresh() }).catch(() => {});
-        }
-
-        setTimeout(() => {
-          maybeAutoRequestBrowserNotificationPermission();
-        }, 180);
-
-        bindRealtimeChannel();
-
-        notificationsBtn?.addEventListener('click', async () => {
-          try {
-            const payload = await fetchNotifications(token);
-            renderNotifications(payload, token);
-          } catch (error) {
-            notificationsList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar notificaciones.</p>';
-          }
+      fetchNotifications(token)
+        .then(payload => renderNotifications(payload, token))
+        .catch(() => {
+          notificationsList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar notificaciones.</p>';
         });
 
+      if (supportsBrowserNotifications() && Notification.permission === 'granted') {
+        syncBrowserPushSubscription(token, { forceRefresh: shouldForceIosPushRefresh() }).catch(() => {});
       }
-    } catch (error) {
-      applyAuthState(null, '');
+
+      setTimeout(() => {
+        maybeAutoRequestBrowserNotificationPermission();
+      }, 180);
+
+      bindRealtimeChannel(user, token);
     }
+
+    async function initializeTenantAuthState() {
+      let storedUser = null;
+      let storedToken = '';
+
+      try {
+        storedUser = JSON.parse(localStorage.getItem('shopix_ecomm_user') || 'null');
+        storedToken = localStorage.getItem('shopix_ecomm_token') || '';
+      } catch (error) {
+        storedUser = null;
+        storedToken = '';
+      }
+
+      applyAuthState(storedUser, storedToken);
+      ensureServiceWorkerRegistration().catch(() => {});
+
+      if (!storedToken) {
+        return;
+      }
+
+      try {
+        const resolvedSession = await resolveTenantAuthUser(storedToken);
+        if (resolvedSession.shouldClear) {
+          clearPersistedTenantAuth(false);
+          applyAuthState(null, '');
+          return;
+        }
+
+        if (resolvedSession.user?.id) {
+          persistTenantAuth(storedToken, resolvedSession.user);
+          return;
+        }
+      } catch (error) {
+      }
+
+      if (storedUser?.id) {
+        bootstrapTenantSession(storedUser, storedToken);
+      }
+    }
+
+    let currentUser = null;
+    let currentToken = '';
+
+    initializeTenantAuthState().catch(() => {
+      applyAuthState(null, '');
+    });
+
+    notificationsBtn?.addEventListener('click', async () => {
+      if (!currentToken || !currentUser?.id) {
+        notificationsList.innerHTML = '<p class="text-muted mb-0">Inicia sesión para ver tus notificaciones.</p>';
+        return;
+      }
+
+      try {
+        const payload = await fetchNotifications(currentToken);
+        renderNotifications(payload, currentToken);
+      } catch (error) {
+        notificationsList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar notificaciones.</p>';
+      }
+    });
 
     window.addEventListener('shopix-auth-changed', (event) => {
       const user = event.detail?.user || null;
       const token = event.detail?.token || '';
       applyAuthState(user, token);
+      bootstrapTenantSession(user, token);
 
       if (token && user?.id && supportsBrowserNotifications() && Notification.permission === 'granted') {
         syncBrowserPushSubscription(token, { forceRefresh: shouldForceIosPushRefresh() }).catch(() => {});
@@ -1533,6 +1628,15 @@
           syncBrowserPushSubscription(token, { forceRefresh: true }).catch(() => {});
         }
       });
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (event.key !== 'shopix_ecomm_token' && event.key !== 'shopix_ecomm_user') {
+        return;
+      }
+
+      applyAuthState(getAuthUser(), getAuthToken());
+      bootstrapTenantSession(getAuthUser(), getAuthToken());
     });
 
     window.addEventListener('appinstalled', () => {
@@ -1614,14 +1718,7 @@
         removeBrowserPushSubscription(currentToken).catch(() => {});
       }
 
-      localStorage.removeItem('shopix_ecomm_token');
-      localStorage.removeItem('shopix_ecomm_user');
-      window.dispatchEvent(new CustomEvent('shopix-auth-changed', {
-        detail: {
-          token: '',
-          user: null,
-        },
-      }));
+      clearPersistedTenantAuth();
       window.location.reload();
     });
 

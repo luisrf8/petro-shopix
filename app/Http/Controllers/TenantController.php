@@ -6,6 +6,7 @@ use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use App\Support\WorkflowNotifier;
+use App\Support\DeliveryManager;
 use App\Models\User;
 use App\Models\Plan;
 use Illuminate\Support\Facades\Hash;
@@ -28,6 +29,7 @@ use App\Models\DollarRate;
 use App\Models\EuroRate;
 use App\Models\Tax;
 use App\Support\ImageStorage;
+use App\Support\ActionReason;
 use App\Services\GeminiImageService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -503,12 +505,12 @@ class TenantController extends Controller
             return back()->with('warning', 'Solo se pueden rechazar pagos pendientes.');
         }
 
-        $request->validate([
-            'review_notes' => 'nullable|string|max:1000',
+        $validated = $request->validate([
+            'review_notes' => 'required|string|max:1000',
         ]);
 
         $payment->status = 'failed';
-        $payment->review_notes = $request->input('review_notes') ?: 'Pago rechazado por administración.';
+        $payment->review_notes = $validated['review_notes'];
 
         if (Schema::hasColumn('tenant_plan_payments', 'reviewed_at')) {
             $payment->reviewed_at = now();
@@ -519,6 +521,11 @@ class TenantController extends Controller
         }
 
         $payment->save();
+
+        ActionReason::log('tenant_plan_payments', 'PLAN_PAYMENT_REJECTED', $validated['review_notes'], [
+            'payment_id' => $payment->id,
+            'tenant_id' => $payment->tenant_id,
+        ]);
 
         return back()->with('warning', 'Pago de plan rechazado correctamente.');
     }
@@ -556,7 +563,16 @@ class TenantController extends Controller
             ->limit(9)
             ->get();
 
-        $materialPackages = MaterialPackage::with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images'])
+        $materialPackages = MaterialPackage::with([
+                'items',
+                'items.variant',
+                'items.variant.product',
+                'items.variant.product.images',
+                'items.variant.product.taxes',
+                'items.variant.product.variants',
+                'items.variant.product.variants.product',
+                'items.variant.product.variants.product.images',
+            ])
             ->where('tenant_id', $tenant->id)
             ->where('is_active', true)
             ->orderBy('created_at', 'desc')
@@ -975,6 +991,11 @@ class TenantController extends Controller
             'printer_tax_change_enabled' => 'nullable|boolean',
             'printer_tax_change_reference' => 'nullable|string|max:255',
             'restrict_delivery_city_to_tenant' => 'nullable|boolean',
+            'delivery_enabled' => 'nullable|boolean',
+            'delivery_fee_mode' => 'nullable|in:free,fixed,distance',
+            'delivery_fixed_fee' => 'nullable|numeric|min:0',
+            'delivery_fee_per_km' => 'nullable|numeric|min:0',
+            'delivery_notifications_enabled' => 'nullable|boolean',
         ]);
 
         if (array_key_exists('economic_activity', $validated)) {
@@ -1107,6 +1128,11 @@ class TenantController extends Controller
             'printer_tax_change_enabled' => $validated['printer_tax_change_enabled'] ?? $tenant->printer_tax_change_enabled,
             'printer_tax_change_reference' => $validated['printer_tax_change_reference'] ?? $tenant->printer_tax_change_reference,
             'restrict_delivery_city_to_tenant' => $validated['restrict_delivery_city_to_tenant'] ?? $tenant->restrict_delivery_city_to_tenant,
+            'delivery_enabled' => $validated['delivery_enabled'] ?? $tenant->delivery_enabled,
+            'delivery_fee_mode' => $validated['delivery_fee_mode'] ?? $tenant->delivery_fee_mode,
+            'delivery_fixed_fee' => $validated['delivery_fixed_fee'] ?? $tenant->delivery_fixed_fee,
+            'delivery_fee_per_km' => $validated['delivery_fee_per_km'] ?? $tenant->delivery_fee_per_km,
+            'delivery_notifications_enabled' => $validated['delivery_notifications_enabled'] ?? $tenant->delivery_notifications_enabled,
         ];
 
         $tenant->fill($tenantData);
@@ -1224,6 +1250,11 @@ class TenantController extends Controller
                 'printer_tax_change_enabled' => 'nullable|boolean',
                 'printer_tax_change_reference' => 'nullable|string|max:255',
                 'restrict_delivery_city_to_tenant' => 'nullable|boolean',
+                'delivery_enabled' => 'nullable|boolean',
+                'delivery_fee_mode' => 'nullable|in:free,fixed,distance',
+                'delivery_fixed_fee' => 'nullable|numeric|min:0',
+                'delivery_fee_per_km' => 'nullable|numeric|min:0',
+                'delivery_notifications_enabled' => 'nullable|boolean',
             ]);
 
             $this->assertEconomicActivityAllowed(
@@ -1368,6 +1399,11 @@ class TenantController extends Controller
                 'printer_tax_change_enabled' => $validated['printer_tax_change_enabled'] ?? $tenant->printer_tax_change_enabled,
                 'printer_tax_change_reference' => $validated['printer_tax_change_reference'] ?? $tenant->printer_tax_change_reference,
                 'restrict_delivery_city_to_tenant' => $validated['restrict_delivery_city_to_tenant'] ?? $tenant->restrict_delivery_city_to_tenant,
+                'delivery_enabled' => $validated['delivery_enabled'] ?? $tenant->delivery_enabled,
+                'delivery_fee_mode' => $validated['delivery_fee_mode'] ?? $tenant->delivery_fee_mode,
+                'delivery_fixed_fee' => $validated['delivery_fixed_fee'] ?? $tenant->delivery_fixed_fee,
+                'delivery_fee_per_km' => $validated['delivery_fee_per_km'] ?? $tenant->delivery_fee_per_km,
+                'delivery_notifications_enabled' => $validated['delivery_notifications_enabled'] ?? $tenant->delivery_notifications_enabled,
                 'background_image'=> $tenant->background_image, // 👈 clave
             ]);
 
@@ -1424,7 +1460,16 @@ class TenantController extends Controller
             ->with('images')
             ->get();
 
-        $materialPackages = MaterialPackage::with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images'])
+        $materialPackages = MaterialPackage::with([
+                'items',
+                'items.variant',
+                'items.variant.product',
+                'items.variant.product.images',
+                'items.variant.product.taxes',
+                'items.variant.product.variants',
+                'items.variant.product.variants.product',
+                'items.variant.product.variants.product.images',
+            ])
             ->where('tenant_id', $tenant->id)
             ->where('is_active', true)
             ->orderBy('created_at', 'desc')
@@ -1637,9 +1682,12 @@ class TenantController extends Controller
         try {
             $validated = $request->validate([
                 'customer_id' => 'required|exists:users,id',
-                'delivery_type' => 'required|in:pickup,shipping',
+                'delivery_type' => 'required|in:pickup,delivery,shipping',
                 'delivery_address' => 'nullable|string|max:500',
                 'delivery_city_id' => 'nullable|integer|exists:cities,id',
+                'delivery_distance_km' => 'nullable|numeric|min:0',
+                'delivery_latitude' => 'nullable|numeric',
+                'delivery_longitude' => 'nullable|numeric',
                 'mark_delivered' => 'nullable|boolean',
                 'mark_payments_paid' => 'nullable|boolean',
                 'mark_sale_completed' => 'nullable|boolean',
@@ -1655,21 +1703,21 @@ class TenantController extends Controller
                 'payments.*.reference_image_mime' => 'nullable|string|max:100',
             ]);
 
-            if ($validated['delivery_type'] === 'shipping' && empty(trim((string) ($validated['delivery_address'] ?? '')))) {
+            if (in_array($validated['delivery_type'], ['delivery', 'shipping'], true) && empty(trim((string) ($validated['delivery_address'] ?? '')))) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'La dirección es obligatoria para envío.',
+                    'message' => 'La dirección es obligatoria para delivery o envío.',
                 ], 422);
             }
 
-            if ($validated['delivery_type'] === 'shipping' && (bool) ($tenant->restrict_delivery_city_to_tenant ?? true)) {
+            if ($validated['delivery_type'] === 'delivery' && (bool) ($tenant->restrict_delivery_city_to_tenant ?? true)) {
                 $deliveryCityId = (int) ($validated['delivery_city_id'] ?? 0);
                 $shippingCityValidation = $this->validateShippingCityAgainstTenant($tenant, $deliveryCityId);
 
                 if (!($shippingCityValidation['ok'] ?? false)) {
                     return response()->json([
                         'success' => false,
-                        'message' => (string) ($shippingCityValidation['message'] ?? 'Solo se permiten envíos a la ciudad de la tienda.'),
+                        'message' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la tienda.'),
                     ], 422);
                 }
             }
@@ -1694,7 +1742,7 @@ class TenantController extends Controller
                 $validated['payments'][$paymentIndex]['reference_image_data'] = $referenceImageData;
             }
 
-            $address = $validated['delivery_type'] === 'shipping'
+            $address = $validated['delivery_type'] !== 'pickup'
                 ? trim((string) $validated['delivery_address'])
                 : 'Tienda';
 
@@ -1704,12 +1752,15 @@ class TenantController extends Controller
             $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
             $tenantElectronicInvoicingEnabled = (bool) ($tenant->electronic_invoicing_enabled ?? false);
             $igtfRate = $this->shouldApplyIgtfForTenant($tenant) ? $this->resolveIgtfRate() : 0;
+            $deliveryDistanceKm = isset($validated['delivery_distance_km']) ? (float) $validated['delivery_distance_km'] : null;
 
-            $preference = $validated['delivery_type'] === 'shipping'
-                ? 'Envío'
-                : 'Retiro en tienda';
+            $preference = match ($validated['delivery_type']) {
+                'delivery' => 'Delivery tienda',
+                'shipping' => 'Envío externo',
+                default => 'Retiro en tienda',
+            };
 
-            $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted, $baseCurrencyCode, $tenantElectronicInvoicingEnabled, $igtfRate) {
+            $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted, $baseCurrencyCode, $tenantElectronicInvoicingEnabled, $igtfRate, $deliveryDistanceKm) {
                 $salesOrder = SalesOrder::create([
                     'user_id' => $validated['customer_id'],
                     'date' => now()->toDateString(),
@@ -1719,6 +1770,12 @@ class TenantController extends Controller
                     'deliver_status' => $markDelivered ? 1 : 0,
                     'tenant_id' => $tenant->id,
                     'sale_currency_code' => $baseCurrencyCode,
+                    'delivery_latitude' => $validated['delivery_type'] !== 'pickup' && isset($validated['delivery_latitude'])
+                        ? (float) $validated['delivery_latitude']
+                        : null,
+                    'delivery_longitude' => $validated['delivery_type'] !== 'pickup' && isset($validated['delivery_longitude'])
+                        ? (float) $validated['delivery_longitude']
+                        : null,
                 ]);
 
                 $orderTotal = 0;
@@ -1792,7 +1849,13 @@ class TenantController extends Controller
                     ? ($directBaseCurrencyPayments * ($igtfRate / 100))
                     : 0;
 
-                $requiredTotal = $orderTotal + $igtfAmount;
+                $deliveryPricing = DeliveryManager::calculate($tenant, (string) $validated['delivery_type'], $orderTotal, $deliveryDistanceKm);
+                $salesOrder->delivery_fee = $deliveryPricing['fee'];
+                $salesOrder->delivery_fee_mode = $deliveryPricing['mode'];
+                $salesOrder->delivery_distance_km = $deliveryPricing['distance_km'];
+                $salesOrder->save();
+
+                $requiredTotal = $orderTotal + (float) $salesOrder->delivery_fee + $igtfAmount;
 
                 if ($totalPaid + 0.0001 < $requiredTotal) {
                     throw new \RuntimeException('El total pagado es menor al total del pedido.');
@@ -1809,6 +1872,17 @@ class TenantController extends Controller
                 'order_id' => $salesOrder->id,
                 'action' => 'review_order_and_payments',
             ]);
+
+            if ($validated['delivery_type'] === 'delivery' && (bool) ($tenant->delivery_notifications_enabled ?? true) && (bool) ($tenant->delivery_enabled ?? false) && ((bool) ($validated['mark_sale_completed'] ?? false) || (bool) ($validated['mark_payments_paid'] ?? false))) {
+                WorkflowNotifier::notifyTenantRoles((int) $tenant->id, ['almacen', 'delivery'], [
+                    'title' => 'Pedido listo para despacho',
+                    'message' => 'El pedido #' . $salesOrder->id . ' ya puede ser preparado para delivery.',
+                    'type' => 'delivery-pending',
+                    'tenant_id' => $tenant->id,
+                    'order_id' => $salesOrder->id,
+                    'action' => 'prepare_delivery',
+                ]);
+            }
 
             return response()->json([
                 'success' => true,

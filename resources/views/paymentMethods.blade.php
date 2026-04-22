@@ -159,7 +159,7 @@
                 @csrf
                 <div class="mb-3">
                   <label for="euroRate" class="form-label">Tasa de Cambio</label>
-                  <input type="number" step="0.01" min="0.01" class="form-control border border-1 p-2" id="euroRate" name="rate" required>
+                  <input type="number" step="0.01" min="0.01" class="form-control border border-1 p-2" id="euroRate" name="rate" required data-decimal-friendly="true">
                 </div>
                 <div class="d-flex flex-row-reverse">
                   <button type="submit" class="btn btn-info">Actualizar</button>
@@ -270,7 +270,7 @@
                 @csrf
                 <div class="mb-3">
                   <label for="dollarRate" class="form-label">Tasa de Cambio</label>
-                  <input type="number" step="0.01" min="0.01" class="form-control border border-1 p-2" id="dollarRate" name="rate" required>
+                  <input type="number" step="0.01" min="0.01" class="form-control border border-1 p-2" id="dollarRate" name="rate" required data-decimal-friendly="true">
                 </div>
                 <div class="d-flex flex-row-reverse">
                   <button type="submit" class="btn btn-info">Actualizar</button>
@@ -652,14 +652,19 @@
         const currentStatus = this.getAttribute('data-status');
         // Alternar el estado
         const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+        const reason = newStatus === 'inactive' ? window.shopixRequestActionReason('Indica el motivo para inactivar la moneda.') : '';
+        if (newStatus === 'inactive' && !reason) {
+          return;
+        }
 
         // Hacer la petición AJAX para cambiar el estado
         fetch(`api/currencies/${categoryId}/currencyToggleStatus`, {
           method: 'POST',
           headers: {
             'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+            'Content-Type': 'application/json',
           },
-          body: { is_active: newStatus === 'active' ? 1 : 0 } // Enviar el estado como JSON
+          body: JSON.stringify({ is_active: newStatus === 'active' ? 1 : 0, action_reason: reason })
         })
         .then(response => {
           if (response.status === 200) { // Valida el código de estado HTTP
@@ -682,14 +687,19 @@
         const currentStatus = this.getAttribute('data-status');
         // Alternar el estado
         const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+        const reason = newStatus === 'inactive' ? window.shopixRequestActionReason('Indica el motivo para inactivar el método de pago.') : '';
+        if (newStatus === 'inactive' && !reason) {
+          return;
+        }
 
         // Hacer la petición AJAX para cambiar el estado
         fetch(`api/payment-methods/${categoryId}/toggleStatus`, {
           method: 'POST',
           headers: {
             'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+            'Content-Type': 'application/json',
           },
-          body: { is_active: newStatus === 'active' ? 1 : 0 } // Enviar el estado como JSON
+          body: JSON.stringify({ is_active: newStatus === 'active' ? 1 : 0, action_reason: reason })
         })
         .then(response => {
           if (response.status === 200) { // Valida el código de estado HTTP

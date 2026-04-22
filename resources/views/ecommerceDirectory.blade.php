@@ -712,7 +712,7 @@
 
       .directory-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.7rem;
+        gap: 0.1rem;
       }
 
       .directory-tenant-media {
@@ -919,7 +919,7 @@
   </header>
 
   <section class="hero">
-    <div class="mx-4">
+    <div class="mx-1">
       <span class="hero-eyebrow"><i class="bi bi-geo-alt"></i> Explorador inteligente</span>
       <div class="hero-search-shell">
         <label class="hero-search-card" for="landingHeroSearch">
@@ -932,7 +932,7 @@
     </div>
   </section>
 
-  <section class="mx-4">
+  <section class="mx-1">
     <div class="">
       <div class="directory-shell">
         <aside class="directory-sidebar">
@@ -1203,13 +1203,49 @@
                 <p class="directory-customer-value" id="directory-client-account-phone">No registrado</p>
               </div>
               <div class="col-12">
-                <form id="directory-client-phone-form" class="row g-2 align-items-end">
-                  <div class="col-12 col-md-8">
-                    <label for="directory-client-phone-input" class="directory-customer-label">Agregar / actualizar teléfono</label>
+                <p class="directory-customer-label">Ubicación guardada</p>
+                <p class="directory-customer-value" id="directory-client-account-location">No registrada</p>
+              </div>
+              <div class="col-12">
+                <p class="directory-customer-label">Coordenadas</p>
+                <p class="directory-customer-value" id="directory-client-account-coordinates">No registradas</p>
+              </div>
+              <div class="col-12">
+                <form id="directory-client-profile-form" class="row g-2 align-items-end">
+                  <div class="col-12 col-md-6">
+                    <label for="directory-client-phone-input" class="directory-customer-label">Teléfono</label>
                     <input type="text" class="form-control" id="directory-client-phone-input" placeholder="Ej: +58 412 0000000" maxlength="50">
                   </div>
+                  <div class="col-12 col-md-6">
+                    <label for="directory-client-address-input" class="directory-customer-label">Dirección exacta</label>
+                    <input type="text" class="form-control" id="directory-client-address-input" placeholder="Calle, edificio, referencia..." maxlength="500">
+                  </div>
                   <div class="col-12 col-md-4">
-                    <button type="submit" class="btn btn-outline-dark btn-sm w-100">Guardar teléfono</button>
+                    <label for="directory-client-country" class="directory-customer-label">País</label>
+                    <select id="directory-client-country" class="form-select">
+                      <option value="">País</option>
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <label for="directory-client-state" class="directory-customer-label">Estado</label>
+                    <select id="directory-client-state" class="form-select" disabled>
+                      <option value="">Estado</option>
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <label for="directory-client-city" class="directory-customer-label">Ciudad</label>
+                    <select id="directory-client-city" class="form-select" disabled>
+                      <option value="">Ciudad</option>
+                    </select>
+                  </div>
+                  <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
+                    <button type="button" class="btn btn-outline-dark btn-sm" id="directory-client-use-current-location">Usar ubicación actual</button>
+                    <small class="text-muted" id="directory-client-location-status">Aún no se ha fijado una ubicación exacta.</small>
+                    <input type="hidden" id="directory-client-latitude">
+                    <input type="hidden" id="directory-client-longitude">
+                  </div>
+                  <div class="col-12 col-md-4">
+                    <button type="submit" class="btn btn-outline-dark btn-sm w-100">Guardar perfil</button>
                   </div>
                 </form>
               </div>
@@ -1279,8 +1315,16 @@
     const directoryAuthError = document.getElementById('directory-auth-error');
     const directoryClientLoginForm = document.getElementById('directory-client-login-form');
     const directoryClientRegisterForm = document.getElementById('directory-client-register-form');
-    const directoryClientPhoneForm = document.getElementById('directory-client-phone-form');
+    const directoryClientProfileForm = document.getElementById('directory-client-profile-form');
     const directoryClientPasswordForm = document.getElementById('directory-client-password-form');
+    const directoryClientCountrySelect = document.getElementById('directory-client-country');
+    const directoryClientStateSelect = document.getElementById('directory-client-state');
+    const directoryClientCitySelect = document.getElementById('directory-client-city');
+    const directoryClientAddressInput = document.getElementById('directory-client-address-input');
+    const directoryClientLatitudeInput = document.getElementById('directory-client-latitude');
+    const directoryClientLongitudeInput = document.getElementById('directory-client-longitude');
+    const directoryClientUseCurrentLocationBtn = document.getElementById('directory-client-use-current-location');
+    const directoryClientLocationStatus = document.getElementById('directory-client-location-status');
     const landingTotalItems = landingDirectoryItems.length;
     const landingStateCityMap = buildLandingStateCityMap();
     const directoryAuthModal = directoryClientAuthModalElement ? bootstrap.Modal.getOrCreateInstance(directoryClientAuthModalElement) : null;
@@ -1292,6 +1336,168 @@
     const directoryDefaultNotificationIcon = @json(url('/pwa-icon/192.png'));
     let directoryServiceWorkerRegistrationPromise = null;
     let directoryNotificationAutoPrompted = false;
+    let directoryCountriesCache = null;
+
+    async function fetchDirectoryLocationJson(url) {
+      const response = await fetch(url, { headers: { Accept: 'application/json' } });
+
+      if (!response.ok) {
+        throw new Error('No se pudo cargar la ubicación.');
+      }
+
+      return response.json();
+    }
+
+    function resetDirectorySelect(selectElement, placeholder, disabled = true) {
+      if (!selectElement) {
+        return;
+      }
+
+      selectElement.innerHTML = `<option value="">${placeholder}</option>`;
+      selectElement.disabled = disabled;
+    }
+
+    function fillDirectorySelect(selectElement, items, placeholder, selectedValue = null) {
+      if (!selectElement) {
+        return;
+      }
+
+      const selectedAsString = selectedValue !== null && selectedValue !== undefined ? String(selectedValue) : null;
+      selectElement.innerHTML = [
+        `<option value="">${placeholder}</option>`,
+        ...items.map((item) => {
+          const id = String(item.id);
+          const selected = selectedAsString !== null && id === selectedAsString ? ' selected' : '';
+          return `<option value="${id}"${selected}>${item.name}</option>`;
+        }),
+      ].join('');
+      selectElement.disabled = items.length === 0;
+    }
+
+    async function getDirectoryCountries() {
+      if (Array.isArray(directoryCountriesCache)) {
+        return directoryCountriesCache;
+      }
+
+      const countries = await fetchDirectoryLocationJson('/get-countries');
+      directoryCountriesCache = Array.isArray(countries) ? countries : [];
+      return directoryCountriesCache;
+    }
+
+    async function initDirectoryLocationSelectors(user = null) {
+      if (!directoryClientCountrySelect || !directoryClientStateSelect || !directoryClientCitySelect) {
+        return;
+      }
+
+      const countries = await getDirectoryCountries();
+      fillDirectorySelect(directoryClientCountrySelect, countries, 'País', user?.country_id || null);
+
+      if (!directoryClientCountrySelect.value) {
+        resetDirectorySelect(directoryClientStateSelect, 'Estado', true);
+        resetDirectorySelect(directoryClientCitySelect, 'Ciudad', true);
+        return;
+      }
+
+      const states = await fetchDirectoryLocationJson(`/get-states/${directoryClientCountrySelect.value}`);
+      fillDirectorySelect(directoryClientStateSelect, Array.isArray(states) ? states : [], 'Estado', user?.state_id || null);
+
+      if (!directoryClientStateSelect.value) {
+        resetDirectorySelect(directoryClientCitySelect, 'Ciudad', true);
+        return;
+      }
+
+      const cities = await fetchDirectoryLocationJson(`/get-cities/${directoryClientStateSelect.value}`);
+      fillDirectorySelect(directoryClientCitySelect, Array.isArray(cities) ? cities : [], 'Ciudad', user?.city_id || null);
+    }
+
+    function bindDirectoryLocationSelectors() {
+      directoryClientCountrySelect?.addEventListener('change', async () => {
+        resetDirectorySelect(directoryClientStateSelect, 'Estado', true);
+        resetDirectorySelect(directoryClientCitySelect, 'Ciudad', true);
+
+        if (!directoryClientCountrySelect.value) {
+          return;
+        }
+
+        try {
+          const states = await fetchDirectoryLocationJson(`/get-states/${directoryClientCountrySelect.value}`);
+          fillDirectorySelect(directoryClientStateSelect, Array.isArray(states) ? states : [], 'Estado');
+        } catch (error) {
+          alert('No se pudieron cargar los estados.');
+        }
+      });
+
+      directoryClientStateSelect?.addEventListener('change', async () => {
+        resetDirectorySelect(directoryClientCitySelect, 'Ciudad', true);
+
+        if (!directoryClientStateSelect.value) {
+          return;
+        }
+
+        try {
+          const cities = await fetchDirectoryLocationJson(`/get-cities/${directoryClientStateSelect.value}`);
+          fillDirectorySelect(directoryClientCitySelect, Array.isArray(cities) ? cities : [], 'Ciudad');
+        } catch (error) {
+          alert('No se pudieron cargar las ciudades.');
+        }
+      });
+    }
+
+    function updateDirectoryLocationStatus(latitude = null, longitude = null) {
+      if (!directoryClientLocationStatus) {
+        return;
+      }
+
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        directoryClientLocationStatus.textContent = `Ubicación exacta fijada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        return;
+      }
+
+      directoryClientLocationStatus.textContent = 'Aún no se ha fijado una ubicación exacta.';
+    }
+
+    function getDirectorySelectedText(selectElement) {
+      if (!selectElement || !selectElement.value) {
+        return '';
+      }
+
+      const selectedOption = selectElement?.options?.[selectElement.selectedIndex];
+      return selectedOption ? selectedOption.text.trim() : '';
+    }
+
+    function requestDirectoryCurrentLocation() {
+      if (!navigator.geolocation) {
+        alert('Tu dispositivo no permite obtener ubicación desde el navegador.');
+        return;
+      }
+
+      updateDirectoryLocationStatus(null, null);
+      if (directoryClientLocationStatus) {
+        directoryClientLocationStatus.textContent = 'Obteniendo ubicación actual...';
+      }
+
+      navigator.geolocation.getCurrentPosition((position) => {
+        const latitude = Number(position.coords.latitude || 0);
+        const longitude = Number(position.coords.longitude || 0);
+
+        if (directoryClientLatitudeInput) {
+          directoryClientLatitudeInput.value = String(latitude);
+        }
+
+        if (directoryClientLongitudeInput) {
+          directoryClientLongitudeInput.value = String(longitude);
+        }
+
+        updateDirectoryLocationStatus(latitude, longitude);
+      }, () => {
+        updateDirectoryLocationStatus(null, null);
+        alert('No se pudo obtener tu ubicación actual. Revisa los permisos de la app o del navegador.');
+      }, {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0,
+      });
+    }
 
     function getDirectoryAuthToken() {
       return localStorage.getItem(directoryAuthTokenKey) || '';
@@ -1545,10 +1751,42 @@
       }
     }
 
+    function clearDirectoryAuthData() {
+      localStorage.removeItem(directoryAuthTokenKey);
+      localStorage.removeItem(directoryAuthUserKey);
+      applyDirectoryAuthState();
+      fillDirectoryAccount(null);
+    }
+
+    async function refreshDirectoryAuthSession(token) {
+      const response = await fetch('/api/user', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data?.user?.id) {
+        return {
+          user: data.user,
+          shouldClear: false,
+        };
+      }
+
+      return {
+        user: null,
+        shouldClear: response.status === 401 || response.status === 404,
+      };
+    }
+
     function setDirectoryAuthData(token, user) {
       localStorage.setItem(directoryAuthTokenKey, token || '');
       localStorage.setItem(directoryAuthUserKey, JSON.stringify(user || null));
       applyDirectoryAuthState();
+      fillDirectoryAccount(user || null);
     }
 
     function clearDirectoryAuthError() {
@@ -1606,18 +1844,73 @@
       }
     }
 
+    async function initializeDirectoryAuthState() {
+      applyDirectoryAuthState();
+      fillDirectoryAccount(getDirectoryAuthUser());
+
+      const token = getDirectoryAuthToken();
+      if (!token) {
+        return;
+      }
+
+      try {
+        const session = await refreshDirectoryAuthSession(token);
+        if (session.shouldClear) {
+          clearDirectoryAuthData();
+          return;
+        }
+
+        if (session.user?.id) {
+          setDirectoryAuthData(token, session.user);
+        }
+      } catch (error) {
+      }
+    }
+
     function fillDirectoryAccount(user) {
       const nameElement = document.getElementById('directory-client-account-name');
       const emailElement = document.getElementById('directory-client-account-email');
       const dniElement = document.getElementById('directory-client-account-dni');
       const phoneElement = document.getElementById('directory-client-account-phone');
       const phoneInputElement = document.getElementById('directory-client-phone-input');
+      const locationElement = document.getElementById('directory-client-account-location');
+      const coordinatesElement = document.getElementById('directory-client-account-coordinates');
+      const latitude = user?.latitude !== null && user?.latitude !== undefined ? Number(user.latitude) : null;
+      const longitude = user?.longitude !== null && user?.longitude !== undefined ? Number(user.longitude) : null;
+      const locationParts = [
+        getDirectorySelectedText(directoryClientCountrySelect),
+        getDirectorySelectedText(directoryClientStateSelect),
+        getDirectorySelectedText(directoryClientCitySelect),
+        user?.address || '',
+      ].filter(Boolean);
 
       if (nameElement) nameElement.textContent = user?.name || '-';
       if (emailElement) emailElement.textContent = user?.email || '-';
       if (dniElement) dniElement.textContent = user?.dni || 'No registrado';
       if (phoneElement) phoneElement.textContent = user?.phone_number || user?.phone || 'No registrado';
       if (phoneInputElement) phoneInputElement.value = user?.phone_number || user?.phone || '';
+      if (directoryClientAddressInput) directoryClientAddressInput.value = user?.address || '';
+      if (directoryClientLatitudeInput) directoryClientLatitudeInput.value = user?.latitude ?? '';
+      if (directoryClientLongitudeInput) directoryClientLongitudeInput.value = user?.longitude ?? '';
+      if (locationElement) locationElement.textContent = locationParts.length ? locationParts.join(' · ') : 'No registrada';
+      if (coordinatesElement) coordinatesElement.textContent = Number.isFinite(latitude) && Number.isFinite(longitude)
+        ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+        : 'No registradas';
+      updateDirectoryLocationStatus(latitude, longitude);
+
+      initDirectoryLocationSelectors(user).then(() => {
+        const refreshedLocationParts = [
+          getDirectorySelectedText(directoryClientCountrySelect),
+          getDirectorySelectedText(directoryClientStateSelect),
+          getDirectorySelectedText(directoryClientCitySelect),
+          user?.address || '',
+        ].filter(Boolean);
+
+        if (locationElement) {
+          locationElement.textContent = refreshedLocationParts.length ? refreshedLocationParts.join(' · ') : 'No registrada';
+        }
+      }).catch(() => {
+      });
     }
 
     async function fetchDirectoryNotifications(token) {
@@ -1769,7 +2062,7 @@
       }
     }
 
-    async function submitDirectoryPhoneUpdate(event) {
+    async function submitDirectoryProfileUpdate(event) {
       event.preventDefault();
 
       const token = getDirectoryAuthToken();
@@ -1779,6 +2072,9 @@
       }
 
       const phoneNumber = (document.getElementById('directory-client-phone-input')?.value || '').trim();
+      const address = (directoryClientAddressInput?.value || '').trim();
+      const latitude = directoryClientLatitudeInput?.value ? Number(directoryClientLatitudeInput.value) : null;
+      const longitude = directoryClientLongitudeInput?.value ? Number(directoryClientLongitudeInput.value) : null;
       const response = await fetch('/api/user/update-profile', {
         method: 'POST',
         headers: {
@@ -1787,7 +2083,15 @@
           'Authorization': `Bearer ${token}`,
           'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
         },
-        body: JSON.stringify({ phone_number: phoneNumber }),
+        body: JSON.stringify({
+          phone_number: phoneNumber,
+          address,
+          country_id: directoryClientCountrySelect?.value || null,
+          state_id: directoryClientStateSelect?.value || null,
+          city_id: directoryClientCitySelect?.value || null,
+          latitude: Number.isFinite(latitude) ? latitude : null,
+          longitude: Number.isFinite(longitude) ? longitude : null,
+        }),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -1796,10 +2100,19 @@
         return;
       }
 
-      const updatedUser = data?.user || { ...user, phone_number: phoneNumber || null };
+      const updatedUser = data?.user || {
+        ...user,
+        phone_number: phoneNumber || null,
+        address: address || null,
+        country_id: directoryClientCountrySelect?.value ? Number(directoryClientCountrySelect.value) : null,
+        state_id: directoryClientStateSelect?.value ? Number(directoryClientStateSelect.value) : null,
+        city_id: directoryClientCitySelect?.value ? Number(directoryClientCitySelect.value) : null,
+        latitude: Number.isFinite(latitude) ? latitude : null,
+        longitude: Number.isFinite(longitude) ? longitude : null,
+      };
       setDirectoryAuthData(token, updatedUser);
       fillDirectoryAccount(updatedUser);
-      alert(data.message || 'Teléfono actualizado correctamente.');
+      alert(data.message || 'Perfil actualizado correctamente.');
     }
 
     async function submitDirectoryPasswordUpdate(event) {
@@ -2132,29 +2445,15 @@
     });
 
     directoryClientLogoutBtn?.addEventListener('click', () => {
-      localStorage.removeItem(directoryAuthTokenKey);
-      localStorage.removeItem(directoryAuthUserKey);
+      clearDirectoryAuthData();
       sessionStorage.removeItem(directoryPendingUrlKey);
-      applyDirectoryAuthState();
-    });
-
-    directoryTenantLinks.forEach(link => {
-      link.addEventListener('click', event => {
-        const token = getDirectoryAuthToken();
-        const user = getDirectoryAuthUser();
-
-        if (token && user?.id) {
-          return;
-        }
-
-        event.preventDefault();
-        openDirectoryAuthModal(link.getAttribute('href') || '');
-      });
     });
 
     directoryClientLoginForm?.addEventListener('submit', submitDirectoryClientLogin);
     directoryClientRegisterForm?.addEventListener('submit', submitDirectoryClientRegister);
-    directoryClientPhoneForm?.addEventListener('submit', submitDirectoryPhoneUpdate);
+    bindDirectoryLocationSelectors();
+    directoryClientUseCurrentLocationBtn?.addEventListener('click', requestDirectoryCurrentLocation);
+    directoryClientProfileForm?.addEventListener('submit', submitDirectoryProfileUpdate);
     directoryClientPasswordForm?.addEventListener('submit', submitDirectoryPasswordUpdate);
     directoryInstallPwaBtn?.addEventListener('click', installDirectoryPwa);
 
@@ -2172,9 +2471,20 @@
       }, 220);
     });
 
+    window.addEventListener('storage', event => {
+      if (event.key !== directoryAuthTokenKey && event.key !== directoryAuthUserKey) {
+        return;
+      }
+
+      applyDirectoryAuthState();
+      fillDirectoryAccount(getDirectoryAuthUser());
+    });
+
     updateLandingCityOptions(getLandingFilterValue('state'));
-    applyDirectoryAuthState();
-    fillDirectoryAccount(getDirectoryAuthUser());
+    initializeDirectoryAuthState().catch(() => {
+      applyDirectoryAuthState();
+      fillDirectoryAccount(getDirectoryAuthUser());
+    });
     syncDirectoryClientData();
     updateDirectoryInstallPwaUi();
     ensureDirectoryServiceWorkerRegistration().catch(() => {});

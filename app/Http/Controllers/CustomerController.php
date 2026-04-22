@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use App\Support\ActionReason;
 
 class CustomerController extends Controller
 {
@@ -147,14 +148,26 @@ class CustomerController extends Controller
         return back()->with('success', 'Cliente actualizado correctamente.');
     }
 
-    public function toggleStatus(User $customer)
+    public function toggleStatus(Request $request, User $customer)
     {
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
 
         abort_if((int) $customer->tenant_id !== $tenantId, 404);
 
+        $reason = null;
+        if ((bool) $customer->is_active) {
+            $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para inactivar el cliente.');
+        }
+
         $customer->is_active = !$customer->is_active;
         $customer->save();
+
+        if (!(bool) $customer->is_active) {
+            ActionReason::log('customers', 'CUSTOMER_DEACTIVATED', (string) $reason, [
+                'customer_id' => $customer->id,
+                'tenant_id' => $customer->tenant_id,
+            ]);
+        }
 
         return back()->with('success', 'Estado del cliente actualizado correctamente.');
     }
