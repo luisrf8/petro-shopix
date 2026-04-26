@@ -261,7 +261,7 @@ class AuditLogger
             }
         }
 
-        if (!$request->hasFile()) {
+        if (empty($request->allFiles())) {
             return false;
         }
 
