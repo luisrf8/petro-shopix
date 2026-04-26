@@ -2793,6 +2793,16 @@
       return normalized;
     }
 
+    function roundProMoney(value) {
+      const numeric = Number(value || 0);
+
+      if (!Number.isFinite(numeric)) {
+        return 0;
+      }
+
+      return Math.round((numeric + Number.EPSILON) * 100) / 100;
+    }
+
     function parseProPaymentAmountValue(value) {
       const normalized = normalizeEditableProPaymentValue(value).numeric;
       const parsed = Number.parseFloat(normalized);
@@ -2923,25 +2933,25 @@
       const normalizedBaseCurrency = normalizePaymentCurrencyCode(proBaseCurrency || 'USD');
 
       if (methodCurrencyCode === normalizedBaseCurrency) {
-        return amount;
+        return roundProMoney(amount);
       }
 
       if (isBsCurrency(method)) {
         if (!proBaseRate || proBaseRate <= 0) return 0;
-        return amount / proBaseRate;
+        return roundProMoney(amount / proBaseRate);
       }
 
       if (methodCurrencyCode === 'USD' && normalizedBaseCurrency === 'EUR') {
         if (proDollarRate <= 0 || proEuroRate <= 0) return 0;
-        return (amount * proDollarRate) / proEuroRate;
+        return roundProMoney((amount * proDollarRate) / proEuroRate);
       }
 
       if (methodCurrencyCode === 'EUR' && normalizedBaseCurrency === 'USD') {
         if (proEuroRate <= 0 || proDollarRate <= 0) return 0;
-        return (amount * proEuroRate) / proDollarRate;
+        return roundProMoney((amount * proEuroRate) / proDollarRate);
       }
 
-      return amount;
+      return roundProMoney(amount);
     }
 
     function renderMethodDetailsHtml(method) {
@@ -3053,7 +3063,7 @@
 
     function calculateProIgtfTotals(paymentRows, totalBaseWithoutIgtf) {
       const normalizedBaseCurrency = normalizePaymentCurrencyCode(proBaseCurrency || 'USD');
-      const directBasePaymentsTotal = paymentRows.reduce((sum, row) => {
+      const directBasePaymentsTotal = roundProMoney(paymentRows.reduce((sum, row) => {
         const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
         const method = getMethodById(methodId);
         const amountRaw = parseProPaymentAmountValue(row.querySelector('.pro-payment-amount')?.value || 0);
@@ -3064,16 +3074,16 @@
         }
 
         return sum + amountRaw;
-      }, 0);
+      }, 0));
 
       const shouldApplyIgtf = proElectronicInvoicingEnabled && !proSpecialTaxpayer && Number(proIgtfRate || 0) > 0;
-      const igtfAmount = shouldApplyIgtf ? (directBasePaymentsTotal * (Number(proIgtfRate || 0) / 100)) : 0;
+      const igtfAmount = shouldApplyIgtf ? roundProMoney(directBasePaymentsTotal * (Number(proIgtfRate || 0) / 100)) : 0;
 
       return {
         shouldApplyIgtf,
         directBasePaymentsTotal,
         igtfAmount,
-        totalWithIgtf: totalBaseWithoutIgtf + igtfAmount,
+        totalWithIgtf: roundProMoney(totalBaseWithoutIgtf + igtfAmount),
       };
     }
 
@@ -3084,20 +3094,20 @@
       const totalBaseWithoutIgtf = getSubtotal(getCart()) + Number(proDeliveryContext.fee || 0);
 
       const paymentRows = Array.from(document.querySelectorAll('[data-pro-payment-row]'));
-      const paidBase = paymentRows.reduce((sum, row) => {
+      const paidBase = roundProMoney(paymentRows.reduce((sum, row) => {
         const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
         const amount = parseProPaymentAmountValue(row.querySelector('.pro-payment-amount')?.value || 0);
         const method = getMethodById(methodId);
         return sum + toBaseFromMethodAmount(method, amount);
-      }, 0);
+      }, 0));
 
       const igtfTotals = calculateProIgtfTotals(paymentRows, totalBaseWithoutIgtf);
-      const totalBase = igtfTotals.totalWithIgtf;
-      const totalBs = totalBase * proBaseRate;
+      const totalBase = roundProMoney(igtfTotals.totalWithIgtf);
+      const totalBs = roundProMoney(totalBase * proBaseRate);
 
-      const remainingBase = Math.max(totalBase - paidBase, 0);
-      const paidBs = paidBase * proBaseRate;
-      const remainingBs = remainingBase * proBaseRate;
+      const remainingBase = roundProMoney(Math.max(totalBase - paidBase, 0));
+      const paidBs = roundProMoney(paidBase * proBaseRate);
+      const remainingBs = roundProMoney(remainingBase * proBaseRate);
 
       document.getElementById('tenant-pro-total-amount').textContent = `${totalBase.toFixed(2)} ${baseSymbol}`;
       document.getElementById('tenant-pro-total-amount-bs').textContent = `${totalBs.toFixed(2)} Bs`;
@@ -3511,12 +3521,12 @@
         return;
       }
 
-      const totalPaidBase = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      const totalPaidBase = roundProMoney(payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
       const totalOrderBaseWithoutIgtf = getSubtotal(cart) + Number(proDeliveryContext.fee || 0);
       const igtfTotals = calculateProIgtfTotals(paymentRows, totalOrderBaseWithoutIgtf);
-      const totalOrderBase = igtfTotals.totalWithIgtf;
+      const totalOrderBase = roundProMoney(igtfTotals.totalWithIgtf);
       if (totalPaidBase + 0.0001 < totalOrderBase) {
-        const remainingBase = totalOrderBase - totalPaidBase;
+        const remainingBase = roundProMoney(totalOrderBase - totalPaidBase);
         alert(`Falta por pagar: ${remainingBase.toFixed(2)} ${getBaseCurrencySymbol()} / ${(remainingBase * proBaseRate).toFixed(2)} Bs`);
         return;
       }

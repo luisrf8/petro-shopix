@@ -1228,6 +1228,16 @@
             return ['BS', 'VES', 'VED', 'VEF', 'BOLIVAR', 'BOLIVARES'].includes(normalized);
         }
 
+        function roundMoney(value) {
+            const numeric = Number(value || 0);
+
+            if (!Number.isFinite(numeric)) {
+                return 0;
+            }
+
+            return Math.round((numeric + Number.EPSILON) * 100) / 100;
+        }
+
         function convertAmountToBaseCurrency(amount, currency) {
             const value = Number(amount || 0);
             const sourceCurrency = String(currency || '').toUpperCase().trim();
@@ -1237,22 +1247,22 @@
             }
 
             if (sourceCurrency === normalizedBaseCurrencyCode) {
-                return value;
+                return roundMoney(value);
             }
 
             if (isBolivarCurrencyCode(sourceCurrency)) {
-                return baseRateToBs > 0 ? value / baseRateToBs : 0;
+                return baseRateToBs > 0 ? roundMoney(value / baseRateToBs) : 0;
             }
 
             if (sourceCurrency === 'USD' && normalizedBaseCurrencyCode === 'EUR') {
-                return (dollarRateToBs > 0 && euroRateToBs > 0) ? (value * dollarRateToBs) / euroRateToBs : 0;
+                return (dollarRateToBs > 0 && euroRateToBs > 0) ? roundMoney((value * dollarRateToBs) / euroRateToBs) : 0;
             }
 
             if (sourceCurrency === 'EUR' && normalizedBaseCurrencyCode === 'USD') {
-                return (euroRateToBs > 0 && dollarRateToBs > 0) ? (value * euroRateToBs) / dollarRateToBs : 0;
+                return (euroRateToBs > 0 && dollarRateToBs > 0) ? roundMoney((value * euroRateToBs) / dollarRateToBs) : 0;
             }
 
-            return value;
+            return roundMoney(value);
         }
 
         function getSelectableVariantsForComponent(component) {
@@ -2645,7 +2655,7 @@ function updateQuantity(id, newQty) {
                 }
             });
 
-            return totalBaseCurrency;
+            return roundMoney(totalBaseCurrency);
         }
 
         function isIgtfEnabledForSale() {
@@ -2661,7 +2671,7 @@ function updateQuantity(id, newQty) {
                 };
             }
             const igtfRate = Number(igtfTax?.rate || 0) / 100;
-            const tax = totalBaseCurrency * igtfRate;
+            const tax = roundMoney(totalBaseCurrency * igtfRate);
             return {
                 totalBaseCurrency,
                 tax
@@ -2907,7 +2917,7 @@ function updateQuantity(id, newQty) {
         }
 
         function validatePaymentDetails() {
-            totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+            totalPaid = roundMoney(payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0));
             console.log("Total pagado:", payments);
             const totalPaidSpan = document.getElementById('totalPaid');
             const paymentMessages = document.querySelectorAll('.paymentMessage');
@@ -2936,13 +2946,13 @@ function updateQuantity(id, newQty) {
                 messageText = `Todos los métodos de pago deben tener una referencia válida.`;
                 messageClass = 'text-danger';
                 disableStep3 = true;
-            } else if (totalPaid < totalAmount) {
-                const remaining = (totalAmount - totalPaid).toFixed(2);
+            } else if (totalPaid + 0.0001 < roundMoney(totalAmount)) {
+                const remaining = roundMoney(totalAmount - totalPaid).toFixed(2);
                 messageText = `Falta por pagar: ${baseCurrencySymbol}${remaining} / BS${(remaining * baseRateToBs).toFixed(2)}`;
                 messageClass = 'text-danger';
                 disableStep3 = true;
-            } else if (totalPaid > totalAmount) {
-                const change = (totalPaid - totalAmount).toFixed(2);
+            } else if (totalPaid - 0.0001 > roundMoney(totalAmount)) {
+                const change = roundMoney(totalPaid - totalAmount).toFixed(2);
                 messageText = `Debe entregar vuelto: ${baseCurrencySymbol}${change} / BS${(change * baseRateToBs).toFixed(2)}`;
                 messageClass = 'text-warning';
                 disableStep3 = false;
