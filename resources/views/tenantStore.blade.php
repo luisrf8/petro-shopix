@@ -243,7 +243,7 @@
                     </ul>
 
                     {{-- Formulario principal --}}
-                    <form id="tenantForm" enctype="multipart/form-data" novalidate>
+                    <form id="tenantForm" action="{{ route('tenant.update') }}" method="POST" enctype="multipart/form-data" novalidate data-submit-mode="native">
                         @csrf
 
                         <div class="tab-content" id="tenantTabsContent">
@@ -722,9 +722,9 @@
                                 @if($canAssignStoreRoles)
                                     <div class="alert alert-info border mb-4">
                                         @if($isOwnerRole)
-                                            Como owner puedes crear usuarios y asignar roles de admin, vendedor y almacenista.
+                                            Como owner puedes crear usuarios y asignar roles de admin, vendedor, almacenista y delivery.
                                         @else
-                                            Como admin puedes crear usuarios operativos y asignar roles de vendedor y almacenista. La asignacion de admin queda reservada al owner.
+                                            Como admin puedes crear usuarios operativos y asignar roles de vendedor, almacenista y delivery. La asignacion de admin queda reservada al owner.
                                         @endif
                                     </div>
                                     @if($isBasicPlanTenant ?? false)
@@ -979,6 +979,23 @@
         }, 3600);
     }
 
+    const initialTenantFlashMessages = [
+        @if (session('success'))
+            { message: @json(session('success')), type: 'success' },
+        @endif
+        @if (session('warning'))
+            { message: @json(session('warning')), type: 'warning' },
+        @endif
+        @if (session('error'))
+            { message: @json(session('error')), type: 'error' },
+        @endif
+        @if ($errors->any())
+            { message: @json($errors->first()), type: 'warning' },
+        @endif
+    ].filter((item) => item && item.message);
+
+    initialTenantFlashMessages.forEach(({ message, type }) => showTenantToast(message, type));
+
     function formatTenantSize(bytes) {
         return `${(Number(bytes || 0) / (1024 * 1024)).toFixed(2)} MB`;
     }
@@ -1002,21 +1019,26 @@
         }
     }
 
-    async function refreshTenantCsrfToken() {
-        const response = await fetch(tenantCsrfRefreshEndpoint, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            credentials: 'include',
-        });
+    function getTenantCookie(name) {
+        const cookieValue = document.cookie
+            .split('; ')
+            .find((row) => row.startsWith(`${name}=`))
+            ?.split('=')[1];
 
-        const data = await response.json().catch(() => ({}));
-        const nextToken = data?.csrf_token || '';
+        if (!cookieValue) {
+            return '';
+        }
 
-        if (!response.ok || !nextToken) {
-            throw new Error('No se pudo renovar el token CSRF.');
+        try {
+            return decodeURIComponent(cookieValue);
+        } catch (error) {
+            return cookieValue;
+        }
+    }
+
+    function syncTenantCsrfToken(nextToken) {
+        if (!nextToken) {
+            return '';
         }
 
         tenantCsrfToken = nextToken;
@@ -1025,6 +1047,37 @@
         document.querySelector('#editUserForm input[name="_token"]')?.setAttribute('value', nextToken);
 
         return nextToken;
+    }
+
+    function getTenantCsrfToken() {
+        const currentToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            || document.querySelector('#tenantForm input[name="_token"]')?.value
+            || document.querySelector('#editUserForm input[name="_token"]')?.value
+            || getTenantCookie('XSRF-TOKEN')
+            || tenantCsrfToken
+            || '';
+
+        return syncTenantCsrfToken(currentToken);
+    }
+
+    async function refreshTenantCsrfToken() {
+        const response = await fetch(tenantCsrfRefreshEndpoint, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+        });
+
+        const data = await response.json().catch(() => ({}));
+        const nextToken = data?.csrf_token || '';
+
+        if (!response.ok || !nextToken) {
+            return getTenantCsrfToken();
+        }
+
+        return syncTenantCsrfToken(nextToken);
     }
 
     function loadTenantImageElement(file) {
@@ -1331,7 +1384,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': tenantCsrfToken,
+                    'X-CSRF-TOKEN': getTenantCsrfToken(),
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify({
@@ -1635,7 +1688,7 @@ function initMap() {
                 const response = await fetch(tenantPlanPaymentRequestEndpoint, {
                     method: 'POST',
                     headers: {
-                        'X-CSRF-TOKEN': tenantCsrfToken,
+                        'X-CSRF-TOKEN': getTenantCsrfToken(),
                         'Accept': 'application/json'
                     },
                     credentials: 'same-origin',
@@ -1877,6 +1930,10 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
     });
     const form = document.getElementById('tenantForm');
     form.addEventListener('submit', async (e) => {
+        if (form.dataset.submitMode === 'native') {
+            return;
+        }
+
         e.preventDefault();
 
         const submitBtn = form.querySelector('button[type="submit"]');
@@ -1887,18 +1944,39 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
 
         try {
             const formData = new FormData(form);
-            formData.set('_token', await refreshTenantCsrfToken());
+            const currentCsrfToken = getTenantCsrfToken();
+            formData.set('_token', currentCsrfToken);
 
-            const response = await fetch(tenantUpdateEndpoint, {
+            let response = await fetch(tenantUpdateEndpoint, {
                 method: "POST",
                 headers: {
-                    'X-CSRF-TOKEN': tenantCsrfToken,
+                    'X-CSRF-TOKEN': currentCsrfToken,
                     'Accept': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
-                credentials: 'include',
+                credentials: 'same-origin',
                 body: formData
             });
+
+            if (response.status === 419) {
+                const activeCsrfToken = await refreshTenantCsrfToken();
+
+                if (activeCsrfToken) {
+                    tenantCsrfToken = activeCsrfToken;
+                    formData.set('_token', activeCsrfToken);
+
+                    response = await fetch(tenantUpdateEndpoint, {
+                        method: "POST",
+                        headers: {
+                            'X-CSRF-TOKEN': activeCsrfToken,
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        credentials: 'same-origin',
+                        body: formData
+                    });
+                }
+            }
 
             const data = await response.json().catch(() => ({}));
 

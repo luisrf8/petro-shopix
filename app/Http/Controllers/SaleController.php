@@ -38,6 +38,7 @@ use App\Models\City;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\ElectronicDocument;
+use App\Events\DeliveryAssignmentUpdated;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -770,7 +771,7 @@ class SaleController extends Controller
     {
         $user = auth()->user();
 
-        $salesOrders = SalesOrder::with(['user', 'details', 'payments'])
+        $salesOrders = SalesOrder::with(['user', 'details', 'payments', 'assignedDeliveryUser'])
             ->where('tenant_id', $user->tenant_id)
             ->where('deliver_status', 0)
             ->where('status', '!=', 2)
@@ -780,17 +781,113 @@ class SaleController extends Controller
                 $order->total_items = (int) $order->details->sum('quantity');
                 $order->order_total_amount = (float) $order->gross_total;
                 $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
-                $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount, 2));
+                $order->registered_paid_amount = (float) $order->payments->where('status', '!=', 3)->sum('amount');
+                $order->effective_paid_amount = max($order->approved_paid_amount, $order->registered_paid_amount);
+                $order->pending_amount = max(0, round($order->order_total_amount - $order->effective_paid_amount, 2));
+
+                $deliveryMeta = $this->extractDeliveryOrderMeta($order);
+                $order->delivery_receiver_name = $deliveryMeta['receiver_name'];
+                $order->delivery_receiver_phone = $deliveryMeta['receiver_phone'];
+                $order->delivery_destination_label = $deliveryMeta['destination_label'];
+                $order->delivery_extra_info = $deliveryMeta['extra_info'];
+                $order->delivery_map_url = $deliveryMeta['map_url'];
+                $order->assigned_delivery_name = trim((string) ($order->assignedDeliveryUser->name ?? ''));
 
                 return $order;
             })
             ->filter(fn (SalesOrder $order) => $order->pending_amount <= 0.0001)
             ->values();
 
-        $ordersCount = (int) $salesOrders->count();
-        $totalPaidOrdersAmount = (float) $salesOrders->sum('approved_paid_amount');
+        $pickupOrders = $salesOrders->filter(function (SalesOrder $order) {
+            $preference = mb_strtolower(trim((string) ($order->preference ?? '')));
 
-        return view('paidPendingDeliveries', compact('salesOrders', 'ordersCount', 'totalPaidOrdersAmount'));
+            if (str_contains($preference, 'delivery')) {
+                return false;
+            }
+
+            if (str_contains($preference, 'env') || str_contains($preference, 'shipping')) {
+                return false;
+            }
+
+            return true;
+        })->values();
+
+        $deliveryOrders = $salesOrders->filter(function (SalesOrder $order) {
+            $preference = mb_strtolower(trim((string) ($order->preference ?? '')));
+
+            return str_contains($preference, 'delivery');
+        })->values();
+
+        $shippingOrders = $salesOrders->filter(function (SalesOrder $order) {
+            $preference = mb_strtolower(trim((string) ($order->preference ?? '')));
+
+            return str_contains($preference, 'env') || str_contains($preference, 'shipping');
+        })->values();
+
+        $isOwner = (bool) ($user?->isOwner() ?? false);
+        $isAdmin = (bool) ($user?->isAdmin() ?? false);
+        $isSeller = (bool) ($user?->hasStoreRole('seller') ?? false);
+        $isWarehouse = (bool) ($user?->hasStoreRole('warehouse') ?? false);
+        $isDelivery = (bool) ($user?->hasStoreRole('delivery') ?? false);
+        $isManager = $isOwner || $isAdmin;
+
+        if ($isDelivery) {
+            $deliveryOrders = $deliveryOrders->filter(function (SalesOrder $order) use ($user) {
+                $assignedUserId = (int) ($order->delivery_assigned_user_id ?? 0);
+
+                return $assignedUserId === 0 || $assignedUserId === (int) ($user->id ?? 0);
+            })->values();
+        }
+
+        $canManagePickupOrders = $isManager || $isSeller || $isWarehouse;
+        $canManageDeliveryOrders = $isManager || $isSeller || $isWarehouse || $isDelivery;
+        $canManageShippingOrders = $isManager || $isWarehouse;
+
+        $deliveryUsers = User::query()
+            ->with('role')
+            ->where('tenant_id', $user->tenant_id)
+            ->where('is_active', 1)
+            ->get()
+            ->filter(fn (User $candidate) => $candidate->hasStoreRole('delivery'))
+            ->values();
+
+        $visibleTabs = collect([
+            [
+                'key' => 'pickup',
+                'label' => 'Retiro en tienda',
+                'orders' => $pickupOrders,
+                'canManage' => $canManagePickupOrders,
+            ],
+            [
+                'key' => 'delivery',
+                'label' => 'Delivery',
+                'orders' => $deliveryOrders,
+                'canManage' => $canManageDeliveryOrders,
+            ],
+            [
+                'key' => 'shipping',
+                'label' => 'Envío',
+                'orders' => $shippingOrders,
+                'canManage' => $canManageShippingOrders,
+            ],
+        ])->filter(fn (array $tab) => (bool) $tab['canManage'])->values();
+
+        $activeTab = (string) optional($visibleTabs->first())['key'];
+        $visibleOrders = $visibleTabs->flatMap(fn (array $tab) => $tab['orders'])->unique('id')->values();
+        $ordersCount = (int) $visibleOrders->count();
+        $totalPaidOrdersAmount = (float) $visibleOrders->sum('effective_paid_amount');
+
+        return view('paidPendingDeliveries', compact(
+            'salesOrders',
+            'ordersCount',
+            'totalPaidOrdersAmount',
+            'pickupOrders',
+            'deliveryOrders',
+            'shippingOrders',
+            'visibleTabs',
+            'activeTab',
+            'deliveryUsers'
+        ));
     }
 
     public function viewOrdersReport(Request $request)
@@ -923,6 +1020,7 @@ class SaleController extends Controller
         $order = SalesOrder::with([
             'user',
             'tenant',
+            'assignedDeliveryUser',
             'details',
             'details.variant',
             'details.variant.product',
@@ -957,14 +1055,146 @@ class SaleController extends Controller
         $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
         $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
         $orderCurrencySymbol = TenantCurrency::resolveCurrencySymbol($orderCurrencyCode);
+        $deliveryMeta = $this->extractDeliveryOrderMeta($order);
+        $deliveryUsers = User::query()
+            ->with('role')
+            ->where('tenant_id', $order->tenant_id)
+            ->get()
+            ->filter(fn (User $candidate) => $candidate->hasStoreRole('delivery'))
+            ->values();
 
-        return view('salesOrderDetail', compact('order', 'totalOrden', 'totalPagado', 'orderCurrencyCode', 'orderCurrencySymbol'));
+        return view('salesOrderDetail', compact('order', 'totalOrden', 'totalPagado', 'orderCurrencyCode', 'orderCurrencySymbol', 'deliveryMeta', 'deliveryUsers'));
+    }
+
+    public function assignDeliveryUser(SalesOrder $order, Request $request)
+    {
+        $user = auth()->user();
+        $canManageAnyDeliveryAssignment = $user?->hasStoreRole('owner', 'admin', 'seller', 'warehouse') ?? false;
+        $canSelfAssignDelivery = $user?->hasStoreRole('delivery') ?? false;
+
+        if (!$canManageAnyDeliveryAssignment && !$canSelfAssignDelivery) {
+            return back()->with('error', 'No autorizado para asignar repartidores.');
+        }
+
+        if ((int) $order->tenant_id !== (int) ($user->tenant_id ?? 0)) {
+            abort(404);
+        }
+
+        if ($canSelfAssignDelivery && !$canManageAnyDeliveryAssignment) {
+            $assignedUserId = (int) ($request->input('delivery_assigned_user_id') ?: ($user->id ?? 0));
+
+            if ($assignedUserId !== (int) ($user->id ?? 0)) {
+                return back()->with('error', 'Solo puedes autoasignarte órdenes para entrega.');
+            }
+        } else {
+            $validated = $request->validate([
+                'delivery_assigned_user_id' => 'nullable|integer|exists:users,id',
+            ]);
+
+            $assignedUserId = (int) ($validated['delivery_assigned_user_id'] ?? 0);
+        }
+
+        $result = DB::transaction(function () use ($order, $user, $assignedUserId, $canManageAnyDeliveryAssignment, $canSelfAssignDelivery) {
+            /** @var SalesOrder $lockedOrder */
+            $lockedOrder = SalesOrder::query()
+                ->with(['user', 'assignedDeliveryUser'])
+                ->whereKey($order->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $previousAssignedUserId = (int) ($lockedOrder->delivery_assigned_user_id ?? 0);
+
+            if ($canSelfAssignDelivery && !$canManageAnyDeliveryAssignment && $previousAssignedUserId > 0 && $previousAssignedUserId !== (int) ($user->id ?? 0)) {
+                return [
+                    'ok' => false,
+                    'message' => 'Esta orden ya fue tomada por otro delivery.',
+                    'status' => 409,
+                ];
+            }
+
+            $deliveryUser = null;
+
+            if ($assignedUserId > 0) {
+                $deliveryUser = User::query()->with('role')->findOrFail($assignedUserId);
+
+                if ((int) $deliveryUser->tenant_id !== (int) $lockedOrder->tenant_id || !$deliveryUser->hasStoreRole('delivery')) {
+                    return [
+                        'ok' => false,
+                        'message' => 'Debes seleccionar un usuario con rol delivery de esta tienda.',
+                        'status' => 422,
+                    ];
+                }
+            }
+
+            $lockedOrder->delivery_assigned_user_id = $assignedUserId > 0 ? $assignedUserId : null;
+            $hasChanged = $previousAssignedUserId !== (int) ($lockedOrder->delivery_assigned_user_id ?? 0);
+
+            if ($hasChanged) {
+                $lockedOrder->save();
+            }
+
+            $lockedOrder->load('assignedDeliveryUser', 'user');
+
+            if ($hasChanged) {
+                try {
+                    event(new DeliveryAssignmentUpdated($lockedOrder, $user));
+                } catch (\Throwable $exception) {
+                    Log::warning('No se pudo emitir el evento realtime de asignacion delivery.', [
+                        'order_id' => $lockedOrder->id,
+                        'tenant_id' => $lockedOrder->tenant_id,
+                        'delivery_assigned_user_id' => $lockedOrder->delivery_assigned_user_id,
+                        'actor_user_id' => $user->id ?? null,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+
+                if ($assignedUserId > 0) {
+                    WorkflowNotifier::notifyUser($lockedOrder->user, [
+                        'title' => 'Delivery asignado a tu orden',
+                        'message' => 'Tu orden #' . $lockedOrder->id . ' ya fue asignada a ' . trim((string) ($lockedOrder->assignedDeliveryUser->name ?? 'un repartidor')) . '.',
+                        'type' => 'delivery-assigned',
+                        'tenant_id' => $lockedOrder->tenant_id,
+                        'order_id' => $lockedOrder->id,
+                        'action' => 'delivery_assigned',
+                        'meta' => [
+                            'delivery_user_id' => (int) ($lockedOrder->delivery_assigned_user_id ?? 0),
+                            'delivery_user_name' => trim((string) ($lockedOrder->assignedDeliveryUser->name ?? '')),
+                            'assigned_by_user_id' => (int) ($user->id ?? 0),
+                            'assigned_by_user_name' => trim((string) ($user->name ?? '')),
+                        ],
+                    ]);
+                }
+            }
+
+            if (!$hasChanged && $assignedUserId > 0 && $assignedUserId === (int) ($user->id ?? 0) && $canSelfAssignDelivery && !$canManageAnyDeliveryAssignment) {
+                $message = 'La orden ya estaba asignada para ti.';
+            } elseif (!$hasChanged && $assignedUserId > 0) {
+                $message = 'La orden ya estaba asignada a ese repartidor.';
+            } elseif (!$hasChanged) {
+                $message = 'La orden ya no tenía repartidor asignado.';
+            } elseif ($assignedUserId > 0 && $canSelfAssignDelivery && !$canManageAnyDeliveryAssignment) {
+                $message = 'Te asignaste esta orden correctamente.';
+            } elseif ($assignedUserId > 0) {
+                $message = 'Repartidor asignado correctamente.';
+            } else {
+                $message = 'Asignación de repartidor eliminada.';
+            }
+
+            return [
+                'ok' => true,
+                'message' => $message,
+                'status' => 200,
+            ];
+        });
+
+        return back()->with($result['ok'] ? 'success' : 'error', $result['message']);
     }
     public function showPublicOrder($id)
     {
         $order = SalesOrder::with([
             'user',
             'tenant',
+            'assignedDeliveryUser',
             'details',
             'details.variant',
             'details.variant.product',
@@ -1760,15 +1990,10 @@ class SaleController extends Controller
                     'action' => 'payment_approved',
                 ]);
 
-                WorkflowNotifier::notifyTenantRoles($tenantId, ['almacen'], [
-                    'title' => 'Pedido por entregar',
-                    'message' => 'El pedido #' . $orderId . ' tiene pago aprobado. Proceder con entrega.',
-                    'type' => 'delivery-pending',
-                    'tenant_id' => $tenantId,
-                    'order_id' => $orderId,
-                    'payment_id' => $payment->id,
-                    'action' => 'deliver_order',
-                ]);
+                $payment->salesOrder->loadMissing('tenant');
+                if ($payment->salesOrder->tenant) {
+                    $this->notifyDeliveryTeamIfEnabled($payment->salesOrder->tenant, $payment->salesOrder, 'El pedido #' . $orderId . ' tiene pago aprobado y está listo para gestionar entrega.');
+                }
             }
         }
         // Enviar correo de confirmación si el pago es aprobado
@@ -1930,6 +2155,52 @@ class SaleController extends Controller
             'order_id' => $order->id,
             'action' => 'prepare_delivery',
         ]);
+    }
+
+    private function extractDeliveryOrderMeta(SalesOrder $order): array
+    {
+        $address = trim((string) ($order->address ?? ''));
+        $receiverName = null;
+        $receiverPhone = null;
+        $extraInfo = [];
+
+        foreach (preg_split('/\r\n|\r|\n/', $address) ?: [] as $line) {
+            $normalizedLine = trim((string) $line);
+            if ($normalizedLine === '') {
+                continue;
+            }
+
+            if (preg_match('/^Recibe:\s*(.+)$/iu', $normalizedLine, $matches) === 1) {
+                $receiverName = trim((string) ($matches[1] ?? ''));
+                continue;
+            }
+
+            if (preg_match('/^Tel[eé]fono(?:\s+receptor)?:\s*(.+)$/iu', $normalizedLine, $matches) === 1) {
+                $receiverPhone = trim((string) ($matches[1] ?? ''));
+                continue;
+            }
+
+            if (preg_match('/^Coordenadas?:/iu', $normalizedLine) === 1) {
+                continue;
+            }
+
+            $extraInfo[] = $normalizedLine;
+        }
+
+        $hasCoordinates = !is_null($order->delivery_latitude) && !is_null($order->delivery_longitude);
+        $mapUrl = $hasCoordinates
+            ? 'https://www.google.com/maps?q=' . $order->delivery_latitude . ',' . $order->delivery_longitude
+            : null;
+
+        return [
+            'receiver_name' => $receiverName,
+            'receiver_phone' => $receiverPhone,
+            'extra_info' => trim(implode(' | ', $extraInfo)),
+            'destination_label' => $hasCoordinates
+                ? 'Ubicación exacta registrada en mapa'
+                : ($address !== '' ? $address : 'Sin destino registrado'),
+            'map_url' => $mapUrl,
+        ];
     }
 
     public function processReturn(Request $request, $orderId)

@@ -6,6 +6,8 @@
     @php
       $roleName = strtolower((string) optional(auth()->user()->role)->name);
       $currentUser = auth()->user();
+      $isDeliveryOnlyView = ($currentUser?->hasStoreRole('delivery') ?? false)
+        && !($currentUser?->hasStoreRole('owner', 'admin', 'seller', 'warehouse') ?? false);
       $edoc = $order->latest_electronic_document;
       $hasAnnulledInvoice = (bool) ($order->has_annulled_invoice ?? false);
       $canApproveSale = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
@@ -13,7 +15,6 @@
       $canRegisterReturn = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canApprovePayments = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canDownloadPdfs = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
-      $canCommunicateCustomer = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $resolveCurrencySymbol = function (?string $code) {
         $normalized = strtoupper(trim((string) $code));
         if ($normalized === 'EUR') {
@@ -35,100 +36,300 @@
       $customerWhatsappUrl = $customerPhone !== ''
         ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', te escribimos sobre la orden #' . $order->id . '.')
         : null;
+      $customerCallUrl = $customerPhone !== '' ? 'tel:' . $customerPhone : null;
+      $deliveryTypeLabel = strtolower(trim((string) ($order->preference ?? '')));
+      $isStoreDelivery = str_contains($deliveryTypeLabel, 'delivery');
+      $isExternalShipping = str_contains($deliveryTypeLabel, 'env') || str_contains($deliveryTypeLabel, 'shipping');
+      $deliveryLabel = (int) $order->deliver_status === 0
+        ? 'Pendiente'
+        : ((int) $order->deliver_status === 1
+          ? 'Entregado'
+          : ((int) $order->deliver_status === 2 ? 'Cancelado' : 'En proceso'));
+      $approvalLabel = $order->status == 0 ? 'En proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado');
+      $paymentBalance = max(0, (float) $totalOrden - (float) $totalPagado);
+      $paymentStepTone = $totalPagado >= $totalOrden && $totalOrden > 0 ? 'success' : ($totalPagado > 0 ? 'pending' : 'danger');
+      $assignedDeliveryName = trim((string) ($order->assignedDeliveryUser->name ?? ''));
+      $assignedDeliveryPhone = trim((string) ($order->assignedDeliveryUser->phone_number ?? ''));
+      $deliveryContactMeta = $assignedDeliveryName !== '' || $assignedDeliveryPhone !== ''
+        ? 'Repartidor: ' . ($assignedDeliveryName !== '' ? $assignedDeliveryName : 'No identificado') . ' | Teléfono: ' . ($assignedDeliveryPhone !== '' ? $assignedDeliveryPhone : 'No registrado')
+        : 'Aún no hay un repartidor asignado para esta orden.';
+      $shippingProgressDescription = match ((int) $order->deliver_status) {
+        1 => 'Paso 3 de 3: el envío figura como entregado correctamente.',
+        2 => 'El envío fue cancelado antes de completar su despacho.',
+        default => 'Paso 1 de 3: tu envío fue registrado y está en preparación para despacho.',
+      };
+      $shippingProgressMeta = match ((int) $order->deliver_status) {
+        1 => 'Proceso: 1. Preparación  2. Despacho  3. Entregado',
+        2 => 'Proceso interrumpido: 1. Preparación  2. Cancelado',
+        default => 'Proceso: 1. Preparación  2. Despacho  3. Entrega final',
+      };
+      $timelineSteps = [
+        [
+          'tone' => 'success',
+          'title' => 'Orden creada',
+          'description' => 'La orden fue registrada el ' . ($order->date ?: 'sin fecha disponible') . '.',
+          'meta' => 'Entrega: ' . ($order->preference ?: 'Sin preferencia definida'),
+        ],
+        [
+          'tone' => $paymentStepTone,
+          'title' => 'Pagos y validación',
+          'description' => $totalPagado > 0
+            ? 'Se registraron pagos por ' . (($orderCurrencySymbol ?? '$') . number_format($totalPagado, 2)) . '. Saldo pendiente: ' . (($orderCurrencySymbol ?? '$') . number_format($paymentBalance, 2)) . '.'
+            : 'Aún no hay pagos confirmados para esta orden.',
+          'meta' => $approvalLabel,
+        ],
+        [
+          'tone' => (int) $order->deliver_status === 1 ? 'success' : ((int) $order->deliver_status === 0 ? 'pending' : 'danger'),
+          'title' => $isExternalShipping ? 'Seguimiento del envío' : 'Entrega y despacho',
+          'description' => $isExternalShipping
+            ? $shippingProgressDescription
+            : 'Estado actual del delivery: ' . $deliveryLabel . '.',
+          'meta' => $isExternalShipping
+            ? $shippingProgressMeta . ' | Dirección: ' . ($order->address ?: 'No registrada')
+            : $deliveryContactMeta,
+        ],
+        [
+          'tone' => $hasAnnulledInvoice ? 'danger' : ($edoc ? 'success' : 'pending'),
+          'title' => 'Factura digital',
+          'description' => $hasAnnulledInvoice
+            ? 'La última factura electrónica fue anulada y no debe reutilizarse.'
+            : ($edoc
+              ? 'Factura electrónica emitida: ' . ($edoc->numero_documento ?: 'sin correlativo visible') . '.'
+              : 'La factura electrónica todavía no ha sido emitida.'),
+          'meta' => $edoc?->created_at ? 'Actualizada ' . $edoc->created_at->format('d/m/Y H:i') : 'Sin actualización registrada',
+        ],
+      ];
+      $visibleTimelineSteps = $isDeliveryOnlyView
+        ? array_values(array_filter($timelineSteps, fn (array $step) => in_array($step['title'], ['Orden creada', 'Entrega y despacho', 'Seguimiento del envío'], true)))
+        : $timelineSteps;
     @endphp
     <div class="container-fluid">
-      <h1 class="order-page-title">Detalles de la Orden Nro {{ $order->id }}</h1>
-      <div class="d-flex flex-wrap gap-2 mb-3">
-        <span class="badge bg-gradient-dark">Orden #{{ $order->id }}</span>
-        @if($edoc && $edoc->numero_documento)
-          <span class="badge {{ $hasAnnulledInvoice ? 'bg-gradient-danger' : 'bg-gradient-success' }}">Factura #{{ $edoc->numero_documento }}</span>
-        @endif
-        @if($hasAnnulledInvoice)
-          <span class="badge bg-gradient-danger">Orden con factura anulada</span>
-        @endif
-      </div>
       <input type="text" id="user-name" class="d-none" value="{{ $order->user->name }}" readonly>
       <input type="text" id="user-email" class="d-none" value="{{ $order->user->email }}" readonly>
       <input type="text" id="user-phone" class="d-none" value="{{ $order->user->phone_number ?? 'No registrado' }}" readonly>
-      <p><strong>Cliente:</strong> {{ $order->user->name }} | <strong>Teléfono:</strong> {{ $order->user->phone_number ?? 'No registrado' }}</p>
-      <p><strong>Moneda de la venta:</strong> {{ $orderCurrencyCode ?? 'USD' }}</p>
-      <p><strong>Entrega:</strong> {{ $order->preference }} | <strong>Dirección:</strong> {{ $order->address }}</p>
-      <div class="d-flex align-items-center gap-2">
-        <strong>Entregado:</strong>
-        @if($order->has_returns)
-          <span class="text-danger">Devolución Registrada</span>
-        @else
-          @if($canApproveDelivery)
-          <select id="deliver-status" class="btn btn-sm toggle-status-btn 
-            {{ $order->deliver_status == 0 ? 'btn-outline-warning' : ($order->deliver_status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
-            onchange="updateDeliverStatus(this, {{ $order->id }})">
-              <option value="0" {{ $order->deliver_status == 0 ? 'selected' : '' }}>Pendiente ↓</option>
-              <option value="1" {{ $order->deliver_status == 1 ? 'selected' : '' }}>Entregado ↓</option>
-              <option value="2" {{ $order->deliver_status == 2 ? 'selected' : '' }}>Cancelado ↓</option>
-          </select>
-          @else
-            <span class="text-sm">{{ $order->deliver_status == 0 ? 'Pendiente' : ($order->deliver_status == 1 ? 'Entregado' : 'Cancelado') }}</span>
-          @endif
-        @endif
-      </div>
 
-      <div class="d-flex gap-2">
-        <div>
-          <p><strong>Fecha:</strong> {{ $order->date }} |
-        </div> 
-          <div class="d-flex gap-2">
-              <strong>Estado:</strong>
-              @if($order->has_returns)
-                <span class="text-danger">Devolución Registrada</span>
-              @else
-              @if($canApproveSale)
-              <select id="order-status" class="btn btn-sm toggle-status-btn 
-                {{ $order->status == 0 ? 'btn-outline-warning' : ($order->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
-                onchange="updateOrderStatus(this, {{ $order->id }})">
-                  <option value="0" {{ $order->status == 0 ? 'selected' : '' }}>En Proceso ↓</option>
-                  <option value="1" {{ $order->status == 1 ? 'selected' : '' }}>Aprobado ↓</option>
-                  <option value="2" {{ $order->status == 2 ? 'selected' : '' }}>Negado ↓</option>
-              </select>
-              @else
-                <span class="text-sm">{{ $order->status == 0 ? 'En Proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado') }}</span>
-              @endif
-              @endif
+      <div class="order-shell">
+        <div class="card order-hero-panel mb-4">
+          <div class="row g-4 align-items-start position-relative" style="z-index:1;">
+            <div class="col-lg-7">
+              <div class="order-eyebrow">Seguimiento inteligente de tu orden</div>
+              <div class="order-hero-title">Orden #{{ $order->id }}</div>
+              <div class="d-flex flex-wrap gap-2 mb-3">
+                @unless($isDeliveryOnlyView)
+                <span class="order-status-pill">{{ $approvalLabel }}</span>
+                @endunless
+                <span class="order-status-pill">{{ $deliveryLabel }}</span>
+                @unless($isDeliveryOnlyView)
+                <span class="order-status-pill">{{ $orderCurrencyCode ?? 'USD' }}</span>
+                @if($hasAnnulledInvoice)
+                  <span class="order-status-pill order-status-pill-danger">Factura anulada</span>
+                @endif
+                @endunless
+              </div>
+              <div class="order-meta-copy">
+                @unless($isDeliveryOnlyView)
+                {{ $order->user->name }} · {{ $order->user->phone_number ?? 'Sin teléfono' }}<br>
+                @endunless
+                {{ $order->preference ?: 'Entrega no definida' }} · {{ $order->address ?: 'Sin dirección registrada' }}
+                @if($isStoreDelivery)
+                  <br>{{ $deliveryContactMeta }}
+                @elseif($isExternalShipping)
+                  <br>{{ $shippingProgressMeta }}
+                @endif
+              </div>
+            </div>
+            <div class="col-lg-5">
+              <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+                <button type="button" onclick="window.history.back()" class="btn btn-outline-secondary mb-0">Volver</button>
+                @unless($isDeliveryOnlyView)
+                @if($canDownloadPdfs)
+                <div class="d-flex align-items-center gap-2 flex-wrap justify-content-lg-end">
+                  <label for="order-download-currency" class="mb-0 text-sm fw-semibold">Moneda de emisión</label>
+                  <select id="order-download-currency" class="form-select form-select-sm border border-1 p-2" style="min-width: 170px; max-width: 220px;">
+                    <option value="{{ $orderCurrencyCode ?? 'USD' }}">{{ $orderCurrencyCode ?? 'USD' }} (moneda de la venta)</option>
+                    @if(($orderCurrencyCode ?? 'USD') !== 'VES')
+                      <option value="VES">VES / Bolívares</option>
+                    @endif
+                  </select>
+                </div>
+                @if(!$hasAnnulledInvoice)
+                <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-dark mb-0">Factura PDF</a>
+                @else
+                <span class="btn btn-outline-danger mb-0 disabled" aria-disabled="true">Factura anulada</span>
+                @endif
+                <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-dark mb-0">Orden de entrega</a>
+                @endif
+                @if($storeWhatsappUrl)
+                  <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
+                @endif
+                @if($canRegisterReturn)
+                  <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">Registrar Devolución</button>
+                @endif
+                @endunless
+                @if($customerWhatsappUrl)
+                  <a href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0">Ir a WhatsApp del cliente</a>
+                @endif
+                @if($customerCallUrl)
+                  <a href="{{ $customerCallUrl }}" class="btn btn-outline-primary mb-0">Llamar al cliente</a>
+                @endif
+                @if(!empty($deliveryMeta['map_url']))
+                  <a href="{{ $deliveryMeta['map_url'] }}" target="_blank" rel="noopener" class="btn btn-outline-dark mb-0">Ver dirección</a>
+                @endif
+              </div>
+            </div>
           </div>
-      </div>
-
-      <div class="w-100 d-flex justify-content-between mt-3 gap-4">
-        <div class="d-flex flex-wrap gap-2">
-          @if($canDownloadPdfs)
-          <div class="d-flex align-items-center gap-2">
-            <label for="order-download-currency" class="mb-0 text-sm fw-semibold">Moneda de emisión</label>
-            <select id="order-download-currency" class="form-select form-select-sm border border-1 p-2" style="min-width: 170px;">
-              <option value="{{ $orderCurrencyCode ?? 'USD' }}">{{ $orderCurrencyCode ?? 'USD' }} (moneda de la venta)</option>
-              @if(($orderCurrencyCode ?? 'USD') !== 'VES')
-                <option value="VES">VES / Bolívares</option>
-              @endif
-            </select>
-          </div>
-          @if(!$hasAnnulledInvoice)
-          <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-dark mb-0">Descargar factura PDF</a>
-          @else
-          <span class="btn btn-outline-danger mb-0 disabled" aria-disabled="true">Factura anulada</span>
-          @endif
-          <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-dark mb-0">Descargar orden de entrega</a>
-          @endif
-          @if($canCommunicateCustomer && $storeWhatsappUrl)
-            <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
-          @endif
-          @if($canCommunicateCustomer && $customerWhatsappUrl)
-            <a href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0">WhatsApp cliente</a>
-          @endif
         </div>
-        @if($canRegisterReturn)
-          <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">
-              Registrar Devolución
-          </button>
-        @endif
+
+        @unless($isDeliveryOnlyView)
+        <div class="row g-3 mb-4">
+          <div class="col-md-3">
+            <div class="card order-metric-card h-100">
+              <div class="order-metric-label">Total orden</div>
+              <div class="order-metric-value">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalOrden, 2) }}</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card order-metric-card h-100">
+              <div class="order-metric-label">Total pagado</div>
+              <div class="order-metric-value">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalPagado, 2) }}</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card order-metric-card h-100">
+              <div class="order-metric-label">Saldo pendiente</div>
+              <div class="order-metric-value">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($paymentBalance, 2) }}</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card order-metric-card h-100">
+              <div class="order-metric-label">Factura</div>
+              <div class="order-metric-value order-metric-value-sm">{{ $edoc?->numero_documento ?: ($hasAnnulledInvoice ? 'Anulada' : 'Pendiente') }}</div>
+            </div>
+          </div>
+        </div>
+        @endunless
+
+        <div class="row g-4 mb-4">
+          <div class="col-lg-7">
+            <div class="card order-timeline-card h-100">
+              <div class="d-flex justify-content-between align-items-start gap-3 mb-3 flex-wrap">
+                <div>
+                  <h5 class="mb-1">Estado de la orden</h5>
+                  <p class="order-meta-copy mb-0">Una lectura rápida del avance real de la orden.</p>
+                </div>
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                  <div class="d-flex align-items-center gap-2">
+                    <strong>Entregado:</strong>
+                    @if($order->has_returns)
+                      <span class="text-danger">Devolución Registrada</span>
+                    @elseif($canApproveDelivery)
+                      <select id="deliver-status" class="btn btn-sm toggle-status-btn {{ $order->deliver_status == 0 ? 'btn-outline-warning' : ($order->deliver_status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" onchange="updateDeliverStatus(this, {{ $order->id }})">
+                        <option value="0" {{ $order->deliver_status == 0 ? 'selected' : '' }}>Pendiente ↓</option>
+                        <option value="1" {{ $order->deliver_status == 1 ? 'selected' : '' }}>Entregado ↓</option>
+                        <option value="2" {{ $order->deliver_status == 2 ? 'selected' : '' }}>Cancelado ↓</option>
+                      </select>
+                    @else
+                      <span class="text-sm">{{ $deliveryLabel }}</span>
+                    @endif
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    <strong>Estado:</strong>
+                    @if($isDeliveryOnlyView)
+                      <span class="text-sm">{{ $approvalLabel }}</span>
+                    @elseif($order->has_returns)
+                      <span class="text-danger">Devolución Registrada</span>
+                    @elseif($canApproveSale)
+                      <select id="order-status" class="btn btn-sm toggle-status-btn {{ $order->status == 0 ? 'btn-outline-warning' : ($order->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" onchange="updateOrderStatus(this, {{ $order->id }})">
+                        <option value="0" {{ $order->status == 0 ? 'selected' : '' }}>En Proceso ↓</option>
+                        <option value="1" {{ $order->status == 1 ? 'selected' : '' }}>Aprobado ↓</option>
+                        <option value="2" {{ $order->status == 2 ? 'selected' : '' }}>Negado ↓</option>
+                      </select>
+                    @else
+                      <span class="text-sm">{{ $approvalLabel }}</span>
+                    @endif
+                  </div>
+                </div>
+              </div>
+
+              <div class="order-timeline-steps">
+                @foreach($visibleTimelineSteps as $step)
+                  <div class="order-timeline-step {{ $step['tone'] }}">
+                    <div class="order-timeline-title">{{ $step['title'] }}</div>
+                    <div class="order-timeline-description">{{ $step['description'] }}</div>
+                    <small class="text-muted d-block">{{ $step['meta'] }}</small>
+                  </div>
+                @endforeach
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-5">
+            <div class="card order-summary-card h-100">
+              <div class="order-summary-label">{{ $isDeliveryOnlyView ? 'Entrega' : 'Cliente y entrega' }}</div>
+              <div class="order-summary-value">{{ $isDeliveryOnlyView ? ($deliveryMeta['receiver_name'] ?: ($order->user->name ?? 'Sin nombre')) : $order->user->name }}</div>
+              @unless($isDeliveryOnlyView)
+              <p class="order-meta-copy mb-3">{{ $order->user->email ?? 'Sin correo' }} · {{ $order->user->phone_number ?? 'Sin teléfono' }}</p>
+              @else
+              <p class="order-meta-copy mb-3">{{ $deliveryMeta['receiver_phone'] ?: 'Sin teléfono registrado' }}</p>
+              @endunless
+              <div class="order-summary-row">
+                <span>Tipo de entrega</span>
+                <strong>{{ $order->preference }}</strong>
+              </div>
+              <div class="order-summary-row">
+                <span>Fecha</span>
+                <strong>{{ $order->date }}</strong>
+              </div>
+              <div class="order-summary-row order-summary-row-column">
+                <span>Dirección</span>
+                <strong>{{ $deliveryMeta['destination_label'] ?? ($order->address ?: 'Sin dirección registrada') }}</strong>
+                @if(!empty($deliveryMeta['map_url']))
+                  <a href="{{ $deliveryMeta['map_url'] }}" target="_blank" rel="noopener" class="text-sm">Abrir ubicación en Google Maps</a>
+                @endif
+              </div>
+              @if(!empty($deliveryMeta['receiver_name']) || !empty($deliveryMeta['receiver_phone']))
+              <div class="order-summary-row order-summary-row-column">
+                <span>Quién recibe</span>
+                <strong>{{ $deliveryMeta['receiver_name'] ?: 'No registrado' }}</strong>
+                <small>{{ $deliveryMeta['receiver_phone'] ?: 'Sin teléfono registrado' }}</small>
+              </div>
+              @endif
+              @if(!empty($deliveryMeta['extra_info']))
+              <div class="order-summary-row order-summary-row-column">
+                <span>Información adicional</span>
+                <strong>{{ $deliveryMeta['extra_info'] }}</strong>
+              </div>
+              @endif
+              @if($isStoreDelivery || $isExternalShipping)
+              <div class="order-summary-row order-summary-row-column">
+                <span>{{ $isStoreDelivery ? 'Gestión de delivery' : 'Gestión de envío' }}</span>
+                <strong>{{ $isStoreDelivery ? $deliveryContactMeta : $shippingProgressMeta }}</strong>
+              </div>
+              @endif
+              @unless($isDeliveryOnlyView)
+              @if($isStoreDelivery && ($currentUser?->hasStoreRole('owner', 'admin', 'warehouse') ?? false))
+              <div class="order-summary-row order-summary-row-column">
+                <span>Asignar repartidor</span>
+                <form method="POST" action="{{ route('sales.assignDeliveryUser', $order->id) }}" class="w-100 d-flex gap-2 align-items-center flex-wrap">
+                  @csrf
+                  <select name="delivery_assigned_user_id" class="form-select form-select-sm border border-1 p-2" style="min-width: 220px;">
+                    <option value="">Sin asignar</option>
+                    @foreach($deliveryUsers as $deliveryUser)
+                      <option value="{{ $deliveryUser->id }}" {{ (int) ($order->delivery_assigned_user_id ?? 0) === (int) $deliveryUser->id ? 'selected' : '' }}>
+                        {{ $deliveryUser->name }}{{ !empty($deliveryUser->phone_number) ? ' · ' . $deliveryUser->phone_number : '' }}
+                      </option>
+                    @endforeach
+                  </select>
+                  <button type="submit" class="btn btn-outline-dark btn-sm mb-0">Guardar</button>
+                </form>
+              </div>
+              @endif
+              @endunless
+            </div>
+          </div>
+        </div>
       </div>
 
+      @unless($isDeliveryOnlyView)
       @php
         $documentIssueMode = (string) ($order->document_issue_mode ?? 'delivery_note');
       @endphp
@@ -389,10 +590,12 @@
           </div>
         </div>
       </div>
+      @endunless
+
       <!-- Tabla de Detalles de la Orden -->
       <div class="card order-surface-card">
         <div class="card-header">
-          <h6 class="mb-0">Productos en la Orden</h6>
+          <h6 class="mb-0">{{ $isDeliveryOnlyView ? 'Lo que vas a entregar' : 'Productos en la Orden' }}</h6>
         </div>
         <div class="card-body">
           <div class="table-responsive order-table-wrapper">
@@ -402,8 +605,10 @@
                 <th>Producto</th>
                 <th>Cantidad</th>
                 <th>Variante</th>
+                @unless($isDeliveryOnlyView)
                 <th>Precio Unitario</th>
                 <th>Subtotal</th>
+                @endunless
               </tr>
             </thead>
             <tbody>
@@ -412,13 +617,16 @@
                 <td data-label="Producto">{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
                 <td data-label="Cantidad">{{ $detalle->quantity }}</td>
                 <td data-label="Variante">{{ $detalle->variant->size ?? '' }}</td>
+                @unless($isDeliveryOnlyView)
                 <td data-label="Precio Unitario"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</span></td>
                 <td data-label="Subtotal"><span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->amount, 2) }}</span></td>
+                @endunless
               </tr>
               @endforeach
             </tbody>
           </table>
           </div>
+          @unless($isDeliveryOnlyView)
           <div class="order-total-stack mt-3">
             <div class="order-total-line">
               <span class="order-total-label">Total Orden</span>
@@ -431,9 +639,11 @@
               </div>
             @endif
           </div>
+          @endunless
         </div>
       </div>
 
+      @unless($isDeliveryOnlyView)
       <!-- Tabla de Pagos -->
       <div class="card mt-4 order-surface-card">
         <div class="card-header">
@@ -506,6 +716,7 @@
           </div>
         </div>
       </div>
+      @endunless
 
       <!-- Modal para realizar devoluciones -->
       @if($canRegisterReturn)
@@ -572,6 +783,187 @@
 
 @push('styles')
 <style>
+  .order-shell {
+    max-width: 1240px;
+  }
+
+  .order-hero-panel {
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 1.75rem;
+    box-shadow: 0 24px 70px -44px rgba(15, 23, 42, 0.5);
+    background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 28%), rgba(255, 255, 255, 0.96);
+  }
+
+  .order-hero-panel::after {
+    content: '';
+    position: absolute;
+    inset: auto -60px -80px auto;
+    width: 220px;
+    height: 220px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(14, 165, 233, 0.18), transparent 68%);
+  }
+
+  .order-eyebrow {
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #1d4ed8;
+    margin-bottom: 0.6rem;
+  }
+
+  .order-hero-title {
+    font-size: clamp(1.8rem, 4vw, 3rem);
+    line-height: 1;
+    font-weight: 800;
+    margin-bottom: 0.75rem;
+    color: #0f172a;
+  }
+
+  .order-hero-subtitle,
+  .order-meta-copy {
+    color: #475569;
+  }
+
+  .order-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-size: 0.82rem;
+    font-weight: 700;
+  }
+
+  .order-status-pill-danger {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .order-metric-card,
+  .order-timeline-card,
+  .order-summary-card {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 1.5rem;
+    box-shadow: 0 20px 40px -36px rgba(15, 23, 42, 0.45);
+    background: rgba(255, 255, 255, 0.95);
+  }
+
+  .order-metric-card {
+    padding: 1rem 1.1rem;
+  }
+
+  .order-metric-label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    font-weight: 700;
+  }
+
+  .order-metric-value {
+    font-size: 1.35rem;
+    font-weight: 800;
+    margin-top: 0.35rem;
+    color: #0f172a;
+  }
+
+  .order-metric-value-sm {
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+
+  .order-timeline-card,
+  .order-summary-card {
+    padding: 1.35rem;
+  }
+
+  .order-timeline-steps {
+    display: grid;
+    gap: 0.95rem;
+  }
+
+  .order-timeline-step {
+    position: relative;
+    padding: 1rem 1rem 1rem 3rem;
+    margin: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.96);
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .order-timeline-step::before {
+    content: '';
+    position: absolute;
+    top: 1.1rem;
+    left: 1rem;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 999px;
+    background: #0f172a;
+    box-shadow: 0 0 0 6px rgba(15, 23, 42, 0.08);
+  }
+
+  .order-timeline-step.pending::before {
+    background: #f59e0b;
+  }
+
+  .order-timeline-step.success::before {
+    background: #16a34a;
+  }
+
+  .order-timeline-step.danger::before {
+    background: #dc2626;
+  }
+
+  .order-timeline-title {
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+  }
+
+  .order-timeline-description {
+    color: #475569;
+    margin-bottom: 0.2rem;
+  }
+
+  .order-summary-label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
+
+  .order-summary-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+  }
+
+  .order-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid #e2e8f0;
+    color: #475569;
+  }
+
+  .order-summary-row-column {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .order-page-title {
     font-weight: 700;
     letter-spacing: -0.01em;
@@ -633,6 +1025,13 @@
   }
 
   @media (max-width: 767.98px) {
+    .order-hero-panel,
+    .order-timeline-card,
+    .order-summary-card,
+    .order-metric-card {
+      border-radius: 1.25rem;
+    }
+
     .order-detail-table thead {
       display: none;
     }

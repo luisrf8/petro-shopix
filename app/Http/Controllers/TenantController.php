@@ -1206,6 +1206,7 @@ class TenantController extends Controller
         $tenant = Tenant::findOrFail($user->tenant_id);
         $latestPaidPlan = $this->getTenantLatestPaidPlanPayment($tenant);
         $isFreePlanTenant = (float) ($latestPaidPlan?->plan?->price ?? -1) <= 0;
+        $expectsJson = $request->expectsJson() || $request->wantsJson();
 
         try {
             $assignableRoleKeys = $user?->assignableStoreRoleKeys() ?? [];
@@ -1281,10 +1282,14 @@ class TenantController extends Controller
 
             if ($shouldCreateNewUser) {
                 if ($isFreePlanTenant) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'El plan Free no permite crear usuarios adicionales.',
-                    ], 403);
+                    if ($expectsJson) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'El plan Free no permite crear usuarios adicionales.',
+                        ], 403);
+                    }
+
+                    return redirect()->route('tenant.store')->with('warning', 'El plan Free no permite crear usuarios adicionales.');
                 }
 
                 $newUserRoleId = (int) ($request->input('new_user.role_id') ?? 0);
@@ -1295,10 +1300,14 @@ class TenantController extends Controller
                     $selectedRoleIsAdmin = in_array($newUserRoleId, $adminRoleIds, true);
 
                     if (!$selectedRoleIsAdmin) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'En plan Básico solo se permite crear un usuario administrador.',
-                        ], 403);
+                        if ($expectsJson) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'En plan Básico solo se permite crear un usuario administrador.',
+                            ], 403);
+                        }
+
+                        return redirect()->route('tenant.store')->with('warning', 'En plan Básico solo se permite crear un usuario administrador.');
                     }
 
                     $currentOwnerCount = $tenant->users()
@@ -1306,17 +1315,25 @@ class TenantController extends Controller
                         ->count();
 
                     if ($currentOwnerCount > 1) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'La tienda tiene más de un owner. Debes regularizarlo antes de crear usuarios.',
-                        ], 403);
+                        if ($expectsJson) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'La tienda tiene más de un owner. Debes regularizarlo antes de crear usuarios.',
+                            ], 403);
+                        }
+
+                        return redirect()->route('tenant.store')->with('warning', 'La tienda tiene más de un owner. Debes regularizarlo antes de crear usuarios.');
                     }
 
                     if ($selectedRoleIsOwner) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'El plan Básico no permite crear más usuarios owner.',
-                        ], 403);
+                        if ($expectsJson) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'El plan Básico no permite crear más usuarios owner.',
+                            ], 403);
+                        }
+
+                        return redirect()->route('tenant.store')->with('warning', 'El plan Básico no permite crear más usuarios owner.');
                     }
 
                     if ($selectedRoleIsAdmin) {
@@ -1325,19 +1342,27 @@ class TenantController extends Controller
                             ->count();
 
                         if ($currentAdminCount >= 1) {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'El plan Básico solo permite un usuario con rol administrador.',
-                            ], 403);
+                            if ($expectsJson) {
+                                return response()->json([
+                                    'success' => false,
+                                    'message' => 'El plan Básico solo permite un usuario con rol administrador.',
+                                ], 403);
+                            }
+
+                            return redirect()->route('tenant.store')->with('warning', 'El plan Básico solo permite un usuario con rol administrador.');
                         }
                     }
                 }
 
                 if (!$user || !$user->canAssignStoreRoles() || empty($assignableRoleIds)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'No tienes permisos para asignar roles a nuevos usuarios.',
-                    ], 403);
+                    if ($expectsJson) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'No tienes permisos para asignar roles a nuevos usuarios.',
+                        ], 403);
+                    }
+
+                    return redirect()->route('tenant.store')->with('warning', 'No tienes permisos para asignar roles a nuevos usuarios.');
                 }
 
                 $newUserValidated = $request->validate([
@@ -1420,26 +1445,38 @@ class TenantController extends Controller
                 ]);
             }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Tenant actualizado correctamente',
-                'tenant'  => $tenant,
-            ]);
+            if ($expectsJson) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Tenant actualizado correctamente',
+                    'tenant'  => $tenant,
+                ]);
+            }
+
+            return redirect()->route('tenant.store')->with('success', 'Tenant actualizado correctamente');
 
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // Devolver errores de validación en JSON
-            return response()->json([
-                'success' => false,
-                'message' => 'Errores de validación',
-                'errors'  => $e->errors(),
-            ], 422);
+            if ($expectsJson) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Errores de validación',
+                    'errors'  => $e->errors(),
+                ], 422);
+            }
+
+            throw $e;
         } catch (\Exception $e) {
-            // Devolver errores generales
-            return response()->json([
-                'success' => false,
-                'message' => 'Ocurrió un error al actualizar el tenant',
-                'error'   => $e->getMessage(),
-            ], 500);
+            if ($expectsJson) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ocurrió un error al actualizar el tenant',
+                    'error'   => $e->getMessage(),
+                ], 500);
+            }
+
+            return redirect()->route('tenant.store')
+                ->withInput()
+                ->with('error', 'Ocurrió un error al actualizar el tenant');
         }
     }
     public function publicTenantCategory(Tenant $tenant)

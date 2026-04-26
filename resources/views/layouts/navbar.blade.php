@@ -106,13 +106,14 @@
       $isAdmin = (bool) ($user?->isAdmin() ?? false);
       $isSeller = (bool) ($user?->hasStoreRole('seller') ?? false);
       $isWarehouse = (bool) ($user?->hasStoreRole('warehouse') ?? false);
+      $isDelivery = (bool) ($user?->hasStoreRole('delivery') ?? false);
 
       $canSeeCategories = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canSeeProducts = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canSell = $isOwner || $isAdmin || $isSeller;
       $canSeeSalesOrders = $isOwner || $isAdmin || $isSeller;
       $canSeePendingOrders = $isOwner || $isAdmin || $isWarehouse;
-      $canSeePaidPendingDeliveries = $isOwner || $isAdmin || $isSeller || $isWarehouse;
+      $canSeePaidPendingDeliveries = $isOwner || $isAdmin || $isSeller || $isWarehouse || $isDelivery;
       $canSeeTenantElectronicDocuments = $isOwner || $isAdmin || $isSeller;
       $canSeeCustomers = $isOwner || $isAdmin || $isSeller;
       $canSeeAccountsReceivable = $isOwner || $isAdmin;

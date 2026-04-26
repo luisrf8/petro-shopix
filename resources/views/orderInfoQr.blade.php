@@ -222,11 +222,33 @@
         $customerWhatsappUrl = $customerPhone !== ''
             ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', sobre la orden #' . $order->id . '.')
             : null;
-        $deliveryLabel = $order->status == 0 ? 'Pendiente' : ($order->status == 1 ? 'Entregado' : ($order->status == 2 ? 'Cancelado' : 'Devolución'));
+        $deliveryTypeLabel = strtolower(trim((string) ($order->preference ?? '')));
+        $isStoreDelivery = str_contains($deliveryTypeLabel, 'delivery');
+        $isExternalShipping = str_contains($deliveryTypeLabel, 'env') || str_contains($deliveryTypeLabel, 'shipping');
+        $deliveryLabel = (int) $order->deliver_status === 0
+            ? 'Pendiente'
+            : ((int) $order->deliver_status === 1
+                ? 'Entregado'
+                : ((int) $order->deliver_status === 2 ? 'Cancelado' : 'En proceso'));
         $approvalLabel = $order->status == 0 ? 'En proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado');
         $paymentBalance = max(0, (float) $totalOrden - (float) $totalPagado);
         $paymentStepTone = $totalPagado >= $totalOrden && $totalOrden > 0 ? 'success' : ($totalPagado > 0 ? 'pending' : 'danger');
         $invoiceDocument = $order->latest_electronic_document;
+        $assignedDeliveryName = trim((string) ($order->assignedDeliveryUser->name ?? ''));
+        $assignedDeliveryPhone = trim((string) ($order->assignedDeliveryUser->phone_number ?? ''));
+        $deliveryContactMeta = $assignedDeliveryName !== '' || $assignedDeliveryPhone !== ''
+            ? 'Repartidor: ' . ($assignedDeliveryName !== '' ? $assignedDeliveryName : 'No identificado') . ' | Teléfono: ' . ($assignedDeliveryPhone !== '' ? $assignedDeliveryPhone : 'No registrado')
+            : 'Aún no hay un repartidor asignado para esta orden.';
+        $shippingProgressDescription = match ((int) $order->deliver_status) {
+            1 => 'Paso 3 de 3: el envío figura como entregado correctamente.',
+            2 => 'El envío fue cancelado antes de completar su despacho.',
+            default => 'Paso 1 de 3: tu envío fue registrado y está en preparación para despacho.',
+        };
+        $shippingProgressMeta = match ((int) $order->deliver_status) {
+            1 => 'Proceso: 1. Preparación  2. Despacho  3. Entregado',
+            2 => 'Proceso interrumpido: 1. Preparación  2. Cancelado',
+            default => 'Proceso: 1. Preparación  2. Despacho  3. Entrega final',
+        };
         $timelineSteps = [
             [
                 'tone' => 'success',
@@ -243,10 +265,14 @@
                 'meta' => $approvalLabel,
             ],
             [
-                'tone' => $order->status == 1 ? 'success' : ($order->status == 0 ? 'pending' : 'danger'),
-                'title' => 'Entrega y despacho',
-                'description' => 'Estado actual: ' . $deliveryLabel . '.',
-                'meta' => 'Dirección: ' . ($order->address ?: 'No registrada'),
+                'tone' => (int) $order->deliver_status === 1 ? 'success' : ((int) $order->deliver_status === 0 ? 'pending' : 'danger'),
+                'title' => $isExternalShipping ? 'Seguimiento del envío' : 'Entrega y despacho',
+                'description' => $isExternalShipping
+                    ? $shippingProgressDescription
+                    : 'Estado actual del delivery: ' . $deliveryLabel . '.',
+                'meta' => $isExternalShipping
+                    ? $shippingProgressMeta . ' | Dirección: ' . ($order->address ?: 'No registrada')
+                    : $deliveryContactMeta,
             ],
             [
                 'tone' => $order->has_annulled_invoice ? 'danger' : ($invoiceDocument ? 'success' : 'pending'),
@@ -275,7 +301,6 @@
                 <div class="col-lg-7">
                     <div class="eyebrow">Seguimiento inteligente de tu orden</div>
                     <div class="hero-title">Orden #{{ $order->id }}</div>
-                    <p class="hero-subtitle mb-3">Consulta pagos, factura, entrega y devoluciones desde un solo panel claro y optimizado para móvil.</p>
                     <div class="d-flex flex-wrap gap-2 mb-3">
                         <span class="status-pill">{{ $approvalLabel }}</span>
                         <span class="status-pill">{{ $deliveryLabel }}</span>
@@ -287,6 +312,11 @@
                     <div class="meta-copy">
                         {{ $order->user->name }} · {{ $order->user->phone_number ?? 'Sin teléfono' }}<br>
                         {{ $order->preference ?: 'Entrega no definida' }} · {{ $order->address ?: 'Sin dirección registrada' }}
+                        @if($isStoreDelivery)
+                            <br>{{ $deliveryContactMeta }}
+                        @elseif($isExternalShipping)
+                            <br>{{ $shippingProgressMeta }}
+                        @endif
                     </div>
                 </div>
                 <div class="col-lg-5">

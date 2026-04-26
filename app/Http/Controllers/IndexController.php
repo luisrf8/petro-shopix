@@ -517,6 +517,7 @@ class IndexController extends Controller
 
         $user = auth()->user();
         $tenantId = $user->tenant_id;
+        $isDeliveryUser = (bool) ($user?->hasStoreRole('delivery') ?? false);
         $tenant = Tenant::find($tenantId);
         $tenantPublicUrl = $tenant?->slug ? url('/').'/'.$tenant->slug : null;
         $currentPlanPayment = null;
@@ -725,6 +726,33 @@ class IndexController extends Controller
             ['name' => 'Órdenes de Compra', 'count' => PurchaseOrder::where('tenant_id', $tenantId)->count(), 'link' => '/purchase-orders'],
         ];
 
+        $deliveryDashboardOrders = collect();
+        $deliveryDashboardAmount = 0.0;
+
+        if ($isDeliveryUser) {
+            $deliveryDashboardOrders = SalesOrder::with(['user', 'details', 'payments'])
+                ->where('tenant_id', $tenantId)
+                ->where('deliver_status', 0)
+                ->where('status', '!=', 2)
+                ->whereRaw('LOWER(COALESCE(preference, "")) LIKE ?', ['%delivery%'])
+                ->orderByDesc('id')
+                ->get()
+                ->map(function (SalesOrder $order) {
+                    $order->total_items = (int) $order->details->sum('quantity');
+                    $order->order_total_amount = (float) $order->gross_total;
+                    $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
+                    $order->registered_paid_amount = (float) $order->payments->where('status', '!=', 3)->sum('amount');
+                    $order->effective_paid_amount = max($order->approved_paid_amount, $order->registered_paid_amount);
+                    $order->pending_amount = max(0, round($order->order_total_amount - $order->effective_paid_amount, 2));
+
+                    return $order;
+                })
+                ->filter(fn (SalesOrder $order) => $order->pending_amount <= 0.0001)
+                ->values();
+
+            $deliveryDashboardAmount = (float) $deliveryDashboardOrders->sum('effective_paid_amount');
+        }
+
         return view('dashboard', compact(
             'stats',
             'purchaseOrders',
@@ -746,7 +774,10 @@ class IndexController extends Controller
             'currentPlanPayment',
             'currentPlanDaysRemaining',
             'financialSummary',
-            'monthlyTrend'
+            'monthlyTrend',
+            'isDeliveryUser',
+            'deliveryDashboardOrders',
+            'deliveryDashboardAmount'
         ));
     }
     

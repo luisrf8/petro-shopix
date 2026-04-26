@@ -737,29 +737,47 @@
         </div>
 
         <div class="mb-3 d-none" id="tenant-shipping-address-container">
-          <label class="form-label">Dirección para delivery o envío</label>
+          <label class="form-label" id="tenant-shipping-address-label">Dirección para delivery</label>
           <div class="row g-2">
-            <div class="col-12 col-md-4">
+            <div class="col-12 d-none" id="tenant-delivery-recipient-fields">
+              <div class="row g-2">
+                <div class="col-12 d-flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-delivery-use-customer-data">Usar mis datos como receptor</button>
+                </div>
+                <div class="col-12 col-md-6">
+                  <input type="text" id="tenant-delivery-receiver-name" class="form-control" placeholder="Nombre de quien recibe">
+                </div>
+                <div class="col-12 col-md-6">
+                  <input type="text" id="tenant-delivery-receiver-phone" class="form-control" placeholder="Teléfono de quien recibe">
+                </div>
+                <div class="col-12">
+                  <textarea id="tenant-delivery-extra-info" class="form-control" rows="2" placeholder="Información adicional para el delivery (opcional)"></textarea>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-md-4" id="tenant-shipping-location-selects-country-wrap">
               <select id="tenant-shipping-country" class="form-select">
                 <option value="">País</option>
               </select>
             </div>
-            <div class="col-12 col-md-4">
+            <div class="col-12 col-md-4" id="tenant-shipping-location-selects-state-wrap">
               <select id="tenant-shipping-state" class="form-select" disabled>
                 <option value="">Estado</option>
               </select>
             </div>
-            <div class="col-12 col-md-4">
+            <div class="col-12 col-md-4" id="tenant-shipping-location-selects-city-wrap">
               <select id="tenant-shipping-city" class="form-select" disabled>
                 <option value="">Ciudad</option>
               </select>
             </div>
-            <div class="col-12">
+            <div class="col-12" id="tenant-shipping-detail-wrap">
               <input type="text" id="tenant-shipping-address-detail" class="form-control" placeholder="Dirección exacta (calle, referencia, etc.)">
+              <small class="text-muted d-block mt-2 d-none" id="tenant-shipping-address-hint">Indica también por cuál agencia de envío deseas trabajar.</small>
             </div>
-            <div class="col-12 d-flex flex-wrap gap-2">
+            <div class="col-12 d-flex flex-wrap gap-2" id="tenant-shipping-location-actions">
               <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-shipping-use-profile-location">Usar ubicación guardada</button>
               <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-shipping-use-current-location">Usar ubicación actual</button>
+              <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-delivery-open-map">Marcar ubicación en mapa</button>
               <small class="text-muted w-100" id="tenant-shipping-location-status">Aún no se ha fijado una ubicación exacta.</small>
               <input type="hidden" id="tenant-shipping-latitude">
               <input type="hidden" id="tenant-shipping-longitude">
@@ -945,29 +963,47 @@
               </div>
 
               <div class="mt-3 d-none" id="tenant-pro-shipping-address-container">
-                <label class="form-label">Dirección para delivery o envío</label>
+                <label class="form-label" id="tenant-pro-shipping-address-label">Dirección para delivery</label>
                 <div class="row g-2">
-                  <div class="col-12 col-md-4">
+                  <div class="col-12 d-none" id="tenant-pro-delivery-recipient-fields">
+                    <div class="row g-2">
+                      <div class="col-12 d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-delivery-use-customer-data">Usar mis datos como receptor</button>
+                      </div>
+                      <div class="col-12 col-md-6">
+                        <input type="text" id="tenant-pro-delivery-receiver-name" class="form-control" placeholder="Nombre de quien recibe">
+                      </div>
+                      <div class="col-12 col-md-6">
+                        <input type="text" id="tenant-pro-delivery-receiver-phone" class="form-control" placeholder="Teléfono de quien recibe">
+                      </div>
+                      <div class="col-12">
+                        <textarea id="tenant-pro-delivery-extra-info" class="form-control" rows="2" placeholder="Información adicional para el delivery (opcional)"></textarea>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-12 col-md-4" id="tenant-pro-shipping-location-selects-country-wrap">
                     <select id="tenant-pro-shipping-country" class="form-select">
                       <option value="">País</option>
                     </select>
                   </div>
-                  <div class="col-12 col-md-4">
+                  <div class="col-12 col-md-4" id="tenant-pro-shipping-location-selects-state-wrap">
                     <select id="tenant-pro-shipping-state" class="form-select" disabled>
                       <option value="">Estado</option>
                     </select>
                   </div>
-                  <div class="col-12 col-md-4">
+                  <div class="col-12 col-md-4" id="tenant-pro-shipping-location-selects-city-wrap">
                     <select id="tenant-pro-shipping-city" class="form-select" disabled>
                       <option value="">Ciudad</option>
                     </select>
                   </div>
-                  <div class="col-12">
+                  <div class="col-12" id="tenant-pro-shipping-detail-wrap">
                     <input type="text" id="tenant-pro-shipping-address-detail" class="form-control" placeholder="Dirección exacta (calle, referencia, etc.)">
+                    <small class="text-muted d-block mt-2 d-none" id="tenant-pro-shipping-address-hint">Indica también por cuál agencia de envío deseas trabajar.</small>
                   </div>
-                  <div class="col-12 d-flex flex-wrap gap-2">
+                  <div class="col-12 d-flex flex-wrap gap-2" id="tenant-pro-shipping-location-actions">
                     <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-shipping-use-profile-location">Usar ubicación guardada</button>
                     <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-shipping-use-current-location">Usar ubicación actual</button>
+                    <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-delivery-open-map">Marcar ubicación en mapa</button>
                     <small class="text-muted w-100" id="tenant-pro-shipping-location-status">Aún no se ha fijado una ubicación exacta.</small>
                     <input type="hidden" id="tenant-pro-shipping-latitude">
                     <input type="hidden" id="tenant-pro-shipping-longitude">
@@ -1025,6 +1061,28 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-dark" id="tenant-confirm-package-flavor-btn">Agregar al carrito</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="tenantDeliveryMapModal" tabindex="-1" aria-labelledby="tenantDeliveryMapModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="tenantDeliveryMapModalLabel">Seleccionar ubicación de delivery</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <input type="text" id="tenant-delivery-map-search" class="form-control" placeholder="Buscar ubicación en Google Maps">
+        </div>
+        <div id="tenant-delivery-map-canvas" style="width: 100%; height: 360px; border-radius: 12px; background: #f5f5f5;"></div>
+        <small class="text-muted d-block mt-3" id="tenant-delivery-map-status">Haz clic en el mapa o mueve el marcador para fijar la ubicación exacta.</small>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-dark" id="tenant-delivery-map-confirm">Usar esta ubicación</button>
       </div>
     </div>
   </div>
@@ -1136,10 +1194,14 @@
     const tenantName = @json($tenant->name);
     const tenantPhoneCode = @json($tenant->phone_code ?? '');
     const tenantPhoneNumber = @json($tenant->phone_number ?? '');
+    const tenantLatitude = @json($tenant->latitude ?? null);
+    const tenantLongitude = @json($tenant->longitude ?? null);
     const tenantCountryId = @json($tenant->country ?? null);
     const tenantStateId = @json($tenant->state ?? null);
     const tenantCityId = @json($tenant->city ?? null);
     const tenantDeliveryConfig = @json(\App\Support\DeliveryManager::settings($tenant));
+    const initialCsrfToken = @json(csrf_token());
+    const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
     const shopixDebug = true;
 
     function cartDebug(...args) {
@@ -1156,15 +1218,28 @@
     const checkoutForm = document.getElementById('tenant-checkout-form');
 
     const shippingAddressContainer = document.getElementById('tenant-shipping-address-container');
+    const shippingAddressLabel = document.getElementById('tenant-shipping-address-label');
     const shippingCountrySelect = document.getElementById('tenant-shipping-country');
     const shippingStateSelect = document.getElementById('tenant-shipping-state');
     const shippingCitySelect = document.getElementById('tenant-shipping-city');
+    const shippingDetailWrap = document.getElementById('tenant-shipping-detail-wrap');
     const shippingAddressDetailInput = document.getElementById('tenant-shipping-address-detail');
+    const shippingAddressHint = document.getElementById('tenant-shipping-address-hint');
+    const deliveryRecipientFields = document.getElementById('tenant-delivery-recipient-fields');
+    const deliveryReceiverNameInput = document.getElementById('tenant-delivery-receiver-name');
+    const deliveryReceiverPhoneInput = document.getElementById('tenant-delivery-receiver-phone');
+    const deliveryExtraInfoInput = document.getElementById('tenant-delivery-extra-info');
+    const deliveryUseCustomerDataBtn = document.getElementById('tenant-delivery-use-customer-data');
+    const deliveryOpenMapBtn = document.getElementById('tenant-delivery-open-map');
     const shippingDistanceInput = document.getElementById('tenant-shipping-distance');
     const shippingDistanceWrap = document.getElementById('tenant-shipping-distance-wrap');
     const shippingLatitudeInput = document.getElementById('tenant-shipping-latitude');
     const shippingLongitudeInput = document.getElementById('tenant-shipping-longitude');
     const shippingLocationStatus = document.getElementById('tenant-shipping-location-status');
+    const shippingLocationSelectCountryWrap = document.getElementById('tenant-shipping-location-selects-country-wrap');
+    const shippingLocationSelectStateWrap = document.getElementById('tenant-shipping-location-selects-state-wrap');
+    const shippingLocationSelectCityWrap = document.getElementById('tenant-shipping-location-selects-city-wrap');
+    const shippingLocationActions = document.getElementById('tenant-shipping-location-actions');
     const shippingUseProfileLocationBtn = document.getElementById('tenant-shipping-use-profile-location');
     const shippingUseCurrentLocationBtn = document.getElementById('tenant-shipping-use-current-location');
     const deliveryTypeInputs = document.querySelectorAll('input[name="tenant-delivery-type"]');
@@ -1176,17 +1251,41 @@
     const proShippingCountrySelect = document.getElementById('tenant-pro-shipping-country');
     const proShippingStateSelect = document.getElementById('tenant-pro-shipping-state');
     const proShippingCitySelect = document.getElementById('tenant-pro-shipping-city');
+    const proShippingDetailWrap = document.getElementById('tenant-pro-shipping-detail-wrap');
     const proShippingAddressDetailInput = document.getElementById('tenant-pro-shipping-address-detail');
+    const proShippingAddressLabel = document.getElementById('tenant-pro-shipping-address-label');
+    const proShippingAddressHint = document.getElementById('tenant-pro-shipping-address-hint');
+    const proDeliveryRecipientFields = document.getElementById('tenant-pro-delivery-recipient-fields');
+    const proDeliveryReceiverNameInput = document.getElementById('tenant-pro-delivery-receiver-name');
+    const proDeliveryReceiverPhoneInput = document.getElementById('tenant-pro-delivery-receiver-phone');
+    const proDeliveryExtraInfoInput = document.getElementById('tenant-pro-delivery-extra-info');
+    const proDeliveryUseCustomerDataBtn = document.getElementById('tenant-pro-delivery-use-customer-data');
+    const proDeliveryOpenMapBtn = document.getElementById('tenant-pro-delivery-open-map');
     const proShippingDistanceInput = document.getElementById('tenant-pro-shipping-distance');
     const proShippingDistanceWrap = document.getElementById('tenant-pro-shipping-distance-wrap');
     const proShippingLatitudeInput = document.getElementById('tenant-pro-shipping-latitude');
     const proShippingLongitudeInput = document.getElementById('tenant-pro-shipping-longitude');
     const proShippingLocationStatus = document.getElementById('tenant-pro-shipping-location-status');
+    const proShippingLocationSelectCountryWrap = document.getElementById('tenant-pro-shipping-location-selects-country-wrap');
+    const proShippingLocationSelectStateWrap = document.getElementById('tenant-pro-shipping-location-selects-state-wrap');
+    const proShippingLocationSelectCityWrap = document.getElementById('tenant-pro-shipping-location-selects-city-wrap');
+    const proShippingLocationActions = document.getElementById('tenant-pro-shipping-location-actions');
     const proShippingUseProfileLocationBtn = document.getElementById('tenant-pro-shipping-use-profile-location');
     const proShippingUseCurrentLocationBtn = document.getElementById('tenant-pro-shipping-use-current-location');
+    const deliveryMapModalElement = document.getElementById('tenantDeliveryMapModal');
+    const deliveryMapSearchInput = document.getElementById('tenant-delivery-map-search');
+    const deliveryMapStatus = document.getElementById('tenant-delivery-map-status');
+    const deliveryMapConfirmBtn = document.getElementById('tenant-delivery-map-confirm');
 
     let countriesCache = null;
     let pendingPackageSelection = null;
+    let googleMapsScriptLoaded = false;
+    let googleMapsScriptLoading = false;
+    let deliveryMap = null;
+    let deliveryMapMarker = null;
+    let deliveryMapAutocomplete = null;
+    let activeDeliveryMapContext = null;
+    let pendingDeliveryMapPosition = null;
 
     async function fetchJson(url) {
       const response = await fetch(url, {
@@ -1243,6 +1342,68 @@
       return selectedOption ? selectedOption.text.trim() : '';
     }
 
+    function normalizePhoneValue(value) {
+      return String(value || '').trim();
+    }
+
+    function getUserPhone(user) {
+      return normalizePhoneValue(user?.phone_number || user?.phone || '');
+    }
+
+    function fillReceiverFieldsFromUser(user, nameInput, phoneInput) {
+      if (!user) {
+        alert('Debes iniciar sesión para usar tus datos como receptor.');
+        return false;
+      }
+
+      if (nameInput) {
+        nameInput.value = String(user.name || '').trim();
+      }
+
+      if (phoneInput) {
+        phoneInput.value = getUserPhone(user);
+      }
+
+      return true;
+    }
+
+    function buildDeliveryAddress(receiverNameInput, receiverPhoneInput, extraInfoInput, latitudeInput = null, longitudeInput = null) {
+      const receiverName = (receiverNameInput?.value || '').trim();
+      const receiverPhone = normalizePhoneValue(receiverPhoneInput?.value || '');
+      const extraInfo = (extraInfoInput?.value || '').trim();
+      const latitude = latitudeInput?.value ? Number(latitudeInput.value) : null;
+      const longitude = longitudeInput?.value ? Number(longitudeInput.value) : null;
+
+      if (!receiverName) {
+        return { valid: false, message: 'Indica el nombre de quien recibe el delivery.' };
+      }
+
+      if (!receiverPhone) {
+        return { valid: false, message: 'Indica el teléfono de quien recibe el delivery.' };
+      }
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return { valid: false, message: 'Debes fijar la ubicación exacta del delivery desde ubicación guardada, ubicación actual o Google Maps.' };
+      }
+
+      const parts = [`Recibe: ${receiverName}`, `Teléfono: ${receiverPhone}`];
+
+      if (extraInfo) {
+        parts.push(`Información adicional: ${extraInfo}`);
+      }
+
+      return {
+        valid: true,
+        cityId: tenantCityId ? Number(tenantCityId) : null,
+        address: parts.join(' | '),
+        latitude,
+        longitude,
+        receiverName,
+        receiverPhone,
+        extraInfo,
+      };
+    }
+
     function buildShippingAddress(countrySelect, stateSelect, citySelect, detailInput, latitudeInput = null, longitudeInput = null) {
       const countryId = countrySelect?.value || '';
       const stateId = stateSelect?.value || '';
@@ -1253,6 +1414,10 @@
 
       if (!countryId || !stateId || !cityId) {
         return { valid: false, message: 'Selecciona país, estado y ciudad para el envío.' };
+      }
+
+      if (!detail) {
+        return { valid: false, message: 'Indica la dirección exacta y la agencia para el envío.' };
       }
 
       const countryName = getSelectedText(countrySelect);
@@ -1273,6 +1438,37 @@
       };
     }
 
+    function buildAddressForDeliveryType(deliveryType, options = {}) {
+      if (deliveryType === 'delivery') {
+        return buildDeliveryAddress(
+          options.receiverNameInput,
+          options.receiverPhoneInput,
+          options.extraInfoInput,
+          options.latitudeInput,
+          options.longitudeInput
+        );
+      }
+
+      if (deliveryType === 'shipping') {
+        return buildShippingAddress(
+          options.countrySelect,
+          options.stateSelect,
+          options.citySelect,
+          options.detailInput,
+          options.latitudeInput,
+          options.longitudeInput
+        );
+      }
+
+      return {
+        valid: true,
+        cityId: null,
+        address: 'Tienda',
+        latitude: null,
+        longitude: null,
+      };
+    }
+
     function renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput) {
       if (!statusElement) {
         return;
@@ -1287,6 +1483,24 @@
       }
 
       statusElement.textContent = 'Aún no se ha fijado una ubicación exacta.';
+    }
+
+    function applyUserLocationCoordinates(user, latitudeInput, longitudeInput, statusElement) {
+      if (!user) {
+        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+        alert('Debes iniciar sesión para usar tu ubicación guardada.');
+        return;
+      }
+
+      if (latitudeInput) {
+        latitudeInput.value = user.latitude ?? '';
+      }
+
+      if (longitudeInput) {
+        longitudeInput.value = user.longitude ?? '';
+      }
+
+      renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
     }
 
     function applyUserLocationToShippingForm(user, countrySelect, stateSelect, citySelect, detailInput, latitudeInput, longitudeInput, statusElement) {
@@ -1599,13 +1813,86 @@
       return cart.reduce((sum, item) => sum + Number(item.qty), 0);
     }
 
+    function updateAddressSectionUi(deliveryType, config) {
+      const {
+        addressLabelElement,
+        detailInput,
+        detailWrap,
+        hintElement,
+        countryWraps,
+        locationActionsElement,
+        locationStatusElement,
+        latitudeInput,
+        longitudeInput,
+        receiverFieldsElement,
+      } = config;
+      const isStoreDelivery = deliveryType === 'delivery';
+      const isThirdPartyShipping = deliveryType === 'shipping';
+
+      if (addressLabelElement) {
+        addressLabelElement.textContent = isThirdPartyShipping ? 'Dirección para envío' : 'Dirección para delivery';
+      }
+
+      if (detailInput) {
+        detailInput.placeholder = isThirdPartyShipping
+          ? 'Dirección exacta y agencia de envío preferida'
+          : 'Dirección exacta (calle, referencia, etc.)';
+      }
+
+      if (detailWrap) {
+        detailWrap.classList.toggle('d-none', !isThirdPartyShipping);
+      }
+
+      if (hintElement) {
+        hintElement.classList.toggle('d-none', !isThirdPartyShipping);
+      }
+
+      if (receiverFieldsElement) {
+        receiverFieldsElement.classList.toggle('d-none', !isStoreDelivery);
+      }
+
+      countryWraps.forEach(wrap => {
+        wrap?.classList.toggle('d-none', !isThirdPartyShipping);
+      });
+
+      if (locationActionsElement) {
+        locationActionsElement.classList.toggle('d-none', !isStoreDelivery);
+      }
+
+      if (!isStoreDelivery) {
+        if (latitudeInput) {
+          latitudeInput.value = '';
+        }
+        if (longitudeInput) {
+          longitudeInput.value = '';
+        }
+        renderShippingLocationStatus(locationStatusElement, latitudeInput, longitudeInput);
+      }
+    }
+
     function updateDeliveryAddressVisibility() {
       const selectedDeliveryType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value;
       const isAddressRequired = ['delivery', 'shipping'].includes(selectedDeliveryType);
       const isStoreDelivery = selectedDeliveryType === 'delivery';
+      const isThirdPartyShipping = selectedDeliveryType === 'shipping';
       if (shippingAddressContainer) {
         shippingAddressContainer.classList.toggle('d-none', !isAddressRequired);
       }
+      updateAddressSectionUi(
+        selectedDeliveryType,
+        {
+          addressLabelElement: shippingAddressLabel,
+          detailInput: shippingAddressDetailInput,
+          detailWrap: shippingDetailWrap,
+          hintElement: shippingAddressHint,
+          countryWraps: [shippingLocationSelectCountryWrap, shippingLocationSelectStateWrap, shippingLocationSelectCityWrap],
+          locationActionsElement: shippingLocationActions,
+          locationStatusElement: shippingLocationStatus,
+          latitudeInput: shippingLatitudeInput,
+          longitudeInput: shippingLongitudeInput,
+          receiverFieldsElement: deliveryRecipientFields,
+        }
+      );
       if (shippingDistanceWrap) {
         shippingDistanceWrap.classList.toggle('d-none', !(isStoreDelivery && tenantDeliveryConfig?.enabled && tenantDeliveryConfig.mode === 'distance'));
       }
@@ -1614,7 +1901,7 @@
         shippingDistanceInput.value = '';
       }
 
-      if (isAddressRequired && shippingCountrySelect && !shippingCountrySelect.options.length) {
+      if (isThirdPartyShipping && shippingCountrySelect && !shippingCountrySelect.options.length) {
         initLocationSelectors(shippingCountrySelect, shippingStateSelect, shippingCitySelect, {
           countryId: tenantCountryId,
           stateId: tenantStateId,
@@ -1625,7 +1912,23 @@
       }
     }
 
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    function getCsrfToken() {
+      const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      if (metaToken) {
+        return metaToken;
+      }
+
+      const cookieMatch = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/);
+      if (cookieMatch?.[1]) {
+        try {
+          return decodeURIComponent(cookieMatch[1]);
+        } catch (error) {
+          return cookieMatch[1];
+        }
+      }
+
+      return initialCsrfToken || '';
+    }
 
     function renderCart() {
       const cart = getCart();
@@ -1990,14 +2293,17 @@
       const isStoreDelivery = deliveryType === 'delivery';
       const isThirdPartyShipping = deliveryType === 'shipping';
       const requiresAddress = isStoreDelivery || isThirdPartyShipping;
-      const shippingAddressResult = buildShippingAddress(
-        shippingCountrySelect,
-        shippingStateSelect,
-        shippingCitySelect,
-        shippingAddressDetailInput,
-        shippingLatitudeInput,
-        shippingLongitudeInput
-      );
+      const shippingAddressResult = buildAddressForDeliveryType(deliveryType, {
+        countrySelect: shippingCountrySelect,
+        stateSelect: shippingStateSelect,
+        citySelect: shippingCitySelect,
+        detailInput: shippingAddressDetailInput,
+        latitudeInput: shippingLatitudeInput,
+        longitudeInput: shippingLongitudeInput,
+        receiverNameInput: deliveryReceiverNameInput,
+        receiverPhoneInput: deliveryReceiverPhoneInput,
+        extraInfoInput: deliveryExtraInfoInput,
+      });
       const authUser = getAuthUser();
       const customerName = (authUser?.name || '').trim();
 
@@ -2037,7 +2343,15 @@
         lines.push(`Costo delivery: ${Number(deliveryContext.fee || 0).toFixed(2)} ${getBaseCurrencySymbol()} (${deliveryContext.label || 'Retiro en tienda'})`);
       }
       if (requiresAddress) {
-        lines.push(`Dirección: ${shippingAddressResult.address}`);
+        if (isStoreDelivery) {
+          lines.push(`Recibe: ${shippingAddressResult.receiverName}`);
+          lines.push(`Teléfono receptor: ${shippingAddressResult.receiverPhone}`);
+          if (shippingAddressResult.extraInfo) {
+            lines.push(`Información adicional: ${shippingAddressResult.extraInfo}`);
+          }
+        } else {
+          lines.push(`Dirección: ${shippingAddressResult.address}`);
+        }
         if (deliveryContext.distanceKm) {
           lines.push(`Distancia estimada: ${deliveryContext.distanceKm.toFixed(2)} km`);
         }
@@ -2139,14 +2453,17 @@
         return true;
       }
 
-      const deliveryAddressResult = buildShippingAddress(
-        proShippingCountrySelect,
-        proShippingStateSelect,
-        proShippingCitySelect,
-        proShippingAddressDetailInput,
-        proShippingLatitudeInput,
-        proShippingLongitudeInput
-      );
+      const deliveryAddressResult = buildAddressForDeliveryType(deliveryType, {
+        countrySelect: proShippingCountrySelect,
+        stateSelect: proShippingStateSelect,
+        citySelect: proShippingCitySelect,
+        detailInput: proShippingAddressDetailInput,
+        latitudeInput: proShippingLatitudeInput,
+        longitudeInput: proShippingLongitudeInput,
+        receiverNameInput: proDeliveryReceiverNameInput,
+        receiverPhoneInput: proDeliveryReceiverPhoneInput,
+        extraInfoInput: proDeliveryExtraInfoInput,
+      });
 
       if (!deliveryAddressResult.valid) {
         alert(deliveryAddressResult.message);
@@ -2186,6 +2503,152 @@
       } catch (error) {
         return null;
       }
+    }
+
+    function getDefaultDeliveryMapPosition() {
+      if (Number.isFinite(Number(tenantLatitude)) && Number.isFinite(Number(tenantLongitude))) {
+        return { lat: Number(tenantLatitude), lng: Number(tenantLongitude) };
+      }
+
+      return { lat: 9.7457, lng: -63.1832 };
+    }
+
+    function getContextCoordinates(context) {
+      const latitude = context?.latitudeInput?.value ? Number(context.latitudeInput.value) : null;
+      const longitude = context?.longitudeInput?.value ? Number(context.longitudeInput.value) : null;
+
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        return { lat: latitude, lng: longitude };
+      }
+
+      return getDefaultDeliveryMapPosition();
+    }
+
+    function updateDeliveryMapStatus(position) {
+      if (!deliveryMapStatus || !position) {
+        return;
+      }
+
+      deliveryMapStatus.textContent = `Ubicación seleccionada: ${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`;
+    }
+
+    function setPendingDeliveryMapPosition(position, updateMap = true) {
+      if (!position) {
+        return;
+      }
+
+      pendingDeliveryMapPosition = {
+        lat: Number(position.lat),
+        lng: Number(position.lng),
+      };
+
+      updateDeliveryMapStatus(pendingDeliveryMapPosition);
+
+      if (updateMap && deliveryMap && deliveryMapMarker) {
+        deliveryMapMarker.setPosition(pendingDeliveryMapPosition);
+        deliveryMap.panTo(pendingDeliveryMapPosition);
+      }
+    }
+
+    function initializeDeliveryMap() {
+      if (!window.google?.maps || deliveryMap) {
+        return;
+      }
+
+      const initialPosition = getDefaultDeliveryMapPosition();
+      deliveryMap = new google.maps.Map(document.getElementById('tenant-delivery-map-canvas'), {
+        center: initialPosition,
+        zoom: 14,
+      });
+
+      deliveryMapMarker = new google.maps.Marker({
+        position: initialPosition,
+        map: deliveryMap,
+        draggable: true,
+      });
+
+      setPendingDeliveryMapPosition(initialPosition, false);
+
+      deliveryMap.addListener('click', (event) => {
+        setPendingDeliveryMapPosition({
+          lat: event.latLng.lat(),
+          lng: event.latLng.lng(),
+        });
+      });
+
+      deliveryMapMarker.addListener('dragend', (event) => {
+        setPendingDeliveryMapPosition({
+          lat: event.latLng.lat(),
+          lng: event.latLng.lng(),
+        }, false);
+      });
+
+      if (deliveryMapSearchInput) {
+        deliveryMapAutocomplete = new google.maps.places.Autocomplete(deliveryMapSearchInput);
+        deliveryMapAutocomplete.bindTo('bounds', deliveryMap);
+        deliveryMapAutocomplete.addListener('place_changed', () => {
+          const place = deliveryMapAutocomplete.getPlace();
+          if (!place.geometry?.location) {
+            return;
+          }
+
+          const position = {
+            lat: place.geometry.location.lat(),
+            lng: place.geometry.location.lng(),
+          };
+
+          deliveryMap.setCenter(position);
+          deliveryMap.setZoom(16);
+          setPendingDeliveryMapPosition(position);
+        });
+      }
+    }
+
+    function loadDeliveryMapScript() {
+      if (googleMapsScriptLoaded) {
+        initializeDeliveryMap();
+        return;
+      }
+
+      if (googleMapsScriptLoading) {
+        return;
+      }
+
+      if (!googleMapsApiKey) {
+        alert('Falta configurar GOOGLE_MAPS_API_KEY para usar el mapa.');
+        return;
+      }
+
+      googleMapsScriptLoading = true;
+      window.initShopixDeliveryMap = function() {
+        googleMapsScriptLoaded = true;
+        googleMapsScriptLoading = false;
+        initializeDeliveryMap();
+      };
+
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places&callback=initShopixDeliveryMap`;
+      script.async = true;
+      script.defer = true;
+      script.onerror = function() {
+        googleMapsScriptLoading = false;
+        alert('No se pudo cargar Google Maps para seleccionar la ubicación.');
+      };
+      document.head.appendChild(script);
+    }
+
+    function openDeliveryMapPicker(context) {
+      if (!deliveryMapModalElement || typeof bootstrap === 'undefined' || !bootstrap?.Modal) {
+        alert('No se pudo abrir el selector de mapa.');
+        return;
+      }
+
+      activeDeliveryMapContext = context;
+      pendingDeliveryMapPosition = getContextCoordinates(context);
+
+      const modal = bootstrap.Modal.getOrCreateInstance(deliveryMapModalElement);
+      modal.show();
+      loadDeliveryMapScript();
     }
 
     function setAuthData(token, user) {
@@ -2355,7 +2818,7 @@
         decimalSeparator = source[decimalIndex];
       } else if (lastComma !== -1) {
         const fraction = source.slice(lastComma + 1).replace(/[^\d]/g, '');
-        if (fraction.length <= 2) {
+        if (fraction.length <= 2 || source.endsWith(',')) {
           decimalIndex = lastComma;
           decimalSeparator = ',';
         }
@@ -2399,6 +2862,7 @@
     function formatProPaymentAmountValue(value) {
       const numeric = Number(value || 0);
       return new Intl.NumberFormat('en-US', {
+        useGrouping: false,
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(Number.isFinite(numeric) ? numeric : 0);
@@ -2902,10 +3366,12 @@
 
       const response = await fetch('/api/loginEcomm', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': getCsrfToken(),
         },
         body: JSON.stringify({ email, password })
       });
@@ -2933,10 +3399,12 @@
 
       const response = await fetch('/api/registerEcomm', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': getCsrfToken(),
         },
         body: JSON.stringify({ name, email, password, password_confirmation, dni, phone_number })
       });
@@ -2973,14 +3441,17 @@
       }
 
       const deliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
-      const deliveryAddressResult = buildShippingAddress(
-        proShippingCountrySelect,
-        proShippingStateSelect,
-        proShippingCitySelect,
-        proShippingAddressDetailInput,
-        proShippingLatitudeInput,
-        proShippingLongitudeInput
-      );
+      const deliveryAddressResult = buildAddressForDeliveryType(deliveryType, {
+        countrySelect: proShippingCountrySelect,
+        stateSelect: proShippingStateSelect,
+        citySelect: proShippingCitySelect,
+        detailInput: proShippingAddressDetailInput,
+        latitudeInput: proShippingLatitudeInput,
+        longitudeInput: proShippingLongitudeInput,
+        receiverNameInput: proDeliveryReceiverNameInput,
+        receiverPhoneInput: proDeliveryReceiverPhoneInput,
+        extraInfoInput: proDeliveryExtraInfoInput,
+      });
 
       if (['delivery', 'shipping'].includes(deliveryType) && !deliveryAddressResult.valid) {
         alert(deliveryAddressResult.message);
@@ -3061,11 +3532,13 @@
       try {
         response = await fetch(`/${tenantSlug}/checkout/pro`, {
           method: 'POST',
+          credentials: 'same-origin',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'Authorization': `Bearer ${token}`,
-            'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': getCsrfToken(),
           },
           body: JSON.stringify({
             customer_id: Number(user.id),
@@ -3250,10 +3723,26 @@
           const currentType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
           const isAddressRequired = ['delivery', 'shipping'].includes(currentType);
           const isStoreDelivery = currentType === 'delivery';
+          const isThirdPartyShipping = currentType === 'shipping';
           document.getElementById('tenant-pro-shipping-address-container').classList.toggle('d-none', !isAddressRequired);
+          updateAddressSectionUi(
+            currentType,
+            {
+              addressLabelElement: proShippingAddressLabel,
+              detailInput: proShippingAddressDetailInput,
+              detailWrap: proShippingDetailWrap,
+              hintElement: proShippingAddressHint,
+              countryWraps: [proShippingLocationSelectCountryWrap, proShippingLocationSelectStateWrap, proShippingLocationSelectCityWrap],
+              locationActionsElement: proShippingLocationActions,
+              locationStatusElement: proShippingLocationStatus,
+              latitudeInput: proShippingLatitudeInput,
+              longitudeInput: proShippingLongitudeInput,
+              receiverFieldsElement: proDeliveryRecipientFields,
+            }
+          );
           proShippingDistanceWrap?.classList.toggle('d-none', !(isStoreDelivery && tenantDeliveryConfig?.enabled && tenantDeliveryConfig.mode === 'distance'));
 
-          if (isAddressRequired && proShippingCountrySelect && !proShippingCountrySelect.options.length) {
+          if (isThirdPartyShipping && proShippingCountrySelect && !proShippingCountrySelect.options.length) {
             initLocationSelectors(proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, {
               countryId: tenantCountryId,
               stateId: tenantStateId,
@@ -3270,11 +3759,29 @@
       proShippingDistanceInput?.addEventListener('input', updateProPaymentSummary);
 
       proShippingUseProfileLocationBtn?.addEventListener('click', () => {
+        const currentType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+        if (currentType === 'delivery') {
+          applyUserLocationCoordinates(getAuthUser(), proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
+          return;
+        }
+
         applyUserLocationToShippingForm(getAuthUser(), proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
       });
 
       proShippingUseCurrentLocationBtn?.addEventListener('click', () => {
         requestCurrentUserLocation(proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
+      });
+
+      proDeliveryUseCustomerDataBtn?.addEventListener('click', () => {
+        fillReceiverFieldsFromUser(getAuthUser(), proDeliveryReceiverNameInput, proDeliveryReceiverPhoneInput);
+      });
+
+      proDeliveryOpenMapBtn?.addEventListener('click', () => {
+        openDeliveryMapPicker({
+          latitudeInput: proShippingLatitudeInput,
+          longitudeInput: proShippingLongitudeInput,
+          statusElement: proShippingLocationStatus,
+        });
       });
 
       document.getElementById('tenant-pro-next-step')?.addEventListener('click', () => {
@@ -3297,11 +3804,72 @@
     bindLocationSelectorEvents(proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect);
 
     shippingUseProfileLocationBtn?.addEventListener('click', () => {
+      const currentType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup';
+      if (currentType === 'delivery') {
+        applyUserLocationCoordinates(getAuthUser(), shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus);
+        return;
+      }
+
       applyUserLocationToShippingForm(getAuthUser(), shippingCountrySelect, shippingStateSelect, shippingCitySelect, shippingAddressDetailInput, shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus);
     });
 
     shippingUseCurrentLocationBtn?.addEventListener('click', () => {
       requestCurrentUserLocation(shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus);
+    });
+
+    deliveryUseCustomerDataBtn?.addEventListener('click', () => {
+      fillReceiverFieldsFromUser(getAuthUser(), deliveryReceiverNameInput, deliveryReceiverPhoneInput);
+    });
+
+    deliveryOpenMapBtn?.addEventListener('click', () => {
+      openDeliveryMapPicker({
+        latitudeInput: shippingLatitudeInput,
+        longitudeInput: shippingLongitudeInput,
+        statusElement: shippingLocationStatus,
+      });
+    });
+
+    deliveryMapModalElement?.addEventListener('shown.bs.modal', () => {
+      initializeDeliveryMap();
+      if (!pendingDeliveryMapPosition) {
+        pendingDeliveryMapPosition = getContextCoordinates(activeDeliveryMapContext);
+      }
+
+      if (window.google?.maps && deliveryMap) {
+        google.maps.event.trigger(deliveryMap, 'resize');
+        deliveryMap.setCenter(pendingDeliveryMapPosition);
+        deliveryMap.setZoom(16);
+      }
+
+      if (deliveryMapMarker) {
+        deliveryMapMarker.setPosition(pendingDeliveryMapPosition);
+      }
+
+      updateDeliveryMapStatus(pendingDeliveryMapPosition);
+    });
+
+    deliveryMapConfirmBtn?.addEventListener('click', () => {
+      if (!activeDeliveryMapContext || !pendingDeliveryMapPosition) {
+        return;
+      }
+
+      if (activeDeliveryMapContext.latitudeInput) {
+        activeDeliveryMapContext.latitudeInput.value = pendingDeliveryMapPosition.lat;
+      }
+
+      if (activeDeliveryMapContext.longitudeInput) {
+        activeDeliveryMapContext.longitudeInput.value = pendingDeliveryMapPosition.lng;
+      }
+
+      renderShippingLocationStatus(
+        activeDeliveryMapContext.statusElement,
+        activeDeliveryMapContext.latitudeInput,
+        activeDeliveryMapContext.longitudeInput
+      );
+
+      if (typeof bootstrap !== 'undefined' && bootstrap?.Modal && deliveryMapModalElement) {
+        bootstrap.Modal.getInstance(deliveryMapModalElement)?.hide();
+      }
     });
 
     if (shippingCountrySelect) {
