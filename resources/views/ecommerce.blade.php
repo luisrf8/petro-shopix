@@ -315,6 +315,62 @@
       background: #f8fafc;
     }
 
+    .hero-cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.85rem;
+      margin-top: 1.5rem;
+    }
+
+    .hero-cta-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.9rem 1.25rem;
+      border-radius: 999px;
+      font-weight: 800;
+      text-decoration: none;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+
+    .hero-cta-pill:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 34px rgba(15, 23, 42, 0.22);
+    }
+
+    .hero-cta-primary {
+      background: linear-gradient(135deg, #f8fbff, #dbeafe);
+      color: #0f172a;
+    }
+
+    .hero-cta-secondary {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+      backdrop-filter: blur(12px);
+    }
+
+    .allies-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 120px;
+      text-decoration: none;
+      border-radius: 18px;
+      padding: 0.75rem;
+      border: 1px solid transparent;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+    }
+
+    .allies-link:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
+      border-color: #cbd5e1;
+      background: #f8fbff;
+    }
+
     /* También puedes aplicar un text-shadow más sutil al menú de navegación */
     .nav-link.white-shadow {
         color: white;
@@ -427,6 +483,16 @@
     <div class="container text-center">
       <h1 class="hero-title">SHOPIX</h1>
       <h2 class="hero-slogan">GESTIONA TU TIENDA O SERVICIO VIRTUAL FÁCILMENTE</h2>
+      <div class="hero-cta-row">
+        <a href="/landings" class="hero-cta-pill hero-cta-primary">
+          <i class="bi bi-grid-1x2-fill"></i>
+          Explorar tiendas / servicios
+        </a>
+        <a href="#planes" class="hero-cta-pill hero-cta-secondary">
+          <i class="bi bi-stars"></i>
+          Ver planes
+        </a>
+      </div>
 
     </div>
   </section>
@@ -469,7 +535,7 @@
     </div>
   </section>
 
-<section class="p-5">
+<section id="planes" class="p-5">
     <div class="text-center">
       <h2 class="section-title mb-5">Planes Disponibles</h2>
       <div class="d-flex flex-wrap justify-content-center gap-4">
@@ -518,6 +584,7 @@
         </div>
         @endforeach
       </div>
+
     </div>
   </section>
 
@@ -566,17 +633,19 @@
           <div class="row justify-content-center">
             @foreach($grupo as $tienda)
               <div class="col-6 col-md-3 mb-4 d-flex justify-content-center align-items-center">
-                @if($tienda->logo)
-                  <img src="{{ \App\Support\ImageStorage::url($tienda->logo) ?? asset('assets/img/shopix5.png') }}" 
-                       alt="{{ $tienda->name }}" 
-                       class="img-fluid allies-logo" 
-                       style="max-height: 100px;">
-                @else
-                  <img src="{{ asset('assets/img/shopix5.png') }}" 
-                       alt="{{ $tienda->name }}" 
-                       class="img-fluid allies-logo" 
-                       style="max-height: 100px;">
-                @endif
+                <a href="{{ route('tenant.public', $tienda->slug) }}" class="allies-link" aria-label="Explorar {{ $tienda->name }}">
+                  @if($tienda->logo)
+                    <img src="{{ \App\Support\ImageStorage::url($tienda->logo) ?? asset('assets/img/shopix5.png') }}" 
+                         alt="{{ $tienda->name }}" 
+                         class="img-fluid allies-logo" 
+                         style="max-height: 100px;">
+                  @else
+                    <img src="{{ asset('assets/img/shopix5.png') }}" 
+                         alt="{{ $tienda->name }}" 
+                         class="img-fluid allies-logo" 
+                         style="max-height: 100px;">
+                  @endif
+                </a>
               </div>
             @endforeach
           </div>

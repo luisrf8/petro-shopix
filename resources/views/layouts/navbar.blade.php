@@ -93,9 +93,9 @@
 <body class="bg-gray-100">
     @php
       use App\Models\Tenant;
-      use App\Models\TenantPlanPayment;
       use App\Models\User as UserModel;
       use App\Support\ImageStorage;
+      use App\Support\TenantPlanCapabilities;
 
       $user = auth()->user();
       $roleName = strtolower((string) optional($user?->role)->name);
@@ -136,44 +136,34 @@
 
       $unreadNotificationsCount = $user ? $user->unreadNotifications()->count() : 0;
 
-        $isFreePlanTenant = false;
-          $isBasicPlanTenant = false;
-        if (!$isSuperAdmin && $tenant) {
-          $latestPaidPlan = TenantPlanPayment::with('plan')
-            ->where('tenant_id', (int) $tenant->id)
-            ->where('status', 'paid')
-            ->orderByDesc('paid_at')
-            ->orderByDesc('id')
-            ->first();
+        $planCapabilities = TenantPlanCapabilities::forTenant($tenant, $isSuperAdmin);
+        $hasFreePlanRestriction = $planCapabilities->hasFreeRestriction();
+        $hasBasicPlanRestriction = $planCapabilities->hasBasicRestriction();
 
-          $isFreePlanTenant = (float) ($latestPaidPlan?->plan?->price ?? -1) <= 0;
-            $planName = strtolower((string) \Illuminate\Support\Str::ascii((string) ($latestPaidPlan?->plan?->name ?? '')));
-            $isBasicPlanTenant = strpos($planName, 'basico') !== false || strpos($planName, 'basic') !== false;
-        }
-
-        $hasFreePlanRestriction = !$isSuperAdmin && $isFreePlanTenant;
-        $hasBasicPlanRestriction = !$isSuperAdmin && $isBasicPlanTenant;
-        $isProPlanTenant = !$isSuperAdmin && !$isFreePlanTenant && !$isBasicPlanTenant;
-
-        $planCanDashboard = $isSuperAdmin || $isProPlanTenant;
-        $planCanCategories = $isSuperAdmin || $isFreePlanTenant || $isBasicPlanTenant || $isProPlanTenant;
+        $planCanDashboard = $planCapabilities->canDashboard();
+        $planCanCategories = $planCapabilities->canCategories();
         $planCanProducts = $planCanCategories;
-        $planCanStoreManagement = $isSuperAdmin || $isFreePlanTenant || $isBasicPlanTenant || $isProPlanTenant;
-        $planCanPaymentMethods = $isSuperAdmin || $isProPlanTenant;
-        $planCanSales = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
-        $planCanCustomers = $isSuperAdmin || $isProPlanTenant;
-        $planCanAccountsReceivable = $isSuperAdmin || $isProPlanTenant;
-        $planCanPaidPendingDeliveries = $isSuperAdmin || $isProPlanTenant;
-        $planCanInventoryEntries = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
-        $planCanProviders = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
-        $planCanWarehouses = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
-        $planCanMaterials = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
-        $planCanPurchaseHistory = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
-        $planCanPendingOrders = $isSuperAdmin || $isProPlanTenant;
-        $planCanSalesOrders = $isSuperAdmin || $isBasicPlanTenant || $isProPlanTenant;
-        $planCanElectronicDocuments = $isSuperAdmin || $isProPlanTenant;
-        $planCanReports = $isSuperAdmin || $isProPlanTenant;
-        $planCanStoreExpenses = $isSuperAdmin || $isProPlanTenant;
+        $planCanStoreManagement = $planCapabilities->canStoreManagement();
+        $planCanPaymentMethods = $planCapabilities->canPaymentMethods();
+        $planCanSales = $planCapabilities->canSales();
+        $planCanAppointments = $planCapabilities->canAppointments();
+        $planCanCustomers = $planCapabilities->canCustomers();
+        $planCanAccountsReceivable = $planCapabilities->canAccountsReceivable();
+        $planCanPaidPendingDeliveries = $planCapabilities->canPaidPendingDeliveries();
+        $planCanInventoryEntries = $planCapabilities->canInventoryEntries();
+        $planCanProviders = $planCapabilities->canProviders();
+        $planCanWarehouses = $planCapabilities->canWarehouses();
+        $planCanMaterials = $planCapabilities->canMaterials();
+        $planCanPurchaseHistory = $planCapabilities->canPurchaseHistory();
+        $planCanPendingOrders = $planCapabilities->canPendingOrders();
+        $planCanSalesOrders = $planCapabilities->canSalesOrders();
+        $planCanElectronicDocuments = $planCapabilities->canElectronicDocuments();
+        $planCanReports = $planCapabilities->canReports();
+        $planCanStoreExpenses = $planCapabilities->canStoreExpenses();
+
+        $tenantBusinessType = strtolower((string) ($tenant->business_type ?? ''));
+        $isServiceStore = in_array($tenantBusinessType, ['servicio', 'service', 'services'], true);
+        $canSeeAppointments = $isOwner || $isAdmin || $isSeller;
 
         $showCatalogSection = ($planCanDashboard)
           || ($canSeeCategories && $planCanCategories)
@@ -182,6 +172,7 @@
           || ($canManageStore && $planCanStoreManagement);
 
         $showSalesSection = ($canSell && $planCanSales)
+          || ($canSeeAppointments && $planCanAppointments && $isServiceStore)
           || ($canSeeCustomers && $planCanCustomers)
           || ($canSeeAccountsReceivable && $planCanAccountsReceivable)
           || ($canSeePaidPendingDeliveries && $planCanPaidPendingDeliveries)
@@ -293,6 +284,15 @@
             <span class="nav-link-text ms-1">Realizar Venta</span>
           </a>
         </li>
+
+        @if($canSeeAppointments && $planCanAppointments && $isServiceStore)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/appointments">
+              <i class="material-symbols-rounded opacity-5">calendar_month</i>
+              <span class="nav-link-text ms-1">Citas</span>
+            </a>
+          </li>
+        @endif
 
         @if($canSeeCustomers && $planCanCustomers)
           <li class="nav-item">
@@ -506,7 +506,7 @@
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
       const serviceWorkerUrl = @json(url('/push-sw.js'));
       const vapidPublicKey = @json(config('webpush.vapid.public_key'));
-      const defaultNotificationIcon = @json(optional(auth()->user()?->tenant)->logo ? \App\Support\ImageStorage::url(auth()->user()->tenant->logo) : asset('assets/img/shopix5.png'));
+      const defaultNotificationIcon = @json($tenantLogo ?? asset('assets/img/shopix5.png'));
       let serviceWorkerRegistrationPromise = null;
 
       function updateBadge(unread) {

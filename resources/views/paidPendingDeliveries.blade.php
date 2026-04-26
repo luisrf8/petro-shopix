@@ -5,12 +5,17 @@
 @section('content')
 @php
   $currentUser = auth()->user();
+  $paidPendingTenant = ($currentUser && (int) ($currentUser->tenant_id ?? 0) > 0)
+    ? \App\Models\Tenant::find((int) $currentUser->tenant_id)
+    : null;
+  $paidPendingCapabilities = \App\Support\TenantPlanCapabilities::forTenant($paidPendingTenant);
   $isOwner = (bool) ($currentUser?->isOwner() ?? false);
   $isAdmin = (bool) ($currentUser?->isAdmin() ?? false);
   $isSeller = (bool) ($currentUser?->hasStoreRole('seller') ?? false);
   $isWarehouse = (bool) ($currentUser?->hasStoreRole('warehouse') ?? false);
   $isDeliveryUser = (bool) ($currentUser?->hasStoreRole('delivery') ?? false);
-  $canAssignDeliveryInline = $isOwner || $isAdmin || $isSeller || $isWarehouse;
+  $deliveryOperationsLocked = !$paidPendingCapabilities->allowsDeliveryOperations();
+  $canAssignDeliveryInline = !$deliveryOperationsLocked && ($isOwner || $isAdmin || $isSeller || $isWarehouse);
 @endphp
 <div class="container-fluid py-2">
   <div class="card my-4">
@@ -75,7 +80,9 @@
                         </div>
                       </td>
                       <td>
-                        @if($tab['key'] === 'delivery' && $isDeliveryUser)
+                        @if($tab['key'] === 'delivery' && $deliveryOperationsLocked)
+                          <span class="text-xs text-muted">Delivery bloqueado por el plan actual.</span>
+                        @elseif($tab['key'] === 'delivery' && $isDeliveryUser)
                           @php
                             $assignedUserId = (int) ($order->delivery_assigned_user_id ?? 0);
                             $isAssignedToCurrentDelivery = $assignedUserId > 0 && $assignedUserId === (int) ($currentUser->id ?? 0);

@@ -84,6 +84,11 @@ class RestrictFreePlanAccess
             'tenant.store',
             'tenant.update',
             'tenant.planPayment.request',
+            'notifications.index',
+            'notifications.feed',
+            'notifications.read',
+            'push-subscriptions.store',
+            'push-subscriptions.destroy',
             'logout',
         ];
 
@@ -102,6 +107,7 @@ class RestrictFreePlanAccess
             'variants',
             'tenant-store',
             'tenant-update',
+            'notifications',
             'logout',
         ];
 

@@ -6,20 +6,21 @@ use App\Models\MaterialPackage;
 use App\Models\MaterialPackageItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use App\Models\TenantPlanPayment;
 use App\Support\ActionReason;
+use App\Support\TenantPlanCapabilities;
 
 class MaterialPackageController extends Controller
 {
     public function index()
     {
         $user = auth()->user();
-        $isBasicPlanTenant = $this->isBasicPlanTenant((int) $user->tenant_id);
+        $isBasicPlanTenant = $this->tenantPlanCapabilities((int) $user->tenant_id)->isBasic();
 
         $productItems = Product::with(['images', 'variants'])
             ->where('tenant_id', $user->tenant_id)
@@ -39,7 +40,7 @@ class MaterialPackageController extends Controller
     {
         $user = auth()->user();
 
-        if ($this->isBasicPlanTenant((int) $user->tenant_id)) {
+        if ($this->tenantPlanCapabilities((int) $user->tenant_id)->isBasic()) {
             return redirect()->route('materials.index')
                 ->withErrors(['items' => 'El plan Básico no permite crear listas de materiales.']);
         }
@@ -95,7 +96,7 @@ class MaterialPackageController extends Controller
     {
         $user = auth()->user();
 
-        if ($this->isBasicPlanTenant((int) $user->tenant_id)) {
+        if ($this->tenantPlanCapabilities((int) $user->tenant_id)->isBasic()) {
             return redirect()->route('materials.index')
                 ->withErrors(['items' => 'El plan Básico no permite editar listas de materiales.']);
         }
@@ -191,18 +192,9 @@ class MaterialPackageController extends Controller
         return $value;
     }
 
-    private function isBasicPlanTenant(int $tenantId): bool
+    private function tenantPlanCapabilities(int $tenantId): TenantPlanCapabilities
     {
-        $latestPaid = TenantPlanPayment::with('plan')
-            ->where('tenant_id', $tenantId)
-            ->where('status', 'paid')
-            ->orderByDesc('paid_at')
-            ->orderByDesc('id')
-            ->first();
-
-        $planName = Str::lower(Str::ascii((string) ($latestPaid?->plan?->name ?? '')));
-
-        return Str::contains($planName, ['basico', 'basic']);
+        return TenantPlanCapabilities::forTenant(Tenant::find($tenantId));
     }
 
     private function validateMaterialPackageRequest(Request $request): array

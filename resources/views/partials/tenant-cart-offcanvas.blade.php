@@ -2738,8 +2738,14 @@
 
     function createPaymentRowHtml(methods, rowId) {
       const options = methods.map(method => `
-        <option value="${method.id}" data-currency-code="${method.currency?.code || ''}" data-currency-name="${method.currency?.name || ''}">${method.name} (${method.currency?.code || method.currency?.name || proBaseCurrency})</option>
+        <option value="${method.id}" data-currency-code="${method.currency?.code || ''}" data-currency-name="${method.currency?.name || ''}" data-has-reference="${method.has_reference ? '1' : '0'}">${method.name} (${method.currency?.code || method.currency?.name || proBaseCurrency})</option>
       `).join('');
+
+      const firstMethod = Array.isArray(methods) && methods.length > 0 ? methods[0] : null;
+      const requiresReference = !!firstMethod?.has_reference;
+      const referenceColumnClass = requiresReference ? 'col-10 col-md-3' : 'd-none';
+      const proofColumnClass = requiresReference ? 'col-12 col-md-6' : 'd-none';
+      const proofNameColumnClass = requiresReference ? 'col-12 col-md-6' : 'd-none';
 
       return `
         <div class="border rounded p-2 tenant-pro-payment-row" data-pro-payment-row="${rowId}">
@@ -2752,13 +2758,13 @@
               <label class="form-label small mb-1">Monto</label>
               <input type="text" inputmode="decimal" autocomplete="off" class="form-control pro-payment-amount" placeholder="0.00">
             </div>
-            <div class="col-10 col-md-3">
+            <div class="${referenceColumnClass} pro-payment-reference-group">
               <label class="form-label small mb-1">Referencia *</label>
-              <input type="text" class="form-control pro-payment-reference" placeholder="Obligatoria" required>
+              <input type="text" class="form-control pro-payment-reference" placeholder="Obligatoria" ${requiresReference ? 'required' : ''}>
             </div>
-            <div class="col-12 col-md-6">
+            <div class="${proofColumnClass} pro-payment-proof-group">
               <label class="form-label small mb-1">Imagen de comprobante *</label>
-              <input type="file" class="form-control pro-payment-reference-image" accept="image/png,image/jpeg,image/jpg,image/webp" required>
+              <input type="file" class="form-control pro-payment-reference-image" accept="image/png,image/jpeg,image/jpg,image/webp" ${requiresReference ? 'required' : ''}>
             </div>
             <div class="col-2 col-md-1 d-flex align-items-end">
               <button type="button" class="btn btn-outline-danger btn-sm w-100 pro-remove-payment-row" aria-label="Eliminar pago"><i class="bi bi-x-lg"></i></button>
@@ -2766,7 +2772,7 @@
             <div class="col-12">
               <div class="small border rounded p-2 bg-light pro-payment-method-details"></div>
             </div>
-            <div class="col-12 col-md-6">
+            <div class="${proofNameColumnClass} pro-payment-proof-name-group">
               <div class="small text-muted pro-payment-reference-image-name pt-md-4">Sin imagen cargada</div>
             </div>
           </div>
@@ -3042,6 +3048,31 @@
       const detailsBox = row.querySelector('.pro-payment-method-details');
       if (detailsBox) {
         detailsBox.innerHTML = renderMethodDetailsHtml(method);
+      }
+
+      const requiresReference = !!method?.has_reference;
+      const referenceGroup = row.querySelector('.pro-payment-reference-group');
+      const proofGroup = row.querySelector('.pro-payment-proof-group');
+      const proofNameGroup = row.querySelector('.pro-payment-proof-name-group');
+      const referenceInput = row.querySelector('.pro-payment-reference');
+      const proofInput = row.querySelector('.pro-payment-reference-image');
+
+      referenceGroup?.classList.toggle('d-none', !requiresReference);
+      proofGroup?.classList.toggle('d-none', !requiresReference);
+      proofNameGroup?.classList.toggle('d-none', !requiresReference);
+
+      if (referenceInput) {
+        referenceInput.required = requiresReference;
+        if (!requiresReference) {
+          referenceInput.value = '';
+        }
+      }
+
+      if (proofInput) {
+        proofInput.required = requiresReference;
+        if (!requiresReference) {
+          proofInput.value = '';
+        }
       }
     }
 
@@ -3491,8 +3522,9 @@
         const amountRaw = parseProPaymentAmountValue(row.querySelector('.pro-payment-amount')?.value || 0);
         const method = getMethodById(methodId);
         const amount = toBaseFromMethodAmount(method, amountRaw);
-        const reference = (row.querySelector('.pro-payment-reference')?.value || '').trim();
-        const imageFile = row.querySelector('.pro-payment-reference-image')?.files?.[0] || null;
+        const requiresReference = !!method?.has_reference;
+        const reference = requiresReference ? (row.querySelector('.pro-payment-reference')?.value || '').trim() : '';
+        const imageFile = requiresReference ? (row.querySelector('.pro-payment-reference-image')?.files?.[0] || null) : null;
         const referenceImageData = imageFile ? await fileToDataUrl(imageFile) : null;
 
         return {
@@ -3509,13 +3541,19 @@
         return;
       }
 
-      const hasMissingReference = payments.some(payment => !String(payment.reference || '').trim());
+      const hasMissingReference = payments.some(payment => {
+        const method = getMethodById(payment.method_id);
+        return !!method?.has_reference && !String(payment.reference || '').trim();
+      });
       if (hasMissingReference) {
         alert('Cada pago debe incluir una referencia.');
         return;
       }
 
-      const hasMissingProofImage = payments.some(payment => !String(payment.reference_image_data || '').trim());
+      const hasMissingProofImage = payments.some(payment => {
+        const method = getMethodById(payment.method_id);
+        return !!method?.has_reference && !String(payment.reference_image_data || '').trim();
+      });
       if (hasMissingProofImage) {
         alert('Cada pago debe incluir una imagen de comprobante.');
         return;

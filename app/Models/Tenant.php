@@ -184,6 +184,21 @@ class Tenant extends Model
         return $this->hasMany(Warehouse::class);
     }
 
+    public function appointmentServices()
+    {
+        return $this->hasMany(AppointmentService::class);
+    }
+
+    public function appointments()
+    {
+        return $this->hasMany(Appointment::class);
+    }
+
+    public function userScheduleRules()
+    {
+        return $this->hasMany(UserScheduleRule::class);
+    }
+
     // Si quieres solo el plan activo:
     public function activePlanPayment()
     {

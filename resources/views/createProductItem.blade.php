@@ -193,10 +193,11 @@
 
                     <div class="mb-3">
                         <label for="categorySelector" class="form-label">Categoría</label>
+                        @php $selectedCategoryId = (string) request('category_id', old('category_id', '')); @endphp
                         <select id="categorySelector" name="category_id" class="form-select" required>
                             <option value="">Seleccione una categoría</option>
                             @foreach($categories as $category)
-                                <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                <option value="{{ $category->id }}" {{ $selectedCategoryId === (string) $category->id ? 'selected' : '' }}>{{ $category->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -209,6 +210,16 @@
                     <div class="mb-3">
                         <label for="productDiscount" class="form-label">Descuento del producto (%)</label>
                         <input type="number" id="productDiscount" name="productDiscount" min="0" max="100" step="0.01" value="0" class="form-control" data-decimal-friendly="true">
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check form-switch ps-0 d-flex align-items-center justify-content-between border rounded-3 px-3 py-2 bg-white">
+                            <div>
+                                <label class="form-check-label fw-semibold" for="productIsConsumable">Producto consumible</label>
+                                <small class="d-block text-muted">Los consumibles se usan para inventario interno y no estarán disponibles para venta directa.</small>
+                            </div>
+                            <input class="form-check-input ms-3" type="checkbox" role="switch" id="productIsConsumable" name="is_consumable" value="1">
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -283,6 +294,7 @@
                 <input type="file" id="createProductAiReferenceImage" class="d-none" accept=".png,.jpg,.jpeg,.webp">
                 <div class="d-flex gap-2 align-items-end">
                     <button type="button" class="btn btn-outline-dark" id="createProductAiAttachBtn" title="Adjuntar imagen">📎</button>
+                    <button type="button" class="btn btn-outline-secondary d-none" id="createProductAiImportMainBtn" title="Importar imagen del producto principal">Importar imagen del producto principal</button>
                     <textarea id="createProductAiPrompt" class="form-control" rows="2" placeholder="Escribe tu mensaje para la IA..."></textarea>
                     <button type="button" class="btn btn-dark" id="createProductAiSendBtn" title="Enviar">➤</button>
                 </div>
@@ -307,6 +319,7 @@
     let createProductAiHistory = [];
     let createProductAiLatestResult = null;
     let createProductAiTarget = null;
+    let createProductAiImportedReference = null;
 
     function showShopixToast(message, type = 'info') {
         let container = document.getElementById('shopixToastContainer');
@@ -527,7 +540,7 @@
     async function getCreateProductAiReferenceData() {
         const attachedFile = document.getElementById('createProductAiReferenceImage')?.files?.[0] || null;
         const targetFile = createProductAiTarget?.input?.files?.[0] || null;
-        const sourceFile = attachedFile || targetFile;
+        const sourceFile = attachedFile;
 
         if (sourceFile) {
             return new Promise((resolve, reject) => {
@@ -540,6 +553,55 @@
                 reader.onerror = () => reject(new Error('No se pudo leer la imagen base.'));
                 reader.readAsDataURL(sourceFile);
             });
+        }
+
+        if (createProductAiImportedReference?.data) {
+            return {
+                data: createProductAiImportedReference.data,
+                mime: createProductAiImportedReference.mime || 'image/png',
+            };
+        }
+
+        if (targetFile) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = String(reader.result || '');
+                    resolve({
+                        data: dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl,
+                        mime: targetFile.type || 'image/png',
+                    });
+                };
+                reader.onerror = () => reject(new Error('No se pudo leer la imagen seleccionada.'));
+                reader.readAsDataURL(targetFile);
+            });
+        }
+
+        const productSeedFile = createProductAiTarget?.productSeedInput?.files?.[0] || null;
+        if (productSeedFile) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = String(reader.result || '');
+                    resolve({
+                        data: dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl,
+                        mime: productSeedFile.type || 'image/png',
+                    });
+                };
+                reader.onerror = () => reject(new Error('No se pudo leer la imagen principal del producto.'));
+                reader.readAsDataURL(productSeedFile);
+            });
+        }
+
+        if (createProductAiTarget?.productSeedUrl) {
+            const dataUrl = await dataUrlFromRemoteImage(createProductAiTarget.productSeedUrl);
+            if (dataUrl) {
+                const mime = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/)?.[1] || 'image/png';
+                return {
+                    data: dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl,
+                    mime,
+                };
+            }
         }
 
         if (createProductAiTarget?.existingImageUrl) {
@@ -559,10 +621,12 @@
         createProductAiTarget = target;
         createProductAiHistory = [];
         createProductAiLatestResult = null;
+        createProductAiImportedReference = null;
         document.getElementById('createProductAiPrompt').value = '';
         document.getElementById('createProductAiReferenceImage').value = '';
         document.getElementById('createProductAiAttachedName').textContent = 'Sin imagen adjunta';
         document.getElementById('createProductAiChat').innerHTML = '';
+        document.getElementById('createProductAiImportMainBtn')?.classList.toggle('d-none', !(target?.productSeedInput?.files?.[0] || target?.productSeedUrl));
         document.getElementById('createProductAiBaseHint').textContent = target?.existingImageUrl || target?.input?.files?.[0]
             ? `Se usará como base la ${target.label || 'imagen actual'} si no adjuntas otra.`
             : 'Sin imagen base seleccionada.';
@@ -646,6 +710,48 @@
         appendCreateProductAiMessage('assistant', 'La imagen se aplicó al formulario.');
     }
 
+    async function importMainProductImageAsSeed() {
+        if (!createProductAiTarget) return;
+
+        const seedFile = createProductAiTarget.productSeedInput?.files?.[0] || null;
+        if (seedFile) {
+            createProductAiImportedReference = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = String(reader.result || '');
+                    resolve({
+                        data: dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl,
+                        mime: seedFile.type || 'image/png',
+                        name: seedFile.name,
+                    });
+                };
+                reader.onerror = () => reject(new Error('No se pudo leer la imagen principal del producto.'));
+                reader.readAsDataURL(seedFile);
+            });
+            document.getElementById('createProductAiAttachedName').textContent = `Base importada: ${seedFile.name}`;
+            showShopixToast('La imagen principal del producto quedó lista como base para la variante.', 'success');
+            return;
+        }
+
+        if (createProductAiTarget.productSeedUrl) {
+            const dataUrl = await dataUrlFromRemoteImage(createProductAiTarget.productSeedUrl);
+            if (!dataUrl) {
+                showShopixToast('No se pudo importar la imagen principal del producto.', 'warning');
+                return;
+            }
+            createProductAiImportedReference = {
+                data: dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl,
+                mime: dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/)?.[1] || 'image/png',
+                name: 'imagen-principal-producto',
+            };
+            document.getElementById('createProductAiAttachedName').textContent = 'Base importada: imagen principal del producto';
+            showShopixToast('La imagen principal del producto quedó lista como base para la variante.', 'success');
+            return;
+        }
+
+        showShopixToast('Primero agrega una imagen principal del producto para reutilizarla como base.', 'warning');
+    }
+
     function createVariantRow() {
         const container = document.getElementById('variantContainer');
         const row = document.createElement('div');
@@ -692,12 +798,15 @@
         const imageInput = row.querySelector('.variant-image-input');
         const preview = row.querySelector('.variant-preview');
         row.querySelector('.open-create-variant-ai-btn')?.addEventListener('click', () => {
+            const firstProductPreview = document.querySelector('#imagePreview img');
             openCreateProductAiModal({
                 input: imageInput,
                 preview,
                 multiple: false,
                 label: 'imagen de variante',
                 existingImageUrl: preview.getAttribute('src') || '',
+                productSeedInput: document.getElementById('productImages'),
+                productSeedUrl: firstProductPreview?.getAttribute('src') || '',
             });
         });
         imageInput.addEventListener('change', async (event) => {
@@ -762,6 +871,8 @@
     document.getElementById('createProductAiAttachBtn').addEventListener('click', () => {
         document.getElementById('createProductAiReferenceImage').click();
     });
+
+    document.getElementById('createProductAiImportMainBtn').addEventListener('click', importMainProductImageAsSeed);
 
     document.getElementById('createProductAiReferenceImage').addEventListener('change', function() {
         const file = this.files?.[0];
@@ -874,7 +985,7 @@
                 throw new Error(validationMessage || payload.message || 'No se pudo crear el producto.');
             }
 
-            showShopixToast('Producto creado correctamente', 'success');
+            showShopixToast(payload.message || 'Producto creado correctamente', 'success');
             window.location.href = "{{ route('products.index') }}";
         } catch (error) {
             showShopixToast(error.message || 'No se pudo crear el producto.', 'error');

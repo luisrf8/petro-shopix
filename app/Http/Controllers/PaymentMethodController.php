@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\DB;
 use App\Support\ImageStorage;
 use App\Support\AuditLogger;
 use App\Support\ActionReason;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 class PaymentMethodController extends Controller
 {
@@ -42,6 +44,7 @@ class PaymentMethodController extends Controller
             ->latest('id')
             ->limit(50)
             ->get();
+        $rateHistoryEntries = $this->buildRateHistoryEntries((int) $user->tenant_id, 120);
         $baseCurrencyCode = strtoupper((string) optional(Tenant::find($user->tenant_id))->base_currency ?: 'USD');
 
         // Agrupar métodos de pago por moneda
@@ -49,7 +52,7 @@ class PaymentMethodController extends Controller
             return $paymentMethod->currency->name; // Agrupar por el nombre de la moneda
         });
 
-        return view('paymentMethods', compact('currencies', 'groupedPaymentMethods', 'dollarRate', 'euroRate', 'dollarRateHistory', 'euroRateHistory', 'baseCurrencyCode'));
+        return view('paymentMethods', compact('currencies', 'groupedPaymentMethods', 'dollarRate', 'euroRate', 'dollarRateHistory', 'euroRateHistory', 'rateHistoryEntries', 'baseCurrencyCode'));
     }
     // Crear un nuevo método de pago
     public function create(Request $request)
@@ -63,6 +66,7 @@ class PaymentMethodController extends Controller
             'admin_name' => 'nullable|string',
             'dni' => 'nullable|string',
             'bank' => 'nullable|string',
+            'has_reference' => 'nullable|boolean',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
             'tenant_id' => 'required'
         ]);
@@ -78,6 +82,7 @@ class PaymentMethodController extends Controller
             'description' => $request->description,
             'dni' => $request->dni,
             'bank' => $request->bank,
+            'has_reference' => $request->boolean('has_reference', true),
             'tenant_id' => $request->tenant_id
         ]);
         if ($request->hasFile('image')) {
@@ -127,6 +132,7 @@ class PaymentMethodController extends Controller
             'admin_name' => 'nullable|string',
             'dni' => 'nullable|string',
             'bank' => 'nullable|string',
+            'has_reference' => 'nullable|boolean',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
         ]);
 
@@ -138,6 +144,7 @@ class PaymentMethodController extends Controller
             'admin_name' => $validated['admin_name'] ?? null,
             'dni' => $validated['dni'] ?? null,
             'bank' => $validated['bank'] ?? null,
+            'has_reference' => $request->boolean('has_reference', true),
         ]);
 
         // Procesar la imagen QR si se envía
@@ -378,6 +385,109 @@ class PaymentMethodController extends Controller
         $paymentMethod->save();
     
         return response()->json(['success' => true, 'message' => 'QR eliminado correctamente.']);
+    }
+
+    public function exportRateHistory(string $format)
+    {
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $entries = $this->buildRateHistoryEntries($tenantId);
+
+        if ($format === 'csv') {
+            return response()->streamDownload(function () use ($entries) {
+                $stream = fopen('php://output', 'w');
+                fwrite($stream, "\xEF\xBB\xBF");
+                fputcsv($stream, ['Moneda', 'Codigo', 'Fecha BCV', 'Tasa VES', 'Registrada']);
+
+                foreach ($entries as $entry) {
+                    fputcsv($stream, [
+                        $entry['currency_name'],
+                        $entry['currency_code'],
+                        $entry['rate_date']->format('Y-m-d'),
+                        number_format((float) $entry['rate'], 4, '.', ''),
+                        optional($entry['created_at'])->format('Y-m-d H:i:s'),
+                    ]);
+                }
+
+                fclose($stream);
+            }, 'historial-tasas-shopix.csv', [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+            ]);
+        }
+
+        if ($format === 'excel') {
+            $html = view('exports.rateHistoryPdf', [
+                'entries' => $entries,
+                'title' => 'Historial de tasas SHOPIX',
+                'exportedAt' => now(),
+            ])->render();
+
+            return response($html, 200, [
+                'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
+                'Content-Disposition' => 'attachment; filename="historial-tasas-shopix.xls"',
+            ]);
+        }
+
+        $html = view('exports.rateHistoryPdf', [
+            'entries' => $entries,
+            'title' => 'Historial de tasas SHOPIX',
+            'exportedAt' => now(),
+        ])->render();
+
+        $options = new Options();
+        $options->set('isHtml5ParserEnabled', true);
+        $options->set('isPhpEnabled', true);
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        return response($dompdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="historial-tasas-shopix.pdf"',
+        ]);
+    }
+
+    private function buildRateHistoryEntries(int $tenantId, ?int $limit = null)
+    {
+        $dollarEntries = DollarRate::query()
+            ->where('tenant_id', $tenantId)
+            ->latest('date')
+            ->latest('id')
+            ->get()
+            ->map(function (DollarRate $rate) {
+                return [
+                    'currency_name' => 'Dolar',
+                    'currency_code' => 'USD',
+                    'rate' => (float) $rate->rate,
+                    'rate_date' => $rate->date instanceof Carbon ? $rate->date : Carbon::parse((string) $rate->date),
+                    'created_at' => $rate->created_at,
+                ];
+            });
+
+        $euroEntries = EuroRate::query()
+            ->where('tenant_id', $tenantId)
+            ->latest('date')
+            ->latest('id')
+            ->get()
+            ->map(function (EuroRate $rate) {
+                return [
+                    'currency_name' => 'Euro',
+                    'currency_code' => 'EUR',
+                    'rate' => (float) $rate->rate,
+                    'rate_date' => $rate->date instanceof Carbon ? $rate->date : Carbon::parse((string) $rate->date),
+                    'created_at' => $rate->created_at,
+                ];
+            });
+
+        $entries = $dollarEntries
+            ->concat($euroEntries)
+            ->sortByDesc(function (array $entry) {
+                return sprintf('%s-%010d', $entry['rate_date']->format('Ymd'), optional($entry['created_at'])->getTimestamp() ?? 0);
+            })
+            ->values();
+
+        return $limit ? $entries->take($limit)->values() : $entries;
     }
 
 }

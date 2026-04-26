@@ -2,6 +2,14 @@
 
 @section('title', 'Categorías')
 
+@php
+  $salesOrdersTenant = ($salesOrdersTenantId = (int) (auth()->user()->tenant_id ?? 0)) > 0
+    ? \App\Models\Tenant::find($salesOrdersTenantId)
+    : null;
+  $salesOrdersCapabilities = \App\Support\TenantPlanCapabilities::forTenant($salesOrdersTenant);
+  $salesOrdersFreePlan = !$salesOrdersCapabilities->canGenerateSalesReport();
+@endphp
+
 @section('content')
     <div class="container-fluid py-2">
       <div class="row mt-4">
@@ -11,7 +19,7 @@
                 <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
                   <h6 class="text-white text-capitalize ps-3">{{ $pageTitle ?? 'VENTAS REALIZADAS' }}</h6>
                   <div class="py-1 px-3 text-end admin-mobile-actions">
-                    @if(!($isPendingDeliveryView ?? false) && ($canApprovePayments ?? true))
+                    @if(!($isPendingDeliveryView ?? false) && ($canApprovePayments ?? true) && !$salesOrdersFreePlan)
                       <label class="text-white admin-mobile-action-trigger"  data-bs-toggle="modal" data-bs-target="#reportModal">
                         + Generar Reporte
                       </label>
@@ -121,7 +129,7 @@
       </div>
     </div>
 
-@if(!($isPendingDeliveryView ?? false) && ($canApprovePayments ?? true))
+@if(!($isPendingDeliveryView ?? false) && ($canApprovePayments ?? true) && !$salesOrdersFreePlan)
 <!-- Modal para generar reporte -->
 <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
     <div class="modal-dialog">

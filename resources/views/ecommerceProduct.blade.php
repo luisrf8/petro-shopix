@@ -1351,6 +1351,7 @@
         const galleryPrevButton = document.getElementById('product-gallery-prev');
         const galleryNextButton = document.getElementById('product-gallery-next');
         const galleryCounter = document.getElementById('product-gallery-counter');
+        const thumbnailGallery = document.getElementById('thumbnail-gallery');
         const thumbnails = document.querySelectorAll('.thumbnail-image');
         const fullscreenButton = document.getElementById('product-gallery-fullscreen');
         const fullscreenModalElement = document.getElementById('productGalleryFullscreenModal');
@@ -1358,10 +1359,47 @@
         const fullscreenPrevButton = document.getElementById('product-gallery-fullscreen-prev');
         const fullscreenNextButton = document.getElementById('product-gallery-fullscreen-next');
         const fullscreenCounter = document.getElementById('product-gallery-fullscreen-counter');
+        const fullscreenThumbsContainer = document.getElementById('product-gallery-fullscreen-thumbs');
         const fullscreenThumbs = Array.from(document.querySelectorAll('[data-fullscreen-gallery-index]'));
         const fullscreenStage = document.getElementById('product-gallery-fullscreen-stage');
         let currentGalleryIndex = 0;
         let fullscreenTouchStartX = null;
+
+        function syncVariantPrimaryImage(imageSrc, altText) {
+          if (!imageSrc || !gallerySlides.length) {
+            return;
+          }
+
+          const firstSlide = gallerySlides[0];
+          const firstSlideImage = firstSlide?.querySelector('img');
+          if (firstSlide) {
+            firstSlide.dataset.imageSrc = imageSrc;
+          }
+          if (firstSlideImage) {
+            firstSlideImage.src = imageSrc;
+            firstSlideImage.alt = altText || firstSlideImage.alt;
+          }
+
+          const firstThumb = thumbnailGallery?.querySelector('.thumbnail-image');
+          if (firstThumb) {
+            firstThumb.src = imageSrc;
+            firstThumb.dataset.mainSrc = imageSrc;
+            firstThumb.alt = altText || firstThumb.alt;
+          }
+
+          const firstFullscreenThumb = fullscreenThumbsContainer?.querySelector('[data-fullscreen-gallery-index="0"]');
+          if (firstFullscreenThumb) {
+            firstFullscreenThumb.src = imageSrc;
+            firstFullscreenThumb.alt = altText || firstFullscreenThumb.alt;
+          }
+
+          if (fullscreenImage && currentGalleryIndex === 0) {
+            fullscreenImage.src = imageSrc;
+            fullscreenImage.alt = altText || fullscreenImage.alt;
+          }
+
+          scrollToGalleryIndex(0);
+        }
 
         function updateGalleryUi(index) {
           currentGalleryIndex = Math.max(0, Math.min(index, Math.max(gallerySlides.length - 1, 0)));
@@ -1573,6 +1611,8 @@
                   const matchingThumb = Array.from(thumbnails).find(t => t.dataset.mainSrc === selectedVariant.imageSrc);
                   if (matchingThumb) {
                     scrollToGalleryIndex(Number(matchingThumb.dataset.galleryIndex || 0));
+                  } else {
+                    syncVariantPrimaryImage(selectedVariant.imageSrc, `Imagen de la variante ${selectedVariant.size} de ${selectedVariant.productName}`);
                   }
                 }
 
@@ -1649,7 +1689,7 @@
               return;
             }
 
-            const message = `Hola, estoy interesado en el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio de *${selectedVariant.price} ${baseCurrencySymbol}*. ¿Podrían darme más información?`;
+            const message = `Hola, vengo de tu tienda virtual de Shopix y estoy interesado en el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio de *${selectedVariant.price} ${baseCurrencySymbol}*. ¿Podrían darme más información?`;
             const whatsappLink = `https://wa.me/${fullPhoneNumber}?text=${encodeURIComponent(message)}`;
             window.open(whatsappLink, '_blank');
           });

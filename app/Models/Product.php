@@ -11,11 +11,17 @@ class Product extends Model
 
     protected $fillable = [
         'name',
+        'slug',
         'description',
         'discount_percentage',
+        'is_consumable',
         'category_id',
         'is_active',
         'tenant_id'
+    ];
+
+    protected $casts = [
+        'is_consumable' => 'boolean',
     ];
 
     public function getDiscountPercentageAttribute($value)

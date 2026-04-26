@@ -75,6 +75,11 @@ class User extends Authenticatable implements JWTSubject
         return $this->belongsTo(Role::class);
     }
 
+    public function tenant()
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
     public function salesOrders()
     {
         return $this->hasMany(SalesOrder::class);
@@ -83,6 +88,26 @@ class User extends Authenticatable implements JWTSubject
     public function payments()
     {
         return $this->hasManyThrough(Payment::class, SalesOrder::class, 'user_id', 'sales_order_id');
+    }
+
+    public function appointmentServices()
+    {
+        return $this->hasMany(AppointmentService::class);
+    }
+
+    public function scheduleRules()
+    {
+        return $this->hasMany(UserScheduleRule::class);
+    }
+
+    public function assignedAppointments()
+    {
+        return $this->hasMany(Appointment::class, 'user_id');
+    }
+
+    public function customerAppointments()
+    {
+        return $this->hasMany(Appointment::class, 'customer_id');
     }
 
     public static function storeRoleDefinitions(): array

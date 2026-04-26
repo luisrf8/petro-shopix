@@ -234,8 +234,9 @@
 
         .main-content .card .table th,
         .main-content .card .table td {
-          font-size: 0.72rem;
-          padding: 0.55rem 0.45rem;
+          font-size: 0.7rem;
+          padding: 0.4rem 0.4rem;
+          line-height: 1.2;
           vertical-align: middle;
         }
 

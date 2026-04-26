@@ -401,9 +401,39 @@
         }
     }
   </style>
-  @extends('layouts.app')
+@extends('layouts.app')
+
+@php
+    $salesPlanCapabilities = \App\Support\TenantPlanCapabilities::forTenant($tenant ?? null);
+    $salesFreePlanLock = !$salesPlanCapabilities->allowsDeliveryOperations();
+    $salesDeliveryEnabled = $salesPlanCapabilities->effectiveDeliveryEnabled($tenant ?? null);
+    $salesSpecialTaxpayer = $salesPlanCapabilities->effectiveSpecialTaxpayer($tenant ?? null);
+@endphp
 
     @section('title', 'Categorías')
+
+@push('styles')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+<style>
+    .select2-container--default .select2-selection--single {
+        height: calc(2.875rem + 2px);
+        border: 1px solid #d2d6da;
+        border-radius: 0.5rem;
+        padding: 0.55rem 0.75rem;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 1.5rem;
+        padding-left: 0;
+        color: #344767;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 100%;
+        right: 0.6rem;
+    }
+</style>
+@endpush
 
     @section('content')
     <div class="container-fluid px-2 px-md-4">
@@ -720,11 +750,11 @@
                             }
                         @endphp
 
-                        @if($igtfTax && (bool) ($tenant->electronic_invoicing_enabled ?? false) && !(bool) ($tenant->special_taxpayer ?? false))
+                        @if($igtfTax && (bool) ($tenant->electronic_invoicing_enabled ?? false) && !$salesSpecialTaxpayer)
                             <strong>
                                 Si el método de pago seleccionado es en {{ $baseCurrencyCode ?? 'USD' }} se aplicará el impuesto del IGTF del {{ $igtfTax->rate }}%
                             </strong>
-                        @elseif($igtfTax && (bool) ($tenant->special_taxpayer ?? false))
+                        @elseif($igtfTax && $salesSpecialTaxpayer)
                             <strong>
                                 La tienda está marcada como contribuyente especial, por lo tanto no se aplica IGTF.
                             </strong>
@@ -770,9 +800,7 @@
                                                 @if ($method->dni)
                                                     <div><small>DNI/Correo: {{ $method->dni }}</small></div>
                                                 @endif
-                                                @php
-                                                    $noReference = in_array(strtolower($method->name), ['efectivo', 'punto de venta', 'pago movil']);
-                                                @endphp
+                                                @php $noReference = !$method->usesReference(); @endphp
                                                 <div id="paymentFields_{{ $method->id }}" class="d-none mt-2" data-currency="{{ $currencyCode }}" data-no-reference="{{ $noReference ? '1' : '0' }}">
                                                     <div id="paymentRows_{{ $method->id }}" class="d-flex flex-column gap-2"></div>
                                                     <button type="button" class="btn btn-outline-dark btn-sm mt-2" onclick="addPaymentEntry('{{ $method->id }}', '{{ $currencyCode }}', {{ $noReference ? 'true' : 'false' }})">
@@ -834,7 +862,7 @@
                                     <option value="">Selecciona un cliente</option>
                                     @foreach(($existingCustomersForSale ?? collect()) as $customerOption)
                                         <option value="{{ $customerOption->id }}">
-                                            {{ $customerOption->name }}{{ $customerOption->email ? ' - ' . $customerOption->email : '' }}
+                                            {{ $customerOption->name }}{{ $customerOption->email ? ' - ' . $customerOption->email : '' }}{{ $customerOption->phone_number ? ' - ' . $customerOption->phone_number : '' }}
                                         </option>
                                     @endforeach
                                 </select>
@@ -872,12 +900,14 @@
                                 <label class="form-check-label" for="delivery_pickup">Retiro en tienda</label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="radio" name="delivery_type" id="delivery_shipping" value="shipping" {{ (bool) ($tenant->delivery_enabled ?? false) ? '' : 'disabled' }}>
+                                <input class="form-check-input" type="radio" name="delivery_type" id="delivery_shipping" value="shipping" {{ $salesDeliveryEnabled ? '' : 'disabled' }}>
                                 <label class="form-check-label" for="delivery_shipping">Envío</label>
                             </div>
                         </div>
                         <small class="text-muted d-block mt-2" id="deliveryModeHelper">
-                            @if((bool) ($tenant->delivery_enabled ?? false))
+                            @if($salesFreePlanLock)
+                                El plan Free solo permite retiro en tienda en el flujo administrativo de ventas.
+                            @elseif($salesDeliveryEnabled)
                                 Modelo activo: {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
                             @else
                                 El delivery está desactivado para esta tienda. Solo se permite retiro en tienda.
@@ -1089,6 +1119,8 @@
 <script src="{{ asset('assets/js/core/popper.min.js') }}"></script>
 <script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
 <script src="https://unpkg.com/html5-qrcode" defer></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         var selectedItems = [];
         var totalAmount = 0;
@@ -1119,6 +1151,61 @@
         const authUser = @json($authUser);
         let selectedExistingCustomerId = Number(existingCustomersForSale?.[0]?.id || 0);
         let currentDeliveryFee = 0;
+
+        function initializeExistingCustomerSelect() {
+            const selectElement = document.getElementById('existingCustomerSelect');
+            if (!selectElement || !window.jQuery || !window.jQuery.fn?.select2) {
+                return;
+            }
+
+            const $select = window.jQuery(selectElement);
+            if ($select.hasClass('select2-hidden-accessible')) {
+                return;
+            }
+
+            $select.select2({
+                width: '100%',
+                placeholder: 'Busca por nombre, correo o teléfono',
+                allowClear: true,
+            });
+
+            $select.on('change', function () {
+                selectedExistingCustomerId = Number(this.value || 0);
+                if (!document.getElementById('step3').classList.contains('d-none')) {
+                    renderSummary();
+                }
+            });
+        }
+
+        function appendFormDataValue(formData, key, value) {
+            if (value === undefined || value === null) {
+                return;
+            }
+
+            if (value instanceof File) {
+                formData.append(key, value);
+                return;
+            }
+
+            if (Array.isArray(value)) {
+                value.forEach((item, index) => appendFormDataValue(formData, `${key}[${index}]`, item));
+                return;
+            }
+
+            if (typeof value === 'object') {
+                Object.entries(value).forEach(([childKey, childValue]) => {
+                    appendFormDataValue(formData, `${key}[${childKey}]`, childValue);
+                });
+                return;
+            }
+
+            if (typeof value === 'boolean') {
+                formData.append(key, value ? '1' : '0');
+                return;
+            }
+
+            formData.append(key, String(value));
+        }
         @php
             $materialPackagesPayload = ($materialPackages ?? collect())->map(function ($package) {
                 return [
@@ -1591,6 +1678,7 @@
         document.addEventListener('DOMContentLoaded', function () {
             // Escuchar todos los checkboxes
             const checkboxes = document.querySelectorAll('input[name="selectedVariants[]"]');
+            initializeExistingCustomerSelect();
             checkboxes.forEach(checkbox => {
                 checkbox.addEventListener('change', handleCheckboxChange);
             });
@@ -2425,19 +2513,36 @@ function updateQuantity(id, newQty) {
 
         function createPaymentRowHtml(methodId, currency, noReference, entryId) {
             const referenceInput = noReference
-                ? `<input type="hidden" class="payment-reference-input" data-method-id="${methodId}" data-entry-id="${entryId}" data-requires-reference="0" value="00">`
+                ? `<input type="hidden" class="payment-reference-input" data-method-id="${methodId}" data-entry-id="${entryId}" data-requires-reference="0" value="">`
                 : `<input type="text" class="form-control payment-reference-input border border-1 p-2" data-method-id="${methodId}" data-entry-id="${entryId}" data-requires-reference="1" placeholder="Referencia" oninput="updatePayment(this)">`;
 
+            const proofInput = noReference
+                ? `<div class="small text-muted py-2">No requiere comprobante para este método.</div>`
+                : `<input type="file" class="form-control border border-1 p-2 payment-proof-input" accept="image/*" data-method-id="${methodId}" data-entry-id="${entryId}" onchange="updatePaymentProof(this)">`;
+
             return `
-                <div class="d-flex flex-row gap-2 align-items-center" data-payment-entry-row="${entryId}">
-                    <label class="m-0">Monto:</label>
-                    <input type="text" inputmode="decimal" autocomplete="off" class="form-control payment-input border border-1 p-2"
-                        data-method-id="${methodId}"
-                        data-entry-id="${entryId}"
-                        data-currency="${currency}"
-                        oninput="updatePayment(this)">
-                    ${referenceInput}
-                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="removePaymentEntry('${methodId}', '${entryId}')">X</button>
+                <div class="border rounded-3 p-2 bg-white" data-payment-entry-row="${entryId}">
+                    <div class="d-flex flex-column flex-lg-row gap-2 align-items-lg-center">
+                        <div class="flex-grow-1">
+                            <label class="form-label mb-1">Monto</label>
+                            <input type="text" inputmode="decimal" autocomplete="off" class="form-control payment-input border border-1 p-2"
+                                data-method-id="${methodId}"
+                                data-entry-id="${entryId}"
+                                data-currency="${currency}"
+                                oninput="updatePayment(this)">
+                        </div>
+                        <div class="flex-grow-1">
+                            <label class="form-label mb-1">Referencia</label>
+                            ${referenceInput}
+                        </div>
+                        <div class="flex-grow-1">
+                            <label class="form-label mb-1">Comprobante</label>
+                            ${proofInput}
+                        </div>
+                        <div class="align-self-end">
+                            <button type="button" class="btn btn-outline-danger btn-sm" onclick="removePaymentEntry('${methodId}', '${entryId}')">X</button>
+                        </div>
+                    </div>
                 </div>
             `;
         }
@@ -2455,7 +2560,9 @@ function updateQuantity(id, newQty) {
                 methodName: methodName || `Método ${methodId}`,
                 currency,
                 amount: 0,
-                reference: noReference ? '00' : ''
+                reference: '',
+                hasProofImage: false,
+                requiresReference: !noReference,
             });
 
             validatePaymentDetails();
@@ -2644,6 +2751,16 @@ function updateQuantity(id, newQty) {
             console.log("payments 2", payments);
             renderCart();
             validatePaymentDetails();
+        }
+
+        function updatePaymentProof(input) {
+            const methodId = input.dataset.methodId;
+            const entryId = input.dataset.entryId;
+            const payment = payments.find(payment => payment.methodId === String(methodId) && payment.entryId === entryId);
+
+            if (payment) {
+                payment.hasProofImage = Boolean(input.files?.[0]);
+            }
         }
 
         function getBaseCurrencyPaymentsTotal() {
@@ -3152,13 +3269,6 @@ function updateQuantity(id, newQty) {
             });
         });
 
-        document.getElementById('existingCustomerSelect')?.addEventListener('change', function () {
-            selectedExistingCustomerId = Number(this.value || 0);
-            if (!document.getElementById('step3').classList.contains('d-none')) {
-                renderSummary();
-            }
-        });
-
         if (document.getElementById('existingCustomerSelect') && existingCustomersForSale.length > 0) {
             const existingCustomerSelect = document.getElementById('existingCustomerSelect');
             if (existingCustomerSelect && !existingCustomerSelect.value) {
@@ -3240,7 +3350,6 @@ function updateQuantity(id, newQty) {
         customerId: shouldCreateNewCustomer ? null : { id: selectedExistingCustomerId },
         customer_existing_id: shouldCreateNewCustomer ? null : selectedExistingCustomerId,
         items: selectedItems,
-        payments: validPayments,
         tenant_id: tenantId,
         dollarRate: baseRateToBs,
         delivery_type: deliveryType,
@@ -3263,16 +3372,41 @@ function updateQuantity(id, newQty) {
     };
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    console.log('Resumen a enviar:', summary);
+    const formData = new FormData();
+    appendFormDataValue(formData, 'customer_existing_id', summary.customer_existing_id);
+    appendFormDataValue(formData, 'items', summary.items);
+    appendFormDataValue(formData, 'tenant_id', summary.tenant_id);
+    appendFormDataValue(formData, 'dollarRate', summary.dollarRate);
+    appendFormDataValue(formData, 'delivery_type', summary.delivery_type);
+    appendFormDataValue(formData, 'delivery_address', summary.delivery_address);
+    appendFormDataValue(formData, 'delivery_city_id', summary.delivery_city_id);
+    appendFormDataValue(formData, 'delivery_distance_km', summary.delivery_distance_km);
+    appendFormDataValue(formData, 'create_new_customer', summary.create_new_customer);
+    appendFormDataValue(formData, 'customer_new', summary.customer_new);
+    appendFormDataValue(formData, 'mark_delivered', summary.mark_delivered);
+    appendFormDataValue(formData, 'mark_payments_paid', summary.mark_payments_paid);
+    appendFormDataValue(formData, 'mark_sale_completed', summary.mark_sale_completed);
+    appendFormDataValue(formData, 'sale_document_mode', summary.sale_document_mode);
+
+    validPayments.forEach((payment, index) => {
+        appendFormDataValue(formData, `payments[${index}][methodId]`, payment.methodId);
+        appendFormDataValue(formData, `payments[${index}][amount]`, payment.amount);
+        appendFormDataValue(formData, `payments[${index}][currency]`, payment.currency);
+        appendFormDataValue(formData, `payments[${index}][reference]`, payment.reference);
+
+        const proofInput = document.querySelector(`.payment-proof-input[data-entry-id="${payment.entryId}"]`);
+        if (proofInput?.files?.[0]) {
+            formData.append(`payments[${index}][proof_image]`, proofInput.files[0]);
+        }
+    });
 
     fetch('/create-sale', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
             'Accept': 'application/json',
             'X-CSRF-TOKEN': csrfToken
         },
-        body: JSON.stringify(summary)
+        body: formData
     })
         .then(async response => {
             const payload = await response.json().catch(() => ({}));

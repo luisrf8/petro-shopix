@@ -2,6 +2,14 @@
 
 @section('title', 'Categorías')
 
+@php
+  $productsToolbarTenant = ($productsToolbarTenantId = (int) (auth()->user()->tenant_id ?? 0)) > 0
+    ? \App\Models\Tenant::find($productsToolbarTenantId)
+    : null;
+  $productsToolbarCapabilities = \App\Support\TenantPlanCapabilities::forTenant($productsToolbarTenant);
+  $productsToolbarFreePlan = !$productsToolbarCapabilities->canGeneratePurchase();
+@endphp
+
 @push('styles')
 <style>
   .products-toolbar {
@@ -19,16 +27,16 @@
     border: 1px solid var(--bs-border-color);
     border-radius: 1rem;
     background: var(--bs-body-bg);
-    padding: 1rem;
+    padding: 0.8rem 0.9rem;
     height: 100%;
     display: flex;
-    gap: 0.9rem;
+    gap: 0.75rem;
     align-items: flex-start;
   }
 
   .product-thumb-clean {
-    width: 92px;
-    height: 92px;
+    width: 78px;
+    height: 78px;
     border-radius: 0.85rem;
     overflow: hidden;
     border: 1px solid var(--bs-border-color);
@@ -51,27 +59,32 @@
   }
 
   .product-title-clean {
-    font-size: 0.98rem;
+    font-size: 0.94rem;
     font-weight: 600;
     margin: 0;
-    line-height: 1.3;
+    line-height: 1.2;
   }
 
   .product-desc-clean {
     color: var(--bs-secondary-color);
-    font-size: 0.82rem;
-    margin: 0.2rem 0 0.55rem;
-    line-height: 1.35;
+    font-size: 0.78rem;
+    margin: 0.1rem 0 0.35rem;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .variant-row-clean {
     display: flex;
     justify-content: space-between;
-    gap: 0.65rem;
+    gap: 0.5rem;
     border-top: 1px solid var(--bs-border-color-translucent);
-    padding-top: 0.45rem;
-    margin-top: 0.45rem;
-    font-size: 0.84rem;
+    padding-top: 0.32rem;
+    margin-top: 0.32rem;
+    font-size: 0.78rem;
+    line-height: 1.15;
   }
 
   .variant-price-clean {
@@ -88,7 +101,7 @@
     align-items: center;
     gap: 0.25rem;
     white-space: nowrap;
-    font-size: 0.84rem;
+    font-size: 0.78rem;
     font-weight: 500;
     color: inherit;
     text-decoration: none;
@@ -117,21 +130,21 @@
     }
 
     .product-card-clean {
-      padding: 0.85rem;
-      gap: 0.65rem;
+      padding: 0.75rem;
+      gap: 0.55rem;
     }
 
     .product-thumb-clean {
-      width: 82px;
-      height: 82px;
+      width: 70px;
+      height: 70px;
     }
 
     .product-title-clean {
-      font-size: 0.92rem;
+      font-size: 0.88rem;
     }
 
     .variant-row-clean {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
     }
   }
 </style>
@@ -214,12 +227,14 @@
               <a class="nav-link text-black mb-0 admin-mobile-action-trigger" href="javascript:;" data-bs-toggle="modal" data-bs-target="#importCatalogModal">
                 + Importar Catálogo
               </a>
-              <a class="nav-link text-black mb-0 admin-mobile-action-trigger" href="/purchase">
-                + Generar Compra
-              </a>
-              <button id="generateReport" class="btn btn-dark mb-0 admin-mobile-action-trigger" onclick="getReport()">
-                Generar Reporte
-              </button>
+              @unless($productsToolbarFreePlan)
+                <a class="nav-link text-black mb-0 admin-mobile-action-trigger" href="/purchase">
+                  + Generar Compra
+                </a>
+                <button id="generateReport" class="btn btn-dark mb-0 admin-mobile-action-trigger" onclick="getReport()">
+                  Generar Reporte
+                </button>
+              @endunless
             </div>
           </div>
     <!-- Modal para crear producto -->
@@ -317,7 +332,7 @@
             ? $product->images[0]
             : $variantImage;
         @endphp
-        <div class="product-item col-12 col-md-6 col-xl-4 mb-3" data-name="{{ strtolower($product->name) }}">
+        <div class="product-item col-12 col-md-6 col-xl-4 mb-2" data-name="{{ strtolower($product->name) }}">
           <div class="product-card-clean">
               <a href="{{ route('productItem', $product->id) }}" class="product-thumb-clean" aria-label="Abrir producto {{ $product->name }}">
                 @if($productCoverImage)
@@ -331,7 +346,7 @@
                 <h6 class="product-title-clean text-truncate">{{ $product->name }}</h6>
                 <p class="product-desc-clean">{{ $product->description ?: 'Sin descripción' }}</p>
 
-                @foreach ($product->variants as $variant)
+                @foreach ($product->variants->take(4) as $variant)
                   <div class="variant-row-clean">
                     <span>
                       <strong>{{ $variant->size }}</strong>
@@ -344,6 +359,13 @@
                     </span>
                   </div>
                 @endforeach
+                @if($product->variants->count() > 4)
+                  <div class="variant-row-clean text-muted">
+                    <span><strong>+{{ $product->variants->count() - 4 }}</strong> variantes más</span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                @endif
               </div>
 
               <div class="product-actions-clean">

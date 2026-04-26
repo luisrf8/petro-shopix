@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Role;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -17,9 +18,11 @@ class UserController extends Controller
      */
     public function index()
     {
-        $users = User::with('role')->paginate(10); ;
+        $users = User::with(['role', 'tenant'])->paginate(10);
         $roles = Role::all();
-        return view('users', compact('users', 'roles'));
+        $tenants = Tenant::query()->orderBy('name')->get(['id', 'name']);
+
+        return view('users', compact('users', 'roles', 'tenants'));
     }
 
     /**
@@ -36,17 +39,26 @@ class UserController extends Controller
     public function store(Request $request)
     {
         DB::raw("SET @user_id = " . auth()->id());
+        $expectsJson = $request->expectsJson() || $request->wantsJson();
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
             'password' => 'required|string|min:8',
             'role_id' => 'required|exists:roles,id',
+            'tenant_id' => 'nullable|exists:tenants,id',
             'phone_number' => 'required|string|max:20',
             'dni' => 'required|string|max:100',
         ]);
 
         if ($validator->fails()) {
+            if ($expectsJson) {
+                return response()->json([
+                    'message' => 'No se pudo crear el usuario.',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
             return redirect()->back()->withErrors($validator)->withInput();
         }
 
@@ -55,6 +67,7 @@ class UserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role_id' => $request->role_id,
+            'tenant_id' => $request->filled('tenant_id') ? (int) $request->tenant_id : null,
             'phone_number' => $request->phone_number,
             'dni' => trim((string) $request->dni),
         ]);
@@ -79,6 +92,7 @@ class UserController extends Controller
     public function update(Request $request, $id)
     {
         DB::raw("SET @user_id = " . auth()->id());
+        $expectsJson = $request->expectsJson() || $request->wantsJson();
 
         $user = User::findOrFail($id);
     
@@ -86,9 +100,17 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $id,
             'role_id' => 'required|exists:roles,id',
+            'tenant_id' => 'nullable|exists:tenants,id',
         ]);
     
         if ($validator->fails()) {
+            if ($expectsJson) {
+                return response()->json([
+                    'message' => 'No se pudo actualizar el usuario.',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
             return redirect()->back()->withErrors($validator)->withInput();
         }
     
@@ -97,6 +119,7 @@ class UserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'role_id' => $request->role_id,
+            'tenant_id' => $request->filled('tenant_id') ? (int) $request->tenant_id : null,
             'password' => $request->password ? Hash::make($request->password) : $user->password,
         ]);
         return response()->json(['status' => 'success'], 200);

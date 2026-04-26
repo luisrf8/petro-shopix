@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\{
+    AppointmentController,
     Auth\AuthenticatedSessionController,
     Auth\RegisteredUserController,
     ProductController,
@@ -53,6 +54,7 @@ Route::middleware('guest')->group(function () {
 // PÁGINAS PÚBLICAS
 Route::get('/', [IndexController::class, 'landing'])->name('landing');
 Route::get('/landings', [IndexController::class, 'landingDirectory'])->name('landing.directory');
+Route::get('/legal/terms-and-conditions.pdf', [TenantController::class, 'termsAndConditionsPdf'])->name('legal.terms.pdf');
 Route::get('/index', fn() => view('index'));
 Route::get('/manifest.webmanifest', function (\Illuminate\Http\Request $request) {
     $name = trim((string) $request->query('name', config('app.name', 'Shopix')));
@@ -174,6 +176,7 @@ Route::get('/get-countries', [LocationController::class, 'getCountries']);
 Route::get('/get-states/{country}', [LocationController::class, 'getStates']);
 Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
 Route::post('/tenant-ai-image', [TenantController::class, 'generateTenantImage'])->name('tenant.ai-image');
+Route::post('/tenant-ai-copy', [TenantController::class, 'generateTenantCopy'])->name('tenant.ai-copy');
 
 // RUTAS CON AUTENTICACIÓN
 Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.access', 'inactive.tenant.restrict'])->group(function () {
@@ -207,6 +210,7 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
 
     Route::get('/users', [UserController::class, 'index'])->middleware('role.name:4')->name('users');
     Route::get('/paymentMethods', [PaymentMethodController::class, 'index'])->middleware('role.name:owner,admin,administrador')->name('paymentMethods.index');
+    Route::get('/paymentMethods/rates/export/{format}', [PaymentMethodController::class, 'exportRateHistory'])->where('format', 'csv|excel|pdf')->middleware('role.name:owner,admin,administrador')->name('paymentMethods.rates.export');
     Route::get('/profile', fn() => view('profile'))->name('profile');
 
     // Ventas
@@ -238,6 +242,11 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::post('/sales/scan-code', [SaleController::class, 'resolveScanCode'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.resolveScanCode');
     Route::get('/sales-orders/{id}/pdf', [SaleController::class, 'downloadPdf'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller');
     Route::get('/sales-orders/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.orders.pdfs');
+    Route::get('/appointments', [AppointmentController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.index');
+    Route::post('/appointments', [AppointmentController::class, 'store'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.store');
+    Route::post('/appointments/services', [AppointmentController::class, 'storeService'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.services.store');
+    Route::post('/appointments/schedules', [AppointmentController::class, 'storeSchedule'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.schedules.store');
+    Route::get('/appointments/available-slots', [AppointmentController::class, 'availableSlots'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.availableSlots');
 
     // Reportes PDF
     Route::get('/reports', [ReportController::class, 'index'])->middleware('role.name:owner,admin,administrador')->name('reports.index');
@@ -327,5 +336,5 @@ Route::get('/{tenant:slug}/categorias', [TenantController::class, 'publicTenantC
 Route::get('/{tenant:slug}/payment-methods', [TenantController::class, 'publicTenantPaymentMethods'])->name('tenant.public.paymentMethods');
 Route::post('/{tenant:slug}/checkout/pro', [TenantController::class, 'publicTenantProCheckout'])->name('tenant.public.proCheckout');
 Route::post('/{tenant:slug}/scan-code', [TenantController::class, 'publicTenantResolveScanCode'])->name('tenant.public.scanCode');
-Route::get('/{tenant:slug}/{product:id}', [TenantController::class, 'publicTenantProduct'])->whereNumber('product')->name('tenant.public.product');
+Route::get('/{tenant:slug}/{product}', [TenantController::class, 'publicTenantProduct'])->name('tenant.public.product');
 Route::post('/tenants-public', [TenantController::class, 'storePublic'])->name('tenants.storePublic'); // ← fuera del grupo auth

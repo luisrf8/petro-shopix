@@ -72,6 +72,22 @@
         border: 1px solid #d2d6da !important;
         padding: 0.5rem !important;
       }
+
+      .tax-readonly-chip {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid #d1d5db;
+        border-radius: 999px;
+        padding: 0.35rem 0.75rem;
+        background: #f8fafc;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      .variant-preview-trigger {
+        cursor: zoom-in;
+      }
     </style>
     <div class="container-fluid py-2">
       <div class="row">
@@ -172,6 +188,7 @@
                       <p class="mb-1"><strong>Categoría:</strong> {{ $product->category->name }}</p>
                       <p class="mb-1"><strong>Descripción:</strong> {{ $product->description }}</p>
                       <p class="mb-2"><strong>Descuento del producto:</strong> {{ number_format((float) ($product->discount_percentage ?? 0), 2) }}%</p>
+                      <p class="mb-2"><strong>Tipo:</strong> {{ $product->is_consumable ? 'Consumible interno' : 'Producto vendible' }}</p>
                       <div class="d-flex flex-wrap gap-2 mb-3">
                         <button type="button" class="btn btn-outline-dark btn-sm" id="generateProductCodesBtn">Generar códigos de todas las variantes</button>
                         <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#addImageModal">Agregar imagen +</button>
@@ -216,7 +233,14 @@
                       <label for="productDiscountPercentage" class="form-label">Descuento (%)</label>
                       <input type="number" class="form-control border" id="productDiscountPercentage" name="discount_percentage" min="0" max="100" step="0.01" value="{{ number_format((float) ($product->discount_percentage ?? 0), 2, '.', '') }}" data-decimal-friendly="true">
                     </div>
-                    <div class="col-md-4 d-flex align-items-end">
+                    <div class="col-md-4">
+                      <label for="productConsumableToggle" class="form-label">Disponibilidad</label>
+                      <select class="form-control border" id="productConsumableToggle" name="is_consumable" required>
+                        <option value="0" {{ !$product->is_consumable ? 'selected' : '' }}>Disponible para venta</option>
+                        <option value="1" {{ $product->is_consumable ? 'selected' : '' }}>Consumible interno</option>
+                      </select>
+                    </div>
+                    <div class="col-md-12 d-flex align-items-end">
                       <button type="submit" class="btn btn-dark w-100" id="saveChangesBtn">Guardar Cambios</button>
                     </div>
                   </form>
@@ -225,48 +249,38 @@
 
               <div class="card mt-3">
                 <div class="card-body">
-                  <h5 class="mb-3">Impuestos del producto</h5>
-                  @if(!$canEditProductTaxes)
-                    <div class="alert alert-warning text-white bg-warning mb-3" role="alert">
-                      Las alícuotas de productos existentes están bloqueadas. Debes habilitar la autorización de imprenta para modificarlas.
-                    </div>
-                  @elseif(!empty($productTaxChangeReference))
-                    <div class="alert alert-info mb-3" role="alert">
-                      Habilitación vigente de imprenta: {{ $productTaxChangeReference }}
-                    </div>
-                  @endif
-                  <div id="taxContainer" class="d-flex flex-wrap gap-3">
-                    @foreach ($taxes as $tax)
-                      <div class="form-check">
-                        <input
-                          class="form-check-input tax-checkbox"
-                          type="checkbox"
-                          value="{{ $tax->id }}"
-                          id="tax{{ $tax->id }}"
-                          {{ !$canEditProductTaxes ? 'disabled' : '' }}
-                          {{ $product->taxes->contains($tax->id) ? 'checked' : '' }}
-                        >
-                        <label class="form-check-label" for="tax{{ $tax->id }}">
-                          {{ $tax->name }} ({{ $tax->rate }}%)
-                        </label>
-                      </div>
-                    @endforeach
+                  <h5 class="mb-3">Impuesto asignado</h5>
+                  <p class="text-sm text-muted mb-3">La edición de producto muestra únicamente el impuesto originalmente asociado.</p>
+                  <div class="d-flex flex-wrap gap-2">
+                    @forelse ($product->taxes as $tax)
+                      <span class="tax-readonly-chip">{{ $tax->name }} ({{ $tax->rate }}%)</span>
+                    @empty
+                      <span class="text-muted">Este producto no tiene impuestos asignados.</span>
+                    @endforelse
                   </div>
-
-                  <button type="button" class="btn btn-dark mt-3" id="saveProductTaxesBtn">
-                    Guardar impuestos
-                  </button>
                 </div>
               </div>
 
               <div class="card mt-3">
+                <div class="card-header pb-0 border-0 bg-transparent">
+                  <ul class="nav nav-tabs card-header-tabs" id="productInventoryTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                      <button class="nav-link active" id="variants-tab" data-bs-toggle="tab" data-bs-target="#variants-tab-pane" type="button" role="tab" aria-controls="variants-tab-pane" aria-selected="true">Variantes</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                      <button class="nav-link" id="warehouse-stock-tab" data-bs-toggle="tab" data-bs-target="#warehouse-stock-tab-pane" type="button" role="tab" aria-controls="warehouse-stock-tab-pane" aria-selected="false">Stock por Almacén</button>
+                    </li>
+                  </ul>
+                </div>
                 <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">Variantes</h5>
-                    <button type="button" class="btn btn-outline-dark btn-sm" id="addVariantBtn">Agregar Variante</button>
-                  </div>
+                  <div class="tab-content" id="productInventoryTabContent">
+                    <div class="tab-pane fade show active" id="variants-tab-pane" role="tabpanel" aria-labelledby="variants-tab" tabindex="0">
+                      <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Variantes</h5>
+                        <button type="button" class="btn btn-outline-dark btn-sm" id="addVariantBtn">Agregar Variante</button>
+                      </div>
 
-                  <div id="variantEditorList" class="d-flex flex-column gap-3">
+                      <div id="variantEditorList" class="d-flex flex-column gap-3">
                     @foreach ($product->variants as $variant)
                       @php
                         $productDiscount = (float) ($product->discount_percentage ?? 0);
@@ -308,6 +322,9 @@
                               src="{{ $variantImage ? (\App\Support\ImageStorage::url($variantImage->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png') }}"
                               alt="Imagen variante"
                               id="variantPreview-{{ $variant->id }}"
+                              class="variant-preview-trigger"
+                              data-variant-image-preview="{{ $variant->id }}"
+                              data-image-label="{{ $product->name }} · {{ $variant->size }}"
                               style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;"
                             >
                             <small class="text-muted">Precio final: {{ number_format($effectivePrice, 2) }} $</small>
@@ -328,11 +345,61 @@
                         </div>
                       </div>
                     @endforeach
+                      </div>
+
+                      <div id="newVariantContainer" class="d-flex flex-column gap-3 mt-3"></div>
+
+                      <button type="button" class="btn btn-dark mt-3" id="saveVariantsBtn">Guardar variantes nuevas</button>
+                    </div>
+
+                    <div class="tab-pane fade" id="warehouse-stock-tab-pane" role="tabpanel" aria-labelledby="warehouse-stock-tab" tabindex="0">
+                      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <div>
+                          <h5 class="mb-1">Stock por Almacén</h5>
+                          <p class="text-sm text-muted mb-0">Consulta la disponibilidad de cada variante en las distintas sedes activas.</p>
+                        </div>
+                        <a href="{{ route('warehouses.index') }}" class="btn btn-outline-dark btn-sm">Gestionar almacenes</a>
+                      </div>
+
+                      @if(($warehouses ?? collect())->isEmpty())
+                        <div class="alert alert-light border text-dark mb-0">No hay almacenes activos configurados para esta tienda.</div>
+                      @else
+                        <div class="table-responsive">
+                          <table class="table align-middle">
+                            <thead>
+                              <tr>
+                                <th>Variante</th>
+                                @foreach($warehouses as $warehouse)
+                                  <th>{{ $warehouse->name }}</th>
+                                @endforeach
+                                <th>Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              @foreach($product->variants as $variant)
+                                @php $variantWarehouseTotal = 0; @endphp
+                                <tr>
+                                  <td>
+                                    <strong>{{ $variant->size }}</strong>
+                                    <div class="text-muted small">Stock global: {{ $variant->stock }}</div>
+                                  </td>
+                                  @foreach($warehouses as $warehouse)
+                                    @php
+                                      $stockItem = $warehouseStocks[$warehouse->id . '_' . $variant->id] ?? null;
+                                      $quantity = (int) ($stockItem->stock ?? 0);
+                                      $variantWarehouseTotal += $quantity;
+                                    @endphp
+                                    <td>{{ $quantity }}</td>
+                                  @endforeach
+                                  <td><strong>{{ $variantWarehouseTotal }}</strong></td>
+                                </tr>
+                              @endforeach
+                            </tbody>
+                          </table>
+                        </div>
+                      @endif
+                    </div>
                   </div>
-
-                  <div id="newVariantContainer" class="d-flex flex-column gap-3 mt-3"></div>
-
-                  <button type="button" class="btn btn-dark mt-3" id="saveVariantsBtn">Guardar variantes nuevas</button>
                 </div>
               </div>
             </div>
@@ -400,6 +467,19 @@
                 </div>
               </div>
             </div>
+            <div class="modal fade" id="variantImagePreviewModal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="variantImagePreviewModalTitle">Imagen de variante</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                  </div>
+                  <div class="modal-body text-center">
+                    <img id="variantImagePreviewModalImg" src="" alt="Imagen variante completa" class="img-fluid rounded border">
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
       </div>
     </div>
@@ -419,6 +499,7 @@
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
     const PRODUCT_ITEM_SAFE_IMAGE_BYTES = 1.2 * 1024 * 1024;
     let productAiModalInstance = null;
+    let variantImagePreviewModalInstance = null;
     let productAiHistory = [];
     let productAiLatestResult = null;
     let productAiTarget = null;
@@ -967,6 +1048,24 @@
     });
   });
 
+  function openVariantImagePreview(src, label) {
+    const imageEl = document.getElementById('variantImagePreviewModalImg');
+    const titleEl = document.getElementById('variantImagePreviewModalTitle');
+    if (!imageEl || !variantImagePreviewModalInstance || !src) {
+      return;
+    }
+
+    imageEl.src = src;
+    titleEl.textContent = label || 'Imagen de variante';
+    variantImagePreviewModalInstance.show();
+  }
+
+  document.querySelectorAll('[data-variant-image-preview]').forEach((preview) => {
+    preview.addEventListener('click', function () {
+      openVariantImagePreview(this.getAttribute('src') || '', this.dataset.imageLabel || 'Imagen de variante');
+    });
+  });
+
   document.querySelectorAll('.open-existing-variant-ai-btn').forEach((button) => {
     button.addEventListener('click', function () {
       const variantId = this.getAttribute('data-variant-id');
@@ -1039,6 +1138,8 @@
       alert(error.message || 'Error al guardar variantes.');
     }
   });
+
+  variantImagePreviewModalInstance = new bootstrap.Modal(document.getElementById('variantImagePreviewModal'));
 
   document.getElementById('saveProductTaxesBtn')?.addEventListener('click', function () {
     if (!inlineProductId) return;

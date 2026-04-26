@@ -8,6 +8,46 @@
   $canRetry = (bool) ($canRetry ?? false);
   $indexRoute = $isSuperAdmin ? 'electronic.documents.index' : 'sales.electronic.documents.tenant';
 @endphp
+<style>
+  .electronic-documents-toolbar {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 0.85rem;
+  }
+
+  .electronic-documents-toolbar > div {
+    grid-column: span 2;
+  }
+
+  .electronic-documents-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .electronic-documents-table-wrap {
+    overflow-x: auto;
+    padding-bottom: 0.35rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .electronic-documents-table {
+    min-width: 1440px;
+  }
+
+  @media (max-width: 991.98px) {
+    .electronic-documents-toolbar > div {
+      grid-column: span 6;
+    }
+  }
+
+  @media (max-width: 575.98px) {
+    .electronic-documents-toolbar > div {
+      grid-column: span 12;
+    }
+  }
+</style>
 <div class="container-fluid py-2">
   <div class="card my-4">
     <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
@@ -16,9 +56,9 @@
       </div>
     </div>
     <div class="card-body">
-      <form method="GET" class="row g-2 align-items-end">
+      <form method="GET" class="electronic-documents-toolbar align-items-end">
         @if($isSuperAdmin)
-          <div class="col-md-2">
+          <div>
             <label class="form-label">Tienda</label>
             <select name="tenant_id" class="form-control border border-1 p-2">
               <option value="0">Todas</option>
@@ -28,7 +68,7 @@
             </select>
           </div>
         @endif
-        <div class="col-md-2">
+        <div>
           <label class="form-label">Estado</label>
           <select name="status" class="form-control border border-1 p-2">
             <option value="all" {{ $status === 'all' ? 'selected' : '' }}>Todos</option>
@@ -37,38 +77,38 @@
             <option value="annulled" {{ $status === 'annulled' ? 'selected' : '' }}>Anulados</option>
           </select>
         </div>
-        <div class="col-md-2">
+        <div>
           <label class="form-label">Serie</label>
           <input type="text" name="serie" value="{{ $serie }}" class="form-control border border-1 p-2">
         </div>
-        <div class="col-md-2">
+        <div>
           <label class="form-label">Código</label>
           <input type="text" name="code" value="{{ $code }}" class="form-control border border-1 p-2">
         </div>
-        <div class="col-md-2">
+        <div>
           <label class="form-label">Desde</label>
           <input type="date" name="from_date" value="{{ $fromDate }}" class="form-control border border-1 p-2">
         </div>
-        <div class="col-md-2">
+        <div>
           <label class="form-label">Hasta</label>
           <input type="date" name="to_date" value="{{ $toDate }}" class="form-control border border-1 p-2">
         </div>
-        <div class="col-md-2">
+        <div>
           <label class="form-label">Solo con errores</label>
           <select name="error_only" class="form-control border border-1 p-2">
             <option value="0" {{ !$errorOnly ? 'selected' : '' }}>No</option>
             <option value="1" {{ $errorOnly ? 'selected' : '' }}>Sí</option>
           </select>
         </div>
-        <div class="col-md-10 d-flex gap-2">
+        <div class="electronic-documents-actions" style="grid-column: 1 / -1;">
           <button type="submit" class="btn btn-dark mb-0">Filtrar</button>
           <a href="{{ route($indexRoute) }}" class="btn btn-outline-secondary mb-0">Limpiar</a>
           <a href="{{ route($indexRoute, array_merge(request()->query(), ['export' => 'csv'])) }}" class="btn btn-outline-success mb-0">Exportar CSV</a>
         </div>
       </form>
 
-      <div class="table-responsive mt-3">
-        <table class="table align-items-center mb-0">
+      <div class="electronic-documents-table-wrap mt-3">
+        <table class="table align-items-center mb-0 electronic-documents-table">
           <thead>
             <tr>
               <th>Fecha</th>

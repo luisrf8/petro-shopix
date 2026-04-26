@@ -119,6 +119,14 @@
             margin-bottom: 1rem;
         }
 
+        .login-success {
+            border-radius: 12px;
+            border-color: #bbf7d0;
+            background: #f0fdf4;
+            color: #166534;
+            margin-bottom: 1rem;
+        }
+
         @media (max-width: 991.98px) {
             .login-aside {
                 padding: 1.25rem;
@@ -155,13 +163,17 @@
                         <h1 class="h3 login-title">Iniciar sesión</h1>
                         <p class="login-subtitle">Ingresa con una cuenta administrativa para continuar.</p>
 
+                        @if (session('status'))
+                            <div class="alert login-success" role="alert">{{ session('status') }}</div>
+                        @endif
+
                         <div id="login-alert" class="alert login-error d-none" role="alert"></div>
 
                         <form id="shopix-login-form" class="row g-3" novalidate>
                             @csrf
                             <div class="col-12">
                                 <label for="email" class="form-label login-field-label">Correo electrónico</label>
-                                <input type="email" class="form-control login-input" id="email" name="email" placeholder="Ingresa tu correo" required>
+                                <input type="email" class="form-control login-input" id="email" name="email" value="{{ old('email') }}" placeholder="Ingresa tu correo" required>
                             </div>
                             <div class="col-12">
                                 <label for="password" class="form-label login-field-label">Contraseña</label>

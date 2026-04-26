@@ -992,7 +992,7 @@
               <div class="col-6 col-sm-6 col-md-4 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
                 <a href="{{ route('tenant.public.product', [
                     'tenant' => $tenant->slug,
-                    'product' => $product->id
+                    'product' => $product->slug
                   ]) }}" class="product-card-link text-decoration-none d-block h-100">
                   <div class="card card-product h-100">
                     <div class="product-card-media">

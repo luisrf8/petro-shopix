@@ -2,6 +2,14 @@
 
 @section('title', 'Categorías')
 
+@php
+  $purchaseOrdersTenant = ($purchaseOrdersTenantId = (int) (auth()->user()->tenant_id ?? 0)) > 0
+    ? \App\Models\Tenant::find($purchaseOrdersTenantId)
+    : null;
+  $purchaseOrdersCapabilities = \App\Support\TenantPlanCapabilities::forTenant($purchaseOrdersTenant);
+  $purchaseOrdersFreePlan = !$purchaseOrdersCapabilities->canGeneratePurchase();
+@endphp
+
 @section('content')
     <div class="container-fluid py-2">
       <div class="row mt-4">
@@ -10,13 +18,15 @@
               <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
                 <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
                   <h6 class="text-white text-capitalize ps-3">ORDENES DE COMPRA REALIZADAS</h6>
-                  <div class="py-1 px-3 text-end admin-mobile-actions" data-bs-toggle="modal" data-bs-target="#reportModal">
-                    <label class="text-white admin-mobile-action-trigger">
-                      + Generar Reporte
-                    </label>
-                    <a class="text-white ms-6 admin-mobile-action-trigger" href="/purchase">
-                      + Generar Compra
-                    </a>
+                  <div class="py-1 px-3 text-end admin-mobile-actions">
+                    @unless($purchaseOrdersFreePlan)
+                      <label class="text-white admin-mobile-action-trigger" data-bs-toggle="modal" data-bs-target="#reportModal">
+                        + Generar Reporte
+                      </label>
+                      <a class="text-white admin-mobile-action-trigger" href="/purchase">
+                        + Generar Compra
+                      </a>
+                    @endunless
                   </div>
                 </div>
               </div> 

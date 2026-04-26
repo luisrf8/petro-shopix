@@ -6,6 +6,7 @@
     @php
       $roleName = strtolower((string) optional(auth()->user()->role)->name);
       $currentUser = auth()->user();
+      $salesOrderPlanCapabilities = \App\Support\TenantPlanCapabilities::forTenant($order->tenant ?? null);
       $isDeliveryOnlyView = ($currentUser?->hasStoreRole('delivery') ?? false)
         && !($currentUser?->hasStoreRole('owner', 'admin', 'seller', 'warehouse') ?? false);
       $edoc = $order->latest_electronic_document;
@@ -40,6 +41,7 @@
       $deliveryTypeLabel = strtolower(trim((string) ($order->preference ?? '')));
       $isStoreDelivery = str_contains($deliveryTypeLabel, 'delivery');
       $isExternalShipping = str_contains($deliveryTypeLabel, 'env') || str_contains($deliveryTypeLabel, 'shipping');
+      $deliveryOperationsLocked = !$salesOrderPlanCapabilities->allowsDeliveryOperations();
       $deliveryLabel = (int) $order->deliver_status === 0
         ? 'Pendiente'
         : ((int) $order->deliver_status === 1
@@ -306,7 +308,12 @@
               </div>
               @endif
               @unless($isDeliveryOnlyView)
-              @if($isStoreDelivery && ($currentUser?->hasStoreRole('owner', 'admin', 'warehouse') ?? false))
+              @if($isStoreDelivery && $deliveryOperationsLocked)
+              <div class="order-summary-row order-summary-row-column">
+                <span>Asignar repartidor</span>
+                <strong>El plan actual no permite gestionar repartidores heredados.</strong>
+              </div>
+              @elseif($isStoreDelivery && ($currentUser?->hasStoreRole('owner', 'admin', 'warehouse') ?? false))
               <div class="order-summary-row order-summary-row-column">
                 <span>Asignar repartidor</span>
                 <form method="POST" action="{{ route('sales.assignDeliveryUser', $order->id) }}" class="w-100 d-flex gap-2 align-items-center flex-wrap">

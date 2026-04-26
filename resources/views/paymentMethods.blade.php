@@ -10,6 +10,9 @@
           <h6 class="mb-0">Tasa EUR: <span id="currentEuroRate">{{$euroRate ? number_format($euroRate->rate, 2) : 'N/A'}}</span> VES / EUR</h6>
         </div>
         <div class="col-md-6 text-md-end mt-2 mt-md-0 d-flex flex-column align-items-md-end gap-2">
+          <button class="btn btn-outline-dark mb-0" data-bs-toggle="modal" data-bs-target="#rateHistoryModal">
+            <i class="material-symbols-rounded text-sm">history</i>&nbsp;&nbsp;Historial y exportaciones
+          </button>
           <button class="btn bg-gradient-success mb-0" data-bs-toggle="modal" data-bs-target="#updateDollarRateModal">
             <i class="material-symbols-rounded text-sm">currency_exchange</i>&nbsp;&nbsp;Actualizar Tasa del Dólar
           </button>
@@ -85,6 +88,55 @@
                     @empty
                       <tr>
                         <td colspan="3" class="text-center text-muted py-4">Sin histórico registrado.</td>
+                      </tr>
+                    @endforelse
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal fade" id="rateHistoryModal" tabindex="-1" aria-labelledby="rateHistoryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+          <div class="modal-content">
+            <div class="modal-header">
+              <div>
+                <h5 class="modal-title" id="rateHistoryModalLabel">Historial de tasas</h5>
+                <small class="text-muted">Consulta el histórico BCV y exporta en Excel, CSV o PDF.</small>
+              </div>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
+                <a href="{{ route('paymentMethods.rates.export', 'excel') }}" class="btn btn-outline-success btn-sm">Exportar Excel</a>
+                <a href="{{ route('paymentMethods.rates.export', 'csv') }}" class="btn btn-outline-primary btn-sm">Exportar CSV</a>
+                <a href="{{ route('paymentMethods.rates.export', 'pdf') }}" class="btn btn-outline-dark btn-sm">Exportar PDF</a>
+              </div>
+              <div class="table-responsive">
+                <table class="table align-items-center mb-0">
+                  <thead>
+                    <tr>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Moneda</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fecha BCV</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Tasa</th>
+                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Registrada</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @forelse($rateHistoryEntries as $entry)
+                      <tr>
+                        <td>
+                          <span class="fw-semibold">{{ $entry['currency_name'] }}</span>
+                          <div class="text-xs text-muted">{{ $entry['currency_code'] }}</div>
+                        </td>
+                        <td>{{ $entry['rate_date']->format('d/m/Y') }}</td>
+                        <td>{{ number_format((float) $entry['rate'], 4) }} Bs</td>
+                        <td>{{ optional($entry['created_at'])->format('d/m/Y H:i') ?? 'Sin registro' }}</td>
+                      </tr>
+                    @empty
+                      <tr>
+                        <td colspan="4" class="text-center text-muted py-4">Sin histórico registrado.</td>
                       </tr>
                     @endforelse
                   </tbody>
@@ -201,6 +253,7 @@
                         style="width: 20%; height: 20%; object-fit: cover; border-radius: inherit;">
                     <div class="d-flex gap-2 align-items-center px-3">
                       <h6 class="mb-0">{{ $method->name }}</h6>
+                      <span class="badge bg-gradient-{{ $method->usesReference() ? 'info' : 'secondary' }}">{{ $method->usesReference() ? 'Posee referencia' : 'Sin referencia' }}</span>
                       <i class="material-symbols-rounded ms-auto text-dark cursor-pointer btn-edit-method" 
                         title="Editar Método"
                         data-bs-toggle="modal" 
@@ -212,7 +265,8 @@
                         data-currency="{{ $method->currency_id }}"
                         data-bank="{{ $method->bank }}"
                         data-dni="{{ $method->dni }}"
-                        data-description="{{ $method->description }}">edit</i>
+                        data-description="{{ $method->description }}"
+                        data-has-reference="{{ $method->usesReference() ? '1' : '0' }}">edit</i>
                     </div>
                     <button class="btn btn-sm toggle-status-btn pt-4 {{ $method->status ? 'text-success' : 'text-danger'}}" 
                         data-id="{{ $method->id }}" 
@@ -321,6 +375,14 @@
                   <label for="paymentMethodDescription" class="form-label">Descripción</label>
                   <input type="text" class="form-control border border-1 p-2" id="paymentMethodDescription" name="description">
                 </div>
+                <div class="mb-3">
+                  <input type="hidden" name="has_reference" value="0">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="paymentMethodHasReference" name="has_reference" value="1" checked>
+                    <label class="form-check-label" for="paymentMethodHasReference">Posee referencia</label>
+                  </div>
+                  <small class="text-muted">Activa esta opción para métodos como transferencia. Desactívala para efectivo o punto de venta.</small>
+                </div>
                 <div class="mb-3 d-flex flex-column">
                   <label for="paymentMethodQr" class="form-label">QR</label>
                     <input type="file" class="form-control border border-1 p-2 " id="image" name="image" accept="image/*">
@@ -373,6 +435,14 @@
                 <div class="mb-3">
                   <label for="editPaymentMethodDescription" class="form-label">Descripción</label>
                   <input type="text" class="form-control border border-1 p-2" id="editPaymentMethodDescription" name="description">
+                </div>
+                <div class="mb-3">
+                  <input type="hidden" name="has_reference" value="0">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="editPaymentMethodHasReference" name="has_reference" value="1" checked>
+                    <label class="form-check-label" for="editPaymentMethodHasReference">Posee referencia</label>
+                  </div>
+                  <small class="text-muted">Si está apagado, el flujo de venta no exigirá referencia ni comprobante.</small>
                 </div>
                 <div class="mb-3 d-flex flex-column">
                   <label for="editPaymentMethodQr" class="form-label">QR</label>
@@ -574,6 +644,7 @@
           const methodBank = this.getAttribute('data-bank') || '';
           const methodDni = this.getAttribute('data-dni') || '';
           const methodDescription = this.getAttribute('data-description') || '';
+          const methodHasReference = this.getAttribute('data-has-reference') === '1';
           const methodQr = this.getAttribute('data-qr') || null;
 
           // Asigna valores al formulario del modal
@@ -583,6 +654,7 @@
           document.getElementById('editPaymentMethodBenefit').value = methodAdmin;
           document.getElementById('editPaymentMethodBank').value = methodBank;
           document.getElementById('editPaymentMethodDescription').value = methodDescription;
+          document.getElementById('editPaymentMethodHasReference').checked = methodHasReference;
 
           // Selecciona la moneda si está disponible
           const currencySelect = document.getElementById('editPaymentMethodCurrency');

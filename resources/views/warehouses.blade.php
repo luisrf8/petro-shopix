@@ -345,6 +345,56 @@
     </div>
 
     <div class="col-12">
+      <div class="card mb-4">
+        <div class="card-header p-3">
+          <h6 class="mb-0">Inventario por almacén</h6>
+        </div>
+        <div class="card-body p-3">
+          <ul class="nav nav-pills mb-3" id="warehouseStockTabs" role="tablist">
+            @foreach($warehouses as $warehouse)
+              <li class="nav-item" role="presentation">
+                <button class="nav-link {{ $loop->first ? 'active' : '' }}" id="warehouse-tab-{{ $warehouse->id }}" data-bs-toggle="pill" data-bs-target="#warehouse-pane-{{ $warehouse->id }}" type="button" role="tab" aria-controls="warehouse-pane-{{ $warehouse->id }}" aria-selected="{{ $loop->first ? 'true' : 'false' }}">
+                  {{ $warehouse->name }}
+                </button>
+              </li>
+            @endforeach
+          </ul>
+          <div class="tab-content">
+            @foreach($warehouses as $warehouse)
+              @php $warehouseItems = $warehouseStockDetails[$warehouse->id] ?? collect(); @endphp
+              <div class="tab-pane fade {{ $loop->first ? 'show active' : '' }}" id="warehouse-pane-{{ $warehouse->id }}" role="tabpanel" aria-labelledby="warehouse-tab-{{ $warehouse->id }}">
+                <div class="table-responsive">
+                  <table class="table table-bordered align-items-center mb-0 warehouse-table">
+                    <thead>
+                      <tr>
+                        <th>Producto</th>
+                        <th>Variante</th>
+                        <th class="text-end">Existencia</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @forelse($warehouseItems as $stockItem)
+                        <tr>
+                          <td>{{ $stockItem->variant->product->name ?? 'Producto' }}</td>
+                          <td>{{ $stockItem->variant->size ?? 'Variante' }}</td>
+                          <td class="text-end fw-semibold">{{ number_format((float) $stockItem->quantity, 2) }}</td>
+                        </tr>
+                      @empty
+                        <tr>
+                          <td colspan="3" class="text-center text-muted py-4">Este almacén todavía no tiene existencias registradas.</td>
+                        </tr>
+                      @endforelse
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            @endforeach
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
       <div class="card">
         <div class="card-header p-3">
           <h6 class="mb-0">Existencia entre almacenes</h6>

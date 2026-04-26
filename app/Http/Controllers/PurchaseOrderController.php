@@ -377,6 +377,10 @@ class PurchaseOrderController extends Controller
                 $consumedQty = (float) data_get($consumption, 'quantity', 0);
                 $unitCost = (float) data_get($consumption, 'unit_cost', 0);
 
+                if ($consumedVariantId === $outputVariantId) {
+                    return response()->json(['error' => 'Una producción interna no puede consumir la misma variante que está produciendo.'], 422);
+                }
+
                 if ($consumedVariantId <= 0 || $consumedQty <= 0 || $unitCost <= 0) {
                     return response()->json(['error' => 'Cada consumible debe tener variante, cantidad y costo unitario válidos.'], 422);
                 }

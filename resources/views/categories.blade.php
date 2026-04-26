@@ -144,6 +144,7 @@
                       <th>Descripción</th>
                       <th>Estado</th>
                       <th>Productos Disponibles</th>
+                      <th>Agregar producto</th>
                       <th>Editar</th>
                       <th>Activar / Inactivar</th>
                     </tr>
@@ -166,6 +167,13 @@
                           </span>
                         </td>
                         <td>{{ $category->total_available_items ?? 0 }}</td>
+                        <td class="align-middle">
+                          <a
+                            href="{{ route('createProductItem', ['category_id' => $category->id]) }}"
+                            class="text-secondary font-weight-bold text-xs toggle-status-btn">
+                            Agregar producto
+                          </a>
+                        </td>
                         <td class="align-middle">
                           <a href="javascript:;"
                             class="text-secondary font-weight-bold text-xs btn-edit-user d-flex align-items-center justify-content-center"

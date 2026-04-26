@@ -17,12 +17,11 @@ use App\Models\Plan;
 use App\Models\Country;
 use App\Models\State;
 use App\Models\City;
-use App\Models\TenantPlanPayment;
 use Carbon\Carbon;
 use App\Models\Log;
 use App\Models\SalesOrderDetail;
+use App\Support\TenantPlanCapabilities;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -519,24 +518,16 @@ class IndexController extends Controller
         $tenantId = $user->tenant_id;
         $isDeliveryUser = (bool) ($user?->hasStoreRole('delivery') ?? false);
         $tenant = Tenant::find($tenantId);
+        $tenantPlanCapabilities = TenantPlanCapabilities::forTenant($tenant);
         $tenantPublicUrl = $tenant?->slug ? url('/').'/'.$tenant->slug : null;
-        $currentPlanPayment = null;
+        $currentPlanPayment = $tenantPlanCapabilities->latestPaidPlan();
         $currentPlanDaysRemaining = null;
 
-        if ($tenantId) {
-            $currentPlanPayment = TenantPlanPayment::with('plan')
-                ->where('tenant_id', $tenantId)
-                ->where('status', 'paid')
-                ->orderByDesc('paid_at')
-                ->orderByDesc('id')
-                ->first();
-
-            if ($currentPlanPayment && !is_null($currentPlanPayment->expires_at)) {
-                $expiresAt = Carbon::parse($currentPlanPayment->expires_at);
-                $currentPlanDaysRemaining = $expiresAt->greaterThanOrEqualTo($now)
-                    ? $now->diffInDays($expiresAt)
-                    : (-1 * $expiresAt->diffInDays($now));
-            }
+        if ($currentPlanPayment && !is_null($currentPlanPayment->expires_at)) {
+            $expiresAt = Carbon::parse($currentPlanPayment->expires_at);
+            $currentPlanDaysRemaining = $expiresAt->greaterThanOrEqualTo($now)
+                ? $now->diffInDays($expiresAt)
+                : (-1 * $expiresAt->diffInDays($now));
         }
 
         // Cargas (filtradas por tenant)
@@ -729,7 +720,7 @@ class IndexController extends Controller
         $deliveryDashboardOrders = collect();
         $deliveryDashboardAmount = 0.0;
 
-        if ($isDeliveryUser) {
+        if ($isDeliveryUser && $tenantPlanCapabilities->allowsDeliveryOperations()) {
             $deliveryDashboardOrders = SalesOrder::with(['user', 'details', 'payments'])
                 ->where('tenant_id', $tenantId)
                 ->where('deliver_status', 0)

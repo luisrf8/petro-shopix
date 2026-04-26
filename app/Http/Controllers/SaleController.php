@@ -51,6 +51,7 @@ use App\Support\TenantCurrency;
 use App\Support\ActionReason;
 use App\Support\DeliveryManager;
 use App\Support\PdfDownload;
+use App\Support\TenantPlanCapabilities;
 use App\Services\FiscalCorrelativeService;
 use App\Services\TheFactoryHkaService;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -64,6 +65,7 @@ class SaleController extends Controller
         // Traer todos los productos con sus variantes
         $productItems = Product::with(['category', 'images', 'variants', 'taxes'])
         ->where('tenant_id', $user->tenant_id)
+        ->where('is_consumable', false)
         ->where('is_active', true)
         ->orderBy('created_at', 'desc')->get();
         $materialPackages = MaterialPackage::with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images', 'items.variant.product.taxes', 'items.variant.product.variants'])
@@ -79,6 +81,13 @@ class SaleController extends Controller
         $euroRate = EuroRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
         $taxes = Tax::all();
         $tenant = Tenant::find($user->tenant_id);
+        $tenantPlanCapabilities = TenantPlanCapabilities::forTenant($tenant);
+        if ($tenant && !$tenantPlanCapabilities->allowsDeliveryOperations()) {
+            $tenant->delivery_enabled = false;
+            $tenant->delivery_notifications_enabled = false;
+            $tenant->restrict_delivery_city_to_tenant = true;
+            $tenant->special_taxpayer = false;
+        }
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
         $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
@@ -121,6 +130,12 @@ class SaleController extends Controller
             'customer_new.email' => 'required_if:create_new_customer,true|email|unique:users,email',
             'customer_new.phone_number' => 'required_if:create_new_customer,true|string|max:20',
             'customer_new.dni' => 'required_if:create_new_customer,true|string|max:100',
+            'payments' => 'nullable|array',
+            'payments.*.methodId' => 'required_with:payments|integer',
+            'payments.*.amount' => 'required_with:payments|numeric|min:0.01',
+            'payments.*.currency' => 'nullable|string|max:10',
+            'payments.*.reference' => 'nullable|string|max:255',
+            'payments.*.proof_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
             'mark_delivered' => 'nullable|boolean',
             'mark_payments_paid' => 'nullable|boolean',
             'mark_sale_completed' => 'nullable|boolean',
@@ -187,6 +202,10 @@ class SaleController extends Controller
             return response()->json(['error' => 'No se encontró la tienda asociada a la venta.'], 422);
         }
 
+        if (!TenantPlanCapabilities::forTenant($tienda)->allowsDeliveryOperations() && in_array($deliveryType, ['delivery', 'shipping'], true)) {
+            return response()->json(['error' => 'El plan Free no permite usar delivery o envíos en ventas administrativas.'], 403);
+        }
+
         if ($deliveryType === 'delivery' && (bool) ($tienda->restrict_delivery_city_to_tenant ?? true)) {
             $deliveryCityId = (int) ($validated['delivery_city_id'] ?? 0);
             $shippingCityValidation = $this->validateShippingCityAgainstTenant($tienda, $deliveryCityId);
@@ -238,6 +257,10 @@ class SaleController extends Controller
             $productVariant = ProductVariant::with('product')->find($item['id']);
             if (!$productVariant) {
                 return response()->json(['error' => 'Variante no encontrada: ' . $item['id']], 400);
+            }
+
+            if ((bool) ($productVariant->product->is_consumable ?? false)) {
+                return response()->json(['error' => 'Los productos consumibles no están disponibles para venta directa.'], 422);
             }
 
             if ($productVariant->stock < $item['quantity']) {
@@ -292,7 +315,7 @@ class SaleController extends Controller
         // Crear pagos
         $approvedPayments = collect();
         if (!empty($paymentDetails) && is_array($paymentDetails)) {
-            foreach ($paymentDetails as $paymentDetail) {
+            foreach ($paymentDetails as $index => $paymentDetail) {
                 $paymentMethod = PaymentMethod::with('currency')
                     ->where('tenant_id', $tenantId)
                     ->active()
@@ -302,17 +325,40 @@ class SaleController extends Controller
                     return response()->json(['error' => 'Uno de los métodos de pago seleccionados está inactivo o no pertenece a esta tienda.'], 422);
                 }
 
+                $requiresReference = $paymentMethod->usesReference();
+                $reference = trim((string) ($paymentDetail['reference'] ?? ''));
+
+                if ($requiresReference && $reference === '') {
+                    return response()->json(['error' => 'El método de pago ' . $paymentMethod->name . ' requiere una referencia.'], 422);
+                }
+
+                if ($requiresReference && !$request->hasFile("payments.$index.proof_image")) {
+                    return response()->json(['error' => 'El método de pago ' . $paymentMethod->name . ' requiere comprobante.'], 422);
+                }
+
                 $payment = Payment::create([
                     'sales_order_id' => $salesOrder->id,
                     'payment_method' => $paymentMethod->id,
                     'amount' => $paymentDetail['amount'],
                     'currency' => $paymentMethod->currency->code ?? $paymentDetail['currency'],
-                    'reference' => $paymentDetail['reference'] ?? null,
+                    'reference' => $requiresReference ? $reference : null,
                     'status' => $markPaymentsPaid ? 1 : 0,
                 ]);
 
                 if ($payment->status == 1) {
                     $approvedPayments->push($payment);
+                }
+
+                if ($request->hasFile("payments.$index.proof_image")) {
+                    $proofPath = ImageStorage::storeUploadedImageAsWebp(
+                        $request->file("payments.$index.proof_image"),
+                        'payment_images'
+                    );
+
+                    PaymentImage::create([
+                        'payment_id' => $payment->id,
+                        'image_path' => $proofPath,
+                    ]);
                 }
             }
         }
@@ -569,6 +615,10 @@ class SaleController extends Controller
             };
         }
 
+        if (!TenantPlanCapabilities::forTenant($tenantForSale)->allowsDeliveryOperations() && in_array($deliveryType, ['delivery', 'shipping'], true)) {
+            return response()->json(['error' => 'El plan Free no permite usar delivery o envíos en este flujo de ventas.'], 403);
+        }
+
         if (in_array($deliveryType, ['delivery', 'shipping'], true) && empty(trim((string) $address))) {
             return response()->json(['error' => 'La dirección es obligatoria para delivery o envío.'], 422);
         }
@@ -710,6 +760,13 @@ class SaleController extends Controller
     public function viewPendingDeliveryOrders()
     {
         $user = auth()->user();
+        $tenant = Tenant::find($user->tenant_id);
+        $planCapabilities = TenantPlanCapabilities::forTenant($tenant);
+
+        if (!$planCapabilities->canPendingOrders() || !$planCapabilities->allowsDeliveryOperations()) {
+            return redirect()->route('sales.orders')
+                ->with('warning', 'El plan actual no permite gestionar pedidos pendientes de delivery.');
+        }
 
         $salesOrders = SalesOrder::with(['user', 'details', 'details.variant', 'payments', 'electronicDocuments', 'returns.items'])
             ->where('tenant_id', $user->tenant_id)
@@ -770,6 +827,13 @@ class SaleController extends Controller
     public function viewPaidPendingDelivery()
     {
         $user = auth()->user();
+        $tenant = Tenant::find($user->tenant_id);
+        $planCapabilities = TenantPlanCapabilities::forTenant($tenant);
+
+        if (!$planCapabilities->canPaidPendingDeliveries() || !$planCapabilities->allowsDeliveryOperations()) {
+            return redirect()->route('sales.orders')
+                ->with('warning', 'El plan actual no permite usar la bandeja de entregas pendientes.');
+        }
 
         $salesOrders = SalesOrder::with(['user', 'details', 'payments', 'assignedDeliveryUser'])
             ->where('tenant_id', $user->tenant_id)
@@ -1071,6 +1135,11 @@ class SaleController extends Controller
         $user = auth()->user();
         $canManageAnyDeliveryAssignment = $user?->hasStoreRole('owner', 'admin', 'seller', 'warehouse') ?? false;
         $canSelfAssignDelivery = $user?->hasStoreRole('delivery') ?? false;
+
+        $tenant = Tenant::find($order->tenant_id);
+        if (!TenantPlanCapabilities::forTenant($tenant)->allowsDeliveryOperations()) {
+            return back()->with('error', 'El plan Free no permite asignar ni gestionar repartidores.');
+        }
 
         if (!$canManageAnyDeliveryAssignment && !$canSelfAssignDelivery) {
             return back()->with('error', 'No autorizado para asignar repartidores.');
@@ -1577,10 +1646,6 @@ class SaleController extends Controller
             })
             ->active()
             ->get();
-        // Agrupar métodos de pago por moneda
-        $groupedPaymentMethods = $paymentMethods->groupBy(function ($paymentMethod) {
-            return $paymentMethod->currency->name; // Agrupar por el nombre de la moneda
-        });
         
         return response()->json($paymentMethods, 200);
     }
@@ -1679,6 +1744,13 @@ class SaleController extends Controller
             ->first();
 
         if ($variant) {
+            if ((bool) ($variant->product->is_consumable ?? false)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El código corresponde a un producto consumible y no puede venderse de forma directa.',
+                ], 422);
+            }
+
             $price = $this->getVariantDiscountedUnitPrice($variant);
 
             return response()->json([
@@ -1886,10 +1958,22 @@ class SaleController extends Controller
         // Recuperar la orden con sus relaciones
         $order = SalesOrder::with([
             'user', 
+            'tenant',
             'details', 
             'details.variant.product', 
             'payments.payment'
         ])->findOrFail($id);
+
+        if ((int) ($order->tenant_id ?? 0) !== (int) ($user->tenant_id ?? 0)) {
+            abort(404);
+        }
+
+        $tenantPlanCapabilities = TenantPlanCapabilities::forTenant($order->tenant);
+        if (!$tenantPlanCapabilities->allowsDeliveryOperations() && $this->orderUsesDeliveryOperations($order)) {
+            return response()->json([
+                'message' => 'El plan Free no permite gestionar cambios de estado para delivery o envíos heredados.'
+            ], 403);
+        }
     
         // Actualizar el estado de la orden
         $order->deliver_status = $request->status;
@@ -2201,6 +2285,15 @@ class SaleController extends Controller
                 : ($address !== '' ? $address : 'Sin destino registrado'),
             'map_url' => $mapUrl,
         ];
+    }
+
+    private function orderUsesDeliveryOperations(SalesOrder $order): bool
+    {
+        $preference = mb_strtolower(trim((string) ($order->preference ?? '')));
+
+        return str_contains($preference, 'delivery')
+            || str_contains($preference, 'env')
+            || str_contains($preference, 'shipping');
     }
 
     public function processReturn(Request $request, $orderId)

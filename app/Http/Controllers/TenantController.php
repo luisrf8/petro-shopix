@@ -28,11 +28,16 @@ use App\Models\Payment;
 use App\Models\DollarRate;
 use App\Models\EuroRate;
 use App\Models\Tax;
+use App\Models\UserScheduleRule;
 use App\Support\ImageStorage;
 use App\Support\ActionReason;
+use App\Support\TenantPlanCapabilities;
 use App\Services\GeminiImageService;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
@@ -42,6 +47,91 @@ use Carbon\Carbon;
 
 class TenantController extends Controller
 {
+    public function generateTenantCopy(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'business_type' => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
+            'economic_activity' => 'required|string|max:150',
+        ]);
+
+        $apiKey = config('services.gemini.api_key');
+        $textModel = config('services.gemini.text_model', 'gemini-2.5-flash');
+
+        if (empty($apiKey)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gemini no está configurado en el servidor.',
+            ], 422);
+        }
+
+        $storeName = trim((string) $validated['name']);
+        $businessType = $this->normalizeBusinessType($validated['business_type'] ?? 'tienda');
+        $economicActivity = $this->normalizeEconomicActivity($validated['economic_activity'] ?? '', $validated['business_type'] ?? null)
+            ?? trim((string) $validated['economic_activity']);
+
+        $prompt = "Redacta copy comercial en español para un negocio que se registra en SHOPIX. "
+            . "Responde SOLO JSON valido con esta forma exacta: {\"slogan\":\"...\",\"description\":\"...\"}. "
+            . "Reglas: slogan entre 5 y 12 palabras, claro, comercial, memorable y sin comillas. "
+            . "Description entre 45 y 85 palabras, tono profesional, orientado a conversion, concreto y natural, sin emojis, sin markdown, sin listas. "
+            . "Datos del negocio: nombre={$storeName}; tipo={$businessType}; rubro={$economicActivity}.";
+
+        $response = Http::timeout(30)->post(
+            "https://generativelanguage.googleapis.com/v1beta/models/{$textModel}:generateContent?key={$apiKey}",
+            [
+                'contents' => [
+                    ['parts' => [['text' => $prompt]]],
+                ],
+            ]
+        );
+
+        if (!$response->successful()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo generar el copy con Gemini.',
+            ], 422);
+        }
+
+        $text = data_get($response->json(), 'candidates.0.content.parts.0.text', '');
+        if (!is_string($text) || trim($text) === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gemini no devolvió contenido útil.',
+            ], 422);
+        }
+
+        $clean = trim($text);
+        $clean = preg_replace('/^```json\s*/', '', $clean);
+        $clean = preg_replace('/^```\s*/', '', (string) $clean);
+        $clean = preg_replace('/\s*```$/', '', (string) $clean);
+
+        $decoded = json_decode((string) $clean, true);
+        if (!is_array($decoded)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gemini devolvió un formato inválido para slogan y descripción.',
+            ], 422);
+        }
+
+        $slogan = Str::limit(trim((string) ($decoded['slogan'] ?? '')), 255, '');
+        $description = trim((string) ($decoded['description'] ?? ''));
+
+        if ($slogan === '' && $description === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo construir una propuesta de copy.',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'slogan' => $slogan,
+                'description' => $description,
+            ],
+        ]);
+    }
+
     public function generateTenantImage(Request $request, GeminiImageService $imageService)
     {
         $validated = $request->validate([
@@ -62,9 +152,14 @@ class TenantController extends Controller
         ]);
 
         $operation = $validated['image_operation'] ?? 'generate';
+        $hasReferenceImage = $request->hasFile('reference_image') || !empty($validated['reference_image_data']);
 
         if ($validated['type'] === 'logo') {
-            $typePrompt = 'Genera un logo profesional, limpio, sin texto, con fondo transparente.';
+            if ($operation === 'remove_background') {
+                $typePrompt = 'Elimina completamente el fondo de la imagen del logo adjunta. Conserva solo el elemento principal, con bordes limpios y fondo transparente.';
+            } else {
+                $typePrompt = 'Genera un logo profesional, limpio, sin texto, con fondo transparente.';
+            }
         } elseif ($validated['type'] === 'background') {
             $typePrompt = 'Genera una imagen de fondo profesional para ecommerce en formato horizontal 1920x1080.';
         } elseif ($validated['type'] === 'product') {
@@ -83,7 +178,14 @@ class TenantController extends Controller
 
         $prompt = trim((string) ($validated['prompt'] ?? ''));
 
-        if ($messages->isEmpty() && $prompt === '') {
+        if ($operation === 'remove_background' && !$hasReferenceImage) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debes adjuntar o generar una imagen antes de quitarle el fondo.',
+            ], 422);
+        }
+
+        if ($operation !== 'remove_background' && $messages->isEmpty() && $prompt === '') {
             return response()->json([
                 'success' => false,
                 'message' => 'Debes enviar un prompt para generar la imagen.',
@@ -155,6 +257,26 @@ class TenantController extends Controller
         ], (int) ($result['status'] ?? 422));
     }
 
+    public function termsAndConditionsPdf()
+    {
+        $html = view('legal.termsAndConditionsPdf', [
+            'generatedAt' => now(),
+        ])->render();
+
+        $options = new Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'DejaVu Sans');
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        return response($dompdf->output(), 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="shopix-terminos-y-condiciones.pdf"');
+    }
+
     public function index()
     {
         // Trae todos los tenants con todos sus planes asociados
@@ -186,6 +308,35 @@ class TenantController extends Controller
         $plans = Plan::all();
 
         return view('tenant', compact('tenants', 'plans', 'nearDueTenants', 'overdueTenants'));
+    }
+
+    public function edit(Tenant $tenant)
+    {
+        $tenant->load(['tenantPlanPayments.plan', 'users.role']);
+
+        $plans = Plan::query()->orderBy('price')->get();
+        $countries = Country::query()->orderBy('name')->get(['id', 'name']);
+        $states = State::query()->orderBy('name')->get(['id', 'name', 'country_id']);
+        $cities = City::query()->orderBy('name')->get(['id', 'name', 'state_id']);
+        $latestPlanPayment = $this->getTenantLatestPaidPlanPayment($tenant);
+        $planDaysRemaining = $this->calculatePlanDaysRemaining($latestPlanPayment);
+        $resolvedPlanCutoffDate = $this->resolvePaymentCutoffDate($latestPlanPayment);
+        $ownerRoleIds = $this->resolveOwnerRoleIds();
+        $owner = $tenant->users->first(function (User $user) use ($ownerRoleIds) {
+            return in_array((int) $user->role_id, $ownerRoleIds, true);
+        }) ?? $tenant->users->first();
+
+        return view('tenants.edit', compact(
+            'tenant',
+            'plans',
+            'countries',
+            'states',
+            'cities',
+            'latestPlanPayment',
+            'planDaysRemaining',
+            'resolvedPlanCutoffDate',
+            'owner'
+        ));
     }
 
     public function paymentsIndex()
@@ -226,9 +377,10 @@ class TenantController extends Controller
         $tenant = Tenant::with(['users.role', 'tenantPlanPayments.plan'])
             ->where('id', $user->tenant_id)
             ->first();
+        $tenantPlanCapabilities = TenantPlanCapabilities::forTenant($tenant);
         $currentPlanPayment = $this->getTenantLatestPaidPlanPayment($tenant);
-        $isBasicPlanTenant = $this->isBasicPlanTenant($tenant);
-        $isFreePlanTenant = (float) ($currentPlanPayment?->plan?->price ?? -1) <= 0;
+        $isBasicPlanTenant = $tenantPlanCapabilities->isBasic();
+        $isFreePlanTenant = $tenantPlanCapabilities->isFree();
         $assignableRoleKeys = $user?->assignableStoreRoleKeys() ?? [];
         $roles = Role::whereNotIn('name', ['owner', 'user', 'super_user'])
             ->get()
@@ -263,8 +415,25 @@ class TenantController extends Controller
         $countries = Country::all();
         $states = State::all();
         $cities = City::all();
+        $isServiceBusiness = Str::lower((string) ($tenant->business_type ?? '')) === 'servicio';
+        $appointmentProfessionals = collect();
+        $appointmentScheduleRules = collect();
+
+        if ($tenantPlanCapabilities->canAppointments() && $isServiceBusiness) {
+            $appointmentProfessionals = $this->appointmentUsersQuery((int) $tenant->id)->get();
+            $appointmentScheduleRules = UserScheduleRule::query()
+                ->with('user')
+                ->where('tenant_id', (int) $tenant->id)
+                ->where('is_active', true)
+                ->orderBy('user_id')
+                ->orderBy('day_of_week')
+                ->orderBy('start_time')
+                ->get();
+        }
+
         return view('tenantStore', compact(
             'tenant',
+            'tenantPlanCapabilities',
             'roles',
             'countries',
             'states',
@@ -279,8 +448,26 @@ class TenantController extends Controller
             'isFreePlanTenant',
             'isBasicPlanTenant',
             'ownerCount',
-            'adminCount'
+            'adminCount',
+            'appointmentProfessionals',
+            'appointmentScheduleRules',
+            'isServiceBusiness'
         ));
+    }
+
+    private function appointmentUsersQuery(int $tenantId)
+    {
+        return User::query()
+            ->with('role')
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->where(function ($query) {
+                $query->whereNull('role_id')
+                    ->orWhereHas('role', function ($roleQuery) {
+                        $roleQuery->whereNotIn(DB::raw('LOWER(name)'), ['user', 'cliente', 'customer', 'super_user', 'super user']);
+                    });
+            })
+            ->orderBy('name');
     }
 
     public function submitPlanPaymentRequest(Request $request)
@@ -783,16 +970,16 @@ class TenantController extends Controller
             'email'                 => 'required|email|unique:tenants,email',
             'logo'                  => 'nullable|image|mimes:png,svg,webp|max:2048',
             'background_image'      => 'nullable|image|mimes:png,jpg,jpeg,webp|max:4096',
-            'color_primary'         => 'required|string|max:7',
-            'color_secondary'       => 'required|string|max:7',
-            'color_accent'          => 'required|string|max:7',
+            'color_primary'         => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
+            'color_secondary'       => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
+            'color_accent'          => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
             'business_type'         => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
             'economic_activity'     => 'required|string|max:150|regex:/.*\S.*/',
             'country'               => 'required|exists:countries,id',
             'state'                 => 'required|exists:states,id',
             'city'                  => 'required|exists:cities,id',
-            'phone_code'            => 'required|string|max:5',
-            'phone_number'          => 'required|string|max:20',
+            'phone_code'            => ['required', 'string', 'max:5', 'regex:/^\+[0-9]{1,4}$/'],
+            'phone_number'          => ['required', 'string', 'max:20', 'regex:/^[0-9]+$/'],
             'working_days'          => 'nullable|array',
             'working_days.*'        => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
             'opening_time'          => 'nullable|date_format:H:i',
@@ -803,11 +990,12 @@ class TenantController extends Controller
             'longitude'             => 'nullable|numeric',
             'slogan'                => 'nullable|string|max:255',
             'description'           => 'nullable|string',
+            'accept_terms'          => 'accepted',
             'users.owner.name'      => 'required|string|max:255',
             'users.owner.email'     => 'required|email|unique:users,email',
             'users.owner.password'  => 'required|string|min:8',
-            'users.owner.phone_number' => 'nullable|string|max:20',
-            'users.owner.dni'       => 'nullable|string|max:50',
+            'users.owner.phone_number' => ['required', 'string', 'max:25', 'regex:/^\+[0-9]{7,20}$/'],
+            'users.owner.dni'       => ['required', 'string', 'max:50', 'regex:/^[0-9]+$/'],
         ]);
 
         $this->assertEconomicActivityAllowed(
@@ -950,6 +1138,7 @@ class TenantController extends Controller
     public function update(Request $request, Tenant $tenant)
     {
         DB::raw("SET @user_id = " . auth()->id());
+        $expectsJson = $request->expectsJson() || $request->wantsJson();
 
         $validated = $request->validate([
             'name'  => 'sometimes|string|max:255',
@@ -1034,9 +1223,9 @@ class TenantController extends Controller
                 $belongsToSameTenant = (int) $existingUserWithEmail->tenant_id === (int) $tenant->id;
 
                 if (!$sameOwner && !$belongsToSameTenant) {
-                    return response()->json([
-                        'message' => 'El correo del dueño ya está en uso por otro usuario',
-                    ], 422);
+                    throw ValidationException::withMessages([
+                        'owner_email' => 'El correo del dueño ya está en uso por otro usuario.',
+                    ]);
                 }
 
                 if (!$owner && $belongsToSameTenant) {
@@ -1139,10 +1328,16 @@ class TenantController extends Controller
         $tenantHasChanges = $tenant->isDirty();
 
         if (!$tenantHasChanges && !$ownerHasChanges && !$planChanged) {
-            return response()->json([
-                'message' => 'No se detectaron cambios para actualizar',
-                'tenant'  => $tenant->load(['tenantPlanPayments.plan', 'users.role']),
-            ]);
+            if ($expectsJson) {
+                return response()->json([
+                    'message' => 'No se detectaron cambios para actualizar',
+                    'tenant'  => $tenant->load(['tenantPlanPayments.plan', 'users.role']),
+                ]);
+            }
+
+            return redirect()
+                ->route('tenants.edit', $tenant)
+                ->with('warning', 'No se detectaron cambios para actualizar.');
         }
 
         if ($ownerHasChanges) {
@@ -1194,10 +1389,16 @@ class TenantController extends Controller
             TenantPlanPayment::create($tenantPlanPaymentData);
         }
 
-        return response()->json([
-            'message' => 'Tenant actualizado correctamente',
-            'tenant'  => $tenant->load(['tenantPlanPayments.plan', 'users.role']),
-        ]);
+        if ($expectsJson) {
+            return response()->json([
+                'message' => 'Tenant actualizado correctamente',
+                'tenant'  => $tenant->load(['tenantPlanPayments.plan', 'users.role']),
+            ]);
+        }
+
+        return redirect()
+            ->route('tenants.edit', $tenant)
+            ->with('success', 'Tienda actualizada correctamente.');
     }
 
     public function updateTenant(Request $request)
@@ -1268,6 +1469,13 @@ class TenantController extends Controller
                 $validated['state'] ?? null,
                 $validated['city'] ?? null
             );
+
+            if ($isFreePlanTenant) {
+                $validated['special_taxpayer'] = false;
+                $validated['restrict_delivery_city_to_tenant'] = $tenant->restrict_delivery_city_to_tenant ?? true;
+                $validated['delivery_enabled'] = false;
+                $validated['delivery_notifications_enabled'] = false;
+            }
 
             $newUserInput = $request->input('new_user', []);
             $shouldCreateNewUser = false;
@@ -1528,14 +1736,32 @@ class TenantController extends Controller
             'baseCurrencySymbol'
         ));
     }
-    public function publicTenantProduct(Tenant $tenant, Product $product)
+    public function publicTenantProduct(Tenant $tenant, string $product)
     {
         $this->abortIfTenantInactiveForPublic($tenant);
 
-        // $tenant y $product son inyectados automáticamente por el model binding de Laravel
-        // gracias a la ruta '/{tenant:slug}/{product:slug}'
-        
-        if ((int) $product->tenant_id !== (int) $tenant->id) {
+        $resolvedProduct = Product::query()
+            ->where('tenant_id', $tenant->id)
+            ->where('slug', $product)
+            ->first();
+
+        if (!$resolvedProduct && ctype_digit($product)) {
+            $legacyProduct = Product::query()
+                ->where('tenant_id', $tenant->id)
+                ->whereKey((int) $product)
+                ->first();
+
+            if ($legacyProduct) {
+                return redirect()->route('tenant.public.product', [
+                    'tenant' => $tenant->slug,
+                    'product' => $legacyProduct->slug,
+                ], 301);
+            }
+        }
+
+        $product = $resolvedProduct;
+
+        if (!$product) {
             abort(404);
         }
 
@@ -1630,7 +1856,7 @@ class TenantController extends Controller
 
     private function isSpecialTaxpayer(Tenant $tenant): bool
     {
-        return (bool) ($tenant->special_taxpayer ?? false);
+        return TenantPlanCapabilities::forTenant($tenant)->effectiveSpecialTaxpayer($tenant);
     }
 
     private function shouldApplyIgtfForTenant(Tenant $tenant): bool
@@ -1735,8 +1961,8 @@ class TenantController extends Controller
                 'payments' => 'required|array|min:1',
                 'payments.*.method_id' => 'required|integer|exists:payment_methods,id',
                 'payments.*.amount' => 'required|numeric|min:0.01',
-                'payments.*.reference' => 'required|string|max:255',
-                'payments.*.reference_image_data' => 'required|string',
+                'payments.*.reference' => 'nullable|string|max:255',
+                'payments.*.reference_image_data' => 'nullable|string',
                 'payments.*.reference_image_mime' => 'nullable|string|max:100',
             ]);
 
@@ -1760,23 +1986,33 @@ class TenantController extends Controller
             }
 
             foreach ($validated['payments'] as $paymentIndex => $paymentData) {
+                $method = PaymentMethod::with('currency')
+                    ->where('tenant_id', $tenant->id)
+                    ->active()
+                    ->find($paymentData['method_id']);
+
+                if (!$method) {
+                    throw new \RuntimeException('Uno de los métodos de pago no pertenece a esta tienda.');
+                }
+
+                $requiresReference = $method->usesReference();
                 $reference = trim((string) ($paymentData['reference'] ?? ''));
                 $referenceImageData = trim((string) ($paymentData['reference_image_data'] ?? ''));
 
-                if ($reference === '') {
+                if ($requiresReference && $reference === '') {
                     throw new \RuntimeException('La referencia del pago #' . ($paymentIndex + 1) . ' es obligatoria.');
                 }
 
-                if ($referenceImageData === '') {
+                if ($requiresReference && $referenceImageData === '') {
                     throw new \RuntimeException('La imagen de comprobante del pago #' . ($paymentIndex + 1) . ' es obligatoria.');
                 }
 
-                if (preg_match('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', $referenceImageData) !== 1) {
+                if ($requiresReference && preg_match('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', $referenceImageData) !== 1) {
                     throw new \RuntimeException('El comprobante del pago #' . ($paymentIndex + 1) . ' debe ser una imagen valida.');
                 }
 
-                $validated['payments'][$paymentIndex]['reference'] = $reference;
-                $validated['payments'][$paymentIndex]['reference_image_data'] = $referenceImageData;
+                $validated['payments'][$paymentIndex]['reference'] = $requiresReference ? $reference : null;
+                $validated['payments'][$paymentIndex]['reference_image_data'] = $requiresReference ? $referenceImageData : null;
             }
 
             $address = $validated['delivery_type'] !== 'pickup'
@@ -1910,7 +2146,7 @@ class TenantController extends Controller
                 'action' => 'review_order_and_payments',
             ]);
 
-            if ($validated['delivery_type'] === 'delivery' && (bool) ($tenant->delivery_notifications_enabled ?? true) && (bool) ($tenant->delivery_enabled ?? false) && ((bool) ($validated['mark_sale_completed'] ?? false) || (bool) ($validated['mark_payments_paid'] ?? false))) {
+            if ($validated['delivery_type'] === 'delivery' && !$this->isFreePlanTenantForTenant($tenant) && (bool) ($tenant->delivery_notifications_enabled ?? true) && (bool) ($tenant->delivery_enabled ?? false) && ((bool) ($validated['mark_sale_completed'] ?? false) || (bool) ($validated['mark_payments_paid'] ?? false))) {
                 WorkflowNotifier::notifyTenantRoles((int) $tenant->id, ['almacen', 'delivery'], [
                     'title' => 'Pedido listo para despacho',
                     'message' => 'El pedido #' . $salesOrder->id . ' ya puede ser preparado para delivery.',
@@ -2086,14 +2322,12 @@ class TenantController extends Controller
 
     private function isBasicPlanTenant(?Tenant $tenant): bool
     {
-        if (!$tenant) {
-            return false;
-        }
+        return TenantPlanCapabilities::forTenant($tenant)->isBasic();
+    }
 
-        $latestPaidPlan = $this->getTenantLatestPaidPlanPayment($tenant);
-        $planName = Str::lower(Str::ascii((string) ($latestPaidPlan?->plan?->name ?? '')));
-
-        return Str::contains($planName, ['basico', 'basic']);
+    private function isFreePlanTenantForTenant(?Tenant $tenant): bool
+    {
+        return TenantPlanCapabilities::forTenant($tenant)->isFree();
     }
 
     private function resolveAdminRoleIds(): array
@@ -2124,9 +2358,7 @@ class TenantController extends Controller
 
     private function tenantHasProPlan(Tenant $tenant): bool
     {
-        $planName = Str::lower((string) $this->getTenantCurrentPlanName($tenant));
-
-        return Str::contains($planName, 'pro');
+        return TenantPlanCapabilities::forTenant($tenant)->isPro();
     }
 
     private function normalizeBusinessType(?string $value): ?string
@@ -2288,19 +2520,30 @@ class TenantController extends Controller
     {
         return [
             'tienda' => [
-                'Alimentos y Bebidas',
-                'Moda y Accesorios',
-                'Hogar y Construccion',
-                'Tecnologia',
-                'Salud y Belleza',
-                'Otros',
+                'Supermercado y Abastos',
+                'Panaderia y Pasteleria',
+                'Moda y Boutique',
+                'Calzado y Marroquineria',
+                'Ferreteria y Construccion',
+                'Hogar, Muebles y Decoracion',
+                'Tecnologia y Computacion',
+                'Telefonia y Accesorios',
+                'Farmacia y Bienestar',
+                'Mascotas y Agrotienda',
+                'Papeleria, Libros y Juguetes',
+                'Repuestos y Accesorios Automotrices',
             ],
             'servicio' => [
-                'Gastronomia',
-                'Cuidado Personal',
-                'Servicios Tecnicos',
-                'Profesionales',
-                'Logistica y Educacion',
+                'Restaurante, Cafeteria y Delivery',
+                'Barberia, Salon y Spa',
+                'Consultorio Medico y Odontologico',
+                'Asesoria Legal, Contable y Administrativa',
+                'Soporte Tecnico y Reparaciones',
+                'Educacion, Cursos e Idiomas',
+                'Logistica, Envios y Mensajeria',
+                'Fitness, Deporte y Bienestar',
+                'Eventos, Fotografia y Produccion',
+                'Mantenimiento, Limpieza e Instalaciones',
             ],
         ];
     }

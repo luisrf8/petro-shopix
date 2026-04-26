@@ -71,6 +71,7 @@
       ? \Illuminate\Support\Str::limit($workingDaysText, 36)
       : ($serviceLabel === 'Servicio' ? 'Atención por agenda' : 'Horario no publicado');
     $mapsUrl = null;
+    $defaultWhatsappMessage = 'Hola, vengo de tu tienda virtual de Shopix';
     if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
       $mapsUrl = 'https://www.google.com/maps?q=' . $tenant->latitude . ',' . $tenant->longitude;
     } else {
@@ -83,6 +84,9 @@
       if (!empty($addressParts)) {
         $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(implode(', ', $addressParts));
       }
+    }
+    if (!empty($whatsappUrl)) {
+      $whatsappUrl .= '&text=' . urlencode($defaultWhatsappMessage);
     }
 
     [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
@@ -904,9 +908,6 @@
         <div class="collapse navbar-collapse" id="landingNavbar">
           <ul class="navbar-nav w-100 align-items-lg-center gap-lg-2">
             <li class="nav-item">
-              <a class="btn landing-nav-link tenant-main-nav-btn" href="#categorias"><i class="bi bi-grid"></i> Categorías</a>
-            </li>
-            <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="#productos"><i class="bi bi-bag"></i> Productos</a>
             </li>
             <li class="nav-item">
@@ -1030,7 +1031,7 @@
           <div class="row" id="products-container">
             @foreach($productItems as $product)
               <div class="col-12 col-sm-6 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
-                <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="text-decoration-none d-block h-100">
+                <a href="{{ route('tenant.public.product', ['tenant' => $tenant->slug, 'product' => $product->slug]) }}" class="text-decoration-none d-block h-100">
                   <div class="card card-product h-100">
                     @if(isset($product->images[0]))
                       <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top landing-media-image" style="height: 300px; object-fit: cover;">
@@ -1168,14 +1169,26 @@
               @if(!empty($tenant->facebook))
                   <a href="{{ $tenant->facebook }}"
                     target="_blank"
+                    rel="noopener noreferrer"
                     class="text-dark fs-4">
                       <i class="bi bi-facebook"></i>
+                  </a>
+              @endif
+
+              @if(!empty($tenant->tiktok))
+                  <a href="{{ \Illuminate\Support\Str::startsWith((string) $tenant->tiktok, ['http://', 'https://']) ? $tenant->tiktok : 'https://www.tiktok.com/@' . ltrim((string) $tenant->tiktok, '@') }}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-dark fs-4"
+                    aria-label="TikTok">
+                      <i class="bi bi-tiktok"></i>
                   </a>
               @endif
 
               @if(!empty($tenant->telegram))
                   <a href="https://t.me/{{ ltrim($tenant->telegram, '@') }}"
                     target="_blank"
+                    rel="noopener noreferrer"
                     class="text-dark fs-4">
                       <i class="bi bi-telegram"></i>
                   </a>

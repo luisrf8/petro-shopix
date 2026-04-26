@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\ProductVariantWarehouseStock;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\Tax;
 use App\Models\Tenant;
+use App\Models\Warehouse;
 use App\Support\ImageStorage;
 use App\Support\TenantCurrency;
 use Illuminate\Support\Facades\Storage;
@@ -167,11 +169,24 @@ class ProductController extends Controller
         $categories = Category::query()
             ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->get();
+        $warehouses = Warehouse::query()
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
+        $warehouseStocks = ProductVariantWarehouseStock::query()
+            ->where('tenant_id', $tenantId)
+            ->whereIn('product_variant_id', $product->variants->pluck('id'))
+            ->get()
+            ->keyBy(function ($item) {
+                return $item->warehouse_id . '_' . $item->product_variant_id;
+            });
         $taxes = Tax::all();
         $canEditProductTaxes = (bool) ($tenant->printer_tax_change_enabled ?? false);
         $productTaxChangeReference = (string) ($tenant->printer_tax_change_reference ?? '');
 
-        return view('productItem', compact('product', 'categories', 'taxes', 'canEditProductTaxes', 'productTaxChangeReference'));
+        return view('productItem', compact('product', 'categories', 'taxes', 'canEditProductTaxes', 'productTaxChangeReference', 'warehouses', 'warehouseStocks'));
     }
     
     public function store(Request $request)
@@ -184,6 +199,7 @@ class ProductController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'category_id' => 'required',
+            'is_consumable' => 'nullable|boolean',
             'tenant_id' => 'required'
         ]);
 
@@ -197,6 +213,9 @@ class ProductController extends Controller
                 'category_id' => ['La categoría seleccionada no pertenece a tu tenant.'],
             ]);
         }
+
+        $validatedData['slug'] = $this->generateUniqueProductSlug((string) $validatedData['name'], $tenantId);
+        $validatedData['is_consumable'] = (bool) ($validatedData['is_consumable'] ?? false);
 
         Product::create($validatedData);
         return response()->json(['success' => true, 'message' => 'Product created successfully'], 200);
@@ -222,6 +241,7 @@ class ProductController extends Controller
             'productName' => $request->input('productName', $request->input('name')),
             'productDescription' => $request->input('productDescription', $request->input('description')),
             'productDiscount' => $request->input('productDiscount', $request->input('discount', 0)),
+            'is_consumable' => $request->boolean('is_consumable'),
         ]);
 
         $validated = $request->validate([
@@ -229,6 +249,7 @@ class ProductController extends Controller
             'productName' => 'required|string|max:255',
             'productDescription' => 'nullable|string',
             'productDiscount' => 'nullable|numeric|min:0|max:100',
+            'is_consumable' => 'nullable|boolean',
             'tax_ids' => 'nullable|array',
             'tax_ids.*' => 'exists:taxes,id',
             'images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
@@ -291,8 +312,10 @@ class ProductController extends Controller
                 $product = Product::create([
                     'category_id' => $validated['category_id'],
                     'name' => $validated['productName'],
+                    'slug' => $this->generateUniqueProductSlug((string) $validated['productName'], $tenantId),
                     'description' => (string) ($validated['productDescription'] ?? ''),
                     'discount_percentage' => max(0, min(100, (float) ($validated['productDiscount'] ?? 0))),
+                    'is_consumable' => (bool) ($validated['is_consumable'] ?? false),
                     'tenant_id' => $tenantId,
                 ]);
 
@@ -380,26 +403,10 @@ class ProductController extends Controller
             return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
         }
 
-        $tenant = Tenant::find($tenantId);
-        if (!(bool) ($tenant->printer_tax_change_enabled ?? false)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Las alícuotas de productos ya creados están bloqueadas. Debes habilitar la autorización de imprenta para poder modificarlas.',
-            ], 422);
-        }
-
-        $request->validate([
-            'taxes' => 'array',
-            'taxes.*' => 'exists:taxes,id'
-        ]);
-
-        // Sincroniza las relaciones
-        $product->taxes()->sync($request->taxes);
-
         return response()->json([
-            'success' => true,
-            'message' => 'Alícuotas actualizadas con autorización de imprenta.',
-        ]);
+            'success' => false,
+            'message' => 'La edición de impuestos generales fue deshabilitada para productos ya creados. El producto conserva el impuesto asignado inicialmente.',
+        ], 403);
     }
 
     public function generateCodes(Product $product)
@@ -664,6 +671,7 @@ class ProductController extends Controller
                         'name' => $productName,
                     ],
                     [
+                        'slug' => $this->generateUniqueProductSlug($productName, (int) $user->tenant_id),
                         'description' => $row['product_description'] ?? 'Sin descripción',
                         'is_active' => isset($row['product_is_active']) ? (bool) $row['product_is_active'] : true,
                     ]
@@ -1366,6 +1374,7 @@ class ProductController extends Controller
 
         $product = Product::create([
             'name' => $request->name,
+            'slug' => $this->generateUniqueProductSlug((string) $request->name, (int) ($request->tenant_id ?? auth()->user()?->tenant_id ?? 0)),
             'description' => $request->description,
             'price' => $request->price,
         ]);
@@ -1397,7 +1406,7 @@ class ProductController extends Controller
             }
         }
 
-        return response()->json(['message' => 'Product created successfully', 'product' => $product], 201);
+        return response()->json(['success' => true, 'message' => 'Product created successfully', 'product' => $product], 201);
     }
 
     public function show($id) {
@@ -1425,6 +1434,7 @@ class ProductController extends Controller
             'description' => 'nullable|string|max:500',
             'category' => 'required|exists:categories,id',
             'is_active' => 'required|boolean',
+            'is_consumable' => 'nullable|boolean',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
 
@@ -1442,9 +1452,11 @@ class ProductController extends Controller
 
         $product->update([
             'name' => $validated['name'],
+            'slug' => $this->generateUniqueProductSlug((string) $validated['name'], (int) $product->tenant_id, (int) $product->id),
             'description' => $validated['description'] ?? null,
             'category_id' => $validated['category'],
             'is_active' => $validated['is_active'],
+            'is_consumable' => (bool) ($validated['is_consumable'] ?? false),
             'discount_percentage' => (float) ($validated['discount_percentage'] ?? 0),
         ]);
 
@@ -1491,6 +1503,33 @@ class ProductController extends Controller
             'success' => true,
             'message' => 'Producto eliminado correctamente.',
         ]);
+    }
+
+    private function generateUniqueProductSlug(string $name, int $tenantId, ?int $ignoreProductId = null): string
+    {
+        $baseSlug = Str::slug($name);
+        if ($baseSlug === '') {
+            $baseSlug = 'producto';
+        }
+
+        $slug = $baseSlug;
+        $suffix = 2;
+
+        while ($this->productSlugExists($slug, $tenantId, $ignoreProductId)) {
+            $slug = $baseSlug . '-' . $suffix;
+            $suffix++;
+        }
+
+        return $slug;
+    }
+
+    private function productSlugExists(string $slug, int $tenantId, ?int $ignoreProductId = null): bool
+    {
+        return Product::query()
+            ->where('tenant_id', $tenantId)
+            ->where('slug', $slug)
+            ->when($ignoreProductId, fn ($query) => $query->where('id', '!=', $ignoreProductId))
+            ->exists();
     }
 
     private function productProtectionReasons(array $variantIds): array

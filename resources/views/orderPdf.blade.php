@@ -38,6 +38,7 @@
     $itemsSubtotal = (float) ($itemsSubtotal ?? $order->items_subtotal);
     $deliveryFee = (float) ($deliveryFee ?? $order->delivery_fee_amount);
     $orderTotal = (float) ($totalOrden ?? ($itemsSubtotal + $deliveryFee));
+    $displayAmount = $displayAmount ?? static fn ($amount) => (float) $amount;
 @endphp
 <table width="100%" style="border-collapse: collapse; border: none;">
     <tr>

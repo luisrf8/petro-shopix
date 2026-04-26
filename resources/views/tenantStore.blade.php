@@ -141,13 +141,27 @@
 .shopix-toast.error {
     background: #842029;
 }
+
+.tenant-store-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.tenant-store-url-box {
+    width: min(100%, 460px);
+}
 </style>
 
 @php
     $authUser = auth()->user();
-    $canAssignStoreRoles = ($authUser?->canAssignStoreRoles() ?? false) && !($isFreePlanTenant ?? false);
+    $tenantPlanCapabilities = $tenantPlanCapabilities ?? \App\Support\TenantPlanCapabilities::forTenant($tenant ?? null);
+    $canAssignStoreRoles = ($authUser?->canAssignStoreRoles() ?? false) && !$tenantPlanCapabilities->isFree();
     $isOwnerRole = $authUser?->isOwner() ?? false;
     $tenantStoreUrl = $tenant->full_url ?? (url('/').'/'.$tenant->slug);
+    $freePlanOperationalLock = !$tenantPlanCapabilities->allowsOperationalDeliverySettings();
     $tenantBusinessType = \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'tienda'));
     $currentPlanName = $currentPlanPayment?->plan?->name ?? 'Sin plan activo';
     $currentPlanAmount = $currentPlanPayment?->amount;
@@ -163,7 +177,42 @@
 
 <div class="p-4 ">
     <div id="shopixToastContainer" class="shopix-toast-stack"></div>
-    <h1 class="">Gestión de Tienda</h1>
+    <div class="tenant-store-header mb-3">
+        <div>
+            <h1 class="mb-1">Gestión de Tienda</h1>
+            <p class="text-sm text-muted mb-0">Administra la configuración comercial, operativa y visual de tu tienda.</p>
+        </div>
+        <div class="tenant-store-url-box">
+            <label class="form-label fw-bold mb-1">URL de la Tienda</label>
+            <div class="input-group">
+                <input
+                    type="text"
+                    class="form-control p-2 border border-radius-lg"
+                    id="storePublicUrlInput"
+                    value="{{ $tenantStoreUrl }}"
+                    readonly>
+                <a
+                    href="{{ $tenantStoreUrl }}"
+                    target="_blank"
+                    rel="noopener"
+                    class="btn btn-outline-dark url-icon-action-btn"
+                    id="openStoreUrlBtn"
+                    aria-label="Abrir tienda"
+                    title="Abrir tienda">
+                    <i class="material-symbols-rounded">open_in_new</i>
+                </a>
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary url-icon-action-btn"
+                    id="copyStoreUrlBtn"
+                    aria-label="Copiar enlace"
+                    title="Copiar enlace"
+                    data-icon-default="content_copy">
+                    <i class="material-symbols-rounded">content_copy</i>
+                </button>
+            </div>
+        </div>
+    </div>
 
     @if(!is_null($currentPlanDaysRemaining))
         @if($currentPlanDaysRemaining < 0)
@@ -197,6 +246,12 @@
                     Subir de plan
                 </button>
             </div>
+        </div>
+    @endif
+
+    @if($freePlanOperationalLock)
+        <div class="alert alert-secondary border" role="alert">
+            <strong>Plan Free:</strong> puedes seguir usando el módulo de notificaciones del panel, pero las opciones de contribuyente especial, restricción de envíos, delivery y notificaciones operativas permanecen bloqueadas en este plan.
         </div>
     @endif
 
@@ -329,37 +384,6 @@
                                     <small class="text-muted d-block mt-2">Estos campos son opcionales y solo se muestran en la landing si tienen datos.</small>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Url de la Tienda</label>
-                                    <div class="input-group mt-2">
-                                        <input
-                                            type="text"
-                                            class="form-control p-2 border border-radius-lg"
-                                            id="storePublicUrlInput"
-                                            value="{{ $tenantStoreUrl }}"
-                                            readonly>
-                                        <a
-                                            href="{{ $tenantStoreUrl }}"
-                                            target="_blank"
-                                            rel="noopener"
-                                            class="btn btn-outline-dark url-icon-action-btn"
-                                            id="openStoreUrlBtn"
-                                            aria-label="Abrir tienda"
-                                            title="Abrir tienda">
-                                            <i class="material-symbols-rounded">open_in_new</i>
-                                        </a>
-                                        <button
-                                            type="button"
-                                            class="btn btn-outline-secondary url-icon-action-btn"
-                                            id="copyStoreUrlBtn"
-                                            aria-label="Copiar enlace"
-                                            title="Copiar enlace"
-                                            data-icon-default="content_copy">
-                                            <i class="material-symbols-rounded">content_copy</i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
                                     <label class="form-label">Eslogan</label>
                                     <input type="text" class="form-control p-2 border border-radius-lg" name="slogan" value="{{ $tenant->slogan ?? '' }}">
                                 </div>
@@ -369,6 +393,7 @@
                                     <textarea class="form-control p-2 border border-radius-lg" name="description" rows="3">{{ $tenant->description ?? '' }}</textarea>
                                 </div>
 
+                                @unless($freePlanOperationalLock)
                                 <div class="mb-3">
                                     <label class="form-label fw-bold d-block">Contribuyente especial</label>
                                     <input type="hidden" name="special_taxpayer" value="0">
@@ -387,6 +412,7 @@
                                     </div>
                                     <small class="text-muted">Si está activo, el sistema no aplicará IGTF en los cobros.</small>
                                 </div>
+                                @endunless
 
                                 <div class="mb-3">
                                     <label class="form-label fw-bold d-block">Habilitación de imprenta para cambio de alícuotas</label>
@@ -412,6 +438,7 @@
                                     <input type="text" class="form-control p-2 border border-radius-lg" name="printer_tax_change_reference" value="{{ $tenant->printer_tax_change_reference ?? '' }}" placeholder="Providencia, ticket o referencia de aprobación">
                                 </div>
 
+                                @unless($freePlanOperationalLock)
                                 <div class="mb-3">
                                     <label class="form-label fw-bold d-block">Restricción de envíos por ciudad</label>
                                     <input type="hidden" name="restrict_delivery_city_to_tenant" value="0">
@@ -488,6 +515,7 @@
                                     </div>
                                     <small class="text-muted">Úsalo junto al rol <strong>delivery</strong> para despachos y reparto.</small>
                                 </div>
+                                @endunless
                             </div>
 
                             {{-- TAB 2 --}}
@@ -823,6 +851,101 @@
         </div>
 
     </div>
+
+    @if(($tenantPlanCapabilities->canAppointments() ?? false) && ($isServiceBusiness ?? false))
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                            <div>
+                                <h4 class="mb-1">Turnos de atención</h4>
+                                <p class="text-sm text-muted mb-0">Define turnos de inicio y fin por usuario para el módulo de Servicios y Citas.</p>
+                            </div>
+                            <a href="{{ route('appointments.index') }}" class="btn btn-outline-dark mb-0">Abrir calendario de citas</a>
+                        </div>
+
+                        <div class="row g-4">
+                            <div class="col-12 col-xl-5">
+                                <div class="border rounded-3 p-3 h-100 bg-white">
+                                    <h6 class="mb-3">Nuevo turno</h6>
+                                    <form method="POST" action="{{ route('appointments.schedules.store') }}" class="row g-3">
+                                        @csrf
+                                        <div class="col-12">
+                                            <label class="form-label">Usuario profesional</label>
+                                            <select name="user_id" class="form-control border border-dark p-2 bg-white" required>
+                                                @forelse($appointmentProfessionals as $professional)
+                                                    <option value="{{ $professional->id }}">{{ $professional->name }}</option>
+                                                @empty
+                                                    <option value="">No hay usuarios disponibles</option>
+                                                @endforelse
+                                            </select>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Día</label>
+                                            <select name="day_of_week" class="form-control border border-dark p-2 bg-white" required>
+                                                @foreach(\App\Models\UserScheduleRule::WEEK_DAYS as $dayIndex => $dayLabel)
+                                                    <option value="{{ $dayIndex }}">{{ $dayLabel }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Intervalo de agenda</label>
+                                            <input type="number" name="slot_interval_minutes" class="form-control border border-dark p-2 bg-white" min="15" step="15" value="60">
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Turno inicio</label>
+                                            <input type="time" name="start_time" class="form-control border border-dark p-2 bg-white" required>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="form-label">Turno fin</label>
+                                            <input type="time" name="end_time" class="form-control border border-dark p-2 bg-white" required>
+                                        </div>
+                                        <div class="col-12">
+                                            <button type="submit" class="btn btn-dark w-100 mb-0" {{ ($appointmentProfessionals ?? collect())->isEmpty() ? 'disabled' : '' }}>Guardar turno</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                            <div class="col-12 col-xl-7">
+                                <div class="border rounded-3 p-3 h-100 bg-white">
+                                    <h6 class="mb-3">Turnos configurados</h6>
+                                    <div class="table-responsive">
+                                        <table class="table align-items-center mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Usuario</th>
+                                                    <th>Día</th>
+                                                    <th>Inicio</th>
+                                                    <th>Fin</th>
+                                                    <th>Intervalo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @forelse($appointmentScheduleRules as $rule)
+                                                    <tr>
+                                                        <td>{{ $rule->user->name ?? 'Profesional' }}</td>
+                                                        <td>{{ $rule->day_label }}</td>
+                                                        <td>{{ \Carbon\Carbon::parse($rule->start_time)->format('H:i') }}</td>
+                                                        <td>{{ \Carbon\Carbon::parse($rule->end_time)->format('H:i') }}</td>
+                                                        <td>{{ $rule->slot_interval_minutes }} min</td>
+                                                    </tr>
+                                                @empty
+                                                    <tr>
+                                                        <td colspan="5" class="text-center text-muted py-4">Todavía no hay turnos definidos para usuarios.</td>
+                                                    </tr>
+                                                @endforelse
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
 <!-- MODAL EDITAR USUARIO -->
 <div class="modal fade" id="editUserModal" tabindex="-1">

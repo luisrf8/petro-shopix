@@ -119,6 +119,73 @@
     .shopix-toast.error {
       background: #842029;
     }
+
+    .hex-input {
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .color-sync-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .color-picker-input {
+      width: 58px;
+      height: 58px;
+      border: 1px solid #dee2e6;
+      border-radius: 0.85rem;
+      padding: 0.25rem;
+      background: #fff;
+      flex: 0 0 auto;
+      cursor: pointer;
+    }
+
+    .color-swatch-chip {
+      min-width: 92px;
+      height: 58px;
+      border-radius: 0.85rem;
+      border: 1px solid #dee2e6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3);
+    }
+
+    .assistant-copy-card {
+      border: 1px solid #dbe4f0;
+      border-radius: 1rem;
+      padding: 1rem;
+      background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+    }
+
+    .terms-consent-card {
+      border: 1px solid #dbe4f0;
+      border-radius: 1rem;
+      padding: 1rem;
+      background: #f8fafc;
+    }
+
+    .terms-consent-list {
+      margin: 0.75rem 0 0;
+      padding-left: 1.1rem;
+      color: #475569;
+    }
+
+    .terms-consent-list li + li {
+      margin-top: 0.35rem;
+    }
+
+    .terms-modal-frame {
+      width: 100%;
+      min-height: 72vh;
+      border: 0;
+      border-radius: 0.75rem;
+      background: #f8fafc;
+    }
   </style>
 </head>
 <!-- Activa tu mejor versión. -->
@@ -156,6 +223,13 @@
                     <li>{{ $error }}</li>
                   @endforeach
                 </ul>
+              </div>
+            @endif
+
+            @if (session('status'))
+              <div class="alert alert-success" role="alert">
+                <strong>Registro completado.</strong>
+                <div class="mt-1">{{ session('status') }}</div>
               </div>
             @endif
 
@@ -197,6 +271,7 @@
                       <option value="">Selecciona un rubro</option>
                     </select>
                     <small id="economic_activity_help" class="text-muted d-block mt-1"></small>
+                    <small id="economic_activity_examples" class="text-muted d-block mt-1"></small>
                   </div>
                 </div>
 
@@ -234,14 +309,26 @@
               <div class="step" id="step2">
                 <h5 class="fw-bold mb-4 text-center">Detalles de tu tienda</h5>
 
+                <div class="assistant-copy-card mb-4">
+                  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div>
+                      <h6 class="fw-bold mb-1">Asistente IA para slogan y descripción</h6>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary" id="generateStoreCopyBtn">
+                      <span class="ai-spark">🤖 Gemini</span> sugerir copy
+                    </button>
+                  </div>
+                  <small class="text-muted d-block mt-2" id="storeCopyAiStatus">Completa nombre de empresa y rubro económico para obtener una sugerencia más precisa.</small>
+                </div>
+
                 <div class="mb-3">
                   <label for="slogan" class="form-label fw-bold">Slogan</label>
-                  <input type="text" name="slogan" id="slogan" class="form-control form-control-lg" placeholder="Tu estilo, tu marca...">
+                  <input type="text" name="slogan" id="slogan" class="form-control form-control-lg" value="{{ old('slogan') }}" placeholder="Tu estilo, tu marca...">
                 </div>
 
                 <div class="mb-3">
                   <label for="description" class="form-label fw-bold">Descripción</label>
-                  <textarea name="description" id="description" class="form-control form-control-lg border border-radius-lg p-2" rows="3" placeholder="Cuéntanos sobre tu empresa..."></textarea>
+                  <textarea name="description" id="description" class="form-control form-control-lg border border-radius-lg p-2" rows="3" placeholder="Cuéntanos sobre tu empresa...">{{ old('description') }}</textarea>
                 </div>
 
                 <!-- 🏠 DIRECCIÓN EXACTA -->
@@ -263,15 +350,27 @@
                 <div class="row mb-4">
                   <div class="col-md-4">
                     <label for="color_primary" class="form-label fw-bold">Color Primario</label>
-                    <input type="color" name="color_primary" id="color_primary" class="form-control form-control-color w-100" value="#0d6efd">
+                    <div class="color-sync-group">
+                      <input type="color" id="color_primary_picker" class="color-picker-input" value="{{ old('color_primary', '#0D6EFD') }}" aria-label="Selector visual color primario">
+                      <input type="text" name="color_primary" id="color_primary" class="form-control form-control-lg hex-input" value="{{ old('color_primary', '#0D6EFD') }}" placeholder="#0D6EFD" pattern="^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$" maxlength="7" required>
+                      <div class="color-swatch-chip" id="color_primary_swatch">Primario</div>
+                    </div>
                   </div>
                   <div class="col-md-4">
                     <label for="color_secondary" class="form-label fw-bold">Color Secundario</label>
-                    <input type="color" name="color_secondary" id="color_secondary" class="form-control form-control-color w-100" value="#6c757d">
+                    <div class="color-sync-group">
+                      <input type="color" id="color_secondary_picker" class="color-picker-input" value="{{ old('color_secondary', '#6C757D') }}" aria-label="Selector visual color secundario">
+                      <input type="text" name="color_secondary" id="color_secondary" class="form-control form-control-lg hex-input" value="{{ old('color_secondary', '#6C757D') }}" placeholder="#6C757D" pattern="^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$" maxlength="7" required>
+                      <div class="color-swatch-chip" id="color_secondary_swatch">Secundario</div>
+                    </div>
                   </div>
                   <div class="col-md-4">
                     <label for="color_accent" class="form-label fw-bold">Color Acento</label>
-                    <input type="color" name="color_accent" id="color_accent" class="form-control form-control-color w-100" value="#ffc107">
+                    <div class="color-sync-group">
+                      <input type="color" id="color_accent_picker" class="color-picker-input" value="{{ old('color_accent', '#FFC107') }}" aria-label="Selector visual color acento">
+                      <input type="text" name="color_accent" id="color_accent" class="form-control form-control-lg hex-input" value="{{ old('color_accent', '#FFC107') }}" placeholder="#FFC107" pattern="^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$" maxlength="7" required>
+                      <div class="color-swatch-chip" id="color_accent_swatch">Acento</div>
+                    </div>
                   </div>
                 </div>
 
@@ -332,7 +431,7 @@
                   </div>
                   <div class="col-md-8">
                       <label for="phone_number" class="form-label fw-bold">Número de teléfono</label>
-                      <input type="text" name="phone_number" id="phone_number" class="form-control form-control-lg" placeholder="Ej: 4121234567" required>
+                      <input type="text" name="phone_number" id="phone_number" class="form-control form-control-lg" placeholder="Ej: 4121234567" inputmode="numeric" autocomplete="tel-national" data-numeric-only="true" required>
                   </div>
                 </div>
 
@@ -380,15 +479,33 @@
                   </div>
                   <div class="col-md-6 mb-3">
                     <label for="owner_dni" class="form-label">DNI</label>
-                    <input type="text" name="users[owner][dni]" id="owner_dni" class="form-control form-control-lg" required>
+                    <input type="text" name="users[owner][dni]" id="owner_dni" class="form-control form-control-lg" inputmode="numeric" autocomplete="off" data-numeric-only="true" required>
                   </div>
                   <div class="col-md-6 mb-3">
                     <label for="owner_phone" class="form-label">Teléfono</label>
-                    <input type="text" name="users[owner][phone_number]" id="owner_phone" class="form-control form-control-lg" required>
+                    <input type="hidden" name="users[owner][phone_number]" id="owner_phone_hidden">
+                    <div class="row g-2">
+                      <div class="col-4">
+                        <select id="owner_phone_code" class="form-select form-select-lg" aria-label="Código de país del owner" required>
+                          <option value="+58">🇻🇪 +58</option>
+                          <option value="+1">🇺🇸 +1</option>
+                          <option value="+34">🇪🇸 +34</option>
+                          <option value="+57">🇨🇴 +57</option>
+                          <option value="+55">🇧🇷 +55</option>
+                          <option value="+52">🇲🇽 +52</option>
+                        </select>
+                      </div>
+                      <div class="col-8">
+                        <input type="text" id="owner_phone" class="form-control form-control-lg" placeholder="Ej: 4121234567" inputmode="numeric" autocomplete="tel-national" data-numeric-only="true" required>
+                      </div>
+                    </div>
                   </div>
                   <div class="col-md-6 mb-3">
                     <label for="owner_email" class="form-label">Tu correo</label>
-                    <input type="email" name="users[owner][email]" id="owner_email" class="form-control form-control-lg" required>
+                    <div class="d-flex gap-2 align-items-start">
+                      <input type="email" name="users[owner][email]" id="owner_email" class="form-control form-control-lg" required>
+                      <button type="button" class="btn btn-outline-secondary" id="reusePreviousEmailBtn">Usar el correo anterior</button>
+                    </div>
                   </div>
                   <div class="col-12 mb-3">
                     <label for="owner_password" class="form-label">Contraseña</label>
@@ -404,9 +521,29 @@
                   <button type="submit" class="btn btn-success btn-lg">🚀 Crear mi tienda</button>
                 </div>
 
-                <p class="text-center text-muted mt-3 mb-0 small">
-                  Al continuar, aceptas nuestros <a href="#" class="text-decoration-none">términos y condiciones</a>.
-                </p>
+                <div class="terms-consent-card mt-4">
+                  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div>
+                      <h6 class="fw-bold mb-1">Términos y condiciones del registro</h6>
+                      <p class="text-muted mb-0">Revisa el contrato y confirma la aceptación antes de crear tu tienda.</p>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                      <button type="button" class="btn btn-outline-secondary btn-sm" id="openTermsModalBtn">Leer contrato</button>
+                      <a href="{{ route('legal.terms.pdf') }}" target="_blank" rel="noopener" class="btn btn-outline-dark btn-sm">Abrir PDF</a>
+                    </div>
+                  </div>
+                  <ul class="terms-consent-list">
+                    <li>Los datos registrados deben ser reales y corresponder a la empresa o servicio que se está creando.</li>
+                    <li>El uso de SHOPIX queda sujeto a las capacidades, restricciones y límites operativos del plan seleccionado.</li>
+                    <li>La creación de la tienda implica aceptación del contrato, políticas de uso y tratamiento operativo de la información suministrada.</li>
+                  </ul>
+                  <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" value="1" id="accept_terms" name="accept_terms" {{ old('accept_terms') ? 'checked' : '' }} required>
+                    <label class="form-check-label" for="accept_terms">
+                      He leído y acepto los términos y condiciones del servicio de SHOPIX.
+                    </label>
+                  </div>
+                </div>
               </div>
             </form>
           </div>
@@ -449,8 +586,28 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="aiCancelBtn">Cancelar</button>
+          <button type="button" class="btn btn-outline-dark" id="aiRemoveBgBtn">Quitar fondo</button>
           <button type="button" class="btn btn-outline-primary" id="aiDownloadBtn" disabled>Descargar</button>
           <button type="button" class="btn btn-outline-success" id="aiUseImageBtn" disabled>Usar esta imagen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="termsPdfModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Términos y condiciones</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body pt-2">
+          <iframe
+            id="termsPdfFrame"
+            class="terms-modal-frame"
+            src="{{ route('legal.terms.pdf') }}"
+            title="Términos y condiciones en PDF"
+          ></iframe>
         </div>
       </div>
     </div>
@@ -463,13 +620,43 @@
     let googleScriptLoaded = false;
     let googleScriptLoading = false;
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
+    const tenantAiCopyEndpoint = @json(route('tenant.ai-copy'));
     const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
     const TENANT_SAFE_IMAGE_BYTES = 1200 * 1024;
     const TENANT_IMAGE_MAX_DIMENSION = 2200;
     let aiModalInstance = null;
+    let termsModalInstance = null;
     let currentAiTarget = null;
     let aiChatHistory = [];
     let aiLatestResult = null;
+
+    function pickReadableTextColor(hex) {
+      const normalized = normalizeTenantHexValue(hex).replace('#', '');
+      if (normalized.length !== 6) {
+        return '#0F172A';
+      }
+
+      const red = parseInt(normalized.slice(0, 2), 16);
+      const green = parseInt(normalized.slice(2, 4), 16);
+      const blue = parseInt(normalized.slice(4, 6), 16);
+      const brightness = ((red * 299) + (green * 587) + (blue * 114)) / 1000;
+
+      return brightness > 155 ? '#0F172A' : '#FFFFFF';
+    }
+
+    function normalizeTenantNumericValue(value) {
+      return String(value ?? '').replace(/\D+/g, '');
+    }
+
+    function normalizeTenantHexValue(value) {
+      const raw = String(value ?? '').trim().toUpperCase().replace(/[^#A-F0-9]/g, '');
+      if (!raw) {
+        return '';
+      }
+
+      const withHash = raw.startsWith('#') ? raw : `#${raw}`;
+      return withHash.slice(0, 7);
+    }
 
     function showTenantToast(message, type = 'info') {
       const container = document.getElementById('shopixToastContainer');
@@ -704,11 +891,103 @@
       const generateBtn = document.getElementById('aiGenerateBtn');
       const cancelBtn = document.getElementById('aiCancelBtn');
       const attachBtn = document.getElementById('aiAttachBtn');
+      const removeBgBtn = document.getElementById('aiRemoveBgBtn');
       status.classList.toggle('d-none', !isLoading);
       generateBtn.disabled = isLoading;
       cancelBtn.disabled = isLoading;
       if (attachBtn) {
         attachBtn.disabled = isLoading;
+      }
+      if (removeBgBtn) {
+        removeBgBtn.disabled = isLoading;
+      }
+    }
+
+    function closeAiModal() {
+      aiModalInstance?.hide();
+    }
+
+    async function getAiSourceImageData() {
+      if (aiLatestResult?.base64Data) {
+        return {
+          data: aiLatestResult.base64Data,
+          mime: aiLatestResult.mimeType || 'image/png',
+        };
+      }
+
+      const input = currentAiTarget ? document.getElementById(currentAiTarget.inputId) : null;
+      const currentFile = input?.files?.[0];
+      if (currentFile) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = String(reader.result || '');
+            resolve({
+              data: dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl,
+              mime: currentFile.type || 'image/png',
+            });
+          };
+          reader.onerror = () => reject(new Error('No se pudo leer la imagen actual.'));
+          reader.readAsDataURL(currentFile);
+        });
+      }
+
+      return getReferenceImageData();
+    }
+
+    async function removeAiImageBackground() {
+      if (!currentAiTarget) {
+        return;
+      }
+
+      const sourceImage = await getAiSourceImageData();
+      if (!sourceImage?.data) {
+        showTenantToast('Adjunta o genera primero una imagen para quitarle el fondo.', 'warning');
+        return;
+      }
+
+      appendAiMessage('user', 'Quita el fondo de esta imagen.');
+      aiChatHistory.push({ role: 'user', content: 'Quita el fondo de esta imagen.' });
+      setAiLoadingState(true);
+
+      try {
+        const response = await fetch(tenantAiImageEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+          },
+          body: JSON.stringify({
+            type: currentAiTarget.type,
+            prompt: 'Quita el fondo y deja la imagen lista para usar como logo.',
+            messages: aiChatHistory,
+            reference_image_data: sourceImage.data,
+            reference_image_mime: sourceImage.mime,
+            image_operation: 'remove_background',
+          }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || payload.message || 'No se pudo quitar el fondo.');
+        }
+
+        aiLatestResult = {
+          base64Data: payload.data,
+          mimeType: payload.mime_type || 'image/png',
+          fileName: currentAiTarget.fileName,
+          inputId: currentAiTarget.inputId,
+          previewId: currentAiTarget.previewId,
+        };
+
+        renderGeneratedPreview();
+        appendAiMessage('assistant', 'Listo. Eliminé el fondo de la imagen actual.');
+        aiChatHistory.push({ role: 'assistant', content: 'Se eliminó el fondo de la imagen.' });
+      } catch (error) {
+        appendAiMessage('assistant', 'No pude quitar el fondo. Intenta con otra imagen o vuelve a generarla.');
+        showTenantToast(error.message || 'Error al quitar el fondo.', 'error');
+      } finally {
+        setAiLoadingState(false);
       }
     }
 
@@ -936,11 +1215,24 @@
       const logoPreview = document.getElementById('logo-preview');
       const openLogoAiModalBtn = document.getElementById('openLogoAiModalBtn');
       const aiGenerateBtn = document.getElementById('aiGenerateBtn');
+      const generateStoreCopyBtn = document.getElementById('generateStoreCopyBtn');
+      const storeCopyAiStatus = document.getElementById('storeCopyAiStatus');
       const aiDownloadBtn = document.getElementById('aiDownloadBtn');
       const aiUseImageBtn = document.getElementById('aiUseImageBtn');
+      const aiRemoveBgBtn = document.getElementById('aiRemoveBgBtn');
       const aiAttachBtn = document.getElementById('aiAttachBtn');
       const aiReferenceImage = document.getElementById('aiReferenceImage');
       const aiPromptInput = document.getElementById('aiPromptInput');
+      const phoneCodeSelect = document.getElementById('phone_code');
+      const phoneNumberInput = document.getElementById('phone_number');
+      const ownerDniInput = document.getElementById('owner_dni');
+      const ownerPhoneInput = document.getElementById('owner_phone');
+      const ownerPhoneCodeSelect = document.getElementById('owner_phone_code');
+      const ownerPhoneHiddenInput = document.getElementById('owner_phone_hidden');
+      const ownerEmailInput = document.getElementById('owner_email');
+      const contactEmailInput = document.getElementById('email');
+      const reusePreviousEmailBtn = document.getElementById('reusePreviousEmailBtn');
+      const openTermsModalBtn = document.getElementById('openTermsModalBtn');
       const countrySelect = document.getElementById('country');
       const stateSelect = document.getElementById('state');
       const citySelect = document.getElementById('city');
@@ -949,37 +1241,115 @@
       const businessTypeSelect = document.getElementById('business_type');
       const economicActivitySelect = document.getElementById('economic_activity');
       const tenantForm = document.getElementById('tenantForm');
+      const hexInputs = Array.from(document.querySelectorAll('.hex-input'));
+      const termsCheckbox = document.getElementById('accept_terms');
+
+      const colorBindings = [
+        { hexId: 'color_primary', pickerId: 'color_primary_picker', swatchId: 'color_primary_swatch' },
+        { hexId: 'color_secondary', pickerId: 'color_secondary_picker', swatchId: 'color_secondary_swatch' },
+        { hexId: 'color_accent', pickerId: 'color_accent_picker', swatchId: 'color_accent_swatch' },
+      ];
 
       const businessCatalog = {
         tienda: [
-          'Alimentos y Bebidas',
-          'Moda y Accesorios',
-          'Hogar y Construccion',
-          'Tecnologia',
-          'Salud y Belleza',
-          'Otros'
+          'Supermercado y Abastos',
+          'Panaderia y Pasteleria',
+          'Moda y Boutique',
+          'Calzado y Marroquineria',
+          'Ferreteria y Construccion',
+          'Hogar, Muebles y Decoracion',
+          'Tecnologia y Computacion',
+          'Telefonia y Accesorios',
+          'Farmacia y Bienestar',
+          'Mascotas y Agrotienda',
+          'Papeleria, Libros y Juguetes',
+          'Repuestos y Accesorios Automotrices'
         ],
         servicio: [
-          'Gastronomia',
-          'Cuidado Personal',
-          'Servicios Tecnicos',
-          'Profesionales',
-          'Logistica y Educacion'
+          'Restaurante, Cafeteria y Delivery',
+          'Barberia, Salon y Spa',
+          'Consultorio Medico y Odontologico',
+          'Asesoria Legal, Contable y Administrativa',
+          'Soporte Tecnico y Reparaciones',
+          'Educacion, Cursos e Idiomas',
+          'Logistica, Envios y Mensajeria',
+          'Fitness, Deporte y Bienestar',
+          'Eventos, Fotografia y Produccion',
+          'Mantenimiento, Limpieza e Instalaciones'
         ]
       };
 
       const businessExamples = {
-        'Alimentos y Bebidas': 'Supermercados, Panaderias, Licorerias, Carnicerias.',
-        'Moda y Accesorios': 'Ropa, Calzado, Joyeria, Opticas.',
-        'Hogar y Construccion': 'Ferreterias, Mueblerias, Decoracion, Pinturerias.',
-        'Tecnologia': 'Electronica, Computacion, Telefonia Movil.',
-        'Salud y Belleza': 'Farmacias, Perfumerias, Cosmetica.',
-        'Otros': 'Jugueterias, Librerias, Pet Shops (Mascotas).',
-        'Gastronomia': 'Restaurantes, Cafeterias, Fast Food, Caterings.',
-        'Cuidado Personal': 'Peluquerias, Centros de Estetica, Spas, Gimnasios.',
-        'Servicios Tecnicos': 'Talleres mecanicos, Reparacion de electrodomesticos, Soporte IT.',
-        'Profesionales': 'Consultorios medicos, Estudios contables/legales, Arquitectura.',
-        'Logistica y Educacion': 'Mensajeria, Institutos de idiomas, Jardines de infantes.'
+        'Supermercado y Abastos': 'Mini market, abasto vecinal, bodegon, distribuidora de viveres.',
+        'Panaderia y Pasteleria': 'Panaderias, reposteria, postres por encargo, cafe bakery.',
+        'Moda y Boutique': 'Ropa femenina, masculina, infantil, boutique de temporada.',
+        'Calzado y Marroquineria': 'Zapaterias, bolsos, carteras, cinturones y accesorios de cuero.',
+        'Ferreteria y Construccion': 'Ferreterias, herramientas, materiales de obra, pinturas y acabados.',
+        'Hogar, Muebles y Decoracion': 'Mueblerias, colchones, decoracion, iluminacion y hogar.',
+        'Tecnologia y Computacion': 'Computadoras, gaming, electronica, impresoras, consumibles.',
+        'Telefonia y Accesorios': 'Celulares, tablets, fundas, cargadores, wearables.',
+        'Farmacia y Bienestar': 'Farmacias, suplementos, cuidado personal, ortopedia ligera.',
+        'Mascotas y Agrotienda': 'Pet shop, alimento para mascotas, insumos veterinarios, agroinsumos.',
+        'Papeleria, Libros y Juguetes': 'Papelerias, librerias, regalos educativos, jugueterias.',
+        'Repuestos y Accesorios Automotrices': 'Lubricantes, baterias, repuestos, accesorios para vehiculos.',
+        'Restaurante, Cafeteria y Delivery': 'Restaurantes, lunch, cafeterias, dark kitchen, delivery.',
+        'Barberia, Salon y Spa': 'Barberias, peluquerias, manicure, spa, estetica facial.',
+        'Consultorio Medico y Odontologico': 'Odontologia, medicina general, pediatria, psicologia, fisioterapia.',
+        'Asesoria Legal, Contable y Administrativa': 'Abogados, contadores, asesoria fiscal, outsourcing administrativo.',
+        'Soporte Tecnico y Reparaciones': 'Reparacion de telefonos, laptops, electrodomesticos, redes, CCTV.',
+        'Educacion, Cursos e Idiomas': 'Academias, cursos online, capacitacion tecnica, clases personalizadas.',
+        'Logistica, Envios y Mensajeria': 'Courier, motomensajeria, transporte de paquetes, encomiendas.',
+        'Fitness, Deporte y Bienestar': 'Entrenadores, gimnasios, yoga, pilates, nutricion deportiva.',
+        'Eventos, Fotografia y Produccion': 'Fotografia, video, bodas, eventos corporativos, produccion creativa.',
+        'Mantenimiento, Limpieza e Instalaciones': 'Limpieza residencial, electricidad, plomeria, aires acondicionados.'
+      };
+
+      const businessDescriptions = {
+        tienda: 'Selecciona el rubro comercial que mejor representa lo que vendes para personalizar mejor la identidad inicial de tu tienda.',
+        servicio: 'Elige el sector del servicio para reflejar con más precisión tu propuesta profesional desde el registro.'
+      };
+
+      const setStoreCopyButtonLoading = (isLoading) => {
+        if (!generateStoreCopyBtn) {
+          return;
+        }
+
+        if (isLoading) {
+          if (generateStoreCopyBtn.dataset.loading === '1') {
+            return;
+          }
+
+          generateStoreCopyBtn.dataset.loading = '1';
+          generateStoreCopyBtn.dataset.originalHtml = generateStoreCopyBtn.innerHTML;
+          generateStoreCopyBtn.disabled = true;
+          generateStoreCopyBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Generando copy...';
+          return;
+        }
+
+        generateStoreCopyBtn.disabled = false;
+        generateStoreCopyBtn.dataset.loading = '0';
+        if (generateStoreCopyBtn.dataset.originalHtml) {
+          generateStoreCopyBtn.innerHTML = generateStoreCopyBtn.dataset.originalHtml;
+        }
+      };
+
+      const syncColorBinding = ({ hexId, pickerId, swatchId }) => {
+        const hexInput = document.getElementById(hexId);
+        const pickerInput = document.getElementById(pickerId);
+        const swatch = document.getElementById(swatchId);
+        if (!hexInput || !pickerInput || !swatch) {
+          return;
+        }
+
+        const normalized = normalizeTenantHexValue(hexInput.value);
+        const colorValue = /^#(?:[A-F0-9]{6}|[A-F0-9]{3})$/i.test(normalized) ? normalized : '#FFFFFF';
+        hexInput.value = normalized || colorValue;
+        pickerInput.value = colorValue.length === 4
+          ? `#${colorValue[1]}${colorValue[1]}${colorValue[2]}${colorValue[2]}${colorValue[3]}${colorValue[3]}`
+          : colorValue;
+        swatch.style.background = colorValue;
+        swatch.style.color = pickReadableTextColor(pickerInput.value);
+        swatch.textContent = colorValue;
       };
 
       const refreshEconomicActivities = (selectedValue = '') => {
@@ -990,6 +1360,7 @@
         const businessType = String(businessTypeSelect.value || 'tienda').toLowerCase() === 'servicio' ? 'servicio' : 'tienda';
         const options = businessCatalog[businessType] || [];
         const help = document.getElementById('economic_activity_help');
+        const examples = document.getElementById('economic_activity_examples');
 
         economicActivitySelect.innerHTML = '<option value="">Selecciona un rubro</option>';
         options.forEach((option) => {
@@ -998,12 +1369,14 @@
         });
 
         const currentValue = economicActivitySelect.value;
-        help.textContent = currentValue && businessExamples[currentValue]
-          ? `Ejemplos: ${businessExamples[currentValue]}`
-          : 'Selecciona una categoria para ver ejemplos.';
+        help.textContent = businessDescriptions[businessType] || 'Selecciona una categoria para ver ejemplos.';
+        examples.textContent = currentValue && businessExamples[currentValue]
+          ? `Ejemplos específicos: ${businessExamples[currentValue]}`
+          : 'Selecciona una categoria para ver ejemplos y una guía más específica del rubro.';
       };
 
       aiModalInstance = new bootstrap.Modal(document.getElementById('aiGenerateModal'));
+      termsModalInstance = new bootstrap.Modal(document.getElementById('termsPdfModal'));
 
       const normalizeSlug = (value) => String(value ?? '')
         .toLowerCase()
@@ -1021,6 +1394,137 @@
         }
 
         slugPreview.textContent = normalizedValue || 'mi-empresa';
+      });
+
+      document.querySelectorAll('[data-numeric-only="true"]').forEach((input) => {
+        input.addEventListener('input', () => {
+          const nextValue = normalizeTenantNumericValue(input.value);
+          if (input.value !== nextValue) {
+            input.value = nextValue;
+          }
+        });
+      });
+
+      hexInputs.forEach((input) => {
+        input.addEventListener('input', () => {
+          input.value = normalizeTenantHexValue(input.value);
+          input.classList.remove('is-invalid');
+          const binding = colorBindings.find((item) => item.hexId === input.id);
+          if (binding) {
+            syncColorBinding(binding);
+          }
+        });
+
+        input.addEventListener('blur', () => {
+          input.value = normalizeTenantHexValue(input.value);
+          const binding = colorBindings.find((item) => item.hexId === input.id);
+          if (binding) {
+            syncColorBinding(binding);
+          }
+        });
+      });
+
+      colorBindings.forEach((binding) => {
+        const pickerInput = document.getElementById(binding.pickerId);
+        pickerInput?.addEventListener('input', () => {
+          const hexInput = document.getElementById(binding.hexId);
+          hexInput.value = normalizeTenantHexValue(pickerInput.value);
+          hexInput.classList.remove('is-invalid');
+          syncColorBinding(binding);
+        });
+        syncColorBinding(binding);
+      });
+
+      const syncOwnerPhoneValue = () => {
+        if (!ownerPhoneHiddenInput) {
+          return;
+        }
+
+        const localNumber = normalizeTenantNumericValue(ownerPhoneInput?.value || '');
+        const countryCode = String(ownerPhoneCodeSelect?.value || '').trim();
+        ownerPhoneHiddenInput.value = localNumber ? `${countryCode}${localNumber}` : '';
+      };
+
+      ownerPhoneInput?.addEventListener('input', syncOwnerPhoneValue);
+      ownerPhoneCodeSelect?.addEventListener('change', syncOwnerPhoneValue);
+      phoneCodeSelect?.addEventListener('change', () => {
+        if (ownerPhoneCodeSelect && !ownerPhoneInput?.value.trim()) {
+          ownerPhoneCodeSelect.value = phoneCodeSelect.value;
+          syncOwnerPhoneValue();
+        }
+      });
+
+      reusePreviousEmailBtn?.addEventListener('click', () => {
+        if (!contactEmailInput?.value.trim()) {
+          showTenantToast('Primero escribe el correo de contacto para reutilizarlo.', 'warning');
+          return;
+        }
+
+        ownerEmailInput.value = contactEmailInput.value.trim();
+        ownerEmailInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+
+      openTermsModalBtn?.addEventListener('click', () => {
+        termsModalInstance?.show();
+      });
+
+      generateStoreCopyBtn?.addEventListener('click', async () => {
+        const storeName = String(document.getElementById('name')?.value || '').trim();
+        const businessType = String(businessTypeSelect?.value || '').trim();
+        const economicActivity = String(economicActivitySelect?.value || '').trim();
+        const sloganInput = document.getElementById('slogan');
+        const descriptionInput = document.getElementById('description');
+
+        if (!storeName || !businessType || !economicActivity) {
+          showTenantToast('Completa nombre, tipo de negocio y rubro antes de usar Gemini.', 'warning');
+          return;
+        }
+
+        setStoreCopyButtonLoading(true);
+        if (storeCopyAiStatus) {
+          storeCopyAiStatus.textContent = 'Gemini está redactando una propuesta inicial para tu negocio...';
+        }
+
+        try {
+          const response = await fetch(tenantAiCopyEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              name: storeName,
+              business_type: businessType,
+              economic_activity: economicActivity,
+            }),
+          });
+
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok || !payload.success || !payload.data) {
+            throw new Error(payload.message || 'No se pudo generar el copy comercial.');
+          }
+
+          if (sloganInput && payload.data.slogan) {
+            sloganInput.value = payload.data.slogan;
+          }
+
+          if (descriptionInput && payload.data.description) {
+            descriptionInput.value = payload.data.description;
+          }
+
+          if (storeCopyAiStatus) {
+            storeCopyAiStatus.textContent = 'Propuesta aplicada. Puedes editar el slogan o la descripción antes de continuar.';
+          }
+          showTenantToast('Gemini generó una propuesta inicial para tu tienda.', 'success');
+        } catch (error) {
+          if (storeCopyAiStatus) {
+            storeCopyAiStatus.textContent = 'No se pudo generar la propuesta en este momento.';
+          }
+          showTenantToast(error.message || 'Error al generar slogan y descripción con Gemini.', 'error');
+        } finally {
+          setStoreCopyButtonLoading(false);
+        }
       });
 
       logoInput.addEventListener('change', async (event) => {
@@ -1075,6 +1579,13 @@
       if (aiDownloadBtn) {
         aiDownloadBtn.addEventListener('click', () => {
           downloadLatestImage();
+          closeAiModal();
+        });
+      }
+
+      if (aiRemoveBgBtn) {
+        aiRemoveBgBtn.addEventListener('click', async () => {
+          await removeAiImageBackground();
         });
       }
 
@@ -1092,7 +1603,8 @@
             fileName: aiLatestResult.fileName,
           });
 
-          appendAiMessage('assistant', 'Imagen aplicada al formulario. Puedes seguir iterando o cerrar el modal cuando quieras.');
+          appendAiMessage('assistant', 'Imagen aplicada al formulario. Cierro el modal para que sigas con el registro.');
+          closeAiModal();
         });
       }
 
@@ -1214,6 +1726,34 @@
       }
 
       tenantForm?.addEventListener('submit', function (event) {
+        syncOwnerPhoneValue();
+
+        const invalidHexInput = hexInputs.find((input) => !/^#(?:[A-F0-9]{6}|[A-F0-9]{3})$/i.test(String(input.value || '').trim()));
+        if (invalidHexInput) {
+          event.preventDefault();
+          invalidHexInput.classList.add('is-invalid');
+          invalidHexInput.focus();
+          showTenantToast('Ingresa colores HEX válidos, por ejemplo #0D6EFD.', 'warning');
+          return;
+        }
+
+        const ownerPhoneValue = normalizeTenantNumericValue(ownerPhoneInput?.value || '');
+        const tenantPhoneValue = normalizeTenantNumericValue(phoneNumberInput?.value || '');
+        const ownerDniValue = normalizeTenantNumericValue(ownerDniInput?.value || '');
+
+        if (!tenantPhoneValue || !ownerPhoneValue || !ownerDniValue) {
+          event.preventDefault();
+          showTenantToast('DNI y teléfonos deben contener solo números.', 'warning');
+          return;
+        }
+
+        if (!termsCheckbox?.checked) {
+          event.preventDefault();
+          showTenantToast('Debes aceptar los términos y condiciones para crear la tienda.', 'warning');
+          termsCheckbox?.focus();
+          return;
+        }
+
         const submitBtn = this.querySelector('button[type="submit"]');
         if (submitBtn?.dataset.loading === '1') {
           event.preventDefault();
