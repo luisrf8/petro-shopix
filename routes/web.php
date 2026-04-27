@@ -43,7 +43,7 @@ Route::middleware('guest')->group(function () {
         ->where('provider', 'google|facebook|apple')
         ->name('client.social.callback');
     Route::get('login', function () {
-        return redirect()->route('login');
+        return redirect('/admin/login');
     });
     Route::post('login', [AuthenticatedSessionController::class, 'authenticateAdmin']);
     
@@ -244,8 +244,10 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/sales-orders/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.orders.pdfs');
     Route::get('/appointments', [AppointmentController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.index');
     Route::post('/appointments', [AppointmentController::class, 'store'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.store');
+    Route::post('/appointments/{appointment}/workflow', [AppointmentController::class, 'workflowAction'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.workflow');
     Route::post('/appointments/services', [AppointmentController::class, 'storeService'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.services.store');
     Route::post('/appointments/schedules', [AppointmentController::class, 'storeSchedule'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.schedules.store');
+    Route::post('/appointments/packages', [AppointmentController::class, 'storePackage'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.packages.store');
     Route::get('/appointments/available-slots', [AppointmentController::class, 'availableSlots'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.availableSlots');
 
     // Reportes PDF

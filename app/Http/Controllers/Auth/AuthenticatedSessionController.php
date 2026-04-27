@@ -324,6 +324,7 @@ class AuthenticatedSessionController extends Controller
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
             'dni' => 'nullable|string|max:100',
+            'phone_code' => ['nullable', 'string', 'max:10', 'regex:/^\+?[0-9]{1,4}$/'],
             'phone_number' => 'nullable|string|max:50',
             'country_id' => 'nullable|integer|exists:countries,id',
             'state_id' => 'nullable|integer|exists:states,id',
@@ -337,6 +338,11 @@ class AuthenticatedSessionController extends Controller
         if ($dni === '') {
             $dni = 'CLI-' . now()->format('YmdHis') . '-' . random_int(100, 999);
         }
+
+        $phoneNumber = $this->normalizeCustomerPhone(
+            (string) $request->input('phone_number', ''),
+            $request->input('phone_code')
+        );
     
         // Crear el usuario
         $user = User::create([
@@ -345,7 +351,7 @@ class AuthenticatedSessionController extends Controller
             'password' => Hash::make($request->password),  // Hashear la contraseña
             'role_id' => $this->resolveCustomerRoleId(),
             'dni' => $dni,
-            'phone_number' => trim((string) $request->input('phone_number', '')) ?: null,
+            'phone_number' => $phoneNumber,
             'country_id' => $request->input('country_id') ?: null,
             'state_id' => $request->input('state_id') ?: null,
             'city_id' => $request->input('city_id') ?: null,
@@ -411,6 +417,7 @@ class AuthenticatedSessionController extends Controller
         }
 
         $validated = $request->validate([
+            'phone_code' => ['nullable', 'string', 'max:10', 'regex:/^\+?[0-9]{1,4}$/'],
             'phone_number' => ['nullable', 'string', 'max:50'],
             'country_id' => ['nullable', 'integer', 'exists:countries,id'],
             'state_id' => ['nullable', 'integer', 'exists:states,id'],
@@ -420,7 +427,10 @@ class AuthenticatedSessionController extends Controller
             'longitude' => ['nullable', 'numeric'],
         ]);
 
-        $user->phone_number = trim((string) ($validated['phone_number'] ?? '')) ?: null;
+        $user->phone_number = $this->normalizeCustomerPhone(
+            (string) ($validated['phone_number'] ?? ''),
+            $validated['phone_code'] ?? null
+        );
         $user->country_id = !empty($validated['country_id']) ? (int) $validated['country_id'] : null;
         $user->state_id = !empty($validated['state_id']) ? (int) $validated['state_id'] : null;
         $user->city_id = !empty($validated['city_id']) ? (int) $validated['city_id'] : null;
@@ -437,6 +447,31 @@ class AuthenticatedSessionController extends Controller
             'message' => 'Perfil actualizado correctamente.',
             'user' => $user,
         ], 200);
+    }
+
+    private function normalizeCustomerPhone(string $phoneNumber, mixed $phoneCode = null): ?string
+    {
+        $rawPhone = trim($phoneNumber);
+        if ($rawPhone === '') {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $rawPhone);
+        if ($digits === '') {
+            return null;
+        }
+
+        if (Str::startsWith($rawPhone, '+')) {
+            return '+' . $digits;
+        }
+
+        $rawCode = trim((string) ($phoneCode ?? ''));
+        $codeDigits = preg_replace('/\D+/', '', $rawCode);
+        if ($codeDigits !== '') {
+            return '+' . $codeDigits . $digits;
+        }
+
+        return $digits;
     }
 
     private function resolveCustomerRoleId(): int

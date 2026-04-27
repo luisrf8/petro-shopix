@@ -14,6 +14,7 @@ class Appointment extends Model
         'appointment_service_id',
         'user_id',
         'customer_id',
+        'sales_order_id',
         'contact_name',
         'contact_phone',
         'starts_at',
@@ -25,6 +26,18 @@ class Appointment extends Model
         'payment_reference',
         'payment_status',
         'source',
+        'called_at',
+        'called_by_user_id',
+        'attendance_confirmed_at',
+        'attendance_confirmed_by_user_id',
+        'cancelled_at',
+        'cancelled_by_user_id',
+        'rescheduled_at',
+        'rescheduled_by_user_id',
+        'rescheduled_from_appointment_id',
+        'confirmation_reminder_sent_at',
+        'workflow_tag',
+        'workflow_note',
         'notes',
     ];
 
@@ -32,6 +45,11 @@ class Appointment extends Model
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
         'paid_amount' => 'float',
+        'called_at' => 'datetime',
+        'attendance_confirmed_at' => 'datetime',
+        'cancelled_at' => 'datetime',
+        'rescheduled_at' => 'datetime',
+        'confirmation_reminder_sent_at' => 'datetime',
     ];
 
     public const STATUSES = [
@@ -72,6 +90,11 @@ class Appointment extends Model
     public function paymentMethod()
     {
         return $this->belongsTo(PaymentMethod::class, 'payment_method_id');
+    }
+
+    public function salesOrder()
+    {
+        return $this->belongsTo(SalesOrder::class, 'sales_order_id');
     }
 
     public function consumptions()

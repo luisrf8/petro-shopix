@@ -869,7 +869,7 @@
                             <div class="col-12 col-xl-5">
                                 <div class="border rounded-3 p-3 h-100 bg-white">
                                     <h6 class="mb-3">Nuevo turno</h6>
-                                    <form method="POST" action="{{ route('appointments.schedules.store') }}" class="row g-3">
+                                    <form id="scheduleRuleForm" method="POST" action="{{ route('appointments.schedules.store') }}" class="row g-3">
                                         @csrf
                                         <div class="col-12">
                                             <label class="form-label">Usuario profesional</label>
@@ -881,13 +881,25 @@
                                                 @endforelse
                                             </select>
                                         </div>
-                                        <div class="col-12 col-md-6">
-                                            <label class="form-label">Día</label>
-                                            <select name="day_of_week" class="form-control border border-dark p-2 bg-white" required>
+                                        <div class="col-12">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <label class="form-label mb-0">Días</label>
+                                                <div class="d-flex gap-2">
+                                                    <button type="button" id="selectAllScheduleDays" class="btn btn-outline-dark btn-sm py-1 px-2 mb-0">Todos</button>
+                                                    <button type="button" id="clearScheduleDays" class="btn btn-outline-secondary btn-sm py-1 px-2 mb-0">Limpiar</button>
+                                                </div>
+                                            </div>
+                                            <div class="row g-2">
                                                 @foreach(\App\Models\UserScheduleRule::WEEK_DAYS as $dayIndex => $dayLabel)
-                                                    <option value="{{ $dayIndex }}">{{ $dayLabel }}</option>
+                                                    <div class="col-6 col-md-4 col-lg-3">
+                                                        <div class="form-check border rounded-2 px-2 py-1 bg-white">
+                                                            <input class="form-check-input" type="checkbox" name="day_of_weeks[]" value="{{ $dayIndex }}" id="schedule_day_{{ $dayIndex }}">
+                                                            <label class="form-check-label" for="schedule_day_{{ $dayIndex }}">{{ $dayLabel }}</label>
+                                                        </div>
+                                                    </div>
                                                 @endforeach
-                                            </select>
+                                            </div>
+                                            <small class="text-muted d-block mt-1">Selecciona uno o varios días para aplicar el mismo horario.</small>
                                         </div>
                                         <div class="col-12 col-md-6">
                                             <label class="form-label">Intervalo de agenda</label>
@@ -1622,6 +1634,10 @@ function initMap() {
     const baseStoreUrl = "{{ rtrim(url('/'), '/') }}";
     const businessTypeSelect = document.getElementById('business_type');
     const economicActivitySelect = document.getElementById('economic_activity');
+    const scheduleRuleForm = document.getElementById('scheduleRuleForm');
+    const selectAllScheduleDaysBtn = document.getElementById('selectAllScheduleDays');
+    const clearScheduleDaysBtn = document.getElementById('clearScheduleDays');
+    const scheduleDayCheckboxes = Array.from(document.querySelectorAll('input[name="day_of_weeks[]"]'));
     const submitPlanPaymentBtn = document.getElementById('submitPlanPaymentBtn');
     const goToPlanPaymentsBtn = document.getElementById('goToPlanPaymentsBtn');
     const planRequestPlanInput = document.getElementById('plan_request_plan_id');
@@ -1634,34 +1650,56 @@ function initMap() {
 
     const businessCatalog = {
         tienda: [
-            'Alimentos y Bebidas',
-            'Moda y Accesorios',
-            'Hogar y Construccion',
-            'Tecnologia',
-            'Salud y Belleza',
-            'Otros'
+            'Supermercado y Abastos',
+            'Panaderia y Pasteleria',
+            'Moda y Boutique',
+            'Calzado y Marroquineria',
+            'Ferreteria y Construccion',
+            'Hogar, Muebles y Decoracion',
+            'Tecnologia y Computacion',
+            'Telefonia y Accesorios',
+            'Farmacia y Bienestar',
+            'Mascotas y Agrotienda',
+            'Papeleria, Libros y Juguetes',
+            'Repuestos y Accesorios Automotrices'
         ],
         servicio: [
-            'Gastronomia',
-            'Cuidado Personal',
-            'Servicios Tecnicos',
-            'Profesionales',
-            'Logistica y Educacion'
+            'Restaurante, Cafeteria y Delivery',
+            'Barberia, Salon y Spa',
+            'Consultorio Medico y Odontologico',
+            'Asesoria Legal, Contable y Administrativa',
+            'Soporte Tecnico y Reparaciones',
+            'Educacion, Cursos e Idiomas',
+            'Logistica, Envios y Mensajeria',
+            'Fitness, Deporte y Bienestar',
+            'Eventos, Fotografia y Produccion',
+            'Mantenimiento, Limpieza e Instalaciones'
         ]
     };
 
     const businessExamples = {
-        'Alimentos y Bebidas': 'Supermercados, Panaderias, Licorerias, Carnicerias.',
-        'Moda y Accesorios': 'Ropa, Calzado, Joyeria, Opticas.',
-        'Hogar y Construccion': 'Ferreterias, Mueblerias, Decoracion, Pinturerias.',
-        'Tecnologia': 'Electronica, Computacion, Telefonia Movil.',
-        'Salud y Belleza': 'Farmacias, Perfumerias, Cosmetica.',
-        'Otros': 'Jugueterias, Librerias, Pet Shops (Mascotas).',
-        'Gastronomia': 'Restaurantes, Cafeterias, Fast Food, Caterings.',
-        'Cuidado Personal': 'Peluquerias, Centros de Estetica, Spas, Gimnasios.',
-        'Servicios Tecnicos': 'Talleres mecanicos, Reparacion de electrodomesticos, Soporte IT.',
-        'Profesionales': 'Consultorios medicos, Estudios contables/legales, Arquitectura.',
-        'Logistica y Educacion': 'Mensajeria, Institutos de idiomas, Jardines de infantes.'
+        'Supermercado y Abastos': 'Mini market, abasto vecinal, bodegon, distribuidora de viveres.',
+        'Panaderia y Pasteleria': 'Panaderias, reposteria, postres por encargo, cafe bakery.',
+        'Moda y Boutique': 'Ropa femenina, masculina, infantil, boutique de temporada.',
+        'Calzado y Marroquineria': 'Zapaterias, bolsos, carteras, cinturones y accesorios de cuero.',
+        'Ferreteria y Construccion': 'Ferreterias, herramientas, materiales de obra, pinturas y acabados.',
+        'Hogar, Muebles y Decoracion': 'Mueblerias, colchones, decoracion, iluminacion y hogar.',
+        'Tecnologia y Computacion': 'Computadoras, gaming, electronica, impresoras, consumibles.',
+        'Telefonia y Accesorios': 'Celulares, tablets, fundas, cargadores, wearables.',
+        'Farmacia y Bienestar': 'Farmacias, suplementos, cuidado personal, ortopedia ligera.',
+        'Mascotas y Agrotienda': 'Pet shop, alimento para mascotas, insumos veterinarios, agroinsumos.',
+        'Papeleria, Libros y Juguetes': 'Papelerias, librerias, regalos educativos, jugueterias.',
+        'Repuestos y Accesorios Automotrices': 'Lubricantes, baterias, repuestos, accesorios para vehiculos.',
+        'Restaurante, Cafeteria y Delivery': 'Restaurantes, lunch, cafeterias, dark kitchen, delivery.',
+        'Barberia, Salon y Spa': 'Barberias, peluquerias, manicure, spa, estetica facial.',
+        'Consultorio Medico y Odontologico': 'Odontologia, medicina general, pediatria, psicologia, fisioterapia.',
+        'Asesoria Legal, Contable y Administrativa': 'Abogados, contadores, asesoria fiscal, outsourcing administrativo.',
+        'Soporte Tecnico y Reparaciones': 'Reparacion de telefonos, laptops, electrodomesticos, redes, CCTV.',
+        'Educacion, Cursos e Idiomas': 'Academias, cursos online, capacitacion tecnica, clases personalizadas.',
+        'Logistica, Envios y Mensajeria': 'Courier, motomensajeria, transporte de paquetes, encomiendas.',
+        'Fitness, Deporte y Bienestar': 'Entrenadores, gimnasios, yoga, pilates, nutricion deportiva.',
+        'Eventos, Fotografia y Produccion': 'Fotografia, video, bodas, eventos corporativos, produccion creativa.',
+        'Mantenimiento, Limpieza e Instalaciones': 'Limpieza residencial, electricidad, plomeria, aires acondicionados.'
     };
 
     const refreshEconomicActivities = (selectedValue = '') => {
@@ -1732,6 +1770,32 @@ function initMap() {
     if (storeSlugInput) {
         storeSlugInput.addEventListener('input', updateStorePublicUrl);
         updateStorePublicUrl();
+    }
+
+    if (selectAllScheduleDaysBtn) {
+        selectAllScheduleDaysBtn.addEventListener('click', () => {
+            scheduleDayCheckboxes.forEach((checkbox) => {
+                checkbox.checked = true;
+            });
+        });
+    }
+
+    if (clearScheduleDaysBtn) {
+        clearScheduleDaysBtn.addEventListener('click', () => {
+            scheduleDayCheckboxes.forEach((checkbox) => {
+                checkbox.checked = false;
+            });
+        });
+    }
+
+    if (scheduleRuleForm) {
+        scheduleRuleForm.addEventListener('submit', (event) => {
+            const hasSelectedDays = scheduleDayCheckboxes.some((checkbox) => checkbox.checked);
+            if (!hasSelectedDays) {
+                event.preventDefault();
+                window.alert('Selecciona al menos un día para guardar el turno.');
+            }
+        });
     }
 
     const syncPhysicalStoreScheduleVisibility = () => {

@@ -321,6 +321,10 @@ class TenantController extends Controller
         $states = State::query()->orderBy('name')->get(['id', 'name', 'country_id']);
         $cities = City::query()->orderBy('name')->get(['id', 'name', 'state_id']);
         $latestPlanPayment = $this->getTenantLatestPaidPlanPayment($tenant);
+        $currentPlanPrice = (float) ($latestPlanPayment?->plan?->price ?? -1);
+        $upgradePlans = $plans->filter(function (Plan $plan) use ($currentPlanPrice) {
+            return (float) ($plan->price ?? 0) > $currentPlanPrice;
+        })->values();
         $planDaysRemaining = $this->calculatePlanDaysRemaining($latestPlanPayment);
         $resolvedPlanCutoffDate = $this->resolvePaymentCutoffDate($latestPlanPayment);
         $ownerRoleIds = $this->resolveOwnerRoleIds();
@@ -331,6 +335,7 @@ class TenantController extends Controller
         return view('tenants.edit', compact(
             'tenant',
             'plans',
+            'upgradePlans',
             'countries',
             'states',
             'cities',
@@ -1204,7 +1209,21 @@ class TenantController extends Controller
 
         $currentPlanId = $latestPaidPlanPayment?->plan_id;
         $incomingPlanId = isset($validated['plan_id']) ? (int) $validated['plan_id'] : null;
+        $incomingPlan = !is_null($incomingPlanId)
+            ? Plan::query()->findOrFail($incomingPlanId)
+            : null;
         $planChanged = !is_null($incomingPlanId) && ((int) $currentPlanId !== $incomingPlanId);
+
+        if ($planChanged && $latestPaidPlanPayment) {
+            $currentPlanPrice = (float) ($latestPaidPlanPayment?->plan?->price ?? 0);
+            $incomingPlanPrice = (float) ($incomingPlan?->price ?? 0);
+
+            if ($incomingPlanPrice <= $currentPlanPrice) {
+                throw ValidationException::withMessages([
+                    'plan_id' => 'Selecciona un plan superior al plan actual.',
+                ]);
+            }
+        }
 
         $ownerRole = Role::where('name', 'owner')->first();
         $owner = $tenant->users()
@@ -1372,7 +1391,7 @@ class TenantController extends Controller
 
         // Si cambia el plan
         if ($planChanged) {
-            $plan = Plan::findOrFail($incomingPlanId);
+            $plan = $incomingPlan;
             $paidAt = Carbon::now();
             $expiresAt = (clone $paidAt)->addDays((int) ($plan->duration_days ?? 0));
 
@@ -1974,13 +1993,12 @@ class TenantController extends Controller
                 'payments.*.reference_image_mime' => 'nullable|string|max:100',
             ]);
 
-            $customerBelongsToTenant = User::query()
-                ->where('tenant_id', (int) $tenant->id)
+            $customerExists = User::query()
                 ->whereKey((int) $validated['customer_id'])
                 ->exists();
 
-            if (!$customerBelongsToTenant) {
-                throw new \RuntimeException('El cliente seleccionado no pertenece a esta tienda.');
+            if (!$customerExists) {
+                throw new \RuntimeException('El cliente seleccionado no existe.');
             }
 
             $appointmentModeSupported = $this->tenantSupportsPublicAppointmentCheckout($tenant);
@@ -2355,9 +2373,26 @@ class TenantController extends Controller
         $serviceId = (int) $request->query('service_id', 0);
         $userId = (int) $request->query('user_id', 0);
         $date = trim((string) $request->query('date', ''));
+        $month = trim((string) $request->query('month', ''));
+
+        $today = now()->startOfDay();
+        $selectedDateForCalendar = $date !== '' ? Carbon::parse($date)->startOfDay() : $today->copy();
+
+        if ($month === '') {
+            $month = $selectedDateForCalendar->format('Y-m');
+        }
+
+        try {
+            $calendarMonthStart = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        } catch (\Throwable $exception) {
+            $calendarMonthStart = $selectedDateForCalendar->copy()->startOfMonth();
+        }
+
+        $calendarMonthEnd = $calendarMonthStart->copy()->endOfMonth();
 
         $slots = [];
-        if ($serviceId > 0 && $userId > 0 && $date !== '') {
+        $calendar = [];
+        if ($serviceId > 0 && $userId > 0) {
             $service = $this->publicAppointmentServicesQuery((int) $tenant->id)
                 ->whereKey($serviceId)
                 ->first();
@@ -2369,8 +2404,23 @@ class TenantController extends Controller
                 if ($service->user_id && (int) $service->user_id !== (int) $professional->id) {
                     $slots = [];
                 } else {
-                    $selectedDate = Carbon::parse($date)->startOfDay();
-                    $slots = $this->buildPublicAppointmentSlots((int) $tenant->id, $professional, $service, $selectedDate);
+                    if ($date !== '') {
+                        $selectedDate = Carbon::parse($date)->startOfDay();
+                        $slots = $this->buildPublicAppointmentSlots((int) $tenant->id, $professional, $service, $selectedDate);
+                    }
+
+                    $cursor = $calendarMonthStart->copy();
+                    while ($cursor->lessThanOrEqualTo($calendarMonthEnd)) {
+                        $daySlots = $this->buildPublicAppointmentSlots((int) $tenant->id, $professional, $service, $cursor);
+                        $calendar[] = [
+                            'date' => $cursor->toDateString(),
+                            'slots_count' => count($daySlots),
+                            'has_slots' => count($daySlots) > 0,
+                            'is_today' => $cursor->isSameDay($today),
+                        ];
+
+                        $cursor->addDay();
+                    }
                 }
             }
         }
@@ -2381,6 +2431,8 @@ class TenantController extends Controller
             'services' => $services,
             'professionals' => $professionals,
             'slots' => $slots,
+            'calendar' => $calendar,
+            'calendar_month' => $calendarMonthStart->format('Y-m'),
             'today' => now()->toDateString(),
         ]);
     }
@@ -2576,7 +2628,10 @@ class TenantController extends Controller
         return AppointmentService::query()
             ->with(['assignedUser:id,name', 'productVariant.product'])
             ->where('tenant_id', $tenantId)
-            ->where('is_active', true)
+            ->where(function ($query) {
+                $query->where('is_active', true)
+                    ->orWhereNull('is_active');
+            })
             ->orderBy('name');
     }
 
@@ -2678,6 +2733,10 @@ class TenantController extends Controller
         $normalized = preg_replace('/\s+/', ' ', $normalized) ?? $normalized;
 
         $businessTypeKey = $this->resolveBusinessTypeKey($businessType);
+        if ($businessTypeKey) {
+            $normalized = $this->resolveLegacyEconomicActivityAlias($normalized, $businessTypeKey);
+        }
+
         $catalog = $this->getBusinessActivityCatalog();
         if ($businessTypeKey && isset($catalog[$businessTypeKey])) {
             foreach ($catalog[$businessTypeKey] as $option) {
@@ -2693,9 +2752,9 @@ class TenantController extends Controller
     private function assertEconomicActivityAllowed(?string $businessType, ?string $economicActivity): void
     {
         $businessTypeKey = $this->resolveBusinessTypeKey($businessType);
-        $normalizedActivity = trim((string) $economicActivity);
+        $normalizedActivity = $this->normalizeEconomicActivity($economicActivity, $businessType);
 
-        if (!$businessTypeKey || $normalizedActivity === '') {
+        if (!$businessTypeKey || empty($normalizedActivity)) {
             return;
         }
 
@@ -2715,6 +2774,36 @@ class TenantController extends Controller
                 'El rubro economico no corresponde al tipo de negocio seleccionado (' . $businessTypeLabel . '). Opciones validas: ' . implode(', ', $options) . '.',
             ],
         ]);
+    }
+
+    private function resolveLegacyEconomicActivityAlias(string $economicActivity, string $businessTypeKey): string
+    {
+        $legacyAliases = [
+            'tienda' => [
+                'Alimentos y Bebidas' => 'Supermercado y Abastos',
+                'Moda y Accesorios' => 'Moda y Boutique',
+                'Hogar y Construccion' => 'Ferreteria y Construccion',
+                'Tecnologia' => 'Tecnologia y Computacion',
+                'Salud y Belleza' => 'Farmacia y Bienestar',
+            ],
+            'servicio' => [
+                'Gastronomia' => 'Restaurante, Cafeteria y Delivery',
+                'Cuidado Personal' => 'Barberia, Salon y Spa',
+                'Servicios Tecnicos' => 'Soporte Tecnico y Reparaciones',
+                'Profesionales' => 'Asesoria Legal, Contable y Administrativa',
+                'Logistica y Educacion' => 'Logistica, Envios y Mensajeria',
+            ],
+        ];
+
+        $aliasesForBusinessType = $legacyAliases[$businessTypeKey] ?? [];
+
+        foreach ($aliasesForBusinessType as $legacy => $canonical) {
+            if (Str::lower($legacy) === Str::lower($economicActivity)) {
+                return $canonical;
+            }
+        }
+
+        return $economicActivity;
     }
 
     private function assertLocationHierarchy($countryId, $stateId, $cityId): void

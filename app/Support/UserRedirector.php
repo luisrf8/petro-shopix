@@ -52,7 +52,7 @@ class UserRedirector
         }
 
         if (self::isSuperAdmin($user)) {
-            return '/plans';
+            return '/tenants';
         }
 
         if (self::isCustomer($user)) {

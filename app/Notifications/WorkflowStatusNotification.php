@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Models\Appointment;
 use App\Models\SalesOrder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\BroadcastMessage;
@@ -31,6 +32,7 @@ class WorkflowStatusNotification extends Notification
             'type' => (string) ($this->payload['type'] ?? 'info'),
             'tenant_id' => $this->payload['tenant_id'] ?? null,
             'order_id' => $this->payload['order_id'] ?? null,
+            'appointment_id' => $this->payload['meta']['appointment_id'] ?? null,
             'payment_id' => $this->payload['payment_id'] ?? null,
             'action' => (string) ($this->payload['action'] ?? ''),
             'meta' => $this->payload['meta'] ?? [],
@@ -59,6 +61,7 @@ class WorkflowStatusNotification extends Notification
             ->data([
                 'url' => $targetUrl,
                 'order_id' => $this->payload['order_id'] ?? null,
+                'appointment_id' => $this->payload['meta']['appointment_id'] ?? null,
                 'payment_id' => $this->payload['payment_id'] ?? null,
                 'type' => (string) ($this->payload['type'] ?? 'info'),
             ])
@@ -76,6 +79,7 @@ class WorkflowStatusNotification extends Notification
         $action = trim((string) ($this->payload['action'] ?? ''));
         $orderId = $this->payload['order_id'] ?? null;
         $paymentId = $this->payload['payment_id'] ?? null;
+        $appointmentId = $this->payload['meta']['appointment_id'] ?? null;
 
         $mail = (new MailMessage)
             ->subject('Shopix - ' . $title)
@@ -101,8 +105,26 @@ class WorkflowStatusNotification extends Notification
     {
         $orderId = $this->payload['order_id'] ?? null;
         $paymentId = $this->payload['payment_id'] ?? null;
+        $appointmentId = $this->payload['meta']['appointment_id'] ?? null;
 
         if (!$orderId) {
+            if ($appointmentId) {
+                $appointment = Appointment::query()
+                    ->select('id', 'customer_id', 'tenant_id', 'starts_at')
+                    ->find($appointmentId);
+
+                if ($appointment) {
+                    if ((int) $appointment->customer_id === (int) ($notifiable->id ?? 0)) {
+                        return url('/');
+                    }
+
+                    if (!empty($notifiable->tenant_id) && (int) $appointment->tenant_id === (int) $notifiable->tenant_id) {
+                        $date = optional($appointment->starts_at)->format('Y-m-d');
+                        return url('/appointments' . ($date ? ('?date=' . $date) : ''));
+                    }
+                }
+            }
+
             return null;
         }
 

@@ -444,18 +444,18 @@
 
   .tenant-pro-summary-grid {
     display: flex;
-    flex-wrap: wrap;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.25rem 0.75rem;
+    flex-wrap: nowrap;
+    gap: 0.45rem;
+    align-items: stretch;
   }
 
   .tenant-pro-summary-card {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    padding: 0;
+    border: 1px solid rgba(var(--tenant-accent-rgb), 0.28);
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 0.3rem 0.45rem;
     min-width: 0;
-    flex: 1 1 calc(50% - 0.75rem);
+    flex: 1 1 0;
   }
 
   .tenant-pro-summary-card small {
@@ -471,6 +471,10 @@
     color: #0f172a;
     font-weight: 700;
     line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.9rem;
   }
 
   .tenant-pro-stepper {
@@ -635,7 +639,20 @@
     }
 
     .tenant-pro-summary-grid {
-      gap: 0.2rem 0.6rem;
+      gap: 0.3rem;
+    }
+
+    .tenant-pro-summary-card {
+      padding: 0.28rem 0.35rem;
+    }
+
+    .tenant-pro-summary-card small {
+      font-size: 0.67rem;
+    }
+
+    .tenant-pro-summary-card strong,
+    .tenant-pro-summary-card span {
+      font-size: 0.8rem;
     }
 
     .tenant-pro-stepper {
@@ -874,7 +891,18 @@
                     <div class="col-12 col-md-6">
                       <input type="text" class="form-control" id="tenant-pro-register-dni" placeholder="DNI (opcional)">
                     </div>
-                    <div class="col-12 col-md-6">
+                    <div class="col-4 col-md-2">
+                      <select class="form-select" id="tenant-pro-register-phone-code" aria-label="Código de país teléfono">
+                        <option value="+58" selected>+58</option>
+                        <option value="+1">+1</option>
+                        <option value="+52">+52</option>
+                        <option value="+57">+57</option>
+                        <option value="+51">+51</option>
+                        <option value="+54">+54</option>
+                        <option value="+34">+34</option>
+                      </select>
+                    </div>
+                    <div class="col-8 col-md-4">
                       <input type="text" class="form-control" id="tenant-pro-register-phone" placeholder="Teléfono (opcional)">
                     </div>
                     <div class="col-12">
@@ -940,7 +968,7 @@
             <div class="tenant-pro-step-shell" id="tenant-pro-delivery-step-shell">
               <h6>Tipo de entrega</h6>
               <p class="tenant-pro-step-note">Primero define cómo recibirás tu compra.</p>
-              <div>
+              <div id="tenant-pro-delivery-type-wrap">
                 <div class="form-check form-check-inline">
                   <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-pickup" value="pickup" checked>
                   <label class="form-check-label" for="tenant-pro-delivery-pickup">Retiro en tienda</label>
@@ -1015,29 +1043,44 @@
               </div>
 
               <div class="mt-3 d-none" id="tenant-pro-appointment-section">
-                <h6>Agenda tu cita</h6>
-                <p class="tenant-pro-step-note">Selecciona el servicio, profesional, horario y cómo deseas pagar.</p>
                 <div class="row g-2">
-                  <div class="col-12">
+                  <div class="col-12" id="tenant-pro-appointment-service-wrap">
                     <label class="form-label">Servicio</label>
                     <select id="tenant-pro-appointment-service" class="form-select">
                       <option value="">Selecciona un servicio</option>
                     </select>
                   </div>
-                  <div class="col-12 col-md-6">
+                  <div class="col-12 d-none" id="tenant-pro-appointment-service-selected-wrap">
+                    <label class="form-label">Servicio seleccionado</label>
+                    <input type="text" id="tenant-pro-appointment-service-selected" class="form-control" readonly>
+                  </div>
+                  <div class="col-12">
                     <label class="form-label">Profesional</label>
                     <select id="tenant-pro-appointment-user" class="form-select">
                       <option value="">Selecciona un profesional</option>
                     </select>
                   </div>
-                  <div class="col-12 col-md-6">
-                    <label class="form-label">Fecha</label>
-                    <input type="date" id="tenant-pro-appointment-date" class="form-control">
+                  <input type="hidden" id="tenant-pro-appointment-date">
+                  <div class="col-12">
+                    <label class="form-label">Calendario de disponibilidad</label>
+                    <div class="border rounded p-2">
+                      <div class="d-flex align-items-center justify-content-between mb-2">
+                        <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-appointment-calendar-prev">Mes anterior</button>
+                        <strong id="tenant-pro-appointment-calendar-label">-</strong>
+                        <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-appointment-calendar-next">Mes siguiente</button>
+                      </div>
+                      <div class="d-grid" style="grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px;" id="tenant-pro-appointment-calendar-grid"></div>
+                    </div>
+                    <small class="text-muted d-block mt-1" id="tenant-pro-appointment-calendar-note">Selecciona servicio y profesional para visualizar disponibilidad por día.</small>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">Fecha seleccionada</label>
+                    <input type="text" id="tenant-pro-appointment-date-display" class="form-control" placeholder="Haz click en un día del calendario" readonly>
                   </div>
                   <div class="col-12">
                     <label class="form-label">Hora disponible</label>
                     <select id="tenant-pro-appointment-slot" class="form-select">
-                      <option value="">Selecciona servicio, profesional y fecha</option>
+                      <option value="">Selecciona profesional y un día del calendario</option>
                     </select>
                     <small class="text-muted d-block mt-1" id="tenant-pro-appointment-slot-note">Te mostraremos los horarios disponibles en tiempo real.</small>
                   </div>
@@ -1312,12 +1355,22 @@
     const proShippingLocationSelectCityWrap = document.getElementById('tenant-pro-shipping-location-selects-city-wrap');
     const proShippingLocationActions = document.getElementById('tenant-pro-shipping-location-actions');
     const proDeliveryStepShell = document.getElementById('tenant-pro-delivery-step-shell');
+    const proDeliveryTypeWrap = document.getElementById('tenant-pro-delivery-type-wrap');
     const proAppointmentSection = document.getElementById('tenant-pro-appointment-section');
+    const proAppointmentServiceWrap = document.getElementById('tenant-pro-appointment-service-wrap');
+    const proAppointmentServiceSelectedWrap = document.getElementById('tenant-pro-appointment-service-selected-wrap');
+    const proAppointmentServiceSelectedInput = document.getElementById('tenant-pro-appointment-service-selected');
     const proAppointmentServiceSelect = document.getElementById('tenant-pro-appointment-service');
     const proAppointmentUserSelect = document.getElementById('tenant-pro-appointment-user');
     const proAppointmentDateInput = document.getElementById('tenant-pro-appointment-date');
+    const proAppointmentDateDisplayInput = document.getElementById('tenant-pro-appointment-date-display');
     const proAppointmentSlotSelect = document.getElementById('tenant-pro-appointment-slot');
     const proAppointmentSlotNote = document.getElementById('tenant-pro-appointment-slot-note');
+    const proAppointmentCalendarGrid = document.getElementById('tenant-pro-appointment-calendar-grid');
+    const proAppointmentCalendarLabel = document.getElementById('tenant-pro-appointment-calendar-label');
+    const proAppointmentCalendarPrevBtn = document.getElementById('tenant-pro-appointment-calendar-prev');
+    const proAppointmentCalendarNextBtn = document.getElementById('tenant-pro-appointment-calendar-next');
+    const proAppointmentCalendarNote = document.getElementById('tenant-pro-appointment-calendar-note');
     const proAppointmentPaymentModeSelect = document.getElementById('tenant-pro-appointment-payment-mode');
     const proPaymentStepNote = document.getElementById('tenant-pro-payment-step-note');
     const proOnSitePaymentNote = document.getElementById('tenant-pro-on-site-payment-note');
@@ -2432,6 +2485,188 @@
     let appointmentCheckoutEnabled = false;
     let appointmentCheckoutServices = [];
     let appointmentCheckoutProfessionals = [];
+    let appointmentCalendarMonth = '';
+    let appointmentCalendarDays = [];
+    let appointmentLockedServiceId = 0;
+
+    function parseAppointmentMonth(value) {
+      const normalized = String(value || '').trim();
+      if (!/^\d{4}-\d{2}$/.test(normalized)) {
+        return null;
+      }
+
+      const [yearRaw, monthRaw] = normalized.split('-');
+      const year = Number(yearRaw);
+      const month = Number(monthRaw);
+      if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+        return null;
+      }
+
+      return { year, month };
+    }
+
+    function getMonthFromDateValue(dateValue) {
+      const normalized = String(dateValue || '').trim();
+      return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized.slice(0, 7) : '';
+    }
+
+    function getAppointmentCalendarMonthBase() {
+      const parsed = parseAppointmentMonth(appointmentCalendarMonth);
+      if (parsed) {
+        return new Date(parsed.year, parsed.month - 1, 1);
+      }
+
+      return new Date();
+    }
+
+    function shiftAppointmentCalendarMonth(step) {
+      const base = getAppointmentCalendarMonthBase();
+      base.setMonth(base.getMonth() + Number(step || 0));
+      const next = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
+      appointmentCalendarMonth = next;
+      renderAppointmentCalendar();
+      refreshAppointmentSlots();
+    }
+
+    function formatAppointmentCalendarLabel(monthValue) {
+      const parsed = parseAppointmentMonth(monthValue);
+      if (!parsed) {
+        return '-';
+      }
+
+      const date = new Date(parsed.year, parsed.month - 1, 1);
+      return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    }
+
+    function formatAppointmentSelectedDateLabel(dateValue) {
+      const normalized = String(dateValue || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        return '';
+      }
+
+      const [yearRaw, monthRaw, dayRaw] = normalized.split('-');
+      const parsedDate = new Date(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw));
+      if (Number.isNaN(parsedDate.getTime())) {
+        return '';
+      }
+
+      return parsedDate.toLocaleDateString('es-ES', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      });
+    }
+
+    function syncSelectedAppointmentDateDisplay() {
+      if (!proAppointmentDateDisplayInput) {
+        return;
+      }
+
+      const selectedDate = String(proAppointmentDateInput?.value || '').trim();
+      proAppointmentDateDisplayInput.value = formatAppointmentSelectedDateLabel(selectedDate);
+    }
+
+    function resolveLockedAppointmentServiceId() {
+      const cart = getCart();
+      const variantIds = Array.isArray(cart)
+        ? cart
+          .map(item => Number(item?.variantId || 0))
+          .filter(variantId => variantId > 0)
+        : [];
+
+      if (variantIds.length === 0) {
+        return 0;
+      }
+
+      const service = appointmentCheckoutServices.find(serviceItem => {
+        const variantId = Number(serviceItem?.product_variant_id || 0);
+        return variantId > 0 && variantIds.includes(variantId);
+      });
+
+      return service ? Number(service.id || 0) : 0;
+    }
+
+    function syncAppointmentServiceSelectionFromCart() {
+      appointmentLockedServiceId = resolveLockedAppointmentServiceId();
+
+      if (proAppointmentServiceSelect) {
+        if (appointmentLockedServiceId > 0) {
+          proAppointmentServiceSelect.value = String(appointmentLockedServiceId);
+          proAppointmentServiceSelect.disabled = true;
+        } else {
+          proAppointmentServiceSelect.disabled = false;
+        }
+      }
+
+      const selectedServiceOption = proAppointmentServiceSelect?.selectedOptions?.[0] || null;
+      const selectedServiceName = String(selectedServiceOption?.textContent || '').trim();
+
+      if (proAppointmentServiceSelectedInput) {
+        proAppointmentServiceSelectedInput.value = selectedServiceName;
+      }
+
+      proAppointmentServiceWrap?.classList.toggle('d-none', appointmentLockedServiceId > 0);
+      proAppointmentServiceSelectedWrap?.classList.toggle('d-none', appointmentLockedServiceId <= 0);
+    }
+
+    function renderAppointmentCalendar() {
+      if (!proAppointmentCalendarGrid) {
+        return;
+      }
+
+      const parsed = parseAppointmentMonth(appointmentCalendarMonth || getMonthFromDateValue(proAppointmentDateInput?.value || ''));
+      if (!parsed) {
+        proAppointmentCalendarGrid.innerHTML = '';
+        if (proAppointmentCalendarLabel) {
+          proAppointmentCalendarLabel.textContent = '-';
+        }
+        return;
+      }
+
+      const monthStart = new Date(parsed.year, parsed.month - 1, 1);
+      const monthEnd = new Date(parsed.year, parsed.month, 0);
+      const selectedDate = String(proAppointmentDateInput?.value || '').trim();
+      const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+      const startWeekday = (monthStart.getDay() + 6) % 7;
+      const totalDays = monthEnd.getDate();
+
+      if (proAppointmentCalendarLabel) {
+        proAppointmentCalendarLabel.textContent = formatAppointmentCalendarLabel(appointmentCalendarMonth);
+      }
+
+      const cells = [];
+      weekdayLabels.forEach(label => {
+        cells.push(`<div class="small text-muted text-center">${label}</div>`);
+      });
+
+      for (let index = 0; index < startWeekday; index += 1) {
+        cells.push('<div></div>');
+      }
+
+      const calendarByDate = new Map((appointmentCalendarDays || []).map(row => [String(row.date || ''), row]));
+
+      for (let day = 1; day <= totalDays; day += 1) {
+        const dateValue = `${parsed.year}-${String(parsed.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const row = calendarByDate.get(dateValue);
+        const slotsCount = Number(row?.slots_count || 0);
+        const hasSlots = !!row?.has_slots;
+        const isSelected = selectedDate === dateValue;
+        const isToday = !!row?.is_today;
+        const buttonClass = isSelected
+          ? 'btn btn-dark btn-sm w-100'
+          : (hasSlots ? 'btn btn-outline-dark btn-sm w-100' : 'btn btn-light btn-sm w-100 text-muted');
+        const title = hasSlots ? `${slotsCount} horario(s)` : 'Sin disponibilidad';
+
+        cells.push(`
+          <button type="button" class="${buttonClass}" data-appointment-calendar-date="${dateValue}" ${hasSlots ? '' : 'disabled'} title="${title}">
+            <span>${day}</span>${isToday ? '<span class="d-block" style="font-size:10px;line-height:1;">Hoy</span>' : ''}
+          </button>
+        `);
+      }
+
+      proAppointmentCalendarGrid.innerHTML = cells.join('');
+    }
 
     function getCheckoutSummaryElement() {
       return document.querySelector('#tenant-pro-checkout-section .tenant-pro-summary.is-compact');
@@ -2529,13 +2764,15 @@
 
       if (stepOneNote) {
         stepOneNote.textContent = isAppointment
-          ? 'Define servicio, profesional, horario y cómo quieres pagar tu cita.'
+          ? 'Selecciona profesional, fecha/hora y luego confirma cómo pagar tu cita.'
           : 'Primero define cómo recibirás tu compra.';
       }
 
       document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach(input => {
         input.checked = input.value === 'pickup';
       });
+
+      proDeliveryTypeWrap?.classList.toggle('d-none', isAppointment);
 
       if (isAppointment) {
         document.getElementById('tenant-pro-shipping-address-container')?.classList.add('d-none');
@@ -2557,6 +2794,8 @@
         ].join('');
       }
 
+      syncAppointmentServiceSelectionFromCart();
+
       if (proAppointmentUserSelect) {
         proAppointmentUserSelect.innerHTML = [
           '<option value="">Selecciona un profesional</option>',
@@ -2564,10 +2803,14 @@
         ].join('');
       }
 
-      if (proAppointmentDateInput && !proAppointmentDateInput.value) {
-        const today = new Date().toISOString().slice(0, 10);
-        proAppointmentDateInput.value = today;
+      syncSelectedAppointmentDateDisplay();
+
+      const dateMonth = getMonthFromDateValue(proAppointmentDateInput?.value || '');
+      if (!appointmentCalendarMonth) {
+        appointmentCalendarMonth = dateMonth || new Date().toISOString().slice(0, 7);
       }
+
+      renderAppointmentCalendar();
     }
 
     async function loadAppointmentCheckoutAvailability() {
@@ -2616,24 +2859,46 @@
       const serviceId = Number(proAppointmentServiceSelect?.value || 0);
       const userId = Number(proAppointmentUserSelect?.value || 0);
       const date = String(proAppointmentDateInput?.value || '').trim();
+      const hasLockedService = appointmentLockedServiceId > 0;
 
-      if (serviceId <= 0 || userId <= 0 || !date) {
-        proAppointmentSlotSelect.innerHTML = '<option value="">Selecciona servicio, profesional y fecha</option>';
+      if (!appointmentCalendarMonth) {
+        appointmentCalendarMonth = getMonthFromDateValue(date) || new Date().toISOString().slice(0, 7);
+      }
+
+      if (serviceId <= 0 || userId <= 0) {
+        proAppointmentSlotSelect.innerHTML = `<option value="">${hasLockedService ? 'Selecciona profesional y un día del calendario' : 'Selecciona servicio, profesional y un día del calendario'}</option>`;
         if (proAppointmentSlotNote) {
-          proAppointmentSlotNote.textContent = 'Te mostraremos los horarios disponibles en tiempo real.';
+          proAppointmentSlotNote.textContent = hasLockedService
+            ? 'Selecciona profesional y un día del calendario para consultar horarios.'
+            : 'Selecciona servicio, profesional y un día del calendario para consultar horarios.';
         }
+        if (proAppointmentCalendarNote) {
+          proAppointmentCalendarNote.textContent = hasLockedService
+            ? 'Selecciona profesional para visualizar disponibilidad por día.'
+            : 'Selecciona servicio y profesional para visualizar disponibilidad por día.';
+        }
+        appointmentCalendarDays = [];
+        renderAppointmentCalendar();
+        syncAppointmentPaymentModeUi();
         return;
       }
 
+      proAppointmentSlotSelect.innerHTML = '<option value="">Selecciona un día del calendario</option>';
       if (proAppointmentSlotNote) {
-        proAppointmentSlotNote.textContent = 'Buscando horarios disponibles...';
+        proAppointmentSlotNote.textContent = date
+          ? 'Buscando horarios disponibles...'
+          : 'Cargando disponibilidad del calendario...';
       }
 
       const params = new URLSearchParams({
         service_id: String(serviceId),
         user_id: String(userId),
-        date,
+        month: appointmentCalendarMonth,
       });
+
+      if (date) {
+        params.set('date', date);
+      }
 
       let response;
       try {
@@ -2647,6 +2912,12 @@
         if (proAppointmentSlotNote) {
           proAppointmentSlotNote.textContent = 'Verifica tu conexión e intenta nuevamente.';
         }
+        if (proAppointmentCalendarNote) {
+          proAppointmentCalendarNote.textContent = 'No se pudo cargar el calendario en este momento.';
+        }
+        appointmentCalendarDays = [];
+        renderAppointmentCalendar();
+        syncAppointmentPaymentModeUi();
         return;
       }
 
@@ -2655,6 +2926,12 @@
         if (proAppointmentSlotNote) {
           proAppointmentSlotNote.textContent = 'No fue posible cargar los horarios.';
         }
+        if (proAppointmentCalendarNote) {
+          proAppointmentCalendarNote.textContent = 'No se pudo cargar el calendario en este momento.';
+        }
+        appointmentCalendarDays = [];
+        renderAppointmentCalendar();
+        syncAppointmentPaymentModeUi();
         return;
       }
 
@@ -2665,17 +2942,37 @@
         payload = {};
       }
 
-      const slots = Array.isArray(payload.slots) ? payload.slots : [];
-      proAppointmentSlotSelect.innerHTML = [
-        '<option value="">Selecciona una hora</option>',
-        ...slots.map(slot => `<option value="${escapeHtml(slot.start || '')}">${escapeHtml(slot.label || `${slot.start || ''} - ${slot.end || ''}`)}</option>`),
-      ].join('');
+      const slots = date && Array.isArray(payload.slots) ? payload.slots : [];
+      appointmentCalendarDays = Array.isArray(payload.calendar) ? payload.calendar : [];
+      if (payload.calendar_month && /^\d{4}-\d{2}$/.test(String(payload.calendar_month))) {
+        appointmentCalendarMonth = String(payload.calendar_month);
+      }
+      proAppointmentSlotSelect.innerHTML = date
+        ? [
+          '<option value="">Selecciona una hora</option>',
+          ...slots.map(slot => `<option value="${escapeHtml(slot.start || '')}">${escapeHtml(slot.label || `${slot.start || ''} - ${slot.end || ''}`)}</option>`),
+        ].join('')
+        : '<option value="">Selecciona un día del calendario</option>';
+
+      renderAppointmentCalendar();
+      if (proAppointmentCalendarNote) {
+        const availableDays = appointmentCalendarDays.filter(row => !!row?.has_slots).length;
+        proAppointmentCalendarNote.textContent = availableDays > 0
+          ? `${availableDays} día(s) con disponibilidad en ${formatAppointmentCalendarLabel(appointmentCalendarMonth)}.`
+          : 'No hay días disponibles en el mes seleccionado para ese servicio/profesional.';
+      }
+
+      syncSelectedAppointmentDateDisplay();
 
       if (proAppointmentSlotNote) {
-        proAppointmentSlotNote.textContent = slots.length > 0
-          ? `${slots.length} horario(s) disponible(s).`
-          : 'No hay horarios disponibles para los datos seleccionados.';
+        proAppointmentSlotNote.textContent = !date
+          ? 'Selecciona un día del calendario para ver horas disponibles.'
+          : (slots.length > 0
+            ? `${slots.length} horario(s) disponible(s).`
+            : 'No hay horarios disponibles para los datos seleccionados.');
       }
+
+      syncAppointmentPaymentModeUi();
     }
 
     function syncAppointmentProfessionalByService() {
@@ -2700,16 +2997,23 @@
 
     function syncAppointmentPaymentModeUi() {
       const onSite = isAppointmentOnSitePayment();
+      const hasSelectedSlot = String(proAppointmentSlotSelect?.value || '').trim() !== '';
 
-      if (proPaymentStepNote) {
-        proPaymentStepNote.textContent = onSite
-          ? 'Confirmarás el pedido sin pago en línea.'
-          : 'Agrega tu pago con referencia y comprobante.';
+      if (proAppointmentPaymentModeSelect) {
+        proAppointmentPaymentModeSelect.disabled = !hasSelectedSlot;
       }
 
-      proOnSitePaymentNote?.classList.toggle('d-none', !onSite);
-      document.getElementById('tenant-pro-payment-rows')?.classList.toggle('d-none', onSite);
-      document.getElementById('tenant-pro-add-payment-row')?.classList.toggle('d-none', onSite);
+      if (proPaymentStepNote) {
+        proPaymentStepNote.textContent = !hasSelectedSlot
+          ? 'Primero selecciona una hora de la cita para habilitar la forma de pago.'
+          : (onSite
+            ? 'Confirmarás el pedido sin pago en línea.'
+            : 'Agrega tu pago con referencia y comprobante.');
+      }
+
+      proOnSitePaymentNote?.classList.toggle('d-none', !hasSelectedSlot || !onSite);
+      document.getElementById('tenant-pro-payment-rows')?.classList.toggle('d-none', !hasSelectedSlot || onSite);
+      document.getElementById('tenant-pro-add-payment-row')?.classList.toggle('d-none', !hasSelectedSlot || onSite);
     }
 
     function validateCheckoutStepOne() {
@@ -2965,6 +3269,34 @@
 
     function clearTenantAuthAlert() {
       showTenantAuthAlert('');
+    }
+
+    function resolveTenantApiErrorMessage(payload, fallbackMessage) {
+      if (payload?.errors && typeof payload.errors === 'object') {
+        const firstError = Object.values(payload.errors).flat()?.[0];
+        if (firstError) {
+          return String(firstError);
+        }
+      }
+
+      if (payload?.error) {
+        return String(payload.error);
+      }
+
+      if (payload?.message) {
+        return String(payload.message);
+      }
+
+      return fallbackMessage;
+    }
+
+    function isExpiredTokenMessage(message) {
+      const normalized = String(message || '').toLowerCase();
+      return normalized.includes('token has expired')
+        || normalized.includes('token inválido')
+        || normalized.includes('token invalido')
+        || normalized.includes('token expirado')
+        || normalized.includes('token vencido');
     }
 
     function showTenantToast(title, message = '') {
@@ -3730,9 +4062,14 @@
         body: JSON.stringify({ email, password })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.token || !data.user) {
-        showTenantAuthAlert(data.message || 'No se pudo iniciar sesión.');
+        const message = resolveTenantApiErrorMessage(data, 'No se pudo iniciar sesión.');
+        if (isExpiredTokenMessage(message)) {
+          clearAuthData();
+        }
+
+        showTenantAuthAlert(message);
         return;
       }
 
@@ -3749,7 +4086,11 @@
       const password = document.getElementById('tenant-pro-register-password').value;
       const password_confirmation = document.getElementById('tenant-pro-register-password-confirmation').value;
       const dni = document.getElementById('tenant-pro-register-dni').value.trim();
-      const phone_number = document.getElementById('tenant-pro-register-phone').value.trim();
+      const phoneCode = document.getElementById('tenant-pro-register-phone-code')?.value || '+58';
+      const rawPhone = document.getElementById('tenant-pro-register-phone').value;
+      const normalizedPhone = String(rawPhone || '').replace(/\D+/g, '');
+      const normalizedCode = String(phoneCode || '').replace(/\D+/g, '') || '58';
+      const phone_number = normalizedPhone ? `+${normalizedCode}${normalizedPhone}` : '';
 
       const response = await fetch('/api/registerEcomm', {
         method: 'POST',
@@ -3763,9 +4104,14 @@
         body: JSON.stringify({ name, email, password, password_confirmation, dni, phone_number })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.token || !data.user) {
-        showTenantAuthAlert(data.message || 'No se pudo crear la cuenta.');
+        const message = resolveTenantApiErrorMessage(data, 'No se pudo crear la cuenta.');
+        if (isExpiredTokenMessage(message)) {
+          clearAuthData();
+        }
+
+        showTenantAuthAlert(message);
         return;
       }
 
@@ -4120,15 +4466,64 @@
     if (cartEnabled) {
       proAppointmentServiceSelect?.addEventListener('change', async () => {
         syncAppointmentProfessionalByService();
+        proAppointmentSlotSelect.value = '';
+        syncAppointmentPaymentModeUi();
         await refreshAppointmentSlots();
       });
 
       proAppointmentUserSelect?.addEventListener('change', async () => {
+        proAppointmentSlotSelect.value = '';
+        syncAppointmentPaymentModeUi();
         await refreshAppointmentSlots();
       });
 
       proAppointmentDateInput?.addEventListener('change', async () => {
+        const selectedDate = String(proAppointmentDateInput.value || '').trim();
+        const selectedMonth = getMonthFromDateValue(selectedDate);
+        if (selectedMonth) {
+          appointmentCalendarMonth = selectedMonth;
+        }
+
+        proAppointmentSlotSelect.value = '';
+        syncSelectedAppointmentDateDisplay();
+        syncAppointmentPaymentModeUi();
         await refreshAppointmentSlots();
+      });
+
+      proAppointmentCalendarGrid?.addEventListener('click', async (event) => {
+        const targetButton = event.target.closest('[data-appointment-calendar-date]');
+        if (!targetButton || !proAppointmentDateInput) {
+          return;
+        }
+
+        const dateValue = String(targetButton.getAttribute('data-appointment-calendar-date') || '').trim();
+        if (!dateValue) {
+          return;
+        }
+
+        proAppointmentDateInput.value = dateValue;
+        const selectedMonth = getMonthFromDateValue(dateValue);
+        if (selectedMonth) {
+          appointmentCalendarMonth = selectedMonth;
+        }
+
+        proAppointmentSlotSelect.value = '';
+        syncSelectedAppointmentDateDisplay();
+        syncAppointmentPaymentModeUi();
+        await refreshAppointmentSlots();
+      });
+
+      proAppointmentCalendarPrevBtn?.addEventListener('click', () => {
+        shiftAppointmentCalendarMonth(-1);
+      });
+
+      proAppointmentCalendarNextBtn?.addEventListener('click', () => {
+        shiftAppointmentCalendarMonth(1);
+      });
+
+      proAppointmentSlotSelect?.addEventListener('change', () => {
+        syncAppointmentPaymentModeUi();
+        updateProPaymentSummary();
       });
 
       proAppointmentPaymentModeSelect?.addEventListener('change', () => {

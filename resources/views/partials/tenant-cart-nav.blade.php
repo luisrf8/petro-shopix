@@ -208,6 +208,35 @@
     border-radius: 999px;
   }
 
+  .tenant-appointment-state-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .tenant-appointment-state-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.34rem;
+    border-radius: 999px;
+    border: 1px solid #dbe3ee;
+    background: #f8fafc;
+    color: #1f2937;
+    padding: 0.3rem 0.55rem;
+    font-size: 0.74rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .tenant-appointment-state-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    display: inline-block;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.15);
+    flex-shrink: 0;
+  }
+
   .tenant-customer-info-shell {
     border: 1px solid #dbe3ee;
     border-radius: 12px;
@@ -371,6 +400,12 @@
         <span>Listado de compras</span>
       </button>
     </li>
+    <li id="tenant-appointments-wrap">
+      <button type="button" id="tenant-appointments-btn" class="dropdown-item d-inline-flex align-items-center gap-2">
+        <i class="bi bi-calendar-check"></i>
+        <span>Mis citas</span>
+      </button>
+    </li>
     <li id="tenant-account-wrap">
       <button type="button" id="tenant-account-btn" class="dropdown-item d-inline-flex align-items-center gap-2">
         <i class="bi bi-person-gear"></i>
@@ -393,6 +428,15 @@
           class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-bag-check"></i>
     <span>Listado de compras</span>
+  </button>
+</li>
+
+<li class="nav-item d-none d-lg-none" id="tenant-appointments-mobile-wrap">
+  <button type="button"
+          id="tenant-appointments-mobile-btn"
+          class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
+    <i class="bi bi-calendar-check"></i>
+    <span>Mis citas</span>
   </button>
 </li>
 
@@ -481,6 +525,20 @@
   </div>
 </div>
 
+<div class="modal fade tenant-modern-modal" id="tenantAppointmentsModal" tabindex="-1" aria-labelledby="tenantAppointmentsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="tenantAppointmentsModalLabel">Mis citas</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="tenant-appointments-list" class="d-flex flex-column gap-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade tenant-modern-modal" id="tenantAuthModal" tabindex="-1" aria-labelledby="tenantAuthModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
@@ -529,7 +587,18 @@
               <div class="col-12">
                 <input type="text" class="form-control" id="tenant-public-register-dni" placeholder="DNI (opcional)">
               </div>
-              <div class="col-12">
+              <div class="col-4 col-md-3">
+                <select class="form-select" id="tenant-public-register-phone-code" aria-label="Código de país teléfono">
+                  <option value="+58" selected>+58</option>
+                  <option value="+1">+1</option>
+                  <option value="+52">+52</option>
+                  <option value="+57">+57</option>
+                  <option value="+51">+51</option>
+                  <option value="+54">+54</option>
+                  <option value="+34">+34</option>
+                </select>
+              </div>
+              <div class="col-8 col-md-9">
                 <input type="text" class="form-control" id="tenant-public-register-phone" placeholder="Teléfono (opcional)">
               </div>
               <div class="col-12">
@@ -572,9 +641,21 @@
             </div>
             <div class="col-12">
               <form id="tenant-customer-phone-form" class="row g-2 align-items-end">
-                <div class="col-12 col-md-8">
+                <div class="col-4 col-md-3">
+                  <label for="tenant-customer-phone-code" class="tenant-customer-info-label">Código país</label>
+                  <select class="form-select" id="tenant-customer-phone-code">
+                    <option value="+58" selected>+58</option>
+                    <option value="+1">+1</option>
+                    <option value="+52">+52</option>
+                    <option value="+57">+57</option>
+                    <option value="+51">+51</option>
+                    <option value="+54">+54</option>
+                    <option value="+34">+34</option>
+                  </select>
+                </div>
+                <div class="col-8 col-md-5">
                   <label for="tenant-customer-phone-input" class="tenant-customer-info-label">Agregar / actualizar teléfono</label>
-                  <input type="text" class="form-control" id="tenant-customer-phone-input" placeholder="Ej: +58 412 0000000" maxlength="50">
+                  <input type="text" class="form-control" id="tenant-customer-phone-input" placeholder="Ej: 4120000000" maxlength="50">
                 </div>
                 <div class="col-12 col-md-4">
                   <button type="submit" class="btn btn-outline-dark btn-sm w-100">Guardar teléfono</button>
@@ -621,12 +702,18 @@
     const ordersButton = document.getElementById('tenant-orders-btn');
     const ordersMobileWrap = document.getElementById('tenant-orders-mobile-wrap');
     const ordersMobileButton = document.getElementById('tenant-orders-mobile-btn');
+    const appointmentsWrap = document.getElementById('tenant-appointments-wrap');
+    const appointmentsButton = document.getElementById('tenant-appointments-btn');
+    const appointmentsMobileWrap = document.getElementById('tenant-appointments-mobile-wrap');
+    const appointmentsMobileButton = document.getElementById('tenant-appointments-mobile-btn');
     const accountWrap = document.getElementById('tenant-account-wrap');
     const accountButton = document.getElementById('tenant-account-btn');
     const accountMobileWrap = document.getElementById('tenant-account-mobile-wrap');
     const accountMobileButton = document.getElementById('tenant-account-mobile-btn');
     const ordersList = document.getElementById('tenant-orders-list');
     const ordersModal = document.getElementById('tenantOrdersModal');
+    const appointmentsList = document.getElementById('tenant-appointments-list');
+    const appointmentsModal = document.getElementById('tenantAppointmentsModal');
     const authModal = document.getElementById('tenantAuthModal');
     const authModalLabel = document.getElementById('tenantAuthModalLabel');
     const customerModal = document.getElementById('tenantCustomerModal');
@@ -651,6 +738,10 @@
       document.body.appendChild(ordersModal);
     }
 
+    if (appointmentsModal && appointmentsModal.parentElement !== document.body) {
+      document.body.appendChild(appointmentsModal);
+    }
+
     if (authModal && authModal.parentElement !== document.body) {
       document.body.appendChild(authModal);
     }
@@ -669,15 +760,44 @@
       document.body.appendChild(tenantToastContainer);
     }
 
-    if (!indicatorWrap || !indicatorText || !logoutWrap || !logoutButton || !ordersWrap || !ordersButton || !ordersList || !notificationsWrap || !notificationsCount || !notificationsList || !accountWrap || !accountButton) {
+    if (!indicatorWrap || !indicatorText || !logoutWrap || !logoutButton || !ordersWrap || !ordersButton || !ordersList || !appointmentsWrap || !appointmentsButton || !appointmentsList || !notificationsWrap || !notificationsCount || !notificationsList || !accountWrap || !accountButton) {
       return;
     }
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const tenantWhatsappNumber = `${@json($tenantThemeModel->phone_code ?? '')}${@json($tenantThemeModel->phone_number ?? '')}`.replace(/\D/g, '');
     const serviceWorkerUrl = @json(url('/push-sw.js'));
     const vapidPublicKey = @json(config('webpush.vapid.public_key'));
     const defaultNotificationIcon = @json(\App\Support\ImageStorage::url($tenantThemeModel->logo ?? null) ?? asset('assets/img/shopix6.png'));
     let storefrontNotificationAutoPrompted = false;
+
+    function resolveTenantApiErrorMessage(payload, fallbackMessage) {
+      if (payload?.errors && typeof payload.errors === 'object') {
+        const firstError = Object.values(payload.errors).flat()?.[0];
+        if (firstError) {
+          return String(firstError);
+        }
+      }
+
+      if (payload?.error) {
+        return String(payload.error);
+      }
+
+      if (payload?.message) {
+        return String(payload.message);
+      }
+
+      return fallbackMessage;
+    }
+
+    function isExpiredTokenMessage(message) {
+      const normalized = String(message || '').toLowerCase();
+      return normalized.includes('token has expired')
+        || normalized.includes('token inválido')
+        || normalized.includes('token invalido')
+        || normalized.includes('token expirado')
+        || normalized.includes('token vencido');
+    }
 
     function supportsBrowserNotifications() {
       return window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
@@ -1041,7 +1161,7 @@
 
       return {
         user: null,
-        shouldClear: response.status === 401 || response.status === 404,
+        shouldClear: !response.ok,
       };
     }
 
@@ -1051,12 +1171,64 @@
       const dniEl = document.getElementById('tenant-customer-dni');
       const phoneEl = document.getElementById('tenant-customer-phone');
       const phoneInputEl = document.getElementById('tenant-customer-phone-input');
+      const phoneCodeEl = document.getElementById('tenant-customer-phone-code');
+      const parsedPhone = splitPhoneNumber(user?.phone || user?.phone_number || '');
 
       if (nameEl) nameEl.textContent = user?.name || '-';
       if (emailEl) emailEl.textContent = user?.email || '-';
       if (dniEl) dniEl.textContent = user?.dni || 'No registrado';
       if (phoneEl) phoneEl.textContent = user?.phone || user?.phone_number || 'No registrado';
-      if (phoneInputEl) phoneInputEl.value = user?.phone || user?.phone_number || '';
+      if (phoneInputEl) phoneInputEl.value = parsedPhone.number;
+      if (phoneCodeEl) phoneCodeEl.value = parsedPhone.code;
+    }
+
+    function normalizePhoneDigits(value) {
+      return String(value || '').replace(/\D+/g, '');
+    }
+
+    function splitPhoneNumber(value) {
+      const normalized = String(value || '').trim();
+      const fallback = { code: '+58', number: '' };
+
+      if (!normalized) {
+        return fallback;
+      }
+
+      const normalizedWithoutSpaces = normalized.replace(/\s+/g, '');
+      const matchedCode = normalizedWithoutSpaces.match(/^\+(\d{1,4})(\d+)$/);
+
+      if (!matchedCode) {
+        return {
+          code: '+58',
+          number: normalizePhoneDigits(normalizedWithoutSpaces),
+        };
+      }
+
+      const codeDigits = matchedCode[1];
+      const localNumber = matchedCode[2];
+      const knownCodes = ['58', '1', '52', '57', '51', '54', '34'];
+      const resolvedCode = knownCodes.includes(codeDigits) ? `+${codeDigits}` : '+58';
+      const number = knownCodes.includes(codeDigits)
+        ? localNumber
+        : normalizePhoneDigits(normalizedWithoutSpaces);
+
+      return {
+        code: resolvedCode,
+        number,
+      };
+    }
+
+    function buildPhoneNumber(phoneCodeId, phoneInputId) {
+      const phoneCode = document.getElementById(phoneCodeId)?.value || '+58';
+      const rawNumber = document.getElementById(phoneInputId)?.value || '';
+      const number = normalizePhoneDigits(rawNumber);
+
+      if (!number) {
+        return '';
+      }
+
+      const code = `+${normalizePhoneDigits(phoneCode) || '58'}`;
+      return `${code}${number}`;
     }
 
     function openTenantCustomerModal() {
@@ -1137,7 +1309,8 @@
       }
 
       const phoneInput = document.getElementById('tenant-customer-phone-input');
-      const phoneNumber = (phoneInput?.value || '').trim();
+      const phoneCode = document.getElementById('tenant-customer-phone-code');
+      const phoneNumber = buildPhoneNumber('tenant-customer-phone-code', 'tenant-customer-phone-input');
 
       const response = await fetch('/api/user/update-profile', {
         method: 'POST',
@@ -1154,7 +1327,7 @@
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        alert(data.message || 'No se pudo actualizar el teléfono.');
+        alert(resolveTenantApiErrorMessage(data, 'No se pudo actualizar el teléfono.'));
         return;
       }
 
@@ -1162,7 +1335,12 @@
       persistTenantAuth(currentToken, updatedUser);
       fillCustomerModalData(updatedUser);
       if (phoneInput) {
-        phoneInput.value = updatedUser?.phone_number || updatedUser?.phone || '';
+        const parsedPhone = splitPhoneNumber(updatedUser?.phone_number || updatedUser?.phone || '');
+        phoneInput.value = parsedPhone.number;
+      }
+      if (phoneCode) {
+        const parsedPhone = splitPhoneNumber(updatedUser?.phone_number || updatedUser?.phone || '');
+        phoneCode.value = parsedPhone.code;
       }
 
       alert(data.message || 'Teléfono actualizado correctamente.');
@@ -1186,7 +1364,13 @@
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.token || !data.user) {
-        alert(data.message || 'No se pudo iniciar sesión.');
+        const message = resolveTenantApiErrorMessage(data, 'No se pudo iniciar sesión.');
+        if (isExpiredTokenMessage(message)) {
+          clearPersistedTenantAuth(false);
+          applyAuthState(null, '');
+        }
+
+        alert(message);
         return;
       }
 
@@ -1206,7 +1390,7 @@
         password: document.getElementById('tenant-public-register-password')?.value || '',
         password_confirmation: document.getElementById('tenant-public-register-password-confirmation')?.value || '',
         dni: document.getElementById('tenant-public-register-dni')?.value.trim() || '',
-        phone_number: document.getElementById('tenant-public-register-phone')?.value.trim() || '',
+        phone_number: buildPhoneNumber('tenant-public-register-phone-code', 'tenant-public-register-phone'),
       };
 
       const response = await fetch('/api/registerEcomm', {
@@ -1221,7 +1405,7 @@
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.token || !data.user) {
-        alert(data.message || 'No se pudo crear la cuenta.');
+        alert(resolveTenantApiErrorMessage(data, 'No se pudo crear la cuenta.'));
         return;
       }
 
@@ -1273,6 +1457,42 @@
       }
 
       return response.json();
+    }
+
+    async function fetchAppointments(token) {
+      const response = await fetch('/api/user/appointments', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('No se pudieron cargar las citas.');
+      }
+
+      return response.json();
+    }
+
+    async function runAppointmentAction(token, appointmentId, payload) {
+      const response = await fetch(`/api/user/appointments/${appointmentId}/action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify(payload || {}),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.success === false) {
+        throw new Error(data?.message || 'No se pudo ejecutar la acción de la cita.');
+      }
+
+      return data;
     }
 
     function showTenantToast(title, message) {
@@ -1378,6 +1598,33 @@
       return 'text-bg-secondary';
     }
 
+    function appointmentStatusColor(status) {
+      const normalized = String(status || '').toLowerCase();
+      if (normalized === 'confirmed') return '#22c55e';
+      if (normalized === 'completed') return '#14b8a6';
+      if (normalized === 'cancelled') return '#ef4444';
+      if (normalized === 'no_show') return '#f59e0b';
+      return '#3b82f6';
+    }
+
+    function appointmentPaymentColor(status) {
+      const normalized = String(status || '').toLowerCase();
+      if (normalized === 'paid') return '#22c55e';
+      if (normalized === 'partial') return '#f59e0b';
+      if (normalized === 'waived') return '#60a5fa';
+      return '#94a3b8';
+    }
+
+    function buildAppointmentWhatsappUrl(row) {
+      if (!tenantWhatsappNumber) {
+        return '';
+      }
+
+      const startsAt = row?.starts_at ? new Date(row.starts_at).toLocaleString() : 'sin fecha';
+      const message = encodeURIComponent(`Hola, te escribo por mi cita de ${row?.service || 'servicio'} con ${row?.professional || 'profesional'} (${startsAt}). ¿Me ayudas con la confirmación?`);
+      return `https://wa.me/${tenantWhatsappNumber}?text=${message}`;
+    }
+
     function renderOrders(payload) {
       const rows = Array.isArray(payload?.orders) ? payload.orders : [];
       if (rows.length === 0) {
@@ -1406,6 +1653,95 @@
       `).join('');
     }
 
+    function renderAppointments(payload) {
+      const rows = Array.isArray(payload?.appointments) ? payload.appointments : [];
+      if (rows.length === 0) {
+        appointmentsList.innerHTML = '<p class="text-muted mb-0">Todavía no tienes citas registradas.</p>';
+        return;
+      }
+
+      appointmentsList.innerHTML = rows.map(row => {
+        const startsAt = row.starts_at ? new Date(row.starts_at).toLocaleString() : 'Sin fecha';
+        const statusColor = appointmentStatusColor(row.status);
+        const paymentColor = appointmentPaymentColor(row.payment_status);
+        const whatsappUrl = buildAppointmentWhatsappUrl(row);
+        const publicOrderButton = row.public_order_url
+          ? `<a href="${row.public_order_url}" class="btn btn-sm btn-outline-dark">Ver pago</a>`
+          : '';
+        const whatsappButton = whatsappUrl
+          ? `<a href="${whatsappUrl}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success">WhatsApp admin</a>`
+          : '';
+
+        return `
+          <article class="tenant-order-card" data-appointment-id="${row.id}">
+            <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
+              <div>
+                <div class="fw-semibold fs-6">${row.service || 'Servicio'}</div>
+                <div class="tenant-order-meta">${row.professional || 'Profesional'} • ${startsAt}</div>
+              </div>
+              <div class="tenant-appointment-state-group">
+                <span class="tenant-appointment-state-chip"><span class="tenant-appointment-state-dot" style="background:${statusColor};"></span>${row.status_label || row.status || 'Programada'}</span>
+                <span class="tenant-appointment-state-chip"><span class="tenant-appointment-state-dot" style="background:${paymentColor};"></span>${row.payment_status_label || row.payment_status || 'Pendiente'}</span>
+              </div>
+            </div>
+            <div class="tenant-order-meta mb-2">Pagado: ${Number(row.paid_amount || 0).toFixed(2)} ${row.payment_currency || 'USD'}</div>
+            <div class="d-flex flex-wrap gap-2">
+              ${row.can_confirm ? '<button type="button" class="btn btn-sm btn-outline-success" data-appointment-action="confirm_attendance">Confirmar asistencia</button>' : ''}
+              ${row.can_reschedule ? '<button type="button" class="btn btn-sm btn-outline-primary" data-appointment-action="reschedule">Cambiar fecha</button>' : ''}
+              ${row.can_confirm_payment ? '<button type="button" class="btn btn-sm btn-success" data-appointment-action="confirm_payment">Pagar y confirmar</button>' : ''}
+              ${row.can_cancel ? '<button type="button" class="btn btn-sm btn-outline-danger" data-appointment-action="cancel">Cancelar</button>' : ''}
+              ${whatsappButton}
+              ${publicOrderButton}
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      appointmentsList.querySelectorAll('[data-appointment-action]').forEach(button => {
+        button.addEventListener('click', async () => {
+          const card = button.closest('[data-appointment-id]');
+          const appointmentId = Number(card?.getAttribute('data-appointment-id') || 0);
+          const action = button.getAttribute('data-appointment-action');
+
+          if (!appointmentId || !action || !currentToken) {
+            return;
+          }
+
+          const payload = { action };
+
+          if (action === 'reschedule') {
+            const newDate = prompt('Nueva fecha (YYYY-MM-DD):');
+            const newTime = prompt('Nueva hora (HH:MM):');
+            if (!newDate || !newTime) {
+              return;
+            }
+            payload.scheduled_date = newDate;
+            payload.start_time = newTime;
+          }
+
+          if (action === 'confirm_payment') {
+            const paidAmount = prompt('Monto pagado:', '0');
+            const paymentReference = prompt('Referencia de pago (opcional):', '');
+            payload.paid_amount = Number(paidAmount || 0);
+            payload.payment_reference = paymentReference || '';
+            payload.create_sale = true;
+          }
+
+          button.disabled = true;
+          try {
+            const result = await runAppointmentAction(currentToken, appointmentId, payload);
+            alert(result?.message || 'Cita actualizada correctamente.');
+            const updated = await fetchAppointments(currentToken);
+            renderAppointments(updated);
+          } catch (error) {
+            alert(error?.message || 'No se pudo actualizar la cita.');
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
+    }
+
     function applyAuthState(user, token) {
       currentUser = user || null;
       currentToken = token || '';
@@ -1415,9 +1751,11 @@
       indicatorWrap.classList.toggle('d-none', !hasSession);
       logoutWrap.classList.toggle('d-none', !hasSession);
       ordersWrap.classList.toggle('d-none', !hasSession);
+      appointmentsWrap.classList.toggle('d-none', !hasSession);
       accountWrap.classList.toggle('d-none', !hasSession);
       logoutMobileWrap?.classList.toggle('d-none', !hasSession);
       ordersMobileWrap?.classList.toggle('d-none', !hasSession);
+      appointmentsMobileWrap?.classList.toggle('d-none', !hasSession);
       accountMobileWrap?.classList.toggle('d-none', !hasSession);
       notificationsWrap.classList.toggle('d-none', !hasSession);
       authTriggers.forEach(trigger => {
@@ -1673,6 +2011,33 @@
 
     ordersMobileButton?.addEventListener('click', () => {
       ordersButton?.click();
+    });
+
+    appointmentsButton?.addEventListener('click', async () => {
+      const hasSession = !!currentToken && !!currentUser?.id;
+      if (!hasSession) {
+        if (openTenantAuthModal()) {
+          return;
+        }
+
+        alert('No se pudo abrir el inicio de sesión en este momento.');
+        return;
+      }
+
+      appointmentsList.innerHTML = '<p class="text-muted mb-0">Cargando citas...</p>';
+      const appointmentsModalInstance = bootstrap.Modal.getOrCreateInstance(document.getElementById('tenantAppointmentsModal'));
+      appointmentsModalInstance.show();
+
+      try {
+        const payload = await fetchAppointments(currentToken);
+        renderAppointments(payload);
+      } catch (error) {
+        appointmentsList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar las citas.</p>';
+      }
+    });
+
+    appointmentsMobileButton?.addEventListener('click', () => {
+      appointmentsButton?.click();
     });
 
     accountButton?.addEventListener('click', () => {

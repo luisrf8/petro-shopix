@@ -15,6 +15,7 @@ use App\Http\Controllers\PlanController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PushSubscriptionController;
+use App\Http\Controllers\AppointmentController;
 
 // ------------------------ RUTAS PÚBLICAS ------------------------
 
@@ -43,6 +44,8 @@ Route::middleware(['auth.jwt'])->group(function () {
     Route::post('/user/update-profile', [AuthenticatedSessionController::class, 'updateEcommProfile']);
     Route::post('/user/change-password', [AuthenticatedSessionController::class, 'changeEcommPassword']);
     Route::get('/user/orders', [SaleController::class, 'viewMyOrders']);
+    Route::get('/user/appointments', [AppointmentController::class, 'myAppointments']);
+    Route::post('/user/appointments/{appointment}/action', [AppointmentController::class, 'customerWorkflowAction']);
     Route::post('/create-sale/ecomm', [SaleController::class, 'storeEcommerceSale']);
     Route::get('/notifications', [NotificationController::class, 'apiIndex']);
     Route::post('/notifications/{id}/read', [NotificationController::class, 'apiMarkAsRead']);

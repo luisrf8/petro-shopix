@@ -345,13 +345,16 @@
                 <div class="mb-0">
                   <label class="form-label">Plan</label>
                   <select name="plan_id" class="form-select border border-1 p-2">
-                    <option value="">Mantener plan actual</option>
-                    @foreach($plans as $plan)
-                      <option value="{{ $plan->id }}" {{ (string) old('plan_id', $latestPlanPayment?->plan_id) === (string) $plan->id ? 'selected' : '' }}>
+                    <option value="" {{ old('plan_id') === null || old('plan_id') === '' ? 'selected' : '' }}>Mantener plan actual</option>
+                    @foreach($upgradePlans as $plan)
+                      <option value="{{ $plan->id }}" {{ (string) old('plan_id') === (string) $plan->id ? 'selected' : '' }}>
                         {{ $plan->name }} - ${{ number_format((float) ($plan->price ?? 0), 2) }}
                       </option>
                     @endforeach
                   </select>
+                  @if($upgradePlans->isEmpty())
+                    <small class="text-muted d-block mt-1">No hay planes superiores disponibles para esta tienda.</small>
+                  @endif
                 </div>
               </div>
             </div>
@@ -405,7 +408,7 @@
             </div>
 
             <div class="d-flex justify-content-between gap-2">
-              <a href="{{ route('tenant.index') }}" class="btn btn-outline-dark mb-0">Volver</a>
+              <a href="{{ route('tenants.index') }}" class="btn btn-outline-dark mb-0">Volver</a>
               <button type="submit" class="btn btn-dark mb-0">Guardar cambios</button>
             </div>
           </div>
@@ -420,34 +423,56 @@
 <script>
   const tenantBusinessCatalog = {
     tienda: [
-      'Alimentos y Bebidas',
-      'Moda y Accesorios',
-      'Hogar y Construccion',
-      'Tecnologia',
-      'Salud y Belleza',
-      'Otros'
+      'Supermercado y Abastos',
+      'Panaderia y Pasteleria',
+      'Moda y Boutique',
+      'Calzado y Marroquineria',
+      'Ferreteria y Construccion',
+      'Hogar, Muebles y Decoracion',
+      'Tecnologia y Computacion',
+      'Telefonia y Accesorios',
+      'Farmacia y Bienestar',
+      'Mascotas y Agrotienda',
+      'Papeleria, Libros y Juguetes',
+      'Repuestos y Accesorios Automotrices'
     ],
     servicio: [
-      'Gastronomia',
-      'Cuidado Personal',
-      'Servicios Tecnicos',
-      'Profesionales',
-      'Logistica y Educacion'
+      'Restaurante, Cafeteria y Delivery',
+      'Barberia, Salon y Spa',
+      'Consultorio Medico y Odontologico',
+      'Asesoria Legal, Contable y Administrativa',
+      'Soporte Tecnico y Reparaciones',
+      'Educacion, Cursos e Idiomas',
+      'Logistica, Envios y Mensajeria',
+      'Fitness, Deporte y Bienestar',
+      'Eventos, Fotografia y Produccion',
+      'Mantenimiento, Limpieza e Instalaciones'
     ]
   };
 
   const tenantBusinessExamples = {
-    'Alimentos y Bebidas': 'Supermercados, Panaderias, Licorerias, Carnicerias.',
-    'Moda y Accesorios': 'Ropa, Calzado, Joyeria, Opticas.',
-    'Hogar y Construccion': 'Ferreterias, Mueblerias, Decoracion, Pinturerias.',
-    'Tecnologia': 'Electronica, Computacion, Telefonia Movil.',
-    'Salud y Belleza': 'Farmacias, Perfumerias, Cosmetica.',
-    'Otros': 'Jugueterias, Librerias, Pet Shops (Mascotas).',
-    'Gastronomia': 'Restaurantes, Cafeterias, Fast Food, Caterings.',
-    'Cuidado Personal': 'Peluquerias, Centros de Estetica, Spas, Gimnasios.',
-    'Servicios Tecnicos': 'Talleres mecanicos, Reparacion de electrodomesticos, Soporte IT.',
-    'Profesionales': 'Consultorios medicos, Estudios contables/legales, Arquitectura.',
-    'Logistica y Educacion': 'Mensajeria, Institutos de idiomas, Jardines de infantes.'
+    'Supermercado y Abastos': 'Mini market, abasto vecinal, bodegon, distribuidora de viveres.',
+    'Panaderia y Pasteleria': 'Panaderias, reposteria, postres por encargo, cafe bakery.',
+    'Moda y Boutique': 'Ropa femenina, masculina, infantil, boutique de temporada.',
+    'Calzado y Marroquineria': 'Zapaterias, bolsos, carteras, cinturones y accesorios de cuero.',
+    'Ferreteria y Construccion': 'Ferreterias, herramientas, materiales de obra, pinturas y acabados.',
+    'Hogar, Muebles y Decoracion': 'Mueblerias, colchones, decoracion, iluminacion y hogar.',
+    'Tecnologia y Computacion': 'Computadoras, gaming, electronica, impresoras, consumibles.',
+    'Telefonia y Accesorios': 'Celulares, tablets, fundas, cargadores, wearables.',
+    'Farmacia y Bienestar': 'Farmacias, suplementos, cuidado personal, ortopedia ligera.',
+    'Mascotas y Agrotienda': 'Pet shop, alimento para mascotas, insumos veterinarios, agroinsumos.',
+    'Papeleria, Libros y Juguetes': 'Papelerias, librerias, regalos educativos, jugueterias.',
+    'Repuestos y Accesorios Automotrices': 'Lubricantes, baterias, repuestos, accesorios para vehiculos.',
+    'Restaurante, Cafeteria y Delivery': 'Restaurantes, lunch, cafeterias, dark kitchen, delivery.',
+    'Barberia, Salon y Spa': 'Barberias, peluquerias, manicure, spa, estetica facial.',
+    'Consultorio Medico y Odontologico': 'Odontologia, medicina general, pediatria, psicologia, fisioterapia.',
+    'Asesoria Legal, Contable y Administrativa': 'Abogados, contadores, asesoria fiscal, outsourcing administrativo.',
+    'Soporte Tecnico y Reparaciones': 'Reparacion de telefonos, laptops, electrodomesticos, redes, CCTV.',
+    'Educacion, Cursos e Idiomas': 'Academias, cursos online, capacitacion tecnica, clases personalizadas.',
+    'Logistica, Envios y Mensajeria': 'Courier, motomensajeria, transporte de paquetes, encomiendas.',
+    'Fitness, Deporte y Bienestar': 'Entrenadores, gimnasios, yoga, pilates, nutricion deportiva.',
+    'Eventos, Fotografia y Produccion': 'Fotografia, video, bodas, eventos corporativos, produccion creativa.',
+    'Mantenimiento, Limpieza e Instalaciones': 'Limpieza residencial, electricidad, plomeria, aires acondicionados.'
   };
 
   function populateTenantEconomicActivities(typeValue, selectedValue = '') {

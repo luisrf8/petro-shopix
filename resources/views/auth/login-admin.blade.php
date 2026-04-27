@@ -206,6 +206,10 @@
             try {
                 const response = await fetch('/admin/login', {
                     method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
                     body: formData,
                 });
 
@@ -214,10 +218,13 @@
                     return;
                 }
 
-                const data = await response.json();
+                const data = await response.json().catch(() => ({}));
 
                 if (!response.ok) {
-                    showLoginError(data.message || 'Credenciales incorrectas.');
+                    const validationMessage = data?.errors
+                        ? Object.values(data.errors).flat()?.[0]
+                        : null;
+                    showLoginError(validationMessage || data.message || 'Credenciales incorrectas.');
                     return;
                 }
 
