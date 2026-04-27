@@ -937,10 +937,10 @@
           </div>
 
           <div class="tenant-pro-step-panel" data-checkout-step-panel="1">
-            <div class="tenant-pro-step-shell">
+            <div class="tenant-pro-step-shell" id="tenant-pro-delivery-step-shell">
               <h6>Tipo de entrega</h6>
               <p class="tenant-pro-step-note">Primero define cómo recibirás tu compra.</p>
-              <div>
+              <div id="tenant-pro-delivery-options">
                 <div class="form-check form-check-inline">
                   <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-pickup" value="pickup" checked>
                   <label class="form-check-label" for="tenant-pro-delivery-pickup">Retiro en tienda</label>
@@ -1013,13 +1013,53 @@
                   </div>
                 </div>
               </div>
+
+              <div class="mt-3 d-none" id="tenant-pro-appointment-section">
+                <h6>Agenda tu cita</h6>
+                <p class="tenant-pro-step-note">Selecciona el servicio, profesional, horario y cómo deseas pagar.</p>
+                <div class="row g-2">
+                  <div class="col-12">
+                    <label class="form-label">Servicio</label>
+                    <select id="tenant-pro-appointment-service" class="form-select">
+                      <option value="">Selecciona un servicio</option>
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label">Profesional</label>
+                    <select id="tenant-pro-appointment-user" class="form-select">
+                      <option value="">Selecciona un profesional</option>
+                    </select>
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label">Fecha</label>
+                    <input type="date" id="tenant-pro-appointment-date" class="form-control">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">Hora disponible</label>
+                    <select id="tenant-pro-appointment-slot" class="form-select">
+                      <option value="">Selecciona servicio, profesional y fecha</option>
+                    </select>
+                    <small class="text-muted d-block mt-1" id="tenant-pro-appointment-slot-note">Te mostraremos los horarios disponibles en tiempo real.</small>
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label">Forma de pago de la cita</label>
+                    <select id="tenant-pro-appointment-payment-mode" class="form-select">
+                      <option value="online">Pagar ahora</option>
+                      <option value="on_site">Pagar en el lugar</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           <div class="tenant-pro-step-panel d-none" data-checkout-step-panel="2">
             <div class="tenant-pro-step-shell">
               <h6>Métodos de pago</h6>
-              <p class="tenant-pro-step-note">Agrega tu pago con referencia y comprobante.</p>
+              <p class="tenant-pro-step-note" id="tenant-pro-payment-step-note">Agrega tu pago con referencia y comprobante.</p>
+              <div class="alert alert-info py-2 px-3 mb-2 d-none" id="tenant-pro-on-site-payment-note">
+                Elegiste pagar en el lugar. Puedes confirmar el pedido sin registrar pago en línea.
+              </div>
               <div id="tenant-pro-payment-rows" class="d-flex flex-column gap-2"></div>
               <button type="button" id="tenant-pro-add-payment-row" class="btn btn-outline-dark btn-sm mt-2">+ Agregar pago</button>
             </div>
@@ -1200,6 +1240,7 @@
     const tenantStateId = @json($tenant->state ?? null);
     const tenantCityId = @json($tenant->city ?? null);
     const tenantDeliveryConfig = @json(\App\Support\DeliveryManager::settings($tenant));
+    const tenantAppointmentAvailabilityEndpoint = `/${tenantSlug}/appointments/public-availability`;
     const initialCsrfToken = @json(csrf_token());
     const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
     const shopixDebug = true;
@@ -1270,6 +1311,17 @@
     const proShippingLocationSelectStateWrap = document.getElementById('tenant-pro-shipping-location-selects-state-wrap');
     const proShippingLocationSelectCityWrap = document.getElementById('tenant-pro-shipping-location-selects-city-wrap');
     const proShippingLocationActions = document.getElementById('tenant-pro-shipping-location-actions');
+    const proDeliveryStepShell = document.getElementById('tenant-pro-delivery-step-shell');
+    const proDeliveryOptions = document.getElementById('tenant-pro-delivery-options');
+    const proAppointmentSection = document.getElementById('tenant-pro-appointment-section');
+    const proAppointmentServiceSelect = document.getElementById('tenant-pro-appointment-service');
+    const proAppointmentUserSelect = document.getElementById('tenant-pro-appointment-user');
+    const proAppointmentDateInput = document.getElementById('tenant-pro-appointment-date');
+    const proAppointmentSlotSelect = document.getElementById('tenant-pro-appointment-slot');
+    const proAppointmentSlotNote = document.getElementById('tenant-pro-appointment-slot-note');
+    const proAppointmentPaymentModeSelect = document.getElementById('tenant-pro-appointment-payment-mode');
+    const proPaymentStepNote = document.getElementById('tenant-pro-payment-step-note');
+    const proOnSitePaymentNote = document.getElementById('tenant-pro-on-site-payment-note');
     const proShippingUseProfileLocationBtn = document.getElementById('tenant-pro-shipping-use-profile-location');
     const proShippingUseCurrentLocationBtn = document.getElementById('tenant-pro-shipping-use-current-location');
     const deliveryMapModalElement = document.getElementById('tenantDeliveryMapModal');
@@ -2378,6 +2430,9 @@
     let proElectronicInvoicingEnabled = false;
     let proSpecialTaxpayer = false;
     let currentCheckoutStep = 1;
+    let appointmentCheckoutEnabled = false;
+    let appointmentCheckoutServices = [];
+    let appointmentCheckoutProfessionals = [];
 
     function getCheckoutSummaryElement() {
       return document.querySelector('#tenant-pro-checkout-section .tenant-pro-summary.is-compact');
@@ -2447,7 +2502,248 @@
       }
     }
 
+    function isAppointmentCheckoutActive() {
+      return !!appointmentCheckoutEnabled;
+    }
+
+    function isAppointmentOnSitePayment() {
+      if (!isAppointmentCheckoutActive()) {
+        return false;
+      }
+
+      return String(proAppointmentPaymentModeSelect?.value || 'online') === 'on_site';
+    }
+
+    function applyAppointmentCheckoutUiState() {
+      const isAppointment = isAppointmentCheckoutActive();
+      const stepOneLabel = document.querySelector('.tenant-pro-step[data-step="1"] .tenant-pro-step-label');
+      const stepOneTitle = proDeliveryStepShell?.querySelector('h6');
+      const stepOneNote = proDeliveryStepShell?.querySelector('.tenant-pro-step-note');
+
+      if (stepOneLabel) {
+        stepOneLabel.textContent = isAppointment ? 'Agenda' : 'Entrega';
+      }
+
+      if (stepOneTitle) {
+        stepOneTitle.textContent = isAppointment ? 'Agenda tu cita' : 'Tipo de entrega';
+      }
+
+      if (stepOneNote) {
+        stepOneNote.textContent = isAppointment
+          ? 'Define servicio, profesional, horario y cómo quieres pagar tu cita.'
+          : 'Primero define cómo recibirás tu compra.';
+      }
+
+      document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach(input => {
+        input.checked = input.value === 'pickup';
+      });
+
+      if (isAppointment) {
+        document.getElementById('tenant-pro-shipping-address-container')?.classList.add('d-none');
+      }
+
+      proDeliveryOptions?.classList.toggle('d-none', isAppointment);
+      proAppointmentSection?.classList.toggle('d-none', !isAppointment);
+      syncAppointmentPaymentModeUi();
+    }
+
+    function populateAppointmentSelectors() {
+      if (!isAppointmentCheckoutActive()) {
+        return;
+      }
+
+      if (proAppointmentServiceSelect) {
+        proAppointmentServiceSelect.innerHTML = [
+          '<option value="">Selecciona un servicio</option>',
+          ...appointmentCheckoutServices.map(service => `<option value="${Number(service.id)}" data-assigned-user-id="${service.assigned_user_id ? Number(service.assigned_user_id) : ''}" data-product-variant-id="${service.product_variant_id ? Number(service.product_variant_id) : ''}">${escapeHtml(service.name || 'Servicio')}</option>`),
+        ].join('');
+      }
+
+      if (proAppointmentUserSelect) {
+        proAppointmentUserSelect.innerHTML = [
+          '<option value="">Selecciona un profesional</option>',
+          ...appointmentCheckoutProfessionals.map(professional => `<option value="${Number(professional.id)}">${escapeHtml(professional.name || 'Profesional')}</option>`),
+        ].join('');
+      }
+
+      if (proAppointmentDateInput && !proAppointmentDateInput.value) {
+        const today = new Date().toISOString().slice(0, 10);
+        proAppointmentDateInput.value = today;
+      }
+    }
+
+    async function loadAppointmentCheckoutAvailability() {
+      appointmentCheckoutEnabled = false;
+      appointmentCheckoutServices = [];
+      appointmentCheckoutProfessionals = [];
+
+      let response;
+      try {
+        response = await fetch(tenantAppointmentAvailabilityEndpoint, {
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+      } catch (error) {
+        applyAppointmentCheckoutUiState();
+        return;
+      }
+
+      if (!response.ok) {
+        applyAppointmentCheckoutUiState();
+        return;
+      }
+
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch (error) {
+        payload = {};
+      }
+
+      appointmentCheckoutEnabled = !!payload.enabled;
+      appointmentCheckoutServices = Array.isArray(payload.services) ? payload.services : [];
+      appointmentCheckoutProfessionals = Array.isArray(payload.professionals) ? payload.professionals : [];
+
+      populateAppointmentSelectors();
+      applyAppointmentCheckoutUiState();
+      await refreshAppointmentSlots();
+    }
+
+    async function refreshAppointmentSlots() {
+      if (!isAppointmentCheckoutActive() || !proAppointmentSlotSelect) {
+        return;
+      }
+
+      const serviceId = Number(proAppointmentServiceSelect?.value || 0);
+      const userId = Number(proAppointmentUserSelect?.value || 0);
+      const date = String(proAppointmentDateInput?.value || '').trim();
+
+      if (serviceId <= 0 || userId <= 0 || !date) {
+        proAppointmentSlotSelect.innerHTML = '<option value="">Selecciona servicio, profesional y fecha</option>';
+        if (proAppointmentSlotNote) {
+          proAppointmentSlotNote.textContent = 'Te mostraremos los horarios disponibles en tiempo real.';
+        }
+        return;
+      }
+
+      if (proAppointmentSlotNote) {
+        proAppointmentSlotNote.textContent = 'Buscando horarios disponibles...';
+      }
+
+      const params = new URLSearchParams({
+        service_id: String(serviceId),
+        user_id: String(userId),
+        date,
+      });
+
+      let response;
+      try {
+        response = await fetch(`${tenantAppointmentAvailabilityEndpoint}?${params.toString()}`, {
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+      } catch (error) {
+        proAppointmentSlotSelect.innerHTML = '<option value="">No se pudo consultar la disponibilidad</option>';
+        if (proAppointmentSlotNote) {
+          proAppointmentSlotNote.textContent = 'Verifica tu conexión e intenta nuevamente.';
+        }
+        return;
+      }
+
+      if (!response.ok) {
+        proAppointmentSlotSelect.innerHTML = '<option value="">No se pudo consultar la disponibilidad</option>';
+        if (proAppointmentSlotNote) {
+          proAppointmentSlotNote.textContent = 'No fue posible cargar los horarios.';
+        }
+        return;
+      }
+
+      let payload = {};
+      try {
+        payload = await response.json();
+      } catch (error) {
+        payload = {};
+      }
+
+      const slots = Array.isArray(payload.slots) ? payload.slots : [];
+      proAppointmentSlotSelect.innerHTML = [
+        '<option value="">Selecciona una hora</option>',
+        ...slots.map(slot => `<option value="${escapeHtml(slot.start || '')}">${escapeHtml(slot.label || `${slot.start || ''} - ${slot.end || ''}`)}</option>`),
+      ].join('');
+
+      if (proAppointmentSlotNote) {
+        proAppointmentSlotNote.textContent = slots.length > 0
+          ? `${slots.length} horario(s) disponible(s).`
+          : 'No hay horarios disponibles para los datos seleccionados.';
+      }
+    }
+
+    function syncAppointmentProfessionalByService() {
+      if (!isAppointmentCheckoutActive()) {
+        return;
+      }
+
+      const selectedOption = proAppointmentServiceSelect?.selectedOptions?.[0] || null;
+      const assignedUserId = Number(selectedOption?.dataset?.assignedUserId || 0);
+
+      if (!proAppointmentUserSelect) {
+        return;
+      }
+
+      if (assignedUserId > 0) {
+        proAppointmentUserSelect.value = String(assignedUserId);
+        proAppointmentUserSelect.disabled = true;
+      } else {
+        proAppointmentUserSelect.disabled = false;
+      }
+    }
+
+    function syncAppointmentPaymentModeUi() {
+      const onSite = isAppointmentOnSitePayment();
+
+      if (proPaymentStepNote) {
+        proPaymentStepNote.textContent = onSite
+          ? 'Confirmarás el pedido sin pago en línea.'
+          : 'Agrega tu pago con referencia y comprobante.';
+      }
+
+      proOnSitePaymentNote?.classList.toggle('d-none', !onSite);
+      document.getElementById('tenant-pro-payment-rows')?.classList.toggle('d-none', onSite);
+      document.getElementById('tenant-pro-add-payment-row')?.classList.toggle('d-none', onSite);
+    }
+
     function validateCheckoutStepOne() {
+      if (isAppointmentCheckoutActive()) {
+        const serviceId = Number(proAppointmentServiceSelect?.value || 0);
+        const userId = Number(proAppointmentUserSelect?.value || 0);
+        const date = String(proAppointmentDateInput?.value || '').trim();
+        const startTime = String(proAppointmentSlotSelect?.value || '').trim();
+
+        if (serviceId <= 0) {
+          alert('Debes seleccionar un servicio para la cita.');
+          return false;
+        }
+
+        if (userId <= 0) {
+          alert('Debes seleccionar un profesional para la cita.');
+          return false;
+        }
+
+        if (!date) {
+          alert('Debes seleccionar una fecha para la cita.');
+          return false;
+        }
+
+        if (!startTime) {
+          alert('Debes seleccionar una hora disponible para la cita.');
+          return false;
+        }
+
+        return true;
+      }
+
       const deliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
       if (!['delivery', 'shipping'].includes(deliveryType)) {
         return true;
@@ -3297,14 +3593,27 @@
       proElectronicInvoicingEnabled = !!methodsData.electronic_invoicing_enabled;
       proSpecialTaxpayer = !!methodsData.special_taxpayer;
 
-      if (methods.length === 0) {
+      await loadAppointmentCheckoutAvailability();
+
+      if (methods.length === 0 && !isAppointmentCheckoutActive()) {
         alert('Esta tienda no tiene métodos de pago activos para checkout.');
         return;
       }
 
-      if (!proBaseRate || proBaseRate <= 0) {
+      if ((!proBaseRate || proBaseRate <= 0) && !isAppointmentCheckoutActive()) {
         alert(`La tienda no tiene tasa configurada para ${proBaseCurrency}. Contacta al comercio.`);
         return;
+      }
+
+      if (isAppointmentCheckoutActive() && proAppointmentPaymentModeSelect) {
+        const onlineOption = proAppointmentPaymentModeSelect.querySelector('option[value="online"]');
+        if (onlineOption) {
+          onlineOption.disabled = methods.length === 0;
+        }
+
+        if (methods.length === 0) {
+          proAppointmentPaymentModeSelect.value = 'on_site';
+        }
       }
 
       applyUserLocationToShippingForm(user, proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
@@ -3312,6 +3621,10 @@
       paymentRowsContainer.innerHTML = '';
       let rowCounter = 0;
       const addPaymentRow = () => {
+        if (!Array.isArray(methods) || methods.length === 0) {
+          return;
+        }
+
         rowCounter += 1;
         paymentRowsContainer.insertAdjacentHTML('beforeend', createPaymentRowHtml(methods, `row_${rowCounter}`));
         const row = paymentRowsContainer.lastElementChild;
@@ -3321,8 +3634,12 @@
         updateProPaymentSummary();
       };
 
-      addPaymentRow();
-      addPaymentRowButton.onclick = addPaymentRow;
+      if (methods.length > 0) {
+        addPaymentRow();
+        addPaymentRowButton.onclick = addPaymentRow;
+      } else {
+        addPaymentRowButton.onclick = null;
+      }
 
       paymentRowsContainer.onclick = (event) => {
         const removeBtn = event.target.closest('.pro-remove-payment-row');
@@ -3392,6 +3709,7 @@
       const initialDeliveryContext = getTenantDeliveryContext(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup', proShippingDistanceInput, false);
       totalAmountElement.textContent = `${(getSubtotal(cart) + Number(initialDeliveryContext.fee || 0)).toFixed(2)} ${getBaseCurrencySymbol()}`;
       updateProPaymentSummary();
+      syncAppointmentPaymentModeUi();
 
       showCheckoutState();
 
@@ -3481,8 +3799,34 @@
         return;
       }
 
-      const deliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
-      const deliveryAddressResult = buildAddressForDeliveryType(deliveryType, {
+      const appointmentModeActive = isAppointmentCheckoutActive();
+      const appointmentPaymentMode = String(proAppointmentPaymentModeSelect?.value || 'online');
+      const requiresOnlinePayment = !appointmentModeActive || appointmentPaymentMode === 'online';
+
+      let selectedAppointmentServiceId = null;
+      let selectedAppointmentUserId = null;
+      let selectedAppointmentDate = '';
+      let selectedAppointmentStartTime = '';
+
+      if (appointmentModeActive) {
+        selectedAppointmentServiceId = Number(proAppointmentServiceSelect?.value || 0);
+        selectedAppointmentUserId = Number(proAppointmentUserSelect?.value || 0);
+        selectedAppointmentDate = String(proAppointmentDateInput?.value || '').trim();
+        selectedAppointmentStartTime = String(proAppointmentSlotSelect?.value || '').trim();
+
+        if (selectedAppointmentServiceId <= 0 || selectedAppointmentUserId <= 0 || !selectedAppointmentDate || !selectedAppointmentStartTime) {
+          alert('Debes completar servicio, profesional, fecha y hora de la cita antes de confirmar.');
+          return;
+        }
+      }
+
+      const deliveryType = appointmentModeActive
+        ? 'pickup'
+        : (document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
+
+      const deliveryAddressResult = appointmentModeActive
+        ? { valid: true, cityId: null, address: 'Tienda', latitude: null, longitude: null }
+        : buildAddressForDeliveryType(deliveryType, {
         countrySelect: proShippingCountrySelect,
         stateSelect: proShippingStateSelect,
         citySelect: proShippingCitySelect,
@@ -3494,12 +3838,15 @@
         extraInfoInput: proDeliveryExtraInfoInput,
       });
 
-      if (['delivery', 'shipping'].includes(deliveryType) && !deliveryAddressResult.valid) {
+      if (!appointmentModeActive && ['delivery', 'shipping'].includes(deliveryType) && !deliveryAddressResult.valid) {
         alert(deliveryAddressResult.message);
         return;
       }
 
-      const proDeliveryContext = getTenantDeliveryContext(deliveryType, proShippingDistanceInput, true);
+      const proDeliveryContext = appointmentModeActive
+        ? getTenantDeliveryContext('pickup', proShippingDistanceInput, false)
+        : getTenantDeliveryContext(deliveryType, proShippingDistanceInput, true);
+
       if (!proDeliveryContext.valid) {
         alert(proDeliveryContext.message || 'Debes completar la información del delivery.');
         return;
@@ -3507,17 +3854,19 @@
 
       const paymentRows = Array.from(document.querySelectorAll('[data-pro-payment-row]'));
 
-      const totalProofBytes = paymentRows.reduce((sum, row) => {
-        const imageFile = row.querySelector('.pro-payment-reference-image')?.files?.[0] || null;
-        return sum + Number(imageFile?.size || 0);
-      }, 0);
+      const totalProofBytes = requiresOnlinePayment
+        ? paymentRows.reduce((sum, row) => {
+            const imageFile = row.querySelector('.pro-payment-reference-image')?.files?.[0] || null;
+            return sum + Number(imageFile?.size || 0);
+          }, 0)
+        : 0;
 
-      if (totalProofBytes > PRO_PAYMENT_SAFE_TOTAL_BYTES) {
+      if (requiresOnlinePayment && totalProofBytes > PRO_PAYMENT_SAFE_TOTAL_BYTES) {
         alert(`Las imágenes de comprobante pesan ${formatBytesToMb(totalProofBytes)} en total. Reduce el total por debajo de ${formatBytesToMb(PRO_PAYMENT_SAFE_TOTAL_BYTES)} para evitar error 413.`);
         return;
       }
 
-      const payments = (await Promise.all(paymentRows.map(async row => {
+      const payments = requiresOnlinePayment ? (await Promise.all(paymentRows.map(async row => {
         const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
         const amountRaw = parseProPaymentAmountValue(row.querySelector('.pro-payment-amount')?.value || 0);
         const method = getMethodById(methodId);
@@ -3534,14 +3883,14 @@
           reference_image_data: referenceImageData,
           reference_image_mime: imageFile?.type || null,
         };
-      }))).filter(payment => payment.method_id > 0 && payment.amount > 0);
+      }))).filter(payment => payment.method_id > 0 && payment.amount > 0) : [];
 
-      if (payments.length === 0) {
+      if (requiresOnlinePayment && payments.length === 0) {
         alert('Debes agregar al menos un pago válido.');
         return;
       }
 
-      const hasMissingReference = payments.some(payment => {
+      const hasMissingReference = requiresOnlinePayment && payments.some(payment => {
         const method = getMethodById(payment.method_id);
         return !!method?.has_reference && !String(payment.reference || '').trim();
       });
@@ -3550,7 +3899,7 @@
         return;
       }
 
-      const hasMissingProofImage = payments.some(payment => {
+      const hasMissingProofImage = requiresOnlinePayment && payments.some(payment => {
         const method = getMethodById(payment.method_id);
         return !!method?.has_reference && !String(payment.reference_image_data || '').trim();
       });
@@ -3559,14 +3908,16 @@
         return;
       }
 
-      const totalPaidBase = roundProMoney(payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
-      const totalOrderBaseWithoutIgtf = getSubtotal(cart) + Number(proDeliveryContext.fee || 0);
-      const igtfTotals = calculateProIgtfTotals(paymentRows, totalOrderBaseWithoutIgtf);
-      const totalOrderBase = roundProMoney(igtfTotals.totalWithIgtf);
-      if (totalPaidBase + 0.0001 < totalOrderBase) {
-        const remainingBase = roundProMoney(totalOrderBase - totalPaidBase);
-        alert(`Falta por pagar: ${remainingBase.toFixed(2)} ${getBaseCurrencySymbol()} / ${(remainingBase * proBaseRate).toFixed(2)} Bs`);
-        return;
+      if (requiresOnlinePayment) {
+        const totalPaidBase = roundProMoney(payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
+        const totalOrderBaseWithoutIgtf = getSubtotal(cart) + Number(proDeliveryContext.fee || 0);
+        const igtfTotals = calculateProIgtfTotals(paymentRows, totalOrderBaseWithoutIgtf);
+        const totalOrderBase = roundProMoney(igtfTotals.totalWithIgtf);
+        if (totalPaidBase + 0.0001 < totalOrderBase) {
+          const remainingBase = roundProMoney(totalOrderBase - totalPaidBase);
+          alert(`Falta por pagar: ${remainingBase.toFixed(2)} ${getBaseCurrencySymbol()} / ${(remainingBase * proBaseRate).toFixed(2)} Bs`);
+          return;
+        }
       }
 
       const items = cart.map(item => ({
@@ -3601,6 +3952,12 @@
             mark_delivered: false,
             mark_payments_paid: false,
             mark_sale_completed: false,
+            appointment_mode: appointmentModeActive,
+            appointment_service_id: appointmentModeActive ? selectedAppointmentServiceId : null,
+            appointment_user_id: appointmentModeActive ? selectedAppointmentUserId : null,
+            appointment_date: appointmentModeActive ? selectedAppointmentDate : null,
+            appointment_start_time: appointmentModeActive ? selectedAppointmentStartTime : null,
+            appointment_payment_mode: appointmentModeActive ? appointmentPaymentMode : null,
           })
         });
       } catch (error) {
@@ -3766,8 +4123,31 @@
     }
 
     if (cartEnabled) {
+      proAppointmentServiceSelect?.addEventListener('change', async () => {
+        syncAppointmentProfessionalByService();
+        await refreshAppointmentSlots();
+      });
+
+      proAppointmentUserSelect?.addEventListener('change', async () => {
+        await refreshAppointmentSlots();
+      });
+
+      proAppointmentDateInput?.addEventListener('change', async () => {
+        await refreshAppointmentSlots();
+      });
+
+      proAppointmentPaymentModeSelect?.addEventListener('change', () => {
+        syncAppointmentPaymentModeUi();
+        updateProPaymentSummary();
+      });
+
       document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach(input => {
         input.addEventListener('change', () => {
+          if (isAppointmentCheckoutActive()) {
+            updateProPaymentSummary();
+            return;
+          }
+
           const currentType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
           const isAddressRequired = ['delivery', 'shipping'].includes(currentType);
           const isStoreDelivery = currentType === 'delivery';

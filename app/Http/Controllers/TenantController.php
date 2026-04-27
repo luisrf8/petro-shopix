@@ -22,6 +22,8 @@ use App\Models\PaymentMethod;
 use App\Models\Currency;
 use App\Models\PaymentImage;
 use App\Models\ProductVariant;
+use App\Models\Appointment;
+use App\Models\AppointmentService;
 use App\Models\SalesOrder;
 use App\Models\SalesOrderDetail;
 use App\Models\Payment;
@@ -1945,7 +1947,7 @@ class TenantController extends Controller
         try {
             $validated = $request->validate([
                 'customer_id' => 'required|exists:users,id',
-                'delivery_type' => 'required|in:pickup,delivery,shipping',
+                'delivery_type' => 'nullable|in:pickup,delivery,shipping',
                 'delivery_address' => 'nullable|string|max:500',
                 'delivery_city_id' => 'nullable|integer|exists:cities,id',
                 'delivery_distance_km' => 'nullable|numeric|min:0',
@@ -1954,11 +1956,17 @@ class TenantController extends Controller
                 'mark_delivered' => 'nullable|boolean',
                 'mark_payments_paid' => 'nullable|boolean',
                 'mark_sale_completed' => 'nullable|boolean',
+                'appointment_mode' => 'nullable|boolean',
+                'appointment_service_id' => 'nullable|integer|exists:appointment_services,id',
+                'appointment_user_id' => 'nullable|integer|exists:users,id',
+                'appointment_date' => 'nullable|date',
+                'appointment_start_time' => 'nullable|date_format:H:i',
+                'appointment_payment_mode' => 'nullable|in:online,on_site',
                 'items' => 'required|array|min:1',
                 'items.*.variant_id' => 'required|integer|exists:product_variants,id',
                 'items.*.quantity' => 'required|integer|min:1',
                 'items.*.unit_price' => 'nullable|numeric|min:0.01',
-                'payments' => 'required|array|min:1',
+                'payments' => 'nullable|array',
                 'payments.*.method_id' => 'required|integer|exists:payment_methods,id',
                 'payments.*.amount' => 'required|numeric|min:0.01',
                 'payments.*.reference' => 'nullable|string|max:255',
@@ -1966,28 +1974,123 @@ class TenantController extends Controller
                 'payments.*.reference_image_mime' => 'nullable|string|max:100',
             ]);
 
-            if (in_array($validated['delivery_type'], ['delivery', 'shipping'], true) && empty(trim((string) ($validated['delivery_address'] ?? '')))) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'La dirección es obligatoria para delivery o envío.',
-                ], 422);
+            $customerBelongsToTenant = User::query()
+                ->where('tenant_id', (int) $tenant->id)
+                ->whereKey((int) $validated['customer_id'])
+                ->exists();
+
+            if (!$customerBelongsToTenant) {
+                throw new \RuntimeException('El cliente seleccionado no pertenece a esta tienda.');
             }
 
-            if ($validated['delivery_type'] === 'delivery' && (bool) ($tenant->restrict_delivery_city_to_tenant ?? true)) {
-                $deliveryCityId = (int) ($validated['delivery_city_id'] ?? 0);
-                $shippingCityValidation = $this->validateShippingCityAgainstTenant($tenant, $deliveryCityId);
+            $appointmentModeSupported = $this->tenantSupportsPublicAppointmentCheckout($tenant);
+            $isAppointmentOrder = $appointmentModeSupported && (bool) ($validated['appointment_mode'] ?? false);
+            $appointmentPaymentMode = 'online';
+            $appointmentService = null;
+            $appointmentProfessional = null;
+            $appointmentDate = null;
+            $appointmentStartTime = null;
 
-                if (!($shippingCityValidation['ok'] ?? false)) {
+            if ($isAppointmentOrder) {
+                $appointmentServiceId = (int) ($validated['appointment_service_id'] ?? 0);
+                $appointmentUserId = (int) ($validated['appointment_user_id'] ?? 0);
+                $appointmentDateRaw = trim((string) ($validated['appointment_date'] ?? ''));
+                $appointmentStartRaw = trim((string) ($validated['appointment_start_time'] ?? ''));
+                $appointmentPaymentMode = (string) ($validated['appointment_payment_mode'] ?? 'online');
+
+                if ($appointmentServiceId <= 0 || $appointmentUserId <= 0 || $appointmentDateRaw === '' || $appointmentStartRaw === '') {
+                    throw new \RuntimeException('Debes seleccionar servicio, profesional, fecha y hora para programar tu cita.');
+                }
+
+                $appointmentService = AppointmentService::query()
+                    ->where('tenant_id', (int) $tenant->id)
+                    ->where('is_active', true)
+                    ->whereKey($appointmentServiceId)
+                    ->first();
+
+                if (!$appointmentService) {
+                    throw new \RuntimeException('El servicio de cita seleccionado no está disponible.');
+                }
+
+                $appointmentProfessional = $this->publicAppointmentUsersQuery((int) $tenant->id)
+                    ->whereKey($appointmentUserId)
+                    ->first();
+
+                if (!$appointmentProfessional) {
+                    throw new \RuntimeException('El profesional seleccionado no está disponible para citas.');
+                }
+
+                if ($appointmentService->user_id && (int) $appointmentService->user_id !== (int) $appointmentProfessional->id) {
+                    throw new \RuntimeException('Este servicio está asignado a otro profesional.');
+                }
+
+                $appointmentDate = Carbon::parse($appointmentDateRaw)->startOfDay();
+                $appointmentStartTime = $appointmentStartRaw;
+
+                $availableSlots = collect($this->buildPublicAppointmentSlots(
+                    (int) $tenant->id,
+                    $appointmentProfessional,
+                    $appointmentService,
+                    $appointmentDate
+                ));
+
+                if (!$availableSlots->firstWhere('start', $appointmentStartTime)) {
+                    throw new \RuntimeException('La hora seleccionada ya no está disponible para ese profesional.');
+                }
+
+                $containsServiceVariant = collect($validated['items'])->contains(function ($item) use ($appointmentService) {
+                    return (int) ($item['variant_id'] ?? 0) === (int) ($appointmentService->product_variant_id ?? 0);
+                });
+
+                if (!$containsServiceVariant) {
+                    throw new \RuntimeException('Debes incluir en el carrito el producto asociado al servicio que deseas agendar.');
+                }
+
+                $validated['delivery_type'] = 'pickup';
+                $validated['delivery_address'] = 'Tienda';
+                $validated['delivery_city_id'] = null;
+                $validated['delivery_distance_km'] = null;
+                $validated['delivery_latitude'] = null;
+                $validated['delivery_longitude'] = null;
+            }
+
+            if (!$isAppointmentOrder) {
+                $validated['delivery_type'] = (string) ($validated['delivery_type'] ?? 'pickup');
+
+                if (!in_array($validated['delivery_type'], ['pickup', 'delivery', 'shipping'], true)) {
+                    throw new \RuntimeException('Debes seleccionar un tipo de entrega válido.');
+                }
+
+                if (in_array($validated['delivery_type'], ['delivery', 'shipping'], true) && empty(trim((string) ($validated['delivery_address'] ?? '')))) {
                     return response()->json([
                         'success' => false,
-                        'message' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la tienda.'),
+                        'message' => 'La dirección es obligatoria para delivery o envío.',
                     ], 422);
                 }
+
+                if ($validated['delivery_type'] === 'delivery' && (bool) ($tenant->restrict_delivery_city_to_tenant ?? true)) {
+                    $deliveryCityId = (int) ($validated['delivery_city_id'] ?? 0);
+                    $shippingCityValidation = $this->validateShippingCityAgainstTenant($tenant, $deliveryCityId);
+
+                    if (!($shippingCityValidation['ok'] ?? false)) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la tienda.'),
+                        ], 422);
+                    }
+                }
+            }
+
+            $requiresOnlinePayment = !$isAppointmentOrder || $appointmentPaymentMode === 'online';
+            $validated['payments'] = is_array($validated['payments'] ?? null) ? array_values($validated['payments']) : [];
+
+            if ($requiresOnlinePayment && count($validated['payments']) === 0) {
+                throw new \RuntimeException('Debes agregar al menos un pago válido.');
             }
 
             foreach ($validated['payments'] as $paymentIndex => $paymentData) {
                 $method = PaymentMethod::with('currency')
-                    ->where('tenant_id', $tenant->id)
+                    ->where('tenant_id', (int) $tenant->id)
                     ->active()
                     ->find($paymentData['method_id']);
 
@@ -2015,33 +2118,38 @@ class TenantController extends Controller
                 $validated['payments'][$paymentIndex]['reference_image_data'] = $requiresReference ? $referenceImageData : null;
             }
 
+            if (!$requiresOnlinePayment) {
+                $validated['payments'] = [];
+            }
+
             $address = $validated['delivery_type'] !== 'pickup'
-                ? trim((string) $validated['delivery_address'])
+                ? trim((string) ($validated['delivery_address'] ?? ''))
                 : 'Tienda';
 
             $markDelivered = (bool) ($validated['mark_delivered'] ?? false);
             $markPaymentsPaid = (bool) ($validated['mark_payments_paid'] ?? false);
             $markSaleCompleted = (bool) ($validated['mark_sale_completed'] ?? false);
             $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
-            $tenantElectronicInvoicingEnabled = (bool) ($tenant->electronic_invoicing_enabled ?? false);
             $igtfRate = $this->shouldApplyIgtfForTenant($tenant) ? $this->resolveIgtfRate() : 0;
             $deliveryDistanceKm = isset($validated['delivery_distance_km']) ? (float) $validated['delivery_distance_km'] : null;
 
-            $preference = match ($validated['delivery_type']) {
-                'delivery' => 'Delivery tienda',
-                'shipping' => 'Envío externo',
-                default => 'Retiro en tienda',
-            };
+            $preference = $isAppointmentOrder
+                ? 'Cita programada'
+                : match ($validated['delivery_type']) {
+                    'delivery' => 'Delivery tienda',
+                    'shipping' => 'Envío externo',
+                    default => 'Retiro en tienda',
+                };
 
-            $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted, $baseCurrencyCode, $tenantElectronicInvoicingEnabled, $igtfRate, $deliveryDistanceKm) {
+            $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted, $baseCurrencyCode, $igtfRate, $deliveryDistanceKm, $isAppointmentOrder, $appointmentService, $appointmentProfessional, $appointmentDate, $appointmentStartTime, $appointmentPaymentMode, $requiresOnlinePayment) {
                 $salesOrder = SalesOrder::create([
-                    'user_id' => $validated['customer_id'],
+                    'user_id' => (int) $validated['customer_id'],
                     'date' => now()->toDateString(),
                     'status' => $markSaleCompleted ? 1 : 0,
                     'address' => $address,
                     'preference' => $preference,
                     'deliver_status' => $markDelivered ? 1 : 0,
-                    'tenant_id' => $tenant->id,
+                    'tenant_id' => (int) $tenant->id,
                     'sale_currency_code' => $baseCurrencyCode,
                     'delivery_latitude' => $validated['delivery_type'] !== 'pickup' && isset($validated['delivery_latitude'])
                         ? (float) $validated['delivery_latitude']
@@ -2051,29 +2159,29 @@ class TenantController extends Controller
                         : null,
                 ]);
 
-                $orderTotal = 0;
+                $orderTotal = 0.0;
 
                 foreach ($validated['items'] as $item) {
-                    $variant = ProductVariant::with('product')->findOrFail($item['variant_id']);
+                    $variant = ProductVariant::with('product')->findOrFail((int) $item['variant_id']);
 
-                if ((int) $variant->product->tenant_id !== (int) $tenant->id) {
-                    throw new \RuntimeException('Uno de los productos no pertenece a esta tienda.');
-                }
+                    if ((int) $variant->product->tenant_id !== (int) $tenant->id) {
+                        throw new \RuntimeException('Uno de los productos no pertenece a esta tienda.');
+                    }
 
-                if ((int) $variant->stock < (int) $item['quantity']) {
-                    throw new \RuntimeException('Stock insuficiente para una de las variantes seleccionadas.');
-                }
+                    if ((int) $variant->stock < (int) $item['quantity']) {
+                        throw new \RuntimeException('Stock insuficiente para una de las variantes seleccionadas.');
+                    }
 
-                $variantEffectivePrice = $this->getVariantDiscountedUnitPrice($variant);
-                $providedUnitPrice = isset($item['unit_price']) ? (float) $item['unit_price'] : $variantEffectivePrice;
-                $unitPrice = min($variantEffectivePrice, $providedUnitPrice);
+                    $variantEffectivePrice = $this->getVariantDiscountedUnitPrice($variant);
+                    $providedUnitPrice = isset($item['unit_price']) ? (float) $item['unit_price'] : $variantEffectivePrice;
+                    $unitPrice = min($variantEffectivePrice, $providedUnitPrice);
 
-                $lineAmount = $unitPrice * (int) $item['quantity'];
-                $orderTotal += $lineAmount;
+                    $lineAmount = $unitPrice * (int) $item['quantity'];
+                    $orderTotal += $lineAmount;
 
                     SalesOrderDetail::create([
-                        'sales_order_id' => $salesOrder->id,
-                        'product_variant_id' => $variant->id,
+                        'sales_order_id' => (int) $salesOrder->id,
+                        'product_variant_id' => (int) $variant->id,
                         'quantity' => (int) $item['quantity'],
                         'price' => $unitPrice,
                         'amount' => $lineAmount,
@@ -2083,17 +2191,22 @@ class TenantController extends Controller
                     $variant->save();
                 }
 
-                $totalPaid = 0;
-                $directBaseCurrencyPayments = 0;
+                $totalPaid = 0.0;
+                $directBaseCurrencyPayments = 0.0;
+                $firstPaymentMethod = null;
 
                 foreach ($validated['payments'] as $paymentData) {
                     $method = PaymentMethod::with('currency')
                         ->active()
-                        ->findOrFail($paymentData['method_id']);
+                        ->findOrFail((int) $paymentData['method_id']);
 
-                if ((int) $method->tenant_id !== (int) $tenant->id) {
-                    throw new \RuntimeException('Uno de los métodos de pago no pertenece a esta tienda.');
-                }
+                    if ((int) $method->tenant_id !== (int) $tenant->id) {
+                        throw new \RuntimeException('Uno de los métodos de pago no pertenece a esta tienda.');
+                    }
+
+                    if (!$firstPaymentMethod) {
+                        $firstPaymentMethod = $method;
+                    }
 
                     $amount = (float) $paymentData['amount'];
                     $totalPaid += $amount;
@@ -2107,8 +2220,8 @@ class TenantController extends Controller
                     }
 
                     $payment = Payment::create([
-                        'sales_order_id' => $salesOrder->id,
-                        'payment_method' => $method->id,
+                        'sales_order_id' => (int) $salesOrder->id,
+                        'payment_method' => (int) $method->id,
                         'amount' => $amount,
                         'currency' => $method->currency->code ?? $method->currency->name ?? 'USD',
                         'reference' => $paymentData['reference'] ?? null,
@@ -2130,8 +2243,37 @@ class TenantController extends Controller
 
                 $requiredTotal = $orderTotal + (float) $salesOrder->delivery_fee + $igtfAmount;
 
-                if ($totalPaid + 0.0001 < $requiredTotal) {
+                if ($requiresOnlinePayment && $totalPaid + 0.0001 < $requiredTotal) {
                     throw new \RuntimeException('El total pagado es menor al total del pedido.');
+                }
+
+                if ($isAppointmentOrder && $appointmentService && $appointmentProfessional && $appointmentDate && $appointmentStartTime) {
+                    $appointmentStartAt = Carbon::parse($appointmentDate->toDateString() . ' ' . $appointmentStartTime);
+                    $appointmentEndAt = (clone $appointmentStartAt)->addMinutes(max(15, (int) ($appointmentService->duration_minutes ?? 60)));
+                    $customer = User::query()->findOrFail((int) $validated['customer_id']);
+
+                    Appointment::create([
+                        'tenant_id' => (int) $tenant->id,
+                        'appointment_service_id' => (int) $appointmentService->id,
+                        'user_id' => (int) $appointmentProfessional->id,
+                        'customer_id' => (int) $customer->id,
+                        'contact_name' => (string) ($customer->name ?? ''),
+                        'contact_phone' => (string) ($customer->phone_number ?? ''),
+                        'starts_at' => $appointmentStartAt,
+                        'ends_at' => $appointmentEndAt,
+                        'status' => 'scheduled',
+                        'payment_method_id' => $firstPaymentMethod?->id,
+                        'paid_amount' => $requiresOnlinePayment ? $totalPaid : null,
+                        'payment_currency' => $firstPaymentMethod?->currency?->code,
+                        'payment_reference' => null,
+                        'payment_status' => $requiresOnlinePayment
+                            ? (($totalPaid + 0.0001 >= $requiredTotal) ? 'paid' : 'partial')
+                            : 'pending',
+                        'source' => 'landing',
+                        'notes' => $appointmentPaymentMode === 'on_site'
+                            ? 'Cita agendada desde landing. Pago en el lugar.'
+                            : 'Cita agendada desde landing. Pago en línea.',
+                    ]);
                 }
 
                 return $salesOrder;
@@ -2175,6 +2317,72 @@ class TenantController extends Controller
                 'message' => 'No se pudo completar el pedido en este momento.',
             ], 500);
         }
+    }
+
+    public function publicTenantAppointmentAvailability(Request $request, Tenant $tenant)
+    {
+        $this->abortIfTenantInactiveForPublic($tenant);
+
+        if (!$this->tenantSupportsPublicAppointmentCheckout($tenant)) {
+            return response()->json([
+                'success' => false,
+                'enabled' => false,
+                'message' => 'La gestión de citas no está habilitada para esta tienda.',
+            ], 200);
+        }
+
+        $services = $this->publicAppointmentServicesQuery((int) $tenant->id)
+            ->get()
+            ->map(function (AppointmentService $service) {
+                return [
+                    'id' => (int) $service->id,
+                    'name' => (string) $service->display_name,
+                    'duration_minutes' => (int) ($service->duration_minutes ?? 60),
+                    'assigned_user_id' => $service->user_id ? (int) $service->user_id : null,
+                    'product_variant_id' => $service->product_variant_id ? (int) $service->product_variant_id : null,
+                ];
+            })
+            ->values();
+
+        $professionals = $this->publicAppointmentUsersQuery((int) $tenant->id)
+            ->get(['id', 'name'])
+            ->map(fn (User $user) => [
+                'id' => (int) $user->id,
+                'name' => (string) $user->name,
+            ])
+            ->values();
+
+        $serviceId = (int) $request->query('service_id', 0);
+        $userId = (int) $request->query('user_id', 0);
+        $date = trim((string) $request->query('date', ''));
+
+        $slots = [];
+        if ($serviceId > 0 && $userId > 0 && $date !== '') {
+            $service = $this->publicAppointmentServicesQuery((int) $tenant->id)
+                ->whereKey($serviceId)
+                ->first();
+            $professional = $this->publicAppointmentUsersQuery((int) $tenant->id)
+                ->whereKey($userId)
+                ->first();
+
+            if ($service && $professional) {
+                if ($service->user_id && (int) $service->user_id !== (int) $professional->id) {
+                    $slots = [];
+                } else {
+                    $selectedDate = Carbon::parse($date)->startOfDay();
+                    $slots = $this->buildPublicAppointmentSlots((int) $tenant->id, $professional, $service, $selectedDate);
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'enabled' => true,
+            'services' => $services,
+            'professionals' => $professionals,
+            'slots' => $slots,
+            'today' => now()->toDateString(),
+        ]);
     }
 
     private function storePaymentReferenceImageFromPayload(Payment $payment, ?string $base64Image, ?string $mimeType = null): void
@@ -2354,6 +2562,95 @@ class TenantController extends Controller
             ->map(fn ($id) => (int) $id)
             ->values()
             ->all();
+    }
+
+    private function tenantSupportsPublicAppointmentCheckout(Tenant $tenant): bool
+    {
+        $isServiceBusiness = Str::lower(trim((string) ($tenant->business_type ?? ''))) === 'servicio';
+
+        return $isServiceBusiness && TenantPlanCapabilities::forTenant($tenant)->canAppointments();
+    }
+
+    private function publicAppointmentServicesQuery(int $tenantId)
+    {
+        return AppointmentService::query()
+            ->with(['assignedUser:id,name', 'productVariant.product'])
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->orderBy('name');
+    }
+
+    private function publicAppointmentUsersQuery(int $tenantId)
+    {
+        return User::query()
+            ->with('role')
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', 1)
+            ->where(function ($query) {
+                $query->whereNull('role_id')
+                    ->orWhereHas('role', function ($roleQuery) {
+                        $roleQuery->whereNotIn(DB::raw('LOWER(name)'), ['user', 'cliente', 'customer', 'super_user', 'super user']);
+                    });
+            })
+            ->orderBy('name');
+    }
+
+    private function buildPublicAppointmentSlots(int $tenantId, User $professional, AppointmentService $service, Carbon $selectedDate): array
+    {
+        if ($service->user_id && (int) $service->user_id !== (int) $professional->id) {
+            return [];
+        }
+
+        $rules = UserScheduleRule::query()
+            ->where('tenant_id', $tenantId)
+            ->where('user_id', (int) $professional->id)
+            ->where('day_of_week', (int) $selectedDate->dayOfWeek)
+            ->where('is_active', true)
+            ->orderBy('start_time')
+            ->get();
+
+        if ($rules->isEmpty()) {
+            return [];
+        }
+
+        $durationMinutes = max(15, (int) ($service->duration_minutes ?? 60));
+        $bufferMinutes = max(0, (int) ($service->buffer_minutes ?? 0));
+
+        $existingAppointments = Appointment::query()
+            ->where('tenant_id', $tenantId)
+            ->where('user_id', (int) $professional->id)
+            ->whereDate('starts_at', $selectedDate->toDateString())
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->orderBy('starts_at')
+            ->get(['starts_at', 'ends_at']);
+
+        $slots = [];
+        foreach ($rules as $rule) {
+            $interval = max(15, (int) ($rule->slot_interval_minutes ?: $durationMinutes));
+            $cursor = Carbon::parse($selectedDate->toDateString() . ' ' . $rule->start_time);
+            $windowEnd = Carbon::parse($selectedDate->toDateString() . ' ' . $rule->end_time);
+
+            while ($cursor->copy()->addMinutes($durationMinutes) <= $windowEnd) {
+                $slotStart = $cursor->copy();
+                $slotEnd = $cursor->copy()->addMinutes($durationMinutes + $bufferMinutes);
+
+                $hasConflict = $existingAppointments->contains(function (Appointment $appointment) use ($slotStart, $slotEnd) {
+                    return $slotStart < $appointment->ends_at && $slotEnd > $appointment->starts_at;
+                });
+
+                if (!$hasConflict && $slotStart >= now()->subMinute()) {
+                    $slots[] = [
+                        'start' => $slotStart->format('H:i'),
+                        'end' => $slotStart->copy()->addMinutes($durationMinutes)->format('H:i'),
+                        'label' => $slotStart->format('H:i') . ' - ' . $slotStart->copy()->addMinutes($durationMinutes)->format('H:i'),
+                    ];
+                }
+
+                $cursor->addMinutes($interval);
+            }
+        }
+
+        return array_values(array_unique($slots, SORT_REGULAR));
     }
 
     private function tenantHasProPlan(Tenant $tenant): bool

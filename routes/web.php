@@ -334,6 +334,7 @@ Route::get('/csrf-token', function () {
 Route::get('/{tenant:slug}', [TenantController::class, 'publicTenantindex'])->name('tenant.public');
 Route::get('/{tenant:slug}/categorias', [TenantController::class, 'publicTenantCategory'])->name('tenant.public.categories');
 Route::get('/{tenant:slug}/payment-methods', [TenantController::class, 'publicTenantPaymentMethods'])->name('tenant.public.paymentMethods');
+Route::get('/{tenant:slug}/appointments/public-availability', [TenantController::class, 'publicTenantAppointmentAvailability'])->name('tenant.public.appointments.availability');
 Route::post('/{tenant:slug}/checkout/pro', [TenantController::class, 'publicTenantProCheckout'])->name('tenant.public.proCheckout');
 Route::post('/{tenant:slug}/scan-code', [TenantController::class, 'publicTenantResolveScanCode'])->name('tenant.public.scanCode');
 Route::get('/{tenant:slug}/{product}', [TenantController::class, 'publicTenantProduct'])->name('tenant.public.product');
