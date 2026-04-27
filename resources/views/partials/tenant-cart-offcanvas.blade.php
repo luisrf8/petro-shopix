@@ -940,7 +940,7 @@
             <div class="tenant-pro-step-shell" id="tenant-pro-delivery-step-shell">
               <h6>Tipo de entrega</h6>
               <p class="tenant-pro-step-note">Primero define cómo recibirás tu compra.</p>
-              <div id="tenant-pro-delivery-options">
+              <div>
                 <div class="form-check form-check-inline">
                   <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-pickup" value="pickup" checked>
                   <label class="form-check-label" for="tenant-pro-delivery-pickup">Retiro en tienda</label>
@@ -1312,7 +1312,6 @@
     const proShippingLocationSelectCityWrap = document.getElementById('tenant-pro-shipping-location-selects-city-wrap');
     const proShippingLocationActions = document.getElementById('tenant-pro-shipping-location-actions');
     const proDeliveryStepShell = document.getElementById('tenant-pro-delivery-step-shell');
-    const proDeliveryOptions = document.getElementById('tenant-pro-delivery-options');
     const proAppointmentSection = document.getElementById('tenant-pro-appointment-section');
     const proAppointmentServiceSelect = document.getElementById('tenant-pro-appointment-service');
     const proAppointmentUserSelect = document.getElementById('tenant-pro-appointment-user');
@@ -2542,7 +2541,6 @@
         document.getElementById('tenant-pro-shipping-address-container')?.classList.add('d-none');
       }
 
-      proDeliveryOptions?.classList.toggle('d-none', isAppointment);
       proAppointmentSection?.classList.toggle('d-none', !isAppointment);
       syncAppointmentPaymentModeUi();
     }
@@ -3605,14 +3603,11 @@
         return;
       }
 
-      if (isAppointmentCheckoutActive() && proAppointmentPaymentModeSelect) {
+      if (isAppointmentCheckoutActive() && proAppointmentPaymentModeSelect && methods.length === 0) {
+        proAppointmentPaymentModeSelect.value = 'on_site';
         const onlineOption = proAppointmentPaymentModeSelect.querySelector('option[value="online"]');
         if (onlineOption) {
-          onlineOption.disabled = methods.length === 0;
-        }
-
-        if (methods.length === 0) {
-          proAppointmentPaymentModeSelect.value = 'on_site';
+          onlineOption.disabled = true;
         }
       }
 
