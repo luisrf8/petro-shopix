@@ -1074,9 +1074,21 @@ class AppointmentController extends Controller
 
     private function notifyAppointmentWorkflow(Appointment $appointment, string $action, User $actor, ?string $note = null): void
     {
+        $appointment->loadMissing(['service', 'customer', 'assignedUser']);
+
+        $serviceLabel = (string) (optional($appointment->service)->display_name ?? optional($appointment->service)->name ?? 'Servicio');
+        $customerLabel = (string) ($appointment->contact_name ?: optional($appointment->customer)->name ?: 'Cliente');
+        $startsAt = $appointment->starts_at;
+        $dayLabel = $startsAt ? $startsAt->format('d/m/Y') : 'Sin fecha';
+        $timeLabel = $startsAt ? $startsAt->format('H:i') : '--:--';
+
         $payload = [
             'title' => 'Actualización de cita',
-            'message' => ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio') . ' · ' . $this->workflowActionMessage($action),
+            'message' => 'Servicio: ' . $serviceLabel
+                . ' · Cliente: ' . $customerLabel
+                . ' · Día: ' . $dayLabel
+                . ' · Hora: ' . $timeLabel
+                . ' · ' . $this->workflowActionMessage($action),
             'type' => 'info',
             'tenant_id' => (int) $appointment->tenant_id,
             'order_id' => $appointment->sales_order_id ? (int) $appointment->sales_order_id : null,

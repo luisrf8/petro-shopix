@@ -539,6 +539,45 @@
   </div>
 </div>
 
+<div class="modal fade tenant-modern-modal" id="tenantAppointmentRescheduleModal" tabindex="-1" aria-labelledby="tenantAppointmentRescheduleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="tenantAppointmentRescheduleModalLabel">Reprogramar cita</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body d-flex flex-column gap-3">
+        <div class="tenant-customer-info-shell">
+          <p class="tenant-customer-info-label mb-1">Cita seleccionada</p>
+          <p class="tenant-customer-info-value mb-0" id="tenant-appointment-reschedule-context">-</p>
+        </div>
+
+        <div class="tenant-customer-info-shell">
+          <div class="row g-2 align-items-end">
+            <div class="col-12">
+              <label for="tenant-appointment-reschedule-date" class="tenant-customer-info-label">Día disponible</label>
+              <input type="date" id="tenant-appointment-reschedule-date" class="form-control">
+            </div>
+            <div class="col-12">
+              <label for="tenant-appointment-reschedule-slot" class="tenant-customer-info-label">Hora disponible</label>
+              <select id="tenant-appointment-reschedule-slot" class="form-select">
+                <option value="">Selecciona una hora</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <small class="text-muted d-block" id="tenant-appointment-reschedule-note">Selecciona un día para consultar horarios disponibles.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-dark mb-0" id="tenant-appointment-reschedule-submit">Guardar cambio</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade tenant-modern-modal" id="tenantAuthModal" tabindex="-1" aria-labelledby="tenantAuthModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
@@ -714,6 +753,12 @@
     const ordersModal = document.getElementById('tenantOrdersModal');
     const appointmentsList = document.getElementById('tenant-appointments-list');
     const appointmentsModal = document.getElementById('tenantAppointmentsModal');
+    const appointmentRescheduleModal = document.getElementById('tenantAppointmentRescheduleModal');
+    const appointmentRescheduleContext = document.getElementById('tenant-appointment-reschedule-context');
+    const appointmentRescheduleDateInput = document.getElementById('tenant-appointment-reschedule-date');
+    const appointmentRescheduleSlotSelect = document.getElementById('tenant-appointment-reschedule-slot');
+    const appointmentRescheduleNote = document.getElementById('tenant-appointment-reschedule-note');
+    const appointmentRescheduleSubmitBtn = document.getElementById('tenant-appointment-reschedule-submit');
     const authModal = document.getElementById('tenantAuthModal');
     const authModalLabel = document.getElementById('tenantAuthModalLabel');
     const customerModal = document.getElementById('tenantCustomerModal');
@@ -729,6 +774,8 @@
     const authTriggers = Array.from(document.querySelectorAll('[data-shopix-open-auth]'));
     let tenantToastContainer = document.getElementById('tenant-toast-container');
     let serviceWorkerRegistrationPromise = null;
+    let tenantAppointmentsById = new Map();
+    let rescheduleAppointmentId = 0;
 
     if (notificationsModal && notificationsModal.parentElement !== document.body) {
       document.body.appendChild(notificationsModal);
@@ -740,6 +787,10 @@
 
     if (appointmentsModal && appointmentsModal.parentElement !== document.body) {
       document.body.appendChild(appointmentsModal);
+    }
+
+    if (appointmentRescheduleModal && appointmentRescheduleModal.parentElement !== document.body) {
+      document.body.appendChild(appointmentRescheduleModal);
     }
 
     if (authModal && authModal.parentElement !== document.body) {
@@ -1520,6 +1571,105 @@
       return data;
     }
 
+    function getTodayLocalDateValue() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+
+    async function fetchAppointmentAvailableSlots(token, appointmentId, dateValue) {
+      const params = new URLSearchParams({ date: String(dateValue || '').trim() });
+      const response = await fetch(`/api/user/appointments/${appointmentId}/available-slots?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.success === false) {
+        throw new Error(data?.message || 'No se pudo cargar la disponibilidad de la cita.');
+      }
+
+      return data;
+    }
+
+    async function refreshRescheduleSlots() {
+      if (!currentToken || rescheduleAppointmentId <= 0 || !appointmentRescheduleDateInput || !appointmentRescheduleSlotSelect) {
+        return;
+      }
+
+      const selectedDate = String(appointmentRescheduleDateInput.value || '').trim();
+      if (!selectedDate) {
+        appointmentRescheduleSlotSelect.innerHTML = '<option value="">Selecciona una hora</option>';
+        if (appointmentRescheduleNote) {
+          appointmentRescheduleNote.textContent = 'Selecciona un día para consultar horarios disponibles.';
+        }
+        return;
+      }
+
+      appointmentRescheduleSlotSelect.innerHTML = '<option value="">Cargando horarios...</option>';
+      if (appointmentRescheduleNote) {
+        appointmentRescheduleNote.textContent = 'Consultando disponibilidad...';
+      }
+
+      try {
+        const payload = await fetchAppointmentAvailableSlots(currentToken, rescheduleAppointmentId, selectedDate);
+        const slots = Array.isArray(payload?.slots) ? payload.slots : [];
+
+        appointmentRescheduleSlotSelect.innerHTML = slots.length > 0
+          ? [
+            '<option value="">Selecciona una hora</option>',
+            ...slots.map(slot => `<option value="${slot.start || ''}">${slot.label || `${slot.start || ''} - ${slot.end || ''}`}</option>`),
+          ].join('')
+          : '<option value="">Sin horarios disponibles</option>';
+
+        if (appointmentRescheduleNote) {
+          appointmentRescheduleNote.textContent = slots.length > 0
+            ? `${slots.length} horario(s) disponible(s).`
+            : 'No hay horarios para ese día. Selecciona otra fecha.';
+        }
+      } catch (error) {
+        appointmentRescheduleSlotSelect.innerHTML = '<option value="">No se pudo cargar disponibilidad</option>';
+        if (appointmentRescheduleNote) {
+          appointmentRescheduleNote.textContent = error?.message || 'No se pudo cargar disponibilidad.';
+        }
+      }
+    }
+
+    function openAppointmentRescheduleModal(row) {
+      if (!appointmentRescheduleModal || !appointmentRescheduleDateInput || !appointmentRescheduleSlotSelect) {
+        return;
+      }
+
+      const appointmentId = Number(row?.id || 0);
+      if (appointmentId <= 0) {
+        return;
+      }
+
+      rescheduleAppointmentId = appointmentId;
+      const startsAtRaw = String(row?.starts_at || '').trim();
+      const startsAtDate = startsAtRaw.length >= 10 ? startsAtRaw.slice(0, 10) : '';
+      const today = getTodayLocalDateValue();
+      const initialDate = startsAtDate && startsAtDate >= today ? startsAtDate : today;
+
+      appointmentRescheduleDateInput.min = today;
+      appointmentRescheduleDateInput.value = initialDate;
+      appointmentRescheduleSlotSelect.innerHTML = '<option value="">Selecciona una hora</option>';
+
+      if (appointmentRescheduleContext) {
+        appointmentRescheduleContext.textContent = `${row?.service || 'Servicio'} · ${row?.professional || 'Profesional'}`;
+      }
+
+      if (appointmentRescheduleNote) {
+        appointmentRescheduleNote.textContent = 'Selecciona un día para consultar horarios disponibles.';
+      }
+
+      const modalInstance = bootstrap.Modal.getOrCreateInstance(appointmentRescheduleModal);
+      modalInstance.show();
+      refreshRescheduleSlots().catch(() => {});
+    }
+
     function showTenantToast(title, message) {
       if (!tenantToastContainer) return;
 
@@ -1680,6 +1830,7 @@
 
     function renderAppointments(payload) {
       const rows = Array.isArray(payload?.appointments) ? payload.appointments : [];
+      tenantAppointmentsById = new Map(rows.map(row => [Number(row?.id || 0), row]));
       if (rows.length === 0) {
         appointmentsList.innerHTML = '<p class="text-muted mb-0">Todavía no tienes citas registradas.</p>';
         return;
@@ -1726,23 +1877,19 @@
         button.addEventListener('click', async () => {
           const card = button.closest('[data-appointment-id]');
           const appointmentId = Number(card?.getAttribute('data-appointment-id') || 0);
+          const appointmentRow = tenantAppointmentsById.get(appointmentId) || null;
           const action = button.getAttribute('data-appointment-action');
 
           if (!appointmentId || !action || !currentToken) {
             return;
           }
 
-          const payload = { action };
-
           if (action === 'reschedule') {
-            const newDate = prompt('Nueva fecha (YYYY-MM-DD):');
-            const newTime = prompt('Nueva hora (HH:MM):');
-            if (!newDate || !newTime) {
-              return;
-            }
-            payload.scheduled_date = newDate;
-            payload.start_time = newTime;
+            openAppointmentRescheduleModal(appointmentRow || { id: appointmentId });
+            return;
           }
+
+          const payload = { action };
 
           if (action === 'confirm_payment') {
             const paidAmount = prompt('Monto pagado:', '0');
@@ -1766,6 +1913,45 @@
         });
       });
     }
+
+    appointmentRescheduleDateInput?.addEventListener('change', () => {
+      refreshRescheduleSlots().catch(() => {});
+    });
+
+    appointmentRescheduleSubmitBtn?.addEventListener('click', async () => {
+      if (!currentToken || rescheduleAppointmentId <= 0 || !appointmentRescheduleDateInput || !appointmentRescheduleSlotSelect) {
+        return;
+      }
+
+      const scheduledDate = String(appointmentRescheduleDateInput.value || '').trim();
+      const startTime = String(appointmentRescheduleSlotSelect.value || '').trim();
+
+      if (!scheduledDate || !startTime) {
+        alert('Debes seleccionar un día y una hora disponible.');
+        return;
+      }
+
+      appointmentRescheduleSubmitBtn.disabled = true;
+      try {
+        const result = await runAppointmentAction(currentToken, rescheduleAppointmentId, {
+          action: 'reschedule',
+          scheduled_date: scheduledDate,
+          start_time: startTime,
+        });
+
+        alert(result?.message || 'Cita reprogramada correctamente.');
+
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(appointmentRescheduleModal);
+        modalInstance.hide();
+
+        const updated = await fetchAppointments(currentToken);
+        renderAppointments(updated);
+      } catch (error) {
+        alert(error?.message || 'No se pudo reprogramar la cita.');
+      } finally {
+        appointmentRescheduleSubmitBtn.disabled = false;
+      }
+    });
 
     function applyAuthState(user, token) {
       currentUser = user || null;
