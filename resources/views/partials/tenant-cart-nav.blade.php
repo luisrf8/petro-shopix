@@ -555,8 +555,21 @@
         <div class="tenant-customer-info-shell">
           <div class="row g-2 align-items-end">
             <div class="col-12">
-              <label for="tenant-appointment-reschedule-date" class="tenant-customer-info-label">Día disponible</label>
-              <input type="date" id="tenant-appointment-reschedule-date" class="form-control">
+              <label class="tenant-customer-info-label d-block mb-1">Calendario de disponibilidad</label>
+              <div class="border rounded p-2">
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                  <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="tenant-appointment-reschedule-calendar-prev">Mes anterior</button>
+                  <strong id="tenant-appointment-reschedule-calendar-label">-</strong>
+                  <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="tenant-appointment-reschedule-calendar-next">Mes siguiente</button>
+                </div>
+                <div class="d-grid" style="grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px;" id="tenant-appointment-reschedule-calendar-grid"></div>
+              </div>
+              <small class="text-muted d-block mt-1" id="tenant-appointment-reschedule-calendar-note">Selecciona un día disponible para ver horarios.</small>
+              <input type="hidden" id="tenant-appointment-reschedule-date">
+            </div>
+            <div class="col-12">
+              <label for="tenant-appointment-reschedule-date-display" class="tenant-customer-info-label">Fecha seleccionada</label>
+              <input type="text" id="tenant-appointment-reschedule-date-display" class="form-control" readonly>
             </div>
             <div class="col-12">
               <label for="tenant-appointment-reschedule-slot" class="tenant-customer-info-label">Hora disponible</label>
@@ -756,6 +769,12 @@
     const appointmentRescheduleModal = document.getElementById('tenantAppointmentRescheduleModal');
     const appointmentRescheduleContext = document.getElementById('tenant-appointment-reschedule-context');
     const appointmentRescheduleDateInput = document.getElementById('tenant-appointment-reschedule-date');
+    const appointmentRescheduleDateDisplayInput = document.getElementById('tenant-appointment-reschedule-date-display');
+    const appointmentRescheduleCalendarGrid = document.getElementById('tenant-appointment-reschedule-calendar-grid');
+    const appointmentRescheduleCalendarLabel = document.getElementById('tenant-appointment-reschedule-calendar-label');
+    const appointmentRescheduleCalendarPrevBtn = document.getElementById('tenant-appointment-reschedule-calendar-prev');
+    const appointmentRescheduleCalendarNextBtn = document.getElementById('tenant-appointment-reschedule-calendar-next');
+    const appointmentRescheduleCalendarNote = document.getElementById('tenant-appointment-reschedule-calendar-note');
     const appointmentRescheduleSlotSelect = document.getElementById('tenant-appointment-reschedule-slot');
     const appointmentRescheduleNote = document.getElementById('tenant-appointment-reschedule-note');
     const appointmentRescheduleSubmitBtn = document.getElementById('tenant-appointment-reschedule-submit');
@@ -776,6 +795,8 @@
     let serviceWorkerRegistrationPromise = null;
     let tenantAppointmentsById = new Map();
     let rescheduleAppointmentId = 0;
+    let rescheduleCalendarMonth = '';
+    let rescheduleCalendarDays = [];
 
     if (notificationsModal && notificationsModal.parentElement !== document.body) {
       document.body.appendChild(notificationsModal);
@@ -1576,8 +1597,14 @@
       return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     }
 
-    async function fetchAppointmentAvailableSlots(token, appointmentId, dateValue) {
-      const params = new URLSearchParams({ date: String(dateValue || '').trim() });
+    async function fetchAppointmentAvailableSlots(token, appointmentId, dateValue, monthValue = '') {
+      const params = new URLSearchParams();
+      if (dateValue) {
+        params.set('date', String(dateValue || '').trim());
+      }
+      if (monthValue) {
+        params.set('month', String(monthValue || '').trim());
+      }
       const response = await fetch(`/api/user/appointments/${appointmentId}/available-slots?${params.toString()}`, {
         method: 'GET',
         headers: {
@@ -1594,46 +1621,215 @@
       return data;
     }
 
-    async function refreshRescheduleSlots() {
+    function parseRescheduleMonth(value) {
+      const normalized = String(value || '').trim();
+      if (!/^\d{4}-\d{2}$/.test(normalized)) {
+        return null;
+      }
+
+      const [yearRaw, monthRaw] = normalized.split('-');
+      const year = Number(yearRaw);
+      const month = Number(monthRaw);
+      if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+        return null;
+      }
+
+      return { year, month };
+    }
+
+    function getMonthFromDateValue(dateValue) {
+      const normalized = String(dateValue || '').trim();
+      return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized.slice(0, 7) : '';
+    }
+
+    function shiftRescheduleMonthValue(monthValue, step) {
+      const parsed = parseRescheduleMonth(monthValue);
+      const base = parsed
+        ? new Date(parsed.year, parsed.month - 1, 1)
+        : new Date();
+
+      base.setMonth(base.getMonth() + Number(step || 0));
+      return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function formatRescheduleCalendarLabel(monthValue) {
+      const parsed = parseRescheduleMonth(monthValue);
+      if (!parsed) {
+        return '-';
+      }
+
+      const date = new Date(parsed.year, parsed.month - 1, 1);
+      return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    }
+
+    function formatRescheduleSelectedDateLabel(dateValue) {
+      const normalized = String(dateValue || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        return '';
+      }
+
+      const [yearRaw, monthRaw, dayRaw] = normalized.split('-');
+      const date = new Date(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw));
+      if (Number.isNaN(date.getTime())) {
+        return '';
+      }
+
+      return date.toLocaleDateString('es-ES', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      });
+    }
+
+    function syncRescheduleSelectedDateDisplay() {
+      if (!appointmentRescheduleDateDisplayInput) {
+        return;
+      }
+
+      const selectedDate = String(appointmentRescheduleDateInput?.value || '').trim();
+      appointmentRescheduleDateDisplayInput.value = formatRescheduleSelectedDateLabel(selectedDate);
+    }
+
+    function renderRescheduleCalendar() {
+      if (!appointmentRescheduleCalendarGrid) {
+        return;
+      }
+
+      const parsed = parseRescheduleMonth(rescheduleCalendarMonth || getMonthFromDateValue(appointmentRescheduleDateInput?.value || ''));
+      if (!parsed) {
+        appointmentRescheduleCalendarGrid.innerHTML = '';
+        if (appointmentRescheduleCalendarLabel) {
+          appointmentRescheduleCalendarLabel.textContent = '-';
+        }
+        return;
+      }
+
+      const monthStart = new Date(parsed.year, parsed.month - 1, 1);
+      const monthEnd = new Date(parsed.year, parsed.month, 0);
+      const selectedDate = String(appointmentRescheduleDateInput?.value || '').trim();
+      const todayIso = getTodayLocalDateValue();
+      const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+      const startWeekday = (monthStart.getDay() + 6) % 7;
+      const totalDays = monthEnd.getDate();
+
+      if (appointmentRescheduleCalendarLabel) {
+        appointmentRescheduleCalendarLabel.textContent = formatRescheduleCalendarLabel(rescheduleCalendarMonth);
+      }
+
+      const cells = [];
+      weekdayLabels.forEach(label => {
+        cells.push(`<div class="small text-muted text-center">${label}</div>`);
+      });
+
+      for (let index = 0; index < startWeekday; index += 1) {
+        cells.push('<div></div>');
+      }
+
+      const calendarByDate = new Map((rescheduleCalendarDays || []).map(row => [String(row.date || ''), row]));
+
+      for (let day = 1; day <= totalDays; day += 1) {
+        const dateValue = `${parsed.year}-${String(parsed.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const row = calendarByDate.get(dateValue);
+        const hasSlots = !!row?.has_slots;
+        const slotsCount = Number(row?.slots_count || 0);
+        const isPastDate = dateValue < todayIso;
+        const isEnabled = hasSlots && !isPastDate;
+        const isSelected = selectedDate === dateValue;
+        const buttonClass = isSelected
+          ? 'btn btn-dark btn-sm w-100'
+          : (hasSlots ? 'btn btn-outline-dark btn-sm w-100' : 'btn btn-outline-secondary btn-sm w-100');
+
+        const title = hasSlots
+          ? `${slotsCount} horario(s)`
+          : (isPastDate ? 'Fecha pasada' : 'Sin horarios disponibles');
+
+        cells.push(`<button type="button" class="${buttonClass}" data-reschedule-calendar-date="${dateValue}" ${isEnabled ? '' : 'disabled'} title="${title}"><span>${day}</span></button>`);
+      }
+
+      appointmentRescheduleCalendarGrid.innerHTML = cells.join('');
+    }
+
+    function findFirstRescheduleAvailableDate(calendarDays) {
+      const todayIso = getTodayLocalDateValue();
+      const row = Array.isArray(calendarDays)
+        ? calendarDays.find(item => !!item?.has_slots && String(item?.date || '') >= todayIso)
+        : null;
+
+      return String(row?.date || '').trim();
+    }
+
+    async function refreshRescheduleAvailability() {
       if (!currentToken || rescheduleAppointmentId <= 0 || !appointmentRescheduleDateInput || !appointmentRescheduleSlotSelect) {
         return;
       }
 
       const selectedDate = String(appointmentRescheduleDateInput.value || '').trim();
-      if (!selectedDate) {
-        appointmentRescheduleSlotSelect.innerHTML = '<option value="">Selecciona una hora</option>';
-        if (appointmentRescheduleNote) {
-          appointmentRescheduleNote.textContent = 'Selecciona un día para consultar horarios disponibles.';
-        }
-        return;
+      const selectedMonth = getMonthFromDateValue(selectedDate);
+      if (!rescheduleCalendarMonth) {
+        rescheduleCalendarMonth = selectedMonth || getTodayLocalDateValue().slice(0, 7);
       }
 
+      const queryMonth = selectedMonth || rescheduleCalendarMonth;
       appointmentRescheduleSlotSelect.innerHTML = '<option value="">Cargando horarios...</option>';
       if (appointmentRescheduleNote) {
-        appointmentRescheduleNote.textContent = 'Consultando disponibilidad...';
+        appointmentRescheduleNote.textContent = selectedDate
+          ? 'Consultando horarios disponibles...'
+          : 'Cargando disponibilidad del calendario...';
       }
 
       try {
-        const payload = await fetchAppointmentAvailableSlots(currentToken, rescheduleAppointmentId, selectedDate);
-        const slots = Array.isArray(payload?.slots) ? payload.slots : [];
+        const payload = await fetchAppointmentAvailableSlots(currentToken, rescheduleAppointmentId, selectedDate, queryMonth);
+        const slots = selectedDate && Array.isArray(payload?.slots) ? payload.slots : [];
+        rescheduleCalendarDays = Array.isArray(payload?.calendar) ? payload.calendar : [];
+        if (payload?.calendar_month && /^\d{4}-\d{2}$/.test(String(payload.calendar_month))) {
+          rescheduleCalendarMonth = String(payload.calendar_month);
+        }
 
-        appointmentRescheduleSlotSelect.innerHTML = slots.length > 0
+        if (!selectedDate) {
+          const firstAvailableDate = findFirstRescheduleAvailableDate(rescheduleCalendarDays);
+          if (firstAvailableDate) {
+            appointmentRescheduleDateInput.value = firstAvailableDate;
+            syncRescheduleSelectedDateDisplay();
+            await refreshRescheduleAvailability();
+            return;
+          }
+        }
+
+        appointmentRescheduleSlotSelect.innerHTML = selectedDate
           ? [
             '<option value="">Selecciona una hora</option>',
             ...slots.map(slot => `<option value="${slot.start || ''}">${slot.label || `${slot.start || ''} - ${slot.end || ''}`}</option>`),
           ].join('')
-          : '<option value="">Sin horarios disponibles</option>';
+          : '<option value="">Selecciona un día del calendario</option>';
+
+        if (selectedDate && slots.length > 0) {
+          appointmentRescheduleSlotSelect.value = String(slots[0]?.start || '');
+        }
+
+        renderRescheduleCalendar();
+
+        if (appointmentRescheduleCalendarNote) {
+          const availableDays = rescheduleCalendarDays.filter(row => !!row?.has_slots).length;
+          appointmentRescheduleCalendarNote.textContent = availableDays > 0
+            ? `${availableDays} día(s) con disponibilidad en ${formatRescheduleCalendarLabel(rescheduleCalendarMonth)}.`
+            : 'No se detectaron días disponibles en este mes.';
+        }
 
         if (appointmentRescheduleNote) {
-          appointmentRescheduleNote.textContent = slots.length > 0
-            ? `${slots.length} horario(s) disponible(s).`
-            : 'No hay horarios para ese día. Selecciona otra fecha.';
+          appointmentRescheduleNote.textContent = !selectedDate
+            ? 'Selecciona un día del calendario para ver horas disponibles.'
+            : (slots.length > 0
+              ? `${slots.length} horario(s) disponible(s).`
+              : 'No hay horarios para ese día. Selecciona otra fecha.');
         }
       } catch (error) {
         appointmentRescheduleSlotSelect.innerHTML = '<option value="">No se pudo cargar disponibilidad</option>';
         if (appointmentRescheduleNote) {
           appointmentRescheduleNote.textContent = error?.message || 'No se pudo cargar disponibilidad.';
         }
+        rescheduleCalendarDays = [];
+        renderRescheduleCalendar();
       }
     }
 
@@ -1653,21 +1849,29 @@
       const today = getTodayLocalDateValue();
       const initialDate = startsAtDate && startsAtDate >= today ? startsAtDate : today;
 
-      appointmentRescheduleDateInput.min = today;
       appointmentRescheduleDateInput.value = initialDate;
+      rescheduleCalendarMonth = getMonthFromDateValue(initialDate) || today.slice(0, 7);
+      rescheduleCalendarDays = [];
       appointmentRescheduleSlotSelect.innerHTML = '<option value="">Selecciona una hora</option>';
+      syncRescheduleSelectedDateDisplay();
 
       if (appointmentRescheduleContext) {
         appointmentRescheduleContext.textContent = `${row?.service || 'Servicio'} · ${row?.professional || 'Profesional'}`;
       }
 
       if (appointmentRescheduleNote) {
-        appointmentRescheduleNote.textContent = 'Selecciona un día para consultar horarios disponibles.';
+        appointmentRescheduleNote.textContent = 'Cargando disponibilidad...';
       }
+
+      if (appointmentRescheduleCalendarNote) {
+        appointmentRescheduleCalendarNote.textContent = 'Cargando calendario...';
+      }
+
+      renderRescheduleCalendar();
 
       const modalInstance = bootstrap.Modal.getOrCreateInstance(appointmentRescheduleModal);
       modalInstance.show();
-      refreshRescheduleSlots().catch(() => {});
+      refreshRescheduleAvailability().catch(() => {});
     }
 
     function showTenantToast(title, message) {
@@ -1914,8 +2118,43 @@
       });
     }
 
-    appointmentRescheduleDateInput?.addEventListener('change', () => {
-      refreshRescheduleSlots().catch(() => {});
+    appointmentRescheduleCalendarGrid?.addEventListener('click', (event) => {
+      const target = event.target.closest('[data-reschedule-calendar-date]');
+      if (!target || !appointmentRescheduleDateInput) {
+        return;
+      }
+
+      const dateValue = String(target.getAttribute('data-reschedule-calendar-date') || '').trim();
+      if (!dateValue) {
+        return;
+      }
+
+      appointmentRescheduleDateInput.value = dateValue;
+      const dateMonth = getMonthFromDateValue(dateValue);
+      if (dateMonth) {
+        rescheduleCalendarMonth = dateMonth;
+      }
+
+      syncRescheduleSelectedDateDisplay();
+      refreshRescheduleAvailability().catch(() => {});
+    });
+
+    appointmentRescheduleCalendarPrevBtn?.addEventListener('click', () => {
+      rescheduleCalendarMonth = shiftRescheduleMonthValue(rescheduleCalendarMonth, -1);
+      if (appointmentRescheduleDateInput) {
+        appointmentRescheduleDateInput.value = '';
+      }
+      syncRescheduleSelectedDateDisplay();
+      refreshRescheduleAvailability().catch(() => {});
+    });
+
+    appointmentRescheduleCalendarNextBtn?.addEventListener('click', () => {
+      rescheduleCalendarMonth = shiftRescheduleMonthValue(rescheduleCalendarMonth, 1);
+      if (appointmentRescheduleDateInput) {
+        appointmentRescheduleDateInput.value = '';
+      }
+      syncRescheduleSelectedDateDisplay();
+      refreshRescheduleAvailability().catch(() => {});
     });
 
     appointmentRescheduleSubmitBtn?.addEventListener('click', async () => {

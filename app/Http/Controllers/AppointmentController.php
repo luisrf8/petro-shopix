@@ -627,7 +627,8 @@ class AppointmentController extends Controller
         }
 
         $validated = $request->validate([
-            'date' => ['required', 'date'],
+            'date' => ['nullable', 'date'],
+            'month' => ['nullable', 'date_format:Y-m'],
         ]);
 
         $service = $appointment->service;
@@ -640,8 +641,40 @@ class AppointmentController extends Controller
             ], 422);
         }
 
-        $selectedDate = Carbon::parse((string) $validated['date'])->startOfDay();
-        $slots = $this->buildAvailableSlots((int) $appointment->tenant_id, $targetUser, $service, $selectedDate, (int) $appointment->id);
+        $today = now()->startOfDay();
+        $selectedDate = !empty($validated['date'])
+            ? Carbon::parse((string) $validated['date'])->startOfDay()
+            : $today->copy();
+
+        $month = trim((string) ($validated['month'] ?? ''));
+        if ($month === '') {
+            $month = $selectedDate->format('Y-m');
+        }
+
+        try {
+            $calendarMonthStart = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+        } catch (\Throwable $exception) {
+            $calendarMonthStart = $selectedDate->copy()->startOfMonth();
+        }
+
+        $calendarMonthEnd = $calendarMonthStart->copy()->endOfMonth();
+        $slots = !empty($validated['date'])
+            ? $this->buildAvailableSlots((int) $appointment->tenant_id, $targetUser, $service, $selectedDate, (int) $appointment->id)
+            : [];
+
+        $calendar = [];
+        $cursor = $calendarMonthStart->copy();
+        while ($cursor->lessThanOrEqualTo($calendarMonthEnd)) {
+            $daySlots = $this->buildAvailableSlots((int) $appointment->tenant_id, $targetUser, $service, $cursor, (int) $appointment->id);
+            $calendar[] = [
+                'date' => $cursor->toDateString(),
+                'slots_count' => count($daySlots),
+                'has_slots' => count($daySlots) > 0,
+                'is_today' => $cursor->isSameDay($today),
+            ];
+
+            $cursor->addDay();
+        }
 
         return response()->json([
             'success' => true,
@@ -649,6 +682,9 @@ class AppointmentController extends Controller
             'appointment_id' => (int) $appointment->id,
             'service_id' => (int) ($service->id ?? 0),
             'user_id' => (int) ($targetUser->id ?? 0),
+            'calendar_month' => $calendarMonthStart->format('Y-m'),
+            'calendar' => $calendar,
+            'today' => $today->toDateString(),
             'total_slots' => count($slots),
             'suggested_slots' => array_slice($slots, 0, 6),
             'slots' => $slots,
