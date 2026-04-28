@@ -138,6 +138,20 @@ class AppointmentController extends Controller
             ];
         })->values();
 
+        if ($request->expectsJson() || $request->boolean('realtime')) {
+            return response()->json([
+                'success' => true,
+                'selected_date' => $selectedDate->toDateString(),
+                'selected_user_id' => $selectedUserId,
+                'calendar_week_start' => $calendarWeekStart->toDateString(),
+                'calendar_week_end' => $calendarWeekEnd->toDateString(),
+                'calendar_week_title' => Str::ucfirst($calendarWeekStart->translatedFormat('d M')) . ' - ' . Str::ucfirst($calendarWeekEnd->translatedFormat('d M Y')),
+                'calendar_week_note' => 'Semana de ' . $calendarWeekStart->format('d/m') . ' a ' . $calendarWeekEnd->format('d/m') . '.',
+                'calendar_week_events_count' => count($calendarEvents ?? []),
+                'calendar_events' => $calendarEvents,
+            ]);
+        }
+
         return view('appointments.index', compact(
             'tenant',
             'planCapabilities',

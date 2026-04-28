@@ -159,6 +159,63 @@
         color: #fff;
         box-shadow: 0 14px 28px rgba(15, 23, 42, 0.16);
         overflow: hidden;
+        transition: transform 0.22s ease, box-shadow 0.22s ease, filter 0.22s ease;
+    }
+
+    .appointments-calendar-event.is-realtime-new {
+        animation: appointmentRealtimeNew 1.15s ease;
+    }
+
+    .appointments-calendar-event.is-realtime-updated {
+        animation: appointmentRealtimeUpdated 1.35s ease;
+    }
+
+    .appointments-calendar-day-column.is-realtime-removed {
+        animation: appointmentRealtimeColumnPulse 1.2s ease;
+    }
+
+    @keyframes appointmentRealtimeNew {
+        0% {
+            opacity: 0;
+            transform: translateY(10px) scale(0.97);
+            filter: brightness(1.12);
+        }
+        45% {
+            opacity: 1;
+            transform: translateY(-1px) scale(1.01);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            filter: brightness(1);
+        }
+    }
+
+    @keyframes appointmentRealtimeUpdated {
+        0% {
+            box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+            filter: brightness(1);
+        }
+        35% {
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.45);
+            filter: brightness(1.14);
+        }
+        100% {
+            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.16);
+            filter: brightness(1);
+        }
+    }
+
+    @keyframes appointmentRealtimeColumnPulse {
+        0% {
+            box-shadow: inset 0 0 0 0 rgba(239, 68, 68, 0);
+        }
+        30% {
+            box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.42);
+        }
+        100% {
+            box-shadow: inset 0 0 0 0 rgba(239, 68, 68, 0);
+        }
     }
 
     .appointments-calendar-event-ribbon {
@@ -441,8 +498,8 @@
         <div class="col-12 col-md-4">
             <div class="appointments-stat-card">
                 <div class="appointments-stat-label">Citas en la semana</div>
-                <div class="appointments-stat-value">{{ count($calendarEvents ?? []) }}</div>
-                <div class="appointment-inline-note">Semana de {{ $calendarWeekStart->format('d/m') }} a {{ $calendarWeekEnd->format('d/m') }}.</div>
+                <div class="appointments-stat-value" id="appointmentsWeekCountValue">{{ count($calendarEvents ?? []) }}</div>
+                <div class="appointment-inline-note" id="appointmentsWeekRangeNote">Semana de {{ $calendarWeekStart->format('d/m') }} a {{ $calendarWeekEnd->format('d/m') }}.</div>
                 <div class="d-flex flex-wrap gap-2 mt-2">
                     <button type="button" class="btn btn-success btn-sm mb-0" data-bs-toggle="modal" data-bs-target="#appointmentBookingModal">Registrar cita</button>
                     <button type="button" class="btn btn-outline-secondary btn-sm mb-0" data-bs-toggle="modal" data-bs-target="#appointmentUpcomingModal">Próximas citas</button>
@@ -490,7 +547,7 @@
 
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                         <div>
-                            <h4 class="mb-1">{{ \Illuminate\Support\Str::ucfirst($calendarWeekStart->translatedFormat('d M')) }} - {{ \Illuminate\Support\Str::ucfirst($calendarWeekEnd->translatedFormat('d M Y')) }}</h4>
+                            <h4 class="mb-1" id="appointmentsWeekRangeTitle">{{ \Illuminate\Support\Str::ucfirst($calendarWeekStart->translatedFormat('d M')) }} - {{ \Illuminate\Support\Str::ucfirst($calendarWeekEnd->translatedFormat('d M Y')) }}</h4>
                         </div>
                         <div class="d-flex flex-wrap gap-2">
                             <a href="{{ route('appointments.index', ['date' => $previousWeekDate, 'user_id' => $selectedUserId]) }}" class="btn btn-outline-dark mb-0">Semana anterior</a>
@@ -985,10 +1042,11 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const appointmentEvents = @json($calendarEvents ?? []);
+    let appointmentEvents = @json($calendarEvents ?? []);
     const calendarDays = @json($calendarDays ?? []);
     const calendarStartHour = Number(@json($calendarBounds['startHour'] ?? 7));
     const calendarHourHeight = 72;
+    const appointmentsRealtimeFeedUrl = @json(route('appointments.index'));
     const servicesPayload = @json($servicesPayload ?? []);
     const consumableVariants = @json($consumableVariantsPayload ?? []);
     const appointmentBsRate = Number(@json($bsRate ?? 0));
@@ -1037,6 +1095,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const calendarGrid = document.querySelector('.appointments-calendar-grid');
     const monthView = document.getElementById('appointmentsMonthView');
     const monthList = document.getElementById('appointmentsMonthList');
+    const appointmentsWeekCountValue = document.getElementById('appointmentsWeekCountValue');
+    const appointmentsWeekRangeNote = document.getElementById('appointmentsWeekRangeNote');
+    const appointmentsWeekRangeTitle = document.getElementById('appointmentsWeekRangeTitle');
     const filtersCollapseElement = document.getElementById('appointmentsFiltersCollapse');
     const filtersToggleButton = document.getElementById('appointmentsFiltersToggleButton');
     const filtersToggleLabel = document.getElementById('appointmentsFiltersToggleLabel');
@@ -1280,7 +1341,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             alert(data?.message || 'Acción aplicada correctamente.');
-            window.location.reload();
+            await refreshCalendarRealtime(true);
+            await loadSlots();
         } catch (error) {
             console.error(error);
             alert('No se pudo ejecutar la acción de la cita.');
@@ -1306,6 +1368,43 @@ document.addEventListener('DOMContentLoaded', () => {
             const isActive = button.dataset.calendarDate === activeCalendarDate;
             button.classList.toggle('is-today', isActive);
         });
+    }
+
+    function getCalendarEventKey(event) {
+        if (!event) {
+            return '';
+        }
+
+        const id = Number(event.id || 0);
+        if (id > 0) {
+            return `id:${id}`;
+        }
+
+        return [
+            String(event.date || ''),
+            String(event.start_time || ''),
+            String(event.end_time || ''),
+            String(event.title || ''),
+            String(event.professional || ''),
+            String(event.customer || ''),
+        ].join('|');
+    }
+
+    function getCalendarEventSignature(event) {
+        if (!event) {
+            return '';
+        }
+
+        return [
+            String(event.date || ''),
+            String(event.start_time || ''),
+            String(event.end_time || ''),
+            String(event.status_key || ''),
+            String(event.payment_status_key || ''),
+            String(event.title || ''),
+            String(event.professional || ''),
+            String(event.customer || ''),
+        ].join('|');
     }
 
     function renderMonthView() {
@@ -1412,7 +1511,22 @@ document.addEventListener('DOMContentLoaded', () => {
         setActiveCalendarDate(activeCalendarDate);
     }
 
-    function renderCalendar() {
+    function renderCalendar(options = {}) {
+        const previousEvents = Array.isArray(options.previousEvents) ? options.previousEvents : [];
+        const realtimeMode = !!options.realtime;
+        const previousMap = new Map(previousEvents.map((event) => [getCalendarEventKey(event), event]));
+        const currentMap = new Map(appointmentEvents.map((event) => [getCalendarEventKey(event), event]));
+        const removedDates = new Set();
+
+        previousMap.forEach((prevEvent, key) => {
+            if (key && !currentMap.has(key)) {
+                const prevDate = String(prevEvent?.date || '').trim();
+                if (prevDate) {
+                    removedDates.add(prevDate);
+                }
+            }
+        });
+
         const grouped = appointmentEvents.reduce((accumulator, item) => {
             accumulator[item.date] = accumulator[item.date] || [];
             accumulator[item.date].push(item);
@@ -1434,6 +1548,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const card = document.createElement('button');
                 const statusColor = resolveAppointmentStatusColor(event.status_key);
                 const paymentColor = resolveAppointmentPaymentColor(event.payment_status_key);
+                const eventKey = getCalendarEventKey(event);
+                const previousEvent = previousMap.get(eventKey);
+                const previousSignature = getCalendarEventSignature(previousEvent);
+                const currentSignature = getCalendarEventSignature(event);
                 card.type = 'button';
                 card.className = 'appointments-calendar-event';
                 card.style.top = `${(event.minutes_from_start / 60) * calendarHourHeight + 4}px`;
@@ -1457,12 +1575,101 @@ document.addEventListener('DOMContentLoaded', () => {
                         eventData: event,
                     });
                 });
+
+                if (realtimeMode) {
+                    if (!previousEvent) {
+                        card.classList.add('is-realtime-new');
+                    } else if (previousSignature !== currentSignature) {
+                        card.classList.add('is-realtime-updated');
+                    }
+                }
+
                 column.appendChild(card);
             });
+
+            if (realtimeMode && removedDates.has(day.date)) {
+                column.classList.add('is-realtime-removed');
+                setTimeout(() => {
+                    column.classList.remove('is-realtime-removed');
+                }, 1300);
+            }
         });
 
         setActiveCalendarDate(activeCalendarDate);
         applyCalendarView();
+    }
+
+    function isAppointmentRealtimeNotification(notification) {
+        const action = String(notification?.action || '').toLowerCase();
+        const type = String(notification?.type || '').toLowerCase();
+        const appointmentId = Number(notification?.appointment_id || notification?.meta?.appointment_id || 0);
+
+        return action.startsWith('appointment_') || type.includes('appointment') || appointmentId > 0;
+    }
+
+    function buildRealtimeFeedParams() {
+        const params = new URLSearchParams();
+        const filtersForm = document.querySelector('form[action="{{ route('appointments.index') }}"]');
+        const dateValue = String(filtersForm?.querySelector('input[name="date"]')?.value || '').trim();
+        const userIdValue = String(filtersForm?.querySelector('select[name="user_id"]')?.value || '').trim();
+
+        params.set('realtime', '1');
+        if (dateValue) {
+            params.set('date', dateValue);
+        }
+        if (userIdValue) {
+            params.set('user_id', userIdValue);
+        }
+
+        return params;
+    }
+
+    let realtimeRefreshInProgress = false;
+    let realtimeRefreshQueued = false;
+
+    async function refreshCalendarRealtime(force = false) {
+        if (realtimeRefreshInProgress && !force) {
+            realtimeRefreshQueued = true;
+            return;
+        }
+
+        realtimeRefreshInProgress = true;
+        try {
+            const params = buildRealtimeFeedParams();
+            const response = await fetch(`${appointmentsRealtimeFeedUrl}?${params.toString()}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || payload?.success === false) {
+                return;
+            }
+
+            const previousEvents = Array.isArray(appointmentEvents) ? [...appointmentEvents] : [];
+            appointmentEvents = Array.isArray(payload?.calendar_events) ? payload.calendar_events : [];
+            if (appointmentsWeekCountValue) {
+                appointmentsWeekCountValue.textContent = String(Number(payload?.calendar_week_events_count || appointmentEvents.length || 0));
+            }
+            if (appointmentsWeekRangeTitle && payload?.calendar_week_title) {
+                appointmentsWeekRangeTitle.textContent = String(payload.calendar_week_title);
+            }
+            if (appointmentsWeekRangeNote && payload?.calendar_week_note) {
+                appointmentsWeekRangeNote.textContent = String(payload.calendar_week_note);
+            }
+
+            renderCalendar({ previousEvents, realtime: true });
+        } catch (error) {
+            console.error(error);
+        } finally {
+            realtimeRefreshInProgress = false;
+            if (realtimeRefreshQueued) {
+                realtimeRefreshQueued = false;
+                refreshCalendarRealtime().catch(() => {});
+            }
+        }
     }
 
     function getSelectedService() {
@@ -1841,6 +2048,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     renderCalendar();
     loadSlots();
+
+    window.addEventListener('shopix:backoffice-notification', (event) => {
+        const notification = event?.detail || {};
+        if (!isAppointmentRealtimeNotification(notification)) {
+            return;
+        }
+
+        refreshCalendarRealtime().catch(() => {});
+    });
 });
 </script>
 @endpush

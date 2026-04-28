@@ -1953,6 +1953,30 @@
       });
     }
 
+    function isAppointmentRealtimeNotification(notification) {
+      const action = String(notification?.action || '').toLowerCase();
+      const type = String(notification?.type || '').toLowerCase();
+      const appointmentId = Number(notification?.appointment_id || notification?.meta?.appointment_id || 0);
+
+      return action.startsWith('appointment_') || type.includes('appointment') || appointmentId > 0;
+    }
+
+    async function refreshTenantAppointmentsRealtime() {
+      if (!currentToken || !currentUser?.id) {
+        return;
+      }
+
+      try {
+        const payload = await fetchAppointments(currentToken);
+        renderAppointments(payload);
+
+        if (appointmentRescheduleModal?.classList.contains('show') && rescheduleAppointmentId > 0) {
+          await refreshRescheduleAvailability();
+        }
+      } catch (error) {
+      }
+    }
+
     function orderStatusLabel(status) {
       if (Number(status) === 1) return 'Aprobado';
       if (Number(status) === 2) return 'Negado';
@@ -2298,6 +2322,10 @@
           const payload = await fetchNotifications(token);
           renderNotifications(payload, token);
         } catch (error) {
+        }
+
+        if (isAppointmentRealtimeNotification(notification)) {
+          refreshTenantAppointmentsRealtime().catch(() => {});
         }
       };
 
