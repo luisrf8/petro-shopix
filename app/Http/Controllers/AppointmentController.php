@@ -413,7 +413,7 @@ class AppointmentController extends Controller
             ->filter(fn ($item) => !empty($item['variant_id']) && !empty($item['quantity']))
             ->values();
 
-        DB::transaction(function () use ($tenantId, $service, $targetUser, $customerId, $validated, $startAt, $endAt, $paymentMethod, $paidAmount, $paymentStatus, $paymentReference, $consumptions, $editingAppointment) {
+        DB::transaction(function () use ($tenantId, $service, $targetUser, $customerId, $validated, $startAt, $endAt, $paymentMethod, $paidAmount, $paymentStatus, $paymentReference, $consumptions, $editingAppointment, $normalizedContactPhone) {
             $appointmentPayload = [
                 'tenant_id' => $tenantId,
                 'appointment_service_id' => (int) $service->id,
@@ -497,16 +497,89 @@ class AppointmentController extends Controller
     {
         $customerId = (int) (auth()->id() ?? 0);
 
-        $appointments = Appointment::query()
+        $validated = $request->validate([
+            'status' => ['nullable', Rule::in(array_keys(Appointment::STATUSES))],
+            'payment_status' => ['nullable', Rule::in(array_keys(Appointment::PAYMENT_STATUSES))],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+            'view' => ['nullable', Rule::in(['all', 'upcoming', 'history'])],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
+        ]);
+
+        $view = (string) ($validated['view'] ?? 'all');
+        $limit = (int) ($validated['limit'] ?? 80);
+        $now = now();
+
+        $query = Appointment::query()
             ->with(['service', 'assignedUser', 'paymentMethod.currency', 'salesOrder'])
             ->where('customer_id', $customerId)
+            ->when(!empty($validated['status']), fn ($builder) => $builder->where('status', (string) $validated['status']))
+            ->when(!empty($validated['payment_status']), fn ($builder) => $builder->where('payment_status', (string) $validated['payment_status']))
+            ->when(!empty($validated['from']), fn ($builder) => $builder->whereDate('starts_at', '>=', (string) $validated['from']))
+            ->when(!empty($validated['to']), fn ($builder) => $builder->whereDate('starts_at', '<=', (string) $validated['to']));
+
+        if ($view === 'upcoming') {
+            $query->where('starts_at', '>=', $now);
+        } elseif ($view === 'history') {
+            $query->where('starts_at', '<', $now);
+        }
+
+        $appointments = $query
             ->orderByDesc('starts_at')
-            ->limit(80)
+            ->limit($limit)
             ->get();
+
+        $summary = [
+            'total' => $appointments->count(),
+            'upcoming' => $appointments->filter(fn (Appointment $item) => $item->starts_at && $item->starts_at->isFuture())->count(),
+            'pending_payment' => $appointments->whereIn('payment_status', ['pending', 'partial'])->count(),
+            'confirmed' => $appointments->where('status', 'confirmed')->count(),
+            'scheduled' => $appointments->where('status', 'scheduled')->count(),
+        ];
+
+        $calendar = $appointments
+            ->groupBy(function (Appointment $appointment) {
+                return optional($appointment->starts_at)?->toDateString() ?: now()->toDateString();
+            })
+            ->map(function ($items, $date) {
+                return [
+                    'date' => $date,
+                    'total' => $items->count(),
+                    'pending_payment' => $items->whereIn('payment_status', ['pending', 'partial'])->count(),
+                    'items' => $items->map(function (Appointment $appointment) {
+                        return [
+                            'id' => (int) $appointment->id,
+                            'starts_at' => optional($appointment->starts_at)?->toDateTimeString(),
+                            'ends_at' => optional($appointment->ends_at)?->toDateTimeString(),
+                            'service' => (string) ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio'),
+                            'status' => (string) ($appointment->status ?? 'scheduled'),
+                            'payment_status' => (string) ($appointment->payment_status ?? 'pending'),
+                        ];
+                    })->values(),
+                ];
+            })
+            ->values();
 
         return response()->json([
             'success' => true,
+            'summary' => $summary,
+            'calendar' => $calendar,
+            'filters' => [
+                'view' => $view,
+                'status' => $validated['status'] ?? null,
+                'payment_status' => $validated['payment_status'] ?? null,
+                'from' => $validated['from'] ?? null,
+                'to' => $validated['to'] ?? null,
+                'limit' => $limit,
+            ],
             'appointments' => $appointments->map(function (Appointment $appointment) {
+                $startsAt = $appointment->starts_at;
+                $isFuture = $startsAt ? $startsAt->isFuture() : false;
+                $isPast = $startsAt ? $startsAt->isPast() : false;
+                $servicePrice = round((float) ($appointment->service->price ?? 0), 2);
+                $paidAmount = round((float) ($appointment->paid_amount ?? 0), 2);
+                $pendingAmount = $servicePrice > 0 ? max(0, round($servicePrice - $paidAmount, 2)) : 0;
+
                 return [
                     'id' => (int) $appointment->id,
                     'tenant_id' => (int) $appointment->tenant_id,
@@ -518,7 +591,9 @@ class AppointmentController extends Controller
                     'status_label' => (string) $appointment->status_label,
                     'payment_status' => (string) ($appointment->payment_status ?? 'pending'),
                     'payment_status_label' => (string) $appointment->payment_status_label,
-                    'paid_amount' => (float) ($appointment->paid_amount ?? 0),
+                    'paid_amount' => $paidAmount,
+                    'service_price' => $servicePrice,
+                    'pending_amount' => $pendingAmount,
                     'payment_currency' => (string) ($appointment->payment_currency ?: 'USD'),
                     'sales_order_id' => $appointment->sales_order_id ? (int) $appointment->sales_order_id : null,
                     'public_order_url' => $appointment->sales_order_id ? url('/publicOrder/' . (int) $appointment->sales_order_id) : null,
@@ -526,8 +601,54 @@ class AppointmentController extends Controller
                     'can_reschedule' => in_array((string) $appointment->status, ['scheduled', 'confirmed'], true),
                     'can_cancel' => in_array((string) $appointment->status, ['scheduled', 'confirmed'], true),
                     'can_confirm_payment' => in_array((string) ($appointment->payment_status ?? 'pending'), ['pending', 'partial'], true),
+                    'can_confirm_now' => in_array((string) $appointment->status, ['scheduled', 'confirmed'], true) && $isFuture,
+                    'can_reschedule_now' => in_array((string) $appointment->status, ['scheduled', 'confirmed'], true) && $isFuture,
+                    'can_cancel_now' => in_array((string) $appointment->status, ['scheduled', 'confirmed'], true) && $isFuture,
+                    'is_past' => $isPast,
+                    'is_future' => $isFuture,
+                    'available_slots_url' => url('/api/user/appointments/' . (int) $appointment->id . '/available-slots'),
                 ];
             })->values(),
+        ]);
+    }
+
+    public function customerAvailableSlots(Request $request, Appointment $appointment): JsonResponse
+    {
+        $customerId = (int) (auth()->id() ?? 0);
+
+        if ((int) ($appointment->customer_id ?? 0) !== $customerId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permiso para ver disponibilidad de esta cita.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+        ]);
+
+        $service = $appointment->service;
+        $targetUser = $appointment->assignedUser;
+
+        if (!$service || !$targetUser) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La cita no tiene servicio o profesional asignado.',
+            ], 422);
+        }
+
+        $selectedDate = Carbon::parse((string) $validated['date'])->startOfDay();
+        $slots = $this->buildAvailableSlots((int) $appointment->tenant_id, $targetUser, $service, $selectedDate, (int) $appointment->id);
+
+        return response()->json([
+            'success' => true,
+            'date' => $selectedDate->toDateString(),
+            'appointment_id' => (int) $appointment->id,
+            'service_id' => (int) ($service->id ?? 0),
+            'user_id' => (int) ($targetUser->id ?? 0),
+            'total_slots' => count($slots),
+            'suggested_slots' => array_slice($slots, 0, 6),
+            'slots' => $slots,
         ]);
     }
 
@@ -552,6 +673,14 @@ class AppointmentController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
             'create_sale' => ['nullable', 'boolean'],
         ]);
+
+        $actionCheck = $this->canCustomerPerformWorkflowAction($appointment, (string) ($validated['action'] ?? ''));
+        if (!$actionCheck['allowed']) {
+            return response()->json([
+                'success' => false,
+                'message' => $actionCheck['message'],
+            ], 422);
+        }
 
         $actor = auth()->user();
         $result = $this->applyWorkflowAction($appointment, $validated, $actor, true);
@@ -767,18 +896,30 @@ class AppointmentController extends Controller
                                 ->first();
                         }
 
+                        $paymentReference = trim((string) ($validated['payment_reference'] ?? $appointment->payment_reference ?? '')) ?: null;
+                        if ($paymentMethod && $paymentMethod->usesReference() && !$paymentReference) {
+                            throw new \RuntimeException('Este método de pago requiere referencia.');
+                        }
+
+                        $servicePrice = round((float) ($appointment->service->price ?? 0), 2);
+                        $paymentStatus = ($servicePrice > 0 && $paidAmount < $servicePrice)
+                            ? 'partial'
+                            : 'paid';
+
                         $appointment->paid_amount = $paidAmount;
                         $appointment->payment_method_id = $paymentMethod?->id;
                         $appointment->payment_currency = (string) ($paymentMethod?->currency?->code ?: ($appointment->payment_currency ?: 'USD'));
-                        $appointment->payment_reference = trim((string) ($validated['payment_reference'] ?? $appointment->payment_reference ?? '')) ?: null;
-                        $appointment->payment_status = 'paid';
+                        $appointment->payment_reference = $paymentReference;
+                        $appointment->payment_status = $paymentStatus;
                         $appointment->status = 'confirmed';
                         $appointment->attendance_confirmed_at = $appointment->attendance_confirmed_at ?: now();
                         $appointment->attendance_confirmed_by_user_id = $appointment->attendance_confirmed_by_user_id ?: (int) $actor->id;
                         $appointment->workflow_tag = 'payment_confirmed';
-                        $appointment->workflow_note = $note ?: 'Pago confirmado en cita.';
+                        $appointment->workflow_note = $note ?: ($paymentStatus === 'partial'
+                            ? 'Pago parcial registrado en cita.'
+                            : 'Pago confirmado en cita.');
 
-                        $createSale = (bool) ($validated['create_sale'] ?? true);
+                        $createSale = (bool) ($validated['create_sale'] ?? !$fromCustomer);
                         if ($createSale) {
                             $this->createSaleOrderFromAppointment($appointment, $paymentMethod);
                         }
@@ -826,6 +967,38 @@ class AppointmentController extends Controller
             'confirm_payment' => 'Pago confirmado y cita actualizada.',
             default => 'Cita actualizada.',
         };
+    }
+
+    private function canCustomerPerformWorkflowAction(Appointment $appointment, string $action): array
+    {
+        $appointment->loadMissing(['service']);
+
+        $status = (string) ($appointment->status ?? 'scheduled');
+        $paymentStatus = (string) ($appointment->payment_status ?? 'pending');
+        $startsAt = $appointment->starts_at;
+        $isFuture = $startsAt ? $startsAt->isFuture() : false;
+
+        if ($action === 'confirm_attendance' && !in_array($status, ['scheduled', 'confirmed'], true)) {
+            return ['allowed' => false, 'message' => 'Esta cita no admite confirmación de asistencia.'];
+        }
+
+        if ($action === 'cancel' && !in_array($status, ['scheduled', 'confirmed'], true)) {
+            return ['allowed' => false, 'message' => 'Solo puedes cancelar citas activas.'];
+        }
+
+        if (($action === 'cancel' || $action === 'reschedule') && !$isFuture) {
+            return ['allowed' => false, 'message' => 'Solo puedes gestionar cambios en citas futuras.'];
+        }
+
+        if ($action === 'reschedule' && !in_array($status, ['scheduled', 'confirmed'], true)) {
+            return ['allowed' => false, 'message' => 'Solo puedes reprogramar citas activas.'];
+        }
+
+        if ($action === 'confirm_payment' && !in_array($paymentStatus, ['pending', 'partial'], true)) {
+            return ['allowed' => false, 'message' => 'El pago de esta cita ya fue confirmado.'];
+        }
+
+        return ['allowed' => true, 'message' => null];
     }
 
     private function createSaleOrderFromAppointment(Appointment $appointment, ?PaymentMethod $paymentMethod = null): ?SalesOrder

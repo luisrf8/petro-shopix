@@ -45,6 +45,7 @@ Route::middleware(['auth.jwt'])->group(function () {
     Route::post('/user/change-password', [AuthenticatedSessionController::class, 'changeEcommPassword']);
     Route::get('/user/orders', [SaleController::class, 'viewMyOrders']);
     Route::get('/user/appointments', [AppointmentController::class, 'myAppointments']);
+    Route::get('/user/appointments/{appointment}/available-slots', [AppointmentController::class, 'customerAvailableSlots']);
     Route::post('/user/appointments/{appointment}/action', [AppointmentController::class, 'customerWorkflowAction']);
     Route::post('/create-sale/ecomm', [SaleController::class, 'storeEcommerceSale']);
     Route::get('/notifications', [NotificationController::class, 'apiIndex']);

@@ -1084,6 +1084,9 @@
                     </select>
                     <small class="text-muted d-block mt-1" id="tenant-pro-appointment-slot-note">Te mostraremos los horarios disponibles en tiempo real.</small>
                   </div>
+                  <div class="col-12 d-none" id="tenant-pro-appointment-summary">
+                    <div class="alert alert-light border mb-0 py-2 px-3" id="tenant-pro-appointment-summary-text">Aún no has completado los datos de tu cita.</div>
+                  </div>
                   <div class="col-12">
                     <label class="form-label">Forma de pago de la cita</label>
                     <select id="tenant-pro-appointment-payment-mode" class="form-select">
@@ -1113,8 +1116,12 @@
               <div class="tenant-pro-success-icon">
                 <i class="bi bi-check2-circle"></i>
               </div>
-              <h6 class="mb-2">Pago enviado con éxito</h6>
-              <p>Tu pago ha sido enviado correctamente. Te llegará una notificación con el seguimiento de tu compra.</p>
+              <h6 class="mb-2">Solicitud enviada con éxito</h6>
+              <p id="tenant-pro-success-message">Recibirás una notificación con el seguimiento de tu compra o cita.</p>
+              <div class="d-none" id="tenant-pro-appointment-status-wrap">
+                <span class="badge bg-secondary" id="tenant-pro-appointment-status-badge">Estado de cita</span>
+                <small class="d-block text-muted mt-1" id="tenant-pro-appointment-status-note">Validando estado actual de la cita...</small>
+              </div>
               <a href="#" id="tenant-pro-success-link" class="btn btn-outline-dark btn-sm mt-3 d-none">Ver seguimiento</a>
             </div>
           </div>
@@ -1372,8 +1379,15 @@
     const proAppointmentCalendarNextBtn = document.getElementById('tenant-pro-appointment-calendar-next');
     const proAppointmentCalendarNote = document.getElementById('tenant-pro-appointment-calendar-note');
     const proAppointmentPaymentModeSelect = document.getElementById('tenant-pro-appointment-payment-mode');
+    const proAppointmentSummaryWrap = document.getElementById('tenant-pro-appointment-summary');
+    const proAppointmentSummaryText = document.getElementById('tenant-pro-appointment-summary-text');
     const proPaymentStepNote = document.getElementById('tenant-pro-payment-step-note');
     const proOnSitePaymentNote = document.getElementById('tenant-pro-on-site-payment-note');
+    const proSuccessMessage = document.getElementById('tenant-pro-success-message');
+    const proAppointmentStatusWrap = document.getElementById('tenant-pro-appointment-status-wrap');
+    const proAppointmentStatusBadge = document.getElementById('tenant-pro-appointment-status-badge');
+    const proAppointmentStatusNote = document.getElementById('tenant-pro-appointment-status-note');
+    const tenantProCheckoutModalElement = document.getElementById('tenantProCheckoutModal');
     const proShippingUseProfileLocationBtn = document.getElementById('tenant-pro-shipping-use-profile-location');
     const proShippingUseCurrentLocationBtn = document.getElementById('tenant-pro-shipping-use-current-location');
     const deliveryMapModalElement = document.getElementById('tenantDeliveryMapModal');
@@ -2488,6 +2502,181 @@
     let appointmentCalendarMonth = '';
     let appointmentCalendarDays = [];
     let appointmentLockedServiceId = 0;
+    let appointmentStatusPollingInterval = null;
+    let trackedAppointmentId = 0;
+
+    function clearAppointmentStatusPolling() {
+      if (appointmentStatusPollingInterval) {
+        clearInterval(appointmentStatusPollingInterval);
+        appointmentStatusPollingInterval = null;
+      }
+    }
+
+    function mapAppointmentStatusToBadge(status) {
+      const normalized = String(status || 'scheduled').toLowerCase();
+
+      if (normalized === 'confirmed') {
+        return { label: 'Confirmada', className: 'bg-success' };
+      }
+
+      if (normalized === 'cancelled') {
+        return { label: 'Cancelada', className: 'bg-danger' };
+      }
+
+      if (normalized === 'completed') {
+        return { label: 'Completada', className: 'bg-primary' };
+      }
+
+      if (normalized === 'no_show') {
+        return { label: 'No asistió', className: 'bg-dark' };
+      }
+
+      return { label: 'Pendiente', className: 'bg-warning text-dark' };
+    }
+
+    function renderTrackedAppointmentStatus(appointment) {
+      if (!proAppointmentStatusWrap || !proAppointmentStatusBadge || !proAppointmentStatusNote) {
+        return;
+      }
+
+      if (!appointment || Number(appointment.id || 0) <= 0) {
+        proAppointmentStatusWrap.classList.add('d-none');
+        return;
+      }
+
+      const statusData = mapAppointmentStatusToBadge(appointment.status || appointment.status_label || 'scheduled');
+      proAppointmentStatusWrap.classList.remove('d-none');
+      proAppointmentStatusBadge.className = `badge ${statusData.className}`;
+      proAppointmentStatusBadge.textContent = `Cita ${statusData.label}`;
+
+      const startsAtRaw = String(appointment.starts_at || '').trim();
+      const startsAtLabel = startsAtRaw
+        ? formatAppointmentSelectedDateLabel(startsAtRaw.slice(0, 10)) + (startsAtRaw.length >= 16 ? ` · ${startsAtRaw.slice(11, 16)}` : '')
+        : '';
+
+      proAppointmentStatusNote.textContent = startsAtLabel
+        ? `Agenda: ${startsAtLabel}. Actualizamos este estado automáticamente.`
+        : 'Actualizamos este estado automáticamente.';
+    }
+
+    async function pollTrackedAppointmentStatus() {
+      if (trackedAppointmentId <= 0) {
+        return;
+      }
+
+      const token = getAuthToken();
+      if (!token) {
+        clearAppointmentStatusPolling();
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/user/appointments?view=all&limit=120', {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = await response.json().catch(() => ({}));
+        const appointments = Array.isArray(payload?.appointments) ? payload.appointments : [];
+        const tracked = appointments.find(item => Number(item?.id || 0) === trackedAppointmentId);
+
+        if (!tracked) {
+          return;
+        }
+
+        renderTrackedAppointmentStatus(tracked);
+
+        const trackedStatus = String(tracked.status || '').toLowerCase();
+        if (['cancelled', 'completed', 'no_show'].includes(trackedStatus)) {
+          clearAppointmentStatusPolling();
+        }
+      } catch (error) {
+      }
+    }
+
+    function startAppointmentStatusPolling(appointment) {
+      const appointmentId = Number(appointment?.id || 0);
+      trackedAppointmentId = appointmentId;
+      clearAppointmentStatusPolling();
+
+      if (appointmentId <= 0) {
+        if (proAppointmentStatusWrap) {
+          proAppointmentStatusWrap.classList.add('d-none');
+        }
+        return;
+      }
+
+      renderTrackedAppointmentStatus(appointment);
+      pollTrackedAppointmentStatus().catch(() => {});
+      appointmentStatusPollingInterval = setInterval(() => {
+        pollTrackedAppointmentStatus().catch(() => {});
+      }, 15000);
+    }
+
+    function getSelectedAppointmentService() {
+      const selectedId = Number(proAppointmentServiceSelect?.value || 0);
+      if (selectedId <= 0) {
+        return null;
+      }
+
+      return appointmentCheckoutServices.find(service => Number(service?.id || 0) === selectedId) || null;
+    }
+
+    function getSelectedAppointmentProfessional() {
+      const selectedId = Number(proAppointmentUserSelect?.value || 0);
+      if (selectedId <= 0) {
+        return null;
+      }
+
+      return appointmentCheckoutProfessionals.find(user => Number(user?.id || 0) === selectedId) || null;
+    }
+
+    function renderAppointmentSelectionSummary() {
+      if (!proAppointmentSummaryWrap || !proAppointmentSummaryText) {
+        return;
+      }
+
+      if (!isAppointmentCheckoutActive()) {
+        proAppointmentSummaryWrap.classList.add('d-none');
+        return;
+      }
+
+      const service = getSelectedAppointmentService();
+      const professional = getSelectedAppointmentProfessional();
+      const selectedDate = String(proAppointmentDateInput?.value || '').trim();
+      const selectedTime = String(proAppointmentSlotSelect?.value || '').trim();
+      const paymentMode = String(proAppointmentPaymentModeSelect?.value || 'online');
+
+      const summaryLines = [];
+      if (service) {
+        const durationText = Number(service?.duration_minutes || 0) > 0 ? ` (${Number(service.duration_minutes)} min)` : '';
+        summaryLines.push(`Servicio: ${String(service.name || 'Servicio')}${durationText}`);
+      }
+      if (professional) {
+        summaryLines.push(`Profesional: ${String(professional.name || 'Profesional')}`);
+      }
+      if (selectedDate && selectedTime) {
+        summaryLines.push(`Agenda: ${formatAppointmentSelectedDateLabel(selectedDate)} a las ${selectedTime}`);
+      }
+      if (selectedTime) {
+        summaryLines.push(`Pago: ${paymentMode === 'on_site' ? 'en el lugar' : 'en línea'}`);
+      }
+
+      if (summaryLines.length === 0) {
+        proAppointmentSummaryWrap.classList.add('d-none');
+        proAppointmentSummaryText.textContent = 'Aún no has completado los datos de tu cita.';
+        return;
+      }
+
+      proAppointmentSummaryWrap.classList.remove('d-none');
+      proAppointmentSummaryText.textContent = summaryLines.join(' | ');
+    }
 
     function parseAppointmentMonth(value) {
       const normalized = String(value || '').trim();
@@ -2565,6 +2754,7 @@
 
       const selectedDate = String(proAppointmentDateInput?.value || '').trim();
       proAppointmentDateDisplayInput.value = formatAppointmentSelectedDateLabel(selectedDate);
+      renderAppointmentSelectionSummary();
     }
 
     function resolveLockedAppointmentServiceId() {
@@ -2608,6 +2798,7 @@
 
       proAppointmentServiceWrap?.classList.toggle('d-none', appointmentLockedServiceId > 0);
       proAppointmentServiceSelectedWrap?.classList.toggle('d-none', appointmentLockedServiceId <= 0);
+      renderAppointmentSelectionSummary();
     }
 
     function renderAppointmentCalendar() {
@@ -2779,6 +2970,7 @@
       }
 
       proAppointmentSection?.classList.toggle('d-none', !isAppointment);
+      renderAppointmentSelectionSummary();
       syncAppointmentPaymentModeUi();
     }
 
@@ -2801,6 +2993,10 @@
           '<option value="">Selecciona un profesional</option>',
           ...appointmentCheckoutProfessionals.map(professional => `<option value="${Number(professional.id)}">${escapeHtml(professional.name || 'Profesional')}</option>`),
         ].join('');
+
+        if (appointmentCheckoutProfessionals.length === 1) {
+          proAppointmentUserSelect.value = String(Number(appointmentCheckoutProfessionals[0].id || 0));
+        }
       }
 
       syncSelectedAppointmentDateDisplay();
@@ -2811,6 +3007,7 @@
       }
 
       renderAppointmentCalendar();
+      renderAppointmentSelectionSummary();
     }
 
     async function loadAppointmentCheckoutAvailability() {
@@ -2879,6 +3076,7 @@
         }
         appointmentCalendarDays = [];
         renderAppointmentCalendar();
+        renderAppointmentSelectionSummary();
         syncAppointmentPaymentModeUi();
         return;
       }
@@ -2917,6 +3115,7 @@
         }
         appointmentCalendarDays = [];
         renderAppointmentCalendar();
+        renderAppointmentSelectionSummary();
         syncAppointmentPaymentModeUi();
         return;
       }
@@ -2931,6 +3130,7 @@
         }
         appointmentCalendarDays = [];
         renderAppointmentCalendar();
+        renderAppointmentSelectionSummary();
         syncAppointmentPaymentModeUi();
         return;
       }
@@ -2947,12 +3147,28 @@
       if (payload.calendar_month && /^\d{4}-\d{2}$/.test(String(payload.calendar_month))) {
         appointmentCalendarMonth = String(payload.calendar_month);
       }
+
+      if (!date) {
+        const firstAvailableDate = String((appointmentCalendarDays.find(row => !!row?.has_slots)?.date) || '').trim();
+        if (firstAvailableDate && proAppointmentDateInput && proAppointmentDateInput.value !== firstAvailableDate) {
+          proAppointmentDateInput.value = firstAvailableDate;
+          syncSelectedAppointmentDateDisplay();
+          renderAppointmentCalendar();
+          await refreshAppointmentSlots();
+          return;
+        }
+      }
+
       proAppointmentSlotSelect.innerHTML = date
         ? [
           '<option value="">Selecciona una hora</option>',
           ...slots.map(slot => `<option value="${escapeHtml(slot.start || '')}">${escapeHtml(slot.label || `${slot.start || ''} - ${slot.end || ''}`)}</option>`),
         ].join('')
         : '<option value="">Selecciona un día del calendario</option>';
+
+      if (date && slots.length > 0 && !String(proAppointmentSlotSelect?.value || '').trim()) {
+        proAppointmentSlotSelect.value = String(slots[0]?.start || '');
+      }
 
       renderAppointmentCalendar();
       if (proAppointmentCalendarNote) {
@@ -2972,6 +3188,7 @@
             : 'No hay horarios disponibles para los datos seleccionados.');
       }
 
+      renderAppointmentSelectionSummary();
       syncAppointmentPaymentModeUi();
     }
 
@@ -2992,7 +3209,13 @@
         proAppointmentUserSelect.disabled = true;
       } else {
         proAppointmentUserSelect.disabled = false;
+        const selectedUserId = Number(proAppointmentUserSelect.value || 0);
+        if (selectedUserId <= 0 && appointmentCheckoutProfessionals.length === 1) {
+          proAppointmentUserSelect.value = String(Number(appointmentCheckoutProfessionals[0]?.id || 0));
+        }
       }
+
+      renderAppointmentSelectionSummary();
     }
 
     function syncAppointmentPaymentModeUi() {
@@ -3014,6 +3237,7 @@
       proOnSitePaymentNote?.classList.toggle('d-none', !hasSelectedSlot || !onSite);
       document.getElementById('tenant-pro-payment-rows')?.classList.toggle('d-none', !hasSelectedSlot || onSite);
       document.getElementById('tenant-pro-add-payment-row')?.classList.toggle('d-none', !hasSelectedSlot || onSite);
+      renderAppointmentSelectionSummary();
     }
 
     function validateCheckoutStepOne() {
@@ -3077,11 +3301,26 @@
       return true;
     }
 
-    function showCheckoutSuccess(orderId = null) {
+    function showCheckoutSuccess(orderId = null, options = {}) {
       const successLink = document.getElementById('tenant-pro-success-link');
       if (successLink && orderId) {
         successLink.href = `/publicOrder/${orderId}`;
         successLink.classList.remove('d-none');
+      }
+
+      if (proSuccessMessage) {
+        proSuccessMessage.textContent = options.message || 'Recibirás una notificación con el seguimiento de tu compra o cita.';
+      }
+
+      startAppointmentStatusPolling(options.appointment || null);
+
+      if (options.promptNotifications === true) {
+        window.dispatchEvent(new CustomEvent('shopix:notifications-optin-requested', {
+          detail: {
+            source: 'checkout-success',
+            standaloneOnly: true,
+          },
+        }));
       }
 
       setCheckoutStep(3);
@@ -4159,6 +4398,41 @@
           alert('Debes completar servicio, profesional, fecha y hora de la cita antes de confirmar.');
           return;
         }
+
+        try {
+          const slotParams = new URLSearchParams({
+            service_id: String(selectedAppointmentServiceId),
+            user_id: String(selectedAppointmentUserId),
+            date: selectedAppointmentDate,
+            month: getMonthFromDateValue(selectedAppointmentDate) || appointmentCalendarMonth || new Date().toISOString().slice(0, 7),
+          });
+
+          const slotValidationResponse = await fetch(`${tenantAppointmentAvailabilityEndpoint}?${slotParams.toString()}`, {
+            headers: {
+              Accept: 'application/json',
+            },
+          });
+
+          if (!slotValidationResponse.ok) {
+            alert('No se pudo validar la disponibilidad de la cita. Intenta nuevamente.');
+            return;
+          }
+
+          const slotValidationPayload = await slotValidationResponse.json().catch(() => ({}));
+          const latestSlots = Array.isArray(slotValidationPayload?.slots) ? slotValidationPayload.slots : [];
+          const slotStillAvailable = latestSlots.some(slot => String(slot?.start || '') === selectedAppointmentStartTime);
+
+          if (!slotStillAvailable) {
+            alert('Ese horario ya no está disponible. Te mostramos la disponibilidad más reciente para que selecciones otro horario.');
+            appointmentCalendarDays = Array.isArray(slotValidationPayload?.calendar) ? slotValidationPayload.calendar : appointmentCalendarDays;
+            proAppointmentSlotSelect.value = '';
+            await refreshAppointmentSlots();
+            return;
+          }
+        } catch (error) {
+          alert('No se pudo validar la disponibilidad de la cita. Revisa tu conexión e intenta otra vez.');
+          return;
+        }
       }
 
       const deliveryType = appointmentModeActive
@@ -4326,7 +4600,15 @@
       }
 
       setProSubmitLoading(false);
-      showCheckoutSuccess(data.order_id || null);
+      const successMessage = appointmentModeActive
+        ? `Tu cita fue apartada correctamente para ${formatAppointmentSelectedDateLabel(selectedAppointmentDate)} a las ${selectedAppointmentStartTime}. Te notificaremos cuando el equipo confirme.`
+        : 'Tu compra fue enviada correctamente. Te llegará una notificación con el seguimiento.';
+
+      showCheckoutSuccess(data.order_id || null, {
+        message: successMessage,
+        appointment: data?.appointment || null,
+        promptNotifications: appointmentModeActive,
+      });
       saveCart([]);
     }
 
@@ -4616,6 +4898,14 @@
 
       document.getElementById('tenant-pro-submit-order')?.addEventListener('click', submitProOrder);
     }
+
+    tenantProCheckoutModalElement?.addEventListener('hidden.bs.modal', () => {
+      clearAppointmentStatusPolling();
+      trackedAppointmentId = 0;
+      if (proAppointmentStatusWrap) {
+        proAppointmentStatusWrap.classList.add('d-none');
+      }
+    });
 
     updateDeliveryAddressVisibility();
     bindLocationSelectorEvents(shippingCountrySelect, shippingStateSelect, shippingCitySelect);

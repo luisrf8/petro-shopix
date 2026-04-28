@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\Appointment;
+use App\Models\AppointmentService;
 use App\Models\MaterialPackage;
 use App\Models\PaymentMethod;
 use App\Models\Product;
@@ -32,6 +34,15 @@ class ReportController extends Controller
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $selectedCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) $request->query('currency_code', $baseCurrencyCode));
         $selectedSalesBookSource = (string) $request->query('sales_book_source', 'shopix');
+        $selectedAppointmentStatus = strtolower(trim((string) $request->query('appointment_status', 'all')));
+        $selectedAppointmentPaymentStatus = strtolower(trim((string) $request->query('appointment_payment_status', 'all')));
+        $selectedAppointmentServiceId = (int) $request->query('appointment_service_id', 0);
+
+        $appointmentServices = AppointmentService::query()
+            ->where('tenant_id', (int) $user->tenant_id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
 
         $expenseCategories = StoreExpense::query()
             ->where('tenant_id', $user->tenant_id)
@@ -44,9 +55,17 @@ class ReportController extends Controller
 
         return view('reports.index', [
             'expenseCategories' => $expenseCategories,
+            'appointmentServices' => $appointmentServices,
             'baseCurrencyCode' => $baseCurrencyCode,
             'selectedCurrencyCode' => $selectedCurrencyCode,
             'selectedSalesBookSource' => in_array($selectedSalesBookSource, ['shopix', 'hka'], true) ? $selectedSalesBookSource : 'shopix',
+            'selectedAppointmentStatus' => in_array($selectedAppointmentStatus, ['all', 'scheduled', 'confirmed', 'completed', 'cancelled', 'no_show'], true)
+                ? $selectedAppointmentStatus
+                : 'all',
+            'selectedAppointmentPaymentStatus' => in_array($selectedAppointmentPaymentStatus, ['all', 'pending', 'partial', 'paid', 'waived'], true)
+                ? $selectedAppointmentPaymentStatus
+                : 'all',
+            'selectedAppointmentServiceId' => $selectedAppointmentServiceId,
         ]);
     }
 
@@ -267,6 +286,44 @@ class ReportController extends Controller
         return $this->downloadCsv(
             'reporte_gestion_ventas',
             ['Orden_ID', 'Fecha', 'Cliente', 'Estado', 'Items', 'Total_' . $currency['code'], 'Cobrado_' . $currency['code']],
+            $csvRows
+        );
+    }
+
+    public function appointmentsWorkflowPdf(Request $request)
+    {
+        [$rows, $summary] = $this->buildAppointmentsWorkflowReportData($request);
+
+        return $this->renderPdf(
+            'reports.pdf.appointments-workflow',
+            compact('rows', 'summary'),
+            'reporte_gestion_citas'
+        );
+    }
+
+    public function appointmentsWorkflowExcel(Request $request)
+    {
+        [$rows, $summary] = $this->buildAppointmentsWorkflowReportData($request);
+
+        $csvRows = $rows->map(function (Appointment $appointment) {
+            return [
+                (string) $appointment->id,
+                (string) ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio'),
+                (string) ($appointment->assignedUser->name ?? 'Profesional'),
+                (string) ($appointment->customer->name ?? 'Cliente'),
+                (string) optional($appointment->starts_at)?->format('d/m/Y H:i'),
+                (string) ($appointment->status_label ?? ucfirst((string) ($appointment->status ?? 'scheduled'))),
+                (string) ($appointment->payment_status_label ?? ucfirst((string) ($appointment->payment_status ?? 'pending'))),
+                number_format((float) ($appointment->service_price_report ?? 0), 2, '.', ''),
+                number_format((float) ($appointment->paid_amount_report ?? 0), 2, '.', ''),
+                number_format((float) ($appointment->pending_amount_report ?? 0), 2, '.', ''),
+                (string) ($appointment->workflow_tag ?? ''),
+            ];
+        })->all();
+
+        return $this->downloadCsv(
+            'reporte_gestion_citas',
+            ['Cita_ID', 'Servicio', 'Profesional', 'Cliente', 'Fecha_Hora', 'Estado_Cita', 'Estado_Pago', 'Precio_' . ($summary['currency_code'] ?? 'USD'), 'Cobrado_' . ($summary['currency_code'] ?? 'USD'), 'Pendiente_' . ($summary['currency_code'] ?? 'USD'), 'Flujo'],
             $csvRows
         );
     }
@@ -796,6 +853,65 @@ class ReportController extends Controller
             'expenses' => (int) $rows->count(),
             'total_amount' => (float) $rows->sum('amount'),
             'currency_code' => $currency['code'],
+        ];
+
+        return [$rows, $summary];
+    }
+
+    private function buildAppointmentsWorkflowReportData(Request $request): array
+    {
+        $user = auth()->user();
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+        $appointmentStatus = strtolower(trim((string) $request->query('appointment_status', 'all')));
+        $appointmentPaymentStatus = strtolower(trim((string) $request->query('appointment_payment_status', 'all')));
+        $serviceId = (int) $request->query('appointment_service_id', 0);
+
+        $rows = Appointment::query()
+            ->with(['service', 'assignedUser', 'customer'])
+            ->where('tenant_id', $user->tenant_id)
+            ->whereDate('starts_at', '>=', $startDate->toDateString())
+            ->whereDate('starts_at', '<=', $endDate->toDateString())
+            ->when($appointmentStatus !== 'all', function ($query) use ($appointmentStatus) {
+                $query->where('status', $appointmentStatus);
+            })
+            ->when($appointmentPaymentStatus !== 'all', function ($query) use ($appointmentPaymentStatus) {
+                $query->where('payment_status', $appointmentPaymentStatus);
+            })
+            ->when($serviceId > 0, function ($query) use ($serviceId) {
+                $query->where('appointment_service_id', $serviceId);
+            })
+            ->orderByDesc('starts_at')
+            ->get();
+
+        $rows->transform(function (Appointment $appointment) use ($currency, $user) {
+            $servicePrice = (float) ($appointment->service->price ?? 0);
+            $paidAmount = (float) ($appointment->paid_amount ?? 0);
+            $pendingAmount = max(0, round($servicePrice - $paidAmount, 2));
+
+            $appointment->service_price_report = TenantCurrency::convertAmount($servicePrice, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $appointment->paid_amount_report = TenantCurrency::convertAmount($paidAmount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $appointment->pending_amount_report = TenantCurrency::convertAmount($pendingAmount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+
+            return $appointment;
+        });
+
+        $summary = [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'currency_code' => $currency['code'],
+            'appointments' => (int) $rows->count(),
+            'scheduled' => (int) $rows->where('status', 'scheduled')->count(),
+            'confirmed' => (int) $rows->where('status', 'confirmed')->count(),
+            'cancelled' => (int) $rows->where('status', 'cancelled')->count(),
+            'completed' => (int) $rows->where('status', 'completed')->count(),
+            'pending_payment' => (int) $rows->whereIn('payment_status', ['pending', 'partial'])->count(),
+            'total_service_price' => (float) $rows->sum('service_price_report'),
+            'total_paid' => (float) $rows->sum('paid_amount_report'),
+            'total_pending' => (float) $rows->sum('pending_amount_report'),
+            'appointment_status' => $appointmentStatus,
+            'appointment_payment_status' => $appointmentPaymentStatus,
+            'appointment_service_id' => $serviceId,
         ];
 
         return [$rows, $summary];

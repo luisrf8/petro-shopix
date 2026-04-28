@@ -277,19 +277,19 @@
       @endif
 
         @if($canSell && $planCanSales)
-
-        <li class="nav-item">
-          <a class="nav-link text-dark" href="/sales">
-            <i class="material-symbols-rounded opacity-5">receipt_long</i>
-            <span class="nav-link-text ms-1">Realizar Venta</span>
-          </a>
-        </li>
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/sales">
+              <i class="material-symbols-rounded opacity-5">receipt_long</i>
+              <span class="nav-link-text ms-1">Realizar Venta</span>
+            </a>
+          </li>
+        @endif
 
         @if($canSeeAppointments && $planCanAppointments && $isServiceStore)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/appointments">
               <i class="material-symbols-rounded opacity-5">calendar_month</i>
-              <span class="nav-link-text ms-1">Citas</span>
+              <span class="nav-link-text ms-1">Citas y Servicios</span>
             </a>
           </li>
         @endif
@@ -311,8 +311,6 @@
             </a>
           </li>
         @endif
-
-      @endif
 
       @if($canSeePaidPendingDeliveries && $planCanPaidPendingDeliveries)
         <li class="nav-item">

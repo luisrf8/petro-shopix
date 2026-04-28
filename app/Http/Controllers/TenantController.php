@@ -2159,7 +2159,9 @@ class TenantController extends Controller
                     default => 'Retiro en tienda',
                 };
 
-            $salesOrder = DB::transaction(function () use ($validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted, $baseCurrencyCode, $igtfRate, $deliveryDistanceKm, $isAppointmentOrder, $appointmentService, $appointmentProfessional, $appointmentDate, $appointmentStartTime, $appointmentPaymentMode, $requiresOnlinePayment) {
+            $createdAppointment = null;
+
+            $salesOrder = DB::transaction(function () use (&$createdAppointment, $validated, $tenant, $address, $preference, $markDelivered, $markPaymentsPaid, $markSaleCompleted, $baseCurrencyCode, $igtfRate, $deliveryDistanceKm, $isAppointmentOrder, $appointmentService, $appointmentProfessional, $appointmentDate, $appointmentStartTime, $appointmentPaymentMode, $requiresOnlinePayment) {
                 $salesOrder = SalesOrder::create([
                     'user_id' => (int) $validated['customer_id'],
                     'date' => now()->toDateString(),
@@ -2270,7 +2272,7 @@ class TenantController extends Controller
                     $appointmentEndAt = (clone $appointmentStartAt)->addMinutes(max(15, (int) ($appointmentService->duration_minutes ?? 60)));
                     $customer = User::query()->findOrFail((int) $validated['customer_id']);
 
-                    Appointment::create([
+                    $createdAppointment = Appointment::create([
                         'tenant_id' => (int) $tenant->id,
                         'appointment_service_id' => (int) $appointmentService->id,
                         'user_id' => (int) $appointmentProfessional->id,
@@ -2306,6 +2308,41 @@ class TenantController extends Controller
                 'action' => 'review_order_and_payments',
             ]);
 
+            $customer = User::query()->find((int) $validated['customer_id']);
+            if ($customer) {
+                WorkflowNotifier::notifyUser($customer, [
+                    'title' => $createdAppointment ? 'Cita solicitada' : 'Pedido recibido',
+                    'message' => $createdAppointment
+                        ? 'Tu cita fue registrada. Te notificaremos cuando sea confirmada por el equipo.'
+                        : 'Tu pedido #' . $salesOrder->id . ' fue recibido correctamente.',
+                    'type' => $createdAppointment ? 'appointment-booked' : 'order-received',
+                    'tenant_id' => (int) $tenant->id,
+                    'order_id' => (int) $salesOrder->id,
+                    'action' => $createdAppointment ? 'appointment_pending_confirmation' : 'order_tracking',
+                    'meta' => [
+                        'appointment_id' => $createdAppointment ? (int) $createdAppointment->id : null,
+                        'appointment_start' => $createdAppointment?->starts_at?->toDateTimeString(),
+                        'payment_mode' => $appointmentPaymentMode,
+                    ],
+                ]);
+            }
+
+            if ($createdAppointment && $createdAppointment->assignedUser) {
+                WorkflowNotifier::notifyUser($createdAppointment->assignedUser, [
+                    'title' => 'Nueva cita por confirmar',
+                    'message' => 'Se agendó una cita para ' . optional($createdAppointment->starts_at)?->format('d/m/Y H:i') . '.',
+                    'type' => 'appointment-pending',
+                    'tenant_id' => (int) $tenant->id,
+                    'order_id' => (int) $salesOrder->id,
+                    'action' => 'appointment_review',
+                    'meta' => [
+                        'appointment_id' => (int) $createdAppointment->id,
+                        'customer_name' => (string) ($createdAppointment->contact_name ?? ''),
+                        'payment_mode' => $appointmentPaymentMode,
+                    ],
+                ]);
+            }
+
             if ($validated['delivery_type'] === 'delivery' && !$this->isFreePlanTenantForTenant($tenant) && (bool) ($tenant->delivery_notifications_enabled ?? true) && (bool) ($tenant->delivery_enabled ?? false) && ((bool) ($validated['mark_sale_completed'] ?? false) || (bool) ($validated['mark_payments_paid'] ?? false))) {
                 WorkflowNotifier::notifyTenantRoles((int) $tenant->id, ['almacen', 'delivery'], [
                     'title' => 'Pedido listo para despacho',
@@ -2319,8 +2356,16 @@ class TenantController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Pedido creado correctamente. Tu pedido fue enviado para validación.',
+                'message' => $createdAppointment
+                    ? 'Cita registrada correctamente. Te notificaremos al confirmar la agenda.'
+                    : 'Pedido creado correctamente. Tu pedido fue enviado para validación.',
                 'order_id' => $salesOrder->id,
+                'appointment' => $createdAppointment ? [
+                    'id' => (int) $createdAppointment->id,
+                    'status' => (string) ($createdAppointment->status ?? 'scheduled'),
+                    'starts_at' => optional($createdAppointment->starts_at)?->toDateTimeString(),
+                    'payment_mode' => $appointmentPaymentMode,
+                ] : null,
             ], 201);
         } catch (\RuntimeException $exception) {
             return response()->json([
@@ -2356,6 +2401,7 @@ class TenantController extends Controller
                     'id' => (int) $service->id,
                     'name' => (string) $service->display_name,
                     'duration_minutes' => (int) ($service->duration_minutes ?? 60),
+                    'price' => (float) ($service->price ?? 0),
                     'assigned_user_id' => $service->user_id ? (int) $service->user_id : null,
                     'product_variant_id' => $service->product_variant_id ? (int) $service->product_variant_id : null,
                 ];

@@ -61,6 +61,36 @@
                             </select>
                             <small class="text-muted d-block mt-1">Para el libro de ventas, HKA se usa para reconciliar estatus y controles con la sesión autenticada.</small>
                         </div>
+                        <div class="col-md-4">
+                            <label for="appointment_status" class="form-label">Estado de cita (reporte citas)</label>
+                            <select id="appointment_status" name="appointment_status" class="form-control border border-1 p-2">
+                                <option value="all" {{ request('appointment_status', $selectedAppointmentStatus ?? 'all') === 'all' ? 'selected' : '' }}>Todos</option>
+                                <option value="scheduled" {{ request('appointment_status', $selectedAppointmentStatus ?? 'all') === 'scheduled' ? 'selected' : '' }}>Programada</option>
+                                <option value="confirmed" {{ request('appointment_status', $selectedAppointmentStatus ?? 'all') === 'confirmed' ? 'selected' : '' }}>Confirmada</option>
+                                <option value="completed" {{ request('appointment_status', $selectedAppointmentStatus ?? 'all') === 'completed' ? 'selected' : '' }}>Completada</option>
+                                <option value="cancelled" {{ request('appointment_status', $selectedAppointmentStatus ?? 'all') === 'cancelled' ? 'selected' : '' }}>Cancelada</option>
+                                <option value="no_show" {{ request('appointment_status', $selectedAppointmentStatus ?? 'all') === 'no_show' ? 'selected' : '' }}>No asistió</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="appointment_payment_status" class="form-label">Estado de pago (reporte citas)</label>
+                            <select id="appointment_payment_status" name="appointment_payment_status" class="form-control border border-1 p-2">
+                                <option value="all" {{ request('appointment_payment_status', $selectedAppointmentPaymentStatus ?? 'all') === 'all' ? 'selected' : '' }}>Todos</option>
+                                <option value="pending" {{ request('appointment_payment_status', $selectedAppointmentPaymentStatus ?? 'all') === 'pending' ? 'selected' : '' }}>Pendiente</option>
+                                <option value="partial" {{ request('appointment_payment_status', $selectedAppointmentPaymentStatus ?? 'all') === 'partial' ? 'selected' : '' }}>Parcial</option>
+                                <option value="paid" {{ request('appointment_payment_status', $selectedAppointmentPaymentStatus ?? 'all') === 'paid' ? 'selected' : '' }}>Pagado</option>
+                                <option value="waived" {{ request('appointment_payment_status', $selectedAppointmentPaymentStatus ?? 'all') === 'waived' ? 'selected' : '' }}>Sin cobro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="appointment_service_id" class="form-label">Servicio (reporte citas)</label>
+                            <select id="appointment_service_id" name="appointment_service_id" class="form-control border border-1 p-2">
+                                <option value="0">Todos los servicios</option>
+                                @foreach(($appointmentServices ?? []) as $serviceOption)
+                                    <option value="{{ $serviceOption->id }}" {{ (int) request('appointment_service_id', $selectedAppointmentServiceId ?? 0) === (int) $serviceOption->id ? 'selected' : '' }}>{{ $serviceOption->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="col-12 d-flex gap-2">
                             <button type="submit" class="btn btn-dark mb-0">Aplicar filtros</button>
                             <a href="{{ route('reports.index') }}" class="btn btn-outline-secondary mb-0">Limpiar</a>
@@ -76,6 +106,9 @@
                             'min_pending_balance' => request('min_pending_balance', '0'),
                             'currency_code' => request('currency_code', $selectedCurrencyCode ?? $baseCurrencyCode ?? 'USD'),
                             'sales_book_source' => request('sales_book_source', $selectedSalesBookSource ?? 'shopix'),
+                            'appointment_status' => request('appointment_status', $selectedAppointmentStatus ?? 'all'),
+                            'appointment_payment_status' => request('appointment_payment_status', $selectedAppointmentPaymentStatus ?? 'all'),
+                            'appointment_service_id' => request('appointment_service_id', $selectedAppointmentServiceId ?? 0),
                         ];
                     @endphp
 
@@ -166,6 +199,19 @@
                                     <div class="d-flex gap-2 flex-wrap">
                                         <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.accountsReceivable.pdf', $params) }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0" href="{{ route('reports.accountsReceivable.excel', $params) }}">Excel</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 col-xl-4">
+                            <div class="card h-100 border">
+                                <div class="card-body">
+                                    <h6 class="mb-2">Gestión de citas y flujo</h6>
+                                    <p class="text-sm text-muted mb-3">Agenda, confirmación, cancelaciones, pagos y saldo pendiente por cita.</p>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.appointments.workflow.pdf', $params) }}">PDF</a>
+                                        <a class="btn btn-outline-success btn-sm mb-0" href="{{ route('reports.appointments.workflow.excel', $params) }}">Excel</a>
                                     </div>
                                 </div>
                             </div>

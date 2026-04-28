@@ -1090,6 +1090,24 @@
       });
     }
 
+    function requestNotificationsFromFlow(detail = {}) {
+      const standaloneOnly = detail?.standaloneOnly !== false;
+
+      if (standaloneOnly && !isStandaloneMode()) {
+        return;
+      }
+
+      if (!currentToken || !currentUser?.id) {
+        return;
+      }
+
+      if (!supportsBrowserNotifications() || !vapidPublicKey || Notification.permission !== 'default') {
+        return;
+      }
+
+      requestBrowserNotificationPermission().catch(() => {});
+    }
+
     function openTenantAuthModal() {
       if (authModal && typeof bootstrap !== 'undefined' && bootstrap?.Modal) {
         const offcanvasElement = document.getElementById('tenantCartOffcanvas');
@@ -2076,6 +2094,10 @@
       }
 
       openTenantAuthModal();
+    });
+
+    window.addEventListener('shopix:notifications-optin-requested', (event) => {
+      requestNotificationsFromFlow(event?.detail || {});
     });
 
     logoutButton.addEventListener('click', () => {

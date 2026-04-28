@@ -264,6 +264,8 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/reports/system/modules/excel', [ReportController::class, 'systemModulesExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.system.modules.excel');
     Route::get('/reports/customers/pdf', [ReportController::class, 'customersPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.customers.pdf');
     Route::get('/reports/customers/excel', [ReportController::class, 'customersExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.customers.excel');
+    Route::get('/reports/appointments/workflow/pdf', [ReportController::class, 'appointmentsWorkflowPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.appointments.workflow.pdf');
+    Route::get('/reports/appointments/workflow/excel', [ReportController::class, 'appointmentsWorkflowExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.appointments.workflow.excel');
     Route::get('/reports/accounts-receivable/pdf', [ReportController::class, 'receivablesPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.accountsReceivable.pdf');
     Route::get('/reports/accounts-receivable/excel', [ReportController::class, 'receivablesExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.accountsReceivable.excel');
     Route::get('/reports/sales/book/pdf', [ReportController::class, 'salesBookPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.sales.book.pdf');
