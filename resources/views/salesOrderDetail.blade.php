@@ -16,6 +16,9 @@
       $canRegisterReturn = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canApprovePayments = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canDownloadPdfs = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
+      $canManageAppointmentWorkflow = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
+      $linkedAppointment = $linkedAppointment ?? null;
+      $appointmentPaymentMethods = $appointmentPaymentMethods ?? collect();
       $resolveCurrencySymbol = function (?string $code) {
         $normalized = strtoupper(trim((string) $code));
         if ($normalized === 'EUR') {
@@ -104,6 +107,19 @@
       $visibleTimelineSteps = $isDeliveryOnlyView
         ? array_values(array_filter($timelineSteps, fn (array $step) => in_array($step['title'], ['Orden creada', 'Entrega y despacho', 'Seguimiento del envío'], true)))
         : $timelineSteps;
+      $appointmentStatusLabels = [
+        'scheduled' => 'Programada',
+        'confirmed' => 'Confirmada',
+        'completed' => 'Completada',
+        'cancelled' => 'Cancelada',
+        'no_show' => 'No asistió',
+      ];
+      $appointmentPaymentStatusLabels = [
+        'pending' => 'Pendiente',
+        'partial' => 'Abono parcial',
+        'paid' => 'Pagada',
+        'waived' => 'Sin cobro',
+      ];
     @endphp
     <div class="container-fluid">
       <input type="text" id="user-name" class="d-none" value="{{ $order->user->name }}" readonly>
@@ -337,6 +353,88 @@
       </div>
 
       @unless($isDeliveryOnlyView)
+      @if($linkedAppointment)
+      <div class="card mt-4 order-surface-card" id="linked-appointment-workflow" data-endpoint="{{ route('appointments.workflow', $linkedAppointment->id) }}">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <h6 class="mb-0">Gestión de cita vinculada</h6>
+          <span class="badge bg-gradient-info">Cita #{{ $linkedAppointment->id }}</span>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6 col-xl-3">
+              <small class="text-muted d-block">Servicio</small>
+              <strong>{{ $linkedAppointment->service->display_name ?? $linkedAppointment->service->name ?? 'Servicio' }}</strong>
+            </div>
+            <div class="col-md-6 col-xl-3">
+              <small class="text-muted d-block">Profesional</small>
+              <strong>{{ $linkedAppointment->assignedUser->name ?? 'Sin asignar' }}</strong>
+            </div>
+            <div class="col-md-6 col-xl-3">
+              <small class="text-muted d-block">Fecha y hora</small>
+              <strong>{{ optional($linkedAppointment->starts_at)->format('d/m/Y H:i') ?? 'Sin fecha' }}</strong>
+            </div>
+            <div class="col-md-6 col-xl-3">
+              <small class="text-muted d-block">Estado actual</small>
+              <strong>{{ $appointmentStatusLabels[(string) ($linkedAppointment->status ?? 'scheduled')] ?? ucfirst((string) ($linkedAppointment->status ?? 'scheduled')) }}</strong>
+              <small class="d-block text-muted mt-1">Pago: {{ $appointmentPaymentStatusLabels[(string) ($linkedAppointment->payment_status ?? 'pending')] ?? ucfirst((string) ($linkedAppointment->payment_status ?? 'pending')) }}</small>
+            </div>
+          </div>
+
+          @if($canManageAppointmentWorkflow)
+          <hr>
+          <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+              <label for="appointment-workflow-action" class="form-label">Acción de estatus</label>
+              <select id="appointment-workflow-action" class="form-select border border-1 p-2">
+                <option value="">Selecciona una acción</option>
+                <option value="call_customer">Registrar llamada</option>
+                <option value="confirm_attendance">Confirmar asistencia</option>
+                <option value="cancel">Cancelar cita</option>
+                <option value="no_show">Marcar no asistió</option>
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label for="appointment-workflow-note" class="form-label">Nota (opcional)</label>
+              <input type="text" id="appointment-workflow-note" class="form-control border border-1 p-2" maxlength="1000" placeholder="Detalle para el equipo o cliente">
+            </div>
+            <div class="col-md-3 d-grid">
+              <button type="button" class="btn btn-outline-dark mb-0" onclick="submitLinkedAppointmentWorkflowAction()">Aplicar acción</button>
+            </div>
+          </div>
+
+          <div class="row g-3 align-items-end mt-1">
+            <div class="col-md-3">
+              <label for="appointment-paid-amount" class="form-label">Monto cobrado</label>
+              <input type="number" id="appointment-paid-amount" class="form-control border border-1 p-2" min="0" step="0.01" value="{{ number_format((float) ($linkedAppointment->paid_amount ?? ($linkedAppointment->service->price ?? 0)), 2, '.', '') }}">
+            </div>
+            <div class="col-md-3">
+              <label for="appointment-payment-method" class="form-label">Método de pago</label>
+              <select id="appointment-payment-method" class="form-select border border-1 p-2">
+                <option value="">Sin método</option>
+                @foreach($appointmentPaymentMethods as $method)
+                  <option value="{{ $method->id }}" data-has-reference="{{ $method->usesReference() ? '1' : '0' }}" {{ (int) ($linkedAppointment->payment_method_id ?? 0) === (int) $method->id ? 'selected' : '' }}>
+                    {{ $method->name }}{{ !empty($method->currency?->code) ? ' · ' . $method->currency->code : '' }}
+                  </option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label for="appointment-payment-reference" class="form-label">Referencia</label>
+              <input type="text" id="appointment-payment-reference" class="form-control border border-1 p-2" maxlength="255" value="{{ $linkedAppointment->payment_reference ?? '' }}" placeholder="Número de referencia">
+            </div>
+            <div class="col-md-2 d-grid">
+              <button type="button" class="btn btn-dark mb-0" onclick="confirmLinkedAppointmentPayment()">Confirmar pago</button>
+            </div>
+          </div>
+          <small class="text-muted d-block mt-2" id="linked-appointment-workflow-feedback">Los cambios se aplican en tiempo real sobre la cita vinculada.</small>
+          @else
+          <hr>
+          <small class="text-muted d-block">No tienes permisos para cambiar el estatus de esta cita o confirmar pagos.</small>
+          @endif
+        </div>
+      </div>
+      @endif
+
       @php
         $documentIssueMode = (string) ($order->document_issue_mode ?? 'delivery_note');
       @endphp
@@ -1200,6 +1298,113 @@ function updatePaymentStatus(selectElement, paymentId) {
     .catch(error => {
         console.error("Error:", error);
         restoreText(selectElement, originalText);
+    });
+}
+
+function submitLinkedAppointmentWorkflowAction() {
+  const workflowCard = document.getElementById('linked-appointment-workflow');
+  const actionSelect = document.getElementById('appointment-workflow-action');
+  const noteInput = document.getElementById('appointment-workflow-note');
+
+  if (!workflowCard || !actionSelect) {
+    return;
+  }
+
+  const action = String(actionSelect.value || '').trim();
+  if (!action) {
+    alert('Selecciona una acción de estatus para la cita.');
+    return;
+  }
+
+  runLinkedAppointmentWorkflow({
+    action,
+    note: String(noteInput?.value || '').trim(),
+    create_sale: false,
+  });
+}
+
+function confirmLinkedAppointmentPayment() {
+  const workflowCard = document.getElementById('linked-appointment-workflow');
+  const amountInput = document.getElementById('appointment-paid-amount');
+  const methodSelect = document.getElementById('appointment-payment-method');
+  const referenceInput = document.getElementById('appointment-payment-reference');
+
+  if (!workflowCard || !amountInput) {
+    return;
+  }
+
+  const amount = Number(amountInput.value || 0);
+  const paymentMethodId = Number(methodSelect?.value || 0);
+  const reference = String(referenceInput?.value || '').trim();
+  const selectedMethod = methodSelect?.selectedOptions?.[0] || null;
+  const requiresReference = String(selectedMethod?.dataset?.hasReference || '0') === '1';
+
+  if (amount <= 0) {
+    alert('Indica un monto mayor a 0 para confirmar el pago de la cita.');
+    return;
+  }
+
+  if (requiresReference && !reference) {
+    alert('Este método de pago requiere referencia.');
+    return;
+  }
+
+  runLinkedAppointmentWorkflow({
+    action: 'confirm_payment',
+    paid_amount: amount,
+    payment_method_id: paymentMethodId > 0 ? paymentMethodId : null,
+    payment_reference: reference,
+    create_sale: false,
+    note: 'Pago confirmado desde detalle de orden.',
+  });
+}
+
+function runLinkedAppointmentWorkflow(payload) {
+  const workflowCard = document.getElementById('linked-appointment-workflow');
+  const feedback = document.getElementById('linked-appointment-workflow-feedback');
+  const endpoint = String(workflowCard?.dataset?.endpoint || '').trim();
+
+  if (!endpoint) {
+    return;
+  }
+
+  if (feedback) {
+    feedback.textContent = 'Aplicando cambios en la cita...';
+    feedback.classList.remove('text-danger');
+  }
+
+  fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'X-CSRF-TOKEN': '{{ csrf_token() }}',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: JSON.stringify(payload),
+  })
+    .then(async response => {
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'No se pudo actualizar la cita.');
+      }
+
+      if (feedback) {
+        feedback.textContent = data.message || 'Cita actualizada correctamente.';
+        feedback.classList.remove('text-danger');
+      }
+
+      alert(data.message || 'Cita actualizada correctamente.');
+      location.reload();
+    })
+    .catch(error => {
+      const message = String(error?.message || 'No se pudo actualizar la cita.');
+      if (feedback) {
+        feedback.textContent = message;
+        feedback.classList.add('text-danger');
+      }
+      alert(message);
     });
 }
 

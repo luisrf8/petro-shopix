@@ -1486,11 +1486,18 @@
         },
       });
 
+      const payload = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        throw new Error('No se pudieron cargar las citas.');
+        if (response.status === 401) {
+          clearPersistedTenantAuth(false);
+          applyAuthState(null, '');
+        }
+
+        throw new Error(payload?.message || 'No se pudieron cargar las citas.');
       }
 
-      return response.json();
+      return payload;
     }
 
     async function runAppointmentAction(token, appointmentId, payload) {

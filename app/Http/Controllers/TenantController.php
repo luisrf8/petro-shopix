@@ -2277,6 +2277,7 @@ class TenantController extends Controller
                         'appointment_service_id' => (int) $appointmentService->id,
                         'user_id' => (int) $appointmentProfessional->id,
                         'customer_id' => (int) $customer->id,
+                        'sales_order_id' => (int) $salesOrder->id,
                         'contact_name' => (string) ($customer->name ?? ''),
                         'contact_phone' => (string) ($customer->phone_number ?? ''),
                         'starts_at' => $appointmentStartAt,

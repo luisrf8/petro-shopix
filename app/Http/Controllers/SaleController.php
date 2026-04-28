@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\MaterialPackage;
 use App\Models\SalesReturn;
 use App\Models\SalesReturnItem;
+use App\Models\Appointment;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Support\Facades\Storage;
@@ -1097,6 +1098,10 @@ class SaleController extends Controller
             'retentions',
             'returns.items',
         ])->find($id);
+
+        if (!$order) {
+            abort(404);
+        }
         // Calcular el total de la orden
         $totalOrden = (float) $order->gross_total;
         // Calcular el total pagado
@@ -1127,7 +1132,34 @@ class SaleController extends Controller
             ->filter(fn (User $candidate) => $candidate->hasStoreRole('delivery'))
             ->values();
 
-        return view('salesOrderDetail', compact('order', 'totalOrden', 'totalPagado', 'orderCurrencyCode', 'orderCurrencySymbol', 'deliveryMeta', 'deliveryUsers'));
+        $linkedAppointment = Appointment::query()
+            ->with(['service', 'assignedUser', 'customer', 'paymentMethod.currency'])
+            ->where('tenant_id', (int) $order->tenant_id)
+            ->where('sales_order_id', (int) $order->id)
+            ->latest('id')
+            ->first();
+
+        $appointmentPaymentMethods = collect();
+        if ($linkedAppointment) {
+            $appointmentPaymentMethods = PaymentMethod::query()
+                ->with('currency')
+                ->where('tenant_id', (int) $order->tenant_id)
+                ->active()
+                ->orderBy('name')
+                ->get();
+        }
+
+        return view('salesOrderDetail', compact(
+            'order',
+            'totalOrden',
+            'totalPagado',
+            'orderCurrencyCode',
+            'orderCurrencySymbol',
+            'deliveryMeta',
+            'deliveryUsers',
+            'linkedAppointment',
+            'appointmentPaymentMethods'
+        ));
     }
 
     public function assignDeliveryUser(SalesOrder $order, Request $request)

@@ -547,11 +547,12 @@ class AppointmentController extends Controller
                     'total' => $items->count(),
                     'pending_payment' => $items->whereIn('payment_status', ['pending', 'partial'])->count(),
                     'items' => $items->map(function (Appointment $appointment) {
+                        $service = $appointment->service;
                         return [
                             'id' => (int) $appointment->id,
                             'starts_at' => optional($appointment->starts_at)?->toDateTimeString(),
                             'ends_at' => optional($appointment->ends_at)?->toDateTimeString(),
-                            'service' => (string) ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio'),
+                            'service' => (string) (optional($service)->display_name ?? optional($service)->name ?? 'Servicio'),
                             'status' => (string) ($appointment->status ?? 'scheduled'),
                             'payment_status' => (string) ($appointment->payment_status ?? 'pending'),
                         ];
@@ -576,15 +577,17 @@ class AppointmentController extends Controller
                 $startsAt = $appointment->starts_at;
                 $isFuture = $startsAt ? $startsAt->isFuture() : false;
                 $isPast = $startsAt ? $startsAt->isPast() : false;
-                $servicePrice = round((float) ($appointment->service->price ?? 0), 2);
+                $service = $appointment->service;
+                $professional = $appointment->assignedUser;
+                $servicePrice = round((float) (optional($service)->price ?? 0), 2);
                 $paidAmount = round((float) ($appointment->paid_amount ?? 0), 2);
                 $pendingAmount = $servicePrice > 0 ? max(0, round($servicePrice - $paidAmount, 2)) : 0;
 
                 return [
                     'id' => (int) $appointment->id,
                     'tenant_id' => (int) $appointment->tenant_id,
-                    'service' => (string) ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio'),
-                    'professional' => (string) ($appointment->assignedUser->name ?? 'Profesional'),
+                    'service' => (string) (optional($service)->display_name ?? optional($service)->name ?? 'Servicio'),
+                    'professional' => (string) (optional($professional)->name ?? 'Profesional'),
                     'starts_at' => optional($appointment->starts_at)?->toDateTimeString(),
                     'ends_at' => optional($appointment->ends_at)?->toDateTimeString(),
                     'status' => (string) ($appointment->status ?? 'scheduled'),
