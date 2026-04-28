@@ -2818,6 +2818,8 @@
       const monthStart = new Date(parsed.year, parsed.month - 1, 1);
       const monthEnd = new Date(parsed.year, parsed.month, 0);
       const selectedDate = String(proAppointmentDateInput?.value || '').trim();
+      const nowLocal = new Date();
+      const todayIso = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`;
       const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
       const startWeekday = (monthStart.getDay() + 6) % 7;
       const totalDays = monthEnd.getDate();
@@ -2844,13 +2846,16 @@
         const hasSlots = !!row?.has_slots;
         const isSelected = selectedDate === dateValue;
         const isToday = !!row?.is_today;
+        const isPastDate = dateValue < todayIso;
         const buttonClass = isSelected
           ? 'btn btn-dark btn-sm w-100'
-          : (hasSlots ? 'btn btn-outline-dark btn-sm w-100' : 'btn btn-light btn-sm w-100 text-muted');
-        const title = hasSlots ? `${slotsCount} horario(s)` : 'Sin disponibilidad';
+          : (hasSlots ? 'btn btn-outline-dark btn-sm w-100' : 'btn btn-outline-secondary btn-sm w-100');
+        const title = hasSlots
+          ? `${slotsCount} horario(s)`
+          : (isPastDate ? 'Fecha pasada' : 'Consultar horarios');
 
         cells.push(`
-          <button type="button" class="${buttonClass}" data-appointment-calendar-date="${dateValue}" ${hasSlots ? '' : 'disabled'} title="${title}">
+          <button type="button" class="${buttonClass}" data-appointment-calendar-date="${dateValue}" ${isPastDate ? 'disabled' : ''} title="${title}">
             <span>${day}</span>${isToday ? '<span class="d-block" style="font-size:10px;line-height:1;">Hoy</span>' : ''}
           </button>
         `);
@@ -3175,7 +3180,7 @@
         const availableDays = appointmentCalendarDays.filter(row => !!row?.has_slots).length;
         proAppointmentCalendarNote.textContent = availableDays > 0
           ? `${availableDays} día(s) con disponibilidad en ${formatAppointmentCalendarLabel(appointmentCalendarMonth)}.`
-          : 'No hay días disponibles en el mes seleccionado para ese servicio/profesional.';
+          : 'No se detectaron días con cupo en la vista mensual. Puedes tocar una fecha para validar horarios en tiempo real.';
       }
 
       syncSelectedAppointmentDateDisplay();
