@@ -2699,19 +2699,34 @@
       return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized.slice(0, 7) : '';
     }
 
-    function getAppointmentCalendarMonthBase() {
-      const parsed = parseAppointmentMonth(appointmentCalendarMonth);
-      if (parsed) {
-        return new Date(parsed.year, parsed.month - 1, 1);
-      }
+    function getCurrentLocalDateValue() {
+      const nowLocal = new Date();
+      return `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`;
+    }
 
-      return new Date();
+    function getCurrentLocalMonthValue() {
+      return getCurrentLocalDateValue().slice(0, 7);
+    }
+
+    function shiftMonthValue(monthValue, step) {
+      const parsed = parseAppointmentMonth(monthValue);
+      const base = parsed
+        ? new Date(parsed.year, parsed.month - 1, 1)
+        : new Date();
+
+      base.setMonth(base.getMonth() + Number(step || 0));
+      return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function findFirstAvailableCalendarDate(calendarDays) {
+      const todayIso = getCurrentLocalDateValue();
+      return String((Array.isArray(calendarDays)
+        ? calendarDays.find(row => !!row?.has_slots && String(row?.date || '') >= todayIso)
+        : null)?.date || '').trim();
     }
 
     function shiftAppointmentCalendarMonth(step) {
-      const base = getAppointmentCalendarMonthBase();
-      base.setMonth(base.getMonth() + Number(step || 0));
-      const next = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`;
+      const next = shiftMonthValue(appointmentCalendarMonth, step);
       appointmentCalendarMonth = next;
       renderAppointmentCalendar();
       refreshAppointmentSlots();
@@ -2818,8 +2833,7 @@
       const monthStart = new Date(parsed.year, parsed.month - 1, 1);
       const monthEnd = new Date(parsed.year, parsed.month, 0);
       const selectedDate = String(proAppointmentDateInput?.value || '').trim();
-      const nowLocal = new Date();
-      const todayIso = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`;
+      const todayIso = getCurrentLocalDateValue();
       const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
       const startWeekday = (monthStart.getDay() + 6) % 7;
       const totalDays = monthEnd.getDate();
@@ -2847,15 +2861,16 @@
         const isSelected = selectedDate === dateValue;
         const isToday = !!row?.is_today;
         const isPastDate = dateValue < todayIso;
+        const isEnabled = hasSlots && !isPastDate;
         const buttonClass = isSelected
           ? 'btn btn-dark btn-sm w-100'
           : (hasSlots ? 'btn btn-outline-dark btn-sm w-100' : 'btn btn-outline-secondary btn-sm w-100');
         const title = hasSlots
           ? `${slotsCount} horario(s)`
-          : (isPastDate ? 'Fecha pasada' : 'Consultar horarios');
+          : (isPastDate ? 'Fecha pasada' : 'Sin horarios disponibles');
 
         cells.push(`
-          <button type="button" class="${buttonClass}" data-appointment-calendar-date="${dateValue}" ${isPastDate ? 'disabled' : ''} title="${title}">
+          <button type="button" class="${buttonClass}" data-appointment-calendar-date="${dateValue}" ${isEnabled ? '' : 'disabled'} title="${title}">
             <span>${day}</span>${isToday ? '<span class="d-block" style="font-size:10px;line-height:1;">Hoy</span>' : ''}
           </button>
         `);
@@ -3008,7 +3023,7 @@
 
       const dateMonth = getMonthFromDateValue(proAppointmentDateInput?.value || '');
       if (!appointmentCalendarMonth) {
-        appointmentCalendarMonth = dateMonth || new Date().toISOString().slice(0, 7);
+        appointmentCalendarMonth = dateMonth || getCurrentLocalMonthValue();
       }
 
       renderAppointmentCalendar();
@@ -3064,7 +3079,7 @@
       const hasLockedService = appointmentLockedServiceId > 0;
 
       if (!appointmentCalendarMonth) {
-        appointmentCalendarMonth = getMonthFromDateValue(date) || new Date().toISOString().slice(0, 7);
+        appointmentCalendarMonth = getMonthFromDateValue(date) || getCurrentLocalMonthValue();
       }
 
       if (serviceId <= 0 || userId <= 0) {
@@ -3093,23 +3108,33 @@
           : 'Cargando disponibilidad del calendario...';
       }
 
-      const params = new URLSearchParams({
-        service_id: String(serviceId),
-        user_id: String(userId),
-        month: appointmentCalendarMonth,
-      });
+      async function fetchAppointmentAvailability(monthValue, dateValue = '') {
+        const params = new URLSearchParams({
+          service_id: String(serviceId),
+          user_id: String(userId),
+          month: monthValue,
+        });
 
-      if (date) {
-        params.set('date', date);
-      }
+        if (dateValue) {
+          params.set('date', dateValue);
+        }
 
-      let response;
-      try {
-        response = await fetch(`${tenantAppointmentAvailabilityEndpoint}?${params.toString()}`, {
+        const response = await fetch(`${tenantAppointmentAvailabilityEndpoint}?${params.toString()}`, {
           headers: {
             Accept: 'application/json',
           },
         });
+
+        if (!response.ok) {
+          throw new Error('availability_request_failed');
+        }
+
+        return response.json().catch(() => ({}));
+      }
+
+      let payload = {};
+      try {
+        payload = await fetchAppointmentAvailability(appointmentCalendarMonth, date);
       } catch (error) {
         proAppointmentSlotSelect.innerHTML = '<option value="">No se pudo consultar la disponibilidad</option>';
         if (proAppointmentSlotNote) {
@@ -3125,26 +3150,22 @@
         return;
       }
 
-      if (!response.ok) {
-        proAppointmentSlotSelect.innerHTML = '<option value="">No se pudo consultar la disponibilidad</option>';
-        if (proAppointmentSlotNote) {
-          proAppointmentSlotNote.textContent = 'No fue posible cargar los horarios.';
-        }
-        if (proAppointmentCalendarNote) {
-          proAppointmentCalendarNote.textContent = 'No se pudo cargar el calendario en este momento.';
-        }
-        appointmentCalendarDays = [];
-        renderAppointmentCalendar();
-        renderAppointmentSelectionSummary();
-        syncAppointmentPaymentModeUi();
-        return;
-      }
+      if (!date) {
+        let scannedMonths = 0;
+        let availableDateInMonth = findFirstAvailableCalendarDate(payload?.calendar || []);
 
-      let payload = {};
-      try {
-        payload = await response.json();
-      } catch (error) {
-        payload = {};
+        while (!availableDateInMonth && scannedMonths < 5) {
+          const nextMonth = shiftMonthValue(String(payload?.calendar_month || appointmentCalendarMonth), 1);
+
+          try {
+            payload = await fetchAppointmentAvailability(nextMonth, '');
+          } catch (error) {
+            break;
+          }
+
+          scannedMonths += 1;
+          availableDateInMonth = findFirstAvailableCalendarDate(payload?.calendar || []);
+        }
       }
 
       const slots = date && Array.isArray(payload.slots) ? payload.slots : [];
@@ -3154,12 +3175,26 @@
       }
 
       if (!date) {
-        const firstAvailableDate = String((appointmentCalendarDays.find(row => !!row?.has_slots)?.date) || '').trim();
+        const firstAvailableDate = findFirstAvailableCalendarDate(appointmentCalendarDays);
         if (firstAvailableDate && proAppointmentDateInput && proAppointmentDateInput.value !== firstAvailableDate) {
           proAppointmentDateInput.value = firstAvailableDate;
           syncSelectedAppointmentDateDisplay();
           renderAppointmentCalendar();
           await refreshAppointmentSlots();
+          return;
+        }
+
+        if (!firstAvailableDate) {
+          proAppointmentSlotSelect.innerHTML = '<option value="">Sin horarios disponibles</option>';
+          if (proAppointmentCalendarNote) {
+            proAppointmentCalendarNote.textContent = 'No encontramos días disponibles para este profesional en los próximos meses.';
+          }
+          if (proAppointmentSlotNote) {
+            proAppointmentSlotNote.textContent = 'Prueba con otro profesional o servicio.';
+          }
+          renderAppointmentCalendar();
+          renderAppointmentSelectionSummary();
+          syncAppointmentPaymentModeUi();
           return;
         }
       }
@@ -3180,7 +3215,7 @@
         const availableDays = appointmentCalendarDays.filter(row => !!row?.has_slots).length;
         proAppointmentCalendarNote.textContent = availableDays > 0
           ? `${availableDays} día(s) con disponibilidad en ${formatAppointmentCalendarLabel(appointmentCalendarMonth)}.`
-          : 'No se detectaron días con cupo en la vista mensual. Puedes tocar una fecha para validar horarios en tiempo real.';
+          : 'No se detectaron días con disponibilidad en este mes para el profesional seleccionado.';
       }
 
       syncSelectedAppointmentDateDisplay();
@@ -4409,7 +4444,7 @@
             service_id: String(selectedAppointmentServiceId),
             user_id: String(selectedAppointmentUserId),
             date: selectedAppointmentDate,
-            month: getMonthFromDateValue(selectedAppointmentDate) || appointmentCalendarMonth || new Date().toISOString().slice(0, 7),
+            month: getMonthFromDateValue(selectedAppointmentDate) || appointmentCalendarMonth || getCurrentLocalMonthValue(),
           });
 
           const slotValidationResponse = await fetch(`${tenantAppointmentAvailabilityEndpoint}?${slotParams.toString()}`, {
