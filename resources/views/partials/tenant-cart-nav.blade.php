@@ -214,6 +214,193 @@
     gap: 0.35rem;
   }
 
+  #tenantAppointmentsModal .modal-dialog {
+    max-width: 620px;
+  }
+
+  #tenant-appointments-list {
+    gap: 0.75rem !important;
+  }
+
+  .tenant-appointment-card {
+    border-radius: 16px;
+    border: 1px solid #dde5f0;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    padding: 0.95rem;
+  }
+
+  .tenant-appointment-card.is-payment-pending {
+    border-color: rgba(var(--tenant-accent-rgb), 0.35);
+    box-shadow: inset 0 0 0 1px rgba(var(--tenant-accent-rgb), 0.1);
+  }
+
+  .tenant-appointment-title {
+    font-size: 1.14rem;
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #111827;
+  }
+
+  .tenant-appointment-meta {
+    color: #475569;
+    font-size: 0.92rem;
+    line-height: 1.35;
+  }
+
+  .tenant-appointment-paid {
+    color: #334155;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .tenant-appointment-state-chip {
+    padding: 0.36rem 0.62rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+    border-color: #d7e2ef;
+    background: #fff;
+  }
+
+  .tenant-appointment-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .tenant-appointment-action {
+    border-radius: 10px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    padding: 0.42rem 0.72rem;
+  }
+
+  .tenant-appointment-action-main {
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    border-color: transparent;
+    color: #fff;
+  }
+
+  .tenant-appointment-action-main:hover,
+  .tenant-appointment-action-main:focus {
+    color: #fff;
+    filter: brightness(0.98);
+  }
+
+  .tenant-appointment-action-soft {
+    border-color: rgba(var(--tenant-primary-rgb), 0.22);
+    color: #1f2937;
+    background: #ffffff;
+  }
+
+  .tenant-appointment-action-soft:hover,
+  .tenant-appointment-action-soft:focus {
+    border-color: rgba(var(--tenant-accent-rgb), 0.48);
+    background: #f8fbff;
+    color: #0f172a;
+  }
+
+  @media (max-width: 575.98px) {
+    .tenant-appointment-actions .tenant-appointment-action {
+      flex: 1 1 calc(50% - 0.45rem);
+      text-align: center;
+    }
+  }
+
+  #tenantAppointmentPaymentModal .modal-dialog,
+  #tenantAppointmentRescheduleModal .modal-dialog {
+    max-width: 560px;
+  }
+
+  .tenant-appointment-modal-shell {
+    border: 1px solid #dde6f2;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    padding: 0.85rem;
+  }
+
+  .tenant-appointment-modal-shell.is-context {
+    border-left: 4px solid rgba(var(--tenant-accent-rgb), 0.75);
+    padding-left: 0.75rem;
+  }
+
+  #tenantAppointmentPaymentModal .form-control,
+  #tenantAppointmentPaymentModal .form-select,
+  #tenantAppointmentRescheduleModal .form-control,
+  #tenantAppointmentRescheduleModal .form-select {
+    border-radius: 12px;
+    border-color: #cdd8e6;
+  }
+
+  #tenantAppointmentPaymentModal .form-control:focus,
+  #tenantAppointmentPaymentModal .form-select:focus,
+  #tenantAppointmentRescheduleModal .form-control:focus,
+  #tenantAppointmentRescheduleModal .form-select:focus {
+    border-color: rgba(var(--tenant-accent-rgb), 0.75);
+    box-shadow: 0 0 0 0.18rem rgba(var(--tenant-accent-rgb), 0.16);
+  }
+
+  .tenant-appointment-modal-footer {
+    border-top: 1px solid #e4eaf3;
+    background: #ffffff;
+  }
+
+  .tenant-appointment-modal-cancel {
+    border-radius: 12px;
+    border-color: #cfd8e5;
+    color: #334155;
+    font-weight: 600;
+  }
+
+  .tenant-appointment-modal-primary {
+    border-radius: 12px;
+    border: 0;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    color: #fff;
+  }
+
+  .tenant-appointment-modal-primary:hover,
+  .tenant-appointment-modal-primary:focus {
+    color: #fff;
+    filter: brightness(0.98);
+  }
+
+  .tenant-reschedule-calendar-shell {
+    border: 1px solid #dbe4ef;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 0.65rem;
+  }
+
+  .tenant-reschedule-calendar-label {
+    font-size: 0.96rem;
+    font-weight: 700;
+    color: #0f172a;
+    text-transform: capitalize;
+  }
+
+  .tenant-reschedule-weekday {
+    font-size: 0.72rem;
+    color: #64748b;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-align: center;
+  }
+
+  .tenant-reschedule-day-btn {
+    border-radius: 10px;
+    min-height: 34px;
+    font-weight: 600;
+  }
+
+  .tenant-reschedule-day-btn.is-selected {
+    background: linear-gradient(135deg, var(--tenant-primary), var(--tenant-secondary));
+    border-color: transparent;
+    color: #fff;
+  }
+
   .tenant-appointment-state-chip {
     display: inline-flex;
     align-items: center;
@@ -539,6 +726,53 @@
   </div>
 </div>
 
+<div class="modal fade tenant-modern-modal" id="tenantAppointmentPaymentModal" tabindex="-1" aria-labelledby="tenantAppointmentPaymentModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="tenantAppointmentPaymentModalLabel">Registrar pago de cita</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body d-flex flex-column gap-3">
+        <div class="tenant-customer-info-shell tenant-appointment-modal-shell is-context">
+          <p class="tenant-customer-info-label mb-1">Cita seleccionada</p>
+          <p class="tenant-customer-info-value mb-0" id="tenant-appointment-payment-context">-</p>
+        </div>
+
+        <div class="tenant-customer-info-shell tenant-appointment-modal-shell">
+          <div class="row g-2 align-items-end">
+            <div class="col-12">
+              <label for="tenant-appointment-payment-method" class="tenant-customer-info-label">Método de pago</label>
+              <select id="tenant-appointment-payment-method" class="form-select">
+                <option value="">Selecciona un método</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="tenant-appointment-payment-amount" class="tenant-customer-info-label">Monto pagado</label>
+              <input type="number" min="0" step="0.01" id="tenant-appointment-payment-amount" class="form-control" placeholder="0.00">
+            </div>
+            <div class="col-12 col-md-6">
+              <label for="tenant-appointment-payment-currency" class="tenant-customer-info-label">Moneda</label>
+              <input type="text" id="tenant-appointment-payment-currency" class="form-control" value="USD" readonly>
+            </div>
+            <div class="col-12" id="tenant-appointment-payment-reference-wrap">
+              <label for="tenant-appointment-payment-reference" class="tenant-customer-info-label">Referencia de pago</label>
+              <input type="text" id="tenant-appointment-payment-reference" class="form-control" maxlength="255" placeholder="Opcional">
+            </div>
+            <div class="col-12">
+              <small class="text-muted d-block" id="tenant-appointment-payment-note">Completa los datos para confirmar el pago.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer tenant-appointment-modal-footer">
+        <button type="button" class="btn tenant-appointment-modal-cancel mb-0" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn tenant-appointment-modal-primary mb-0" id="tenant-appointment-payment-submit">Confirmar pago</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade tenant-modern-modal" id="tenantAppointmentRescheduleModal" tabindex="-1" aria-labelledby="tenantAppointmentRescheduleModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
@@ -547,20 +781,20 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body d-flex flex-column gap-3">
-        <div class="tenant-customer-info-shell">
+        <div class="tenant-customer-info-shell tenant-appointment-modal-shell is-context">
           <p class="tenant-customer-info-label mb-1">Cita seleccionada</p>
           <p class="tenant-customer-info-value mb-0" id="tenant-appointment-reschedule-context">-</p>
         </div>
 
-        <div class="tenant-customer-info-shell">
+        <div class="tenant-customer-info-shell tenant-appointment-modal-shell">
           <div class="row g-2 align-items-end">
             <div class="col-12">
               <label class="tenant-customer-info-label d-block mb-1">Calendario de disponibilidad</label>
-              <div class="border rounded p-2">
+              <div class="tenant-reschedule-calendar-shell">
                 <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
-                  <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="tenant-appointment-reschedule-calendar-prev">Mes anterior</button>
-                  <strong id="tenant-appointment-reschedule-calendar-label">-</strong>
-                  <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="tenant-appointment-reschedule-calendar-next">Mes siguiente</button>
+                  <button type="button" class="btn btn-sm tenant-appointment-action tenant-appointment-action-soft mb-0" id="tenant-appointment-reschedule-calendar-prev">Mes anterior</button>
+                  <strong id="tenant-appointment-reschedule-calendar-label" class="tenant-reschedule-calendar-label">-</strong>
+                  <button type="button" class="btn btn-sm tenant-appointment-action tenant-appointment-action-soft mb-0" id="tenant-appointment-reschedule-calendar-next">Mes siguiente</button>
                 </div>
                 <div class="d-grid" style="grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px;" id="tenant-appointment-reschedule-calendar-grid"></div>
               </div>
@@ -583,9 +817,9 @@
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-dark mb-0" id="tenant-appointment-reschedule-submit">Guardar cambio</button>
+      <div class="modal-footer tenant-appointment-modal-footer">
+        <button type="button" class="btn tenant-appointment-modal-cancel mb-0" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn tenant-appointment-modal-primary mb-0" id="tenant-appointment-reschedule-submit">Guardar cambio</button>
       </div>
     </div>
   </div>
@@ -766,6 +1000,15 @@
     const ordersModal = document.getElementById('tenantOrdersModal');
     const appointmentsList = document.getElementById('tenant-appointments-list');
     const appointmentsModal = document.getElementById('tenantAppointmentsModal');
+    const appointmentPaymentModal = document.getElementById('tenantAppointmentPaymentModal');
+    const appointmentPaymentContext = document.getElementById('tenant-appointment-payment-context');
+    const appointmentPaymentMethodSelect = document.getElementById('tenant-appointment-payment-method');
+    const appointmentPaymentAmountInput = document.getElementById('tenant-appointment-payment-amount');
+    const appointmentPaymentCurrencyInput = document.getElementById('tenant-appointment-payment-currency');
+    const appointmentPaymentReferenceWrap = document.getElementById('tenant-appointment-payment-reference-wrap');
+    const appointmentPaymentReferenceInput = document.getElementById('tenant-appointment-payment-reference');
+    const appointmentPaymentNote = document.getElementById('tenant-appointment-payment-note');
+    const appointmentPaymentSubmitBtn = document.getElementById('tenant-appointment-payment-submit');
     const appointmentRescheduleModal = document.getElementById('tenantAppointmentRescheduleModal');
     const appointmentRescheduleContext = document.getElementById('tenant-appointment-reschedule-context');
     const appointmentRescheduleDateInput = document.getElementById('tenant-appointment-reschedule-date');
@@ -794,6 +1037,8 @@
     let tenantToastContainer = document.getElementById('tenant-toast-container');
     let serviceWorkerRegistrationPromise = null;
     let tenantAppointmentsById = new Map();
+    let tenantAppointmentPaymentMethods = [];
+    let paymentAppointmentId = 0;
     let rescheduleAppointmentId = 0;
     let rescheduleCalendarMonth = '';
     let rescheduleCalendarDays = [];
@@ -808,6 +1053,10 @@
 
     if (appointmentsModal && appointmentsModal.parentElement !== document.body) {
       document.body.appendChild(appointmentsModal);
+    }
+
+    if (appointmentPaymentModal && appointmentPaymentModal.parentElement !== document.body) {
+      document.body.appendChild(appointmentPaymentModal);
     }
 
     if (appointmentRescheduleModal && appointmentRescheduleModal.parentElement !== document.body) {
@@ -1719,7 +1968,7 @@
 
       const cells = [];
       weekdayLabels.forEach(label => {
-        cells.push(`<div class="small text-muted text-center">${label}</div>`);
+        cells.push(`<div class="tenant-reschedule-weekday">${label}</div>`);
       });
 
       for (let index = 0; index < startWeekday; index += 1) {
@@ -1737,8 +1986,10 @@
         const isEnabled = hasSlots && !isPastDate;
         const isSelected = selectedDate === dateValue;
         const buttonClass = isSelected
-          ? 'btn btn-dark btn-sm w-100'
-          : (hasSlots ? 'btn btn-outline-dark btn-sm w-100' : 'btn btn-outline-secondary btn-sm w-100');
+          ? 'btn btn-dark btn-sm w-100 tenant-reschedule-day-btn is-selected'
+          : (hasSlots
+            ? 'btn btn-outline-dark btn-sm w-100 tenant-reschedule-day-btn'
+            : 'btn btn-outline-secondary btn-sm w-100 tenant-reschedule-day-btn');
 
         const title = hasSlots
           ? `${slotsCount} horario(s)`
@@ -1872,6 +2123,79 @@
       const modalInstance = bootstrap.Modal.getOrCreateInstance(appointmentRescheduleModal);
       modalInstance.show();
       refreshRescheduleAvailability().catch(() => {});
+    }
+
+    function syncAppointmentPaymentMethodUi() {
+      if (!appointmentPaymentMethodSelect) {
+        return;
+      }
+
+      const selectedId = Number(appointmentPaymentMethodSelect.value || 0);
+      const selectedMethod = tenantAppointmentPaymentMethods.find(method => Number(method?.id || 0) === selectedId) || null;
+      const currencyCode = selectedMethod?.currency_code ? String(selectedMethod.currency_code) : 'USD';
+      const requiresReference = !!selectedMethod?.uses_reference;
+
+      if (appointmentPaymentCurrencyInput) {
+        appointmentPaymentCurrencyInput.value = currencyCode;
+      }
+
+      if (appointmentPaymentReferenceWrap) {
+        appointmentPaymentReferenceWrap.classList.toggle('d-none', !requiresReference);
+      }
+
+      if (appointmentPaymentReferenceInput && !requiresReference) {
+        appointmentPaymentReferenceInput.value = '';
+      }
+
+      if (appointmentPaymentNote) {
+        appointmentPaymentNote.textContent = requiresReference
+          ? 'Este método requiere referencia de pago.'
+          : 'Completa los datos para confirmar el pago.';
+      }
+    }
+
+    function openAppointmentPaymentModal(row) {
+      if (!appointmentPaymentModal || !appointmentPaymentMethodSelect || !appointmentPaymentAmountInput) {
+        return;
+      }
+
+      const appointmentId = Number(row?.id || 0);
+      if (appointmentId <= 0) {
+        return;
+      }
+
+      paymentAppointmentId = appointmentId;
+      const servicePrice = Number(row?.service_price || 0);
+      const pendingAmount = Number(row?.pending_amount || 0);
+      const defaultAmount = pendingAmount > 0 ? pendingAmount : servicePrice;
+
+      if (appointmentPaymentContext) {
+        appointmentPaymentContext.textContent = `${row?.service || 'Servicio'} · ${row?.professional || 'Profesional'}`;
+      }
+
+      appointmentPaymentAmountInput.value = defaultAmount > 0 ? defaultAmount.toFixed(2) : '';
+
+      const options = ['<option value="">Selecciona un método</option>'];
+      tenantAppointmentPaymentMethods.forEach((method) => {
+        const currencyCode = String(method?.currency_code || 'USD').trim();
+        const methodLabel = `${method?.name || 'Método'}${currencyCode ? ` · ${currencyCode}` : ''}`;
+        options.push(`<option value="${Number(method?.id || 0)}">${methodLabel}</option>`);
+      });
+      appointmentPaymentMethodSelect.innerHTML = options.join('');
+
+      const preferredMethodId = Number(row?.payment_method_id || 0);
+      if (preferredMethodId > 0 && tenantAppointmentPaymentMethods.some(method => Number(method?.id || 0) === preferredMethodId)) {
+        appointmentPaymentMethodSelect.value = String(preferredMethodId);
+      }
+
+      if (appointmentPaymentReferenceInput) {
+        appointmentPaymentReferenceInput.value = '';
+      }
+
+      syncAppointmentPaymentMethodUi();
+
+      const modalInstance = bootstrap.Modal.getOrCreateInstance(appointmentPaymentModal);
+      modalInstance.show();
     }
 
     function showTenantToast(title, message) {
@@ -2058,6 +2382,7 @@
 
     function renderAppointments(payload) {
       const rows = Array.isArray(payload?.appointments) ? payload.appointments : [];
+      tenantAppointmentPaymentMethods = Array.isArray(payload?.payment_methods) ? payload.payment_methods : [];
       tenantAppointmentsById = new Map(rows.map(row => [Number(row?.id || 0), row]));
       if (rows.length === 0) {
         appointmentsList.innerHTML = '<p class="text-muted mb-0">Todavía no tienes citas registradas.</p>';
@@ -2065,35 +2390,44 @@
       }
 
       appointmentsList.innerHTML = rows.map(row => {
-        const startsAt = row.starts_at ? new Date(row.starts_at).toLocaleString() : 'Sin fecha';
+        const startsAt = row.starts_at
+          ? new Date(row.starts_at).toLocaleString(undefined, {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : 'Sin fecha';
         const statusColor = appointmentStatusColor(row.status);
         const paymentColor = appointmentPaymentColor(row.payment_status);
         const whatsappUrl = buildAppointmentWhatsappUrl(row);
+        const isPaymentPending = ['pending', 'partial'].includes(String(row.payment_status || '').toLowerCase());
         const publicOrderButton = row.public_order_url
-          ? `<a href="${row.public_order_url}" class="btn btn-sm btn-outline-dark">Ver pago</a>`
+          ? `<a href="${row.public_order_url}" class="btn btn-sm tenant-appointment-action tenant-appointment-action-soft">Ver pago</a>`
           : '';
         const whatsappButton = whatsappUrl
-          ? `<a href="${whatsappUrl}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success">WhatsApp admin</a>`
+          ? `<a href="${whatsappUrl}" target="_blank" rel="noopener" class="btn btn-sm tenant-appointment-action tenant-appointment-action-soft">WhatsApp admin</a>`
           : '';
 
         return `
-          <article class="tenant-order-card" data-appointment-id="${row.id}">
+          <article class="tenant-appointment-card ${isPaymentPending ? 'is-payment-pending' : ''}" data-appointment-id="${row.id}">
             <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
               <div>
-                <div class="fw-semibold fs-6">${row.service || 'Servicio'}</div>
-                <div class="tenant-order-meta">${row.professional || 'Profesional'} • ${startsAt}</div>
+                <div class="tenant-appointment-title">${row.service || 'Servicio'}</div>
+                <div class="tenant-appointment-meta">${row.professional || 'Profesional'} · ${startsAt}</div>
               </div>
               <div class="tenant-appointment-state-group">
                 <span class="tenant-appointment-state-chip"><span class="tenant-appointment-state-dot" style="background:${statusColor};"></span>${row.status_label || row.status || 'Programada'}</span>
                 <span class="tenant-appointment-state-chip"><span class="tenant-appointment-state-dot" style="background:${paymentColor};"></span>${row.payment_status_label || row.payment_status || 'Pendiente'}</span>
               </div>
             </div>
-            <div class="tenant-order-meta mb-2">Pagado: ${Number(row.paid_amount || 0).toFixed(2)} ${row.payment_currency || 'USD'}</div>
-            <div class="d-flex flex-wrap gap-2">
-              ${row.can_confirm ? '<button type="button" class="btn btn-sm btn-outline-success" data-appointment-action="confirm_attendance">Confirmar asistencia</button>' : ''}
-              ${row.can_reschedule ? '<button type="button" class="btn btn-sm btn-outline-primary" data-appointment-action="reschedule">Cambiar fecha</button>' : ''}
-              ${row.can_confirm_payment ? '<button type="button" class="btn btn-sm btn-success" data-appointment-action="confirm_payment">Pagar y confirmar</button>' : ''}
-              ${row.can_cancel ? '<button type="button" class="btn btn-sm btn-outline-danger" data-appointment-action="cancel">Cancelar</button>' : ''}
+            <div class="tenant-appointment-paid mb-2">Pagado: ${Number(row.paid_amount || 0).toFixed(2)} ${row.payment_currency || 'USD'}</div>
+            <div class="tenant-appointment-actions">
+              ${row.can_confirm ? '<button type="button" class="btn btn-sm tenant-appointment-action tenant-appointment-action-main" data-appointment-action="confirm_attendance">Confirmar asistencia</button>' : ''}
+              ${row.can_reschedule ? '<button type="button" class="btn btn-sm tenant-appointment-action tenant-appointment-action-soft" data-appointment-action="reschedule">Cambiar fecha</button>' : ''}
+              ${row.can_confirm_payment ? '<button type="button" class="btn btn-sm tenant-appointment-action tenant-appointment-action-main" data-appointment-action="confirm_payment">Pagar y confirmar</button>' : ''}
+              ${row.can_cancel ? '<button type="button" class="btn btn-sm tenant-appointment-action tenant-appointment-action-soft" data-appointment-action="cancel">Cancelar</button>' : ''}
               ${whatsappButton}
               ${publicOrderButton}
             </div>
@@ -2117,24 +2451,21 @@
             return;
           }
 
-          const payload = { action };
-
           if (action === 'confirm_payment') {
-            const paidAmount = prompt('Monto pagado:', '0');
-            const paymentReference = prompt('Referencia de pago (opcional):', '');
-            payload.paid_amount = Number(paidAmount || 0);
-            payload.payment_reference = paymentReference || '';
-            payload.create_sale = true;
+            openAppointmentPaymentModal(appointmentRow || { id: appointmentId });
+            return;
           }
+
+          const payload = { action };
 
           button.disabled = true;
           try {
             const result = await runAppointmentAction(currentToken, appointmentId, payload);
-            alert(result?.message || 'Cita actualizada correctamente.');
+            showTenantToast('Citas', result?.message || 'Cita actualizada correctamente.');
             const updated = await fetchAppointments(currentToken);
             renderAppointments(updated);
           } catch (error) {
-            alert(error?.message || 'No se pudo actualizar la cita.');
+            showTenantToast('Citas', error?.message || 'No se pudo actualizar la cita.');
           } finally {
             button.disabled = false;
           }
@@ -2214,6 +2545,72 @@
       } finally {
         appointmentRescheduleSubmitBtn.disabled = false;
       }
+    });
+
+    appointmentPaymentMethodSelect?.addEventListener('change', syncAppointmentPaymentMethodUi);
+
+    appointmentPaymentSubmitBtn?.addEventListener('click', async () => {
+      if (!currentToken || paymentAppointmentId <= 0 || !appointmentPaymentMethodSelect || !appointmentPaymentAmountInput) {
+        return;
+      }
+
+      const paymentMethodId = Number(appointmentPaymentMethodSelect.value || 0);
+      const paidAmount = Number(appointmentPaymentAmountInput.value || 0);
+      const paymentReference = String(appointmentPaymentReferenceInput?.value || '').trim();
+      const selectedMethod = tenantAppointmentPaymentMethods.find(method => Number(method?.id || 0) === paymentMethodId) || null;
+
+      if (paymentMethodId <= 0) {
+        showTenantToast('Pago de cita', 'Debes seleccionar un método de pago.');
+        return;
+      }
+
+      if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+        showTenantToast('Pago de cita', 'Indica un monto pagado mayor a 0.');
+        return;
+      }
+
+      if (selectedMethod?.uses_reference && paymentReference === '') {
+        showTenantToast('Pago de cita', 'Este método requiere referencia de pago.');
+        return;
+      }
+
+      appointmentPaymentSubmitBtn.disabled = true;
+
+      try {
+        const result = await runAppointmentAction(currentToken, paymentAppointmentId, {
+          action: 'confirm_payment',
+          payment_method_id: paymentMethodId,
+          paid_amount: paidAmount,
+          payment_reference: paymentReference,
+          create_sale: true,
+        });
+
+        showTenantToast('Pago de cita', result?.message || 'Pago registrado correctamente.');
+
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(appointmentPaymentModal);
+        modalInstance.hide();
+
+        const updated = await fetchAppointments(currentToken);
+        renderAppointments(updated);
+      } catch (error) {
+        showTenantToast('Pago de cita', error?.message || 'No se pudo registrar el pago.');
+      } finally {
+        appointmentPaymentSubmitBtn.disabled = false;
+      }
+    });
+
+    appointmentPaymentModal?.addEventListener('hidden.bs.modal', () => {
+      paymentAppointmentId = 0;
+      if (appointmentPaymentMethodSelect) {
+        appointmentPaymentMethodSelect.value = '';
+      }
+      if (appointmentPaymentAmountInput) {
+        appointmentPaymentAmountInput.value = '';
+      }
+      if (appointmentPaymentReferenceInput) {
+        appointmentPaymentReferenceInput.value = '';
+      }
+      syncAppointmentPaymentMethodUi();
     });
 
     function applyAuthState(user, token) {

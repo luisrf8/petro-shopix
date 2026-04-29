@@ -459,8 +459,14 @@
 @php
     $calendarHours = range($calendarBounds['startHour'], max($calendarBounds['startHour'], $calendarBounds['endHour'] - 1));
     $calendarHoursCount = count($calendarHours);
+    $requestedCalendarView = strtolower((string) request('view', ''));
+    $selectedCalendarView = in_array($requestedCalendarView, ['day', 'week', 'month'], true) ? $requestedCalendarView : null;
+    $previousDayDate = $selectedDate->copy()->subDay()->toDateString();
+    $nextDayDate = $selectedDate->copy()->addDay()->toDateString();
     $previousWeekDate = $calendarWeekStart->copy()->subWeek()->toDateString();
     $nextWeekDate = $calendarWeekStart->copy()->addWeek()->toDateString();
+    $previousMonthDate = $selectedDate->copy()->subMonthNoOverflow()->toDateString();
+    $nextMonthDate = $selectedDate->copy()->addMonthNoOverflow()->toDateString();
 @endphp
 <div class="container-fluid py-3 appointments-shell">
 
@@ -533,26 +539,43 @@
                                     @endforeach
                                 </select>
                             </div>
+                            <input type="hidden" name="view" id="appointmentsCalendarViewInput" value="{{ $selectedCalendarView ?? '' }}">
                             <button class="btn btn-dark mb-0" type="submit">Actualizar vista</button>
                         </form>
                     </div>
 
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                         <div class="btn-group" role="group" aria-label="Vista calendario">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-view="day">Día</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm active" data-calendar-view="week">Semana</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-view="month">Mes</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm {{ $selectedCalendarView === 'day' ? 'active btn-dark' : '' }}" data-calendar-view="day">Día</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm {{ ($selectedCalendarView === 'week' || !$selectedCalendarView) ? 'active btn-dark' : '' }}" data-calendar-view="week">Semana</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm {{ $selectedCalendarView === 'month' ? 'active btn-dark' : '' }}" data-calendar-view="month">Mes</button>
                         </div>
                     </div>
 
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                         <div>
-                            <h4 class="mb-1" id="appointmentsWeekRangeTitle">{{ \Illuminate\Support\Str::ucfirst($calendarWeekStart->translatedFormat('d M')) }} - {{ \Illuminate\Support\Str::ucfirst($calendarWeekEnd->translatedFormat('d M Y')) }}</h4>
+                            <h4
+                                class="mb-1"
+                                id="appointmentsWeekRangeTitle"
+                                data-title-day="{{ \Illuminate\Support\Str::ucfirst($selectedDate->translatedFormat('d M Y')) }}"
+                                data-title-week="{{ \Illuminate\Support\Str::ucfirst($calendarWeekStart->translatedFormat('d M')) }} - {{ \Illuminate\Support\Str::ucfirst($calendarWeekEnd->translatedFormat('d M Y')) }}"
+                                data-title-month="{{ \Illuminate\Support\Str::ucfirst($selectedDate->translatedFormat('F Y')) }}"
+                            >{{ \Illuminate\Support\Str::ucfirst($calendarWeekStart->translatedFormat('d M')) }} - {{ \Illuminate\Support\Str::ucfirst($calendarWeekEnd->translatedFormat('d M Y')) }}</h4>
                         </div>
-                        <div class="d-flex flex-wrap gap-2">
-                            <a href="{{ route('appointments.index', ['date' => $previousWeekDate, 'user_id' => $selectedUserId]) }}" class="btn btn-outline-dark mb-0">Semana anterior</a>
-                            <a href="{{ route('appointments.index', ['date' => now()->toDateString(), 'user_id' => $selectedUserId]) }}" class="btn btn-outline-secondary mb-0">Hoy</a>
-                            <a href="{{ route('appointments.index', ['date' => $nextWeekDate, 'user_id' => $selectedUserId]) }}" class="btn btn-dark mb-0">Semana siguiente</a>
+                        <div class="d-flex flex-wrap gap-2" data-calendar-nav-view="day">
+                            <a href="{{ route('appointments.index', ['date' => $previousDayDate, 'user_id' => $selectedUserId, 'view' => 'day']) }}" class="btn btn-outline-dark mb-0">Día anterior</a>
+                            <a href="{{ route('appointments.index', ['date' => now()->toDateString(), 'user_id' => $selectedUserId, 'view' => 'day']) }}" class="btn btn-outline-secondary mb-0">Hoy</a>
+                            <a href="{{ route('appointments.index', ['date' => $nextDayDate, 'user_id' => $selectedUserId, 'view' => 'day']) }}" class="btn btn-outline-dark mb-0">Día siguiente</a>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2" data-calendar-nav-view="week">
+                            <a href="{{ route('appointments.index', ['date' => $previousWeekDate, 'user_id' => $selectedUserId, 'view' => 'week']) }}" class="btn btn-outline-dark mb-0">Semana anterior</a>
+                            <a href="{{ route('appointments.index', ['date' => now()->toDateString(), 'user_id' => $selectedUserId, 'view' => 'week']) }}" class="btn btn-outline-secondary mb-0">Hoy</a>
+                            <a href="{{ route('appointments.index', ['date' => $nextWeekDate, 'user_id' => $selectedUserId, 'view' => 'week']) }}" class="btn btn-outline-dark mb-0">Semana siguiente</a>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2" data-calendar-nav-view="month">
+                            <a href="{{ route('appointments.index', ['date' => $previousMonthDate, 'user_id' => $selectedUserId, 'view' => 'month']) }}" class="btn btn-outline-dark mb-0">Mes anterior</a>
+                            <a href="{{ route('appointments.index', ['date' => now()->toDateString(), 'user_id' => $selectedUserId, 'view' => 'month']) }}" class="btn btn-outline-secondary mb-0">Hoy</a>
+                            <a href="{{ route('appointments.index', ['date' => $nextMonthDate, 'user_id' => $selectedUserId, 'view' => 'month']) }}" class="btn btn-outline-dark mb-0">Mes siguiente</a>
                         </div>
                     </div>
 
@@ -656,164 +679,204 @@
                     @csrf
                     <input type="hidden" name="appointment_id" id="appointmentIdInput" value="">
                     <input type="hidden" name="create_customer" id="appointmentCreateCustomerInput" value="0">
-                    <div class="col-12 col-lg-6">
-                        <label class="form-label">Servicio</label>
-                        <select name="appointment_service_id" id="appointmentServiceSelect" class="form-control border border-1 p-2" required>
-                            <option value="">Seleccione</option>
-                            @foreach($services as $service)
-                                <option value="{{ $service->id }}" {{ (string) old('appointment_service_id') === (string) $service->id ? 'selected' : '' }}>{{ $service->display_name }} · {{ $service->duration_minutes }} min</option>
-                            @endforeach
-                        </select>
-                        <small id="appointmentServiceMeta" class="appointment-inline-note d-block mt-1">Selecciona el servicio-producto a reservar.</small>
-                    </div>
-                    <div class="col-12 col-lg-6">
-                        <label class="form-label">Profesional</label>
-                        <select name="user_id" id="appointmentUserSelect" class="form-control border border-1 p-2" required>
-                            <option value="">Seleccione</option>
-                            @foreach($professionals as $professional)
-                                <option value="{{ $professional->id }}" {{ (string) old('user_id', $selectedUserId > 0 ? $selectedUserId : '') === (string) $professional->id ? 'selected' : '' }}>{{ $professional->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-6 col-lg-4">
-                        <label class="form-label">Fecha</label>
-                        <input type="date" name="scheduled_date" id="appointmentDateInput" class="form-control border border-1 p-2" value="{{ old('scheduled_date', $selectedDate->toDateString()) }}" required>
-                    </div>
-                    <div class="col-md-6 col-lg-4">
-                        <label class="form-label">Hora disponible</label>
-                        <select name="start_time" id="appointmentSlotSelect" class="form-control border border-1 p-2" required>
-                            <option value="">Seleccione un servicio, profesional y fecha</option>
-                        </select>
-                    </div>
-                    <div class="col-12 col-lg-8">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <label class="form-label mb-0">Cliente existente</label>
-                            <button type="button" class="appointment-toggle-chip mb-0" id="appointmentToggleNewCustomerBtn">Cliente nuevo</button>
-                        </div>
-                        <select name="customer_id" id="appointmentCustomerSelect" class="form-control border border-1 p-2">
-                            <option value="">Sin cliente registrado</option>
-                            @foreach($customers as $customer)
-                                <option value="{{ $customer->id }}" {{ (string) old('customer_id') === (string) $customer->id ? 'selected' : '' }}>{{ $customer->name }}{{ $customer->phone_number ? ' · ' . $customer->phone_number : '' }}</option>
-                            @endforeach
-                        </select>
-                        <small class="appointment-inline-note d-block mt-1" id="appointmentCustomerModeHint">Selecciona cliente existente o activa “Cliente nuevo”.</small>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Nombre de contacto</label>
-                        <input type="text" name="contact_name" class="form-control border border-1 p-2" value="{{ old('contact_name') }}" placeholder="Si no hay cliente registrado">
-                    </div>
-                    <div class="col-4 col-md-2">
-                        <label class="form-label">Código</label>
-                        <select name="contact_phone_code" id="appointmentContactPhoneCodeInput" class="form-control border border-1 p-2">
-                            <option value="+58" {{ old('contact_phone_code', '+58') === '+58' ? 'selected' : '' }}>+58</option>
-                            <option value="+1" {{ old('contact_phone_code') === '+1' ? 'selected' : '' }}>+1</option>
-                            <option value="+52" {{ old('contact_phone_code') === '+52' ? 'selected' : '' }}>+52</option>
-                            <option value="+57" {{ old('contact_phone_code') === '+57' ? 'selected' : '' }}>+57</option>
-                            <option value="+51" {{ old('contact_phone_code') === '+51' ? 'selected' : '' }}>+51</option>
-                            <option value="+54" {{ old('contact_phone_code') === '+54' ? 'selected' : '' }}>+54</option>
-                            <option value="+34" {{ old('contact_phone_code') === '+34' ? 'selected' : '' }}>+34</option>
-                        </select>
-                    </div>
-                    <div class="col-8 col-md-4">
-                        <label class="form-label">Teléfono</label>
-                        <input type="text" name="contact_phone" id="appointmentContactPhoneInput" class="form-control border border-1 p-2" value="{{ old('contact_phone') }}" placeholder="4120000000">
-                    </div>
-                    <div class="col-md-6 d-none" id="appointmentNewCustomerExtra">
-                        <label class="form-label">Email cliente (opcional)</label>
-                        <input type="email" name="customer_email" id="appointmentCustomerEmailInput" class="form-control border border-1 p-2" value="{{ old('customer_email') }}" placeholder="cliente@correo.com">
-                    </div>
-                    <div class="col-md-6 d-none" id="appointmentNewCustomerExtraDni">
-                        <label class="form-label">DNI cliente (opcional)</label>
-                        <input type="text" name="customer_dni" id="appointmentCustomerDniInput" class="form-control border border-1 p-2" value="{{ old('customer_dni') }}">
-                    </div>
                     <div class="col-12">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <label class="form-label mb-0">Consumibles utilizados</label>
-                            <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="addAppointmentConsumptionBtn">Agregar consumible</button>
-                        </div>
-                        <div id="appointmentConsumptionsWrapper" class="d-flex flex-column gap-2"></div>
-                        <small class="appointment-inline-note d-block mt-1">Registra solo los consumibles realmente usados en la atención.</small>
+                        <ul class="nav nav-tabs" id="appointmentBookingTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="appointment-tab-data" data-bs-toggle="tab" data-bs-target="#appointment-pane-data" type="button" role="tab" aria-controls="appointment-pane-data" aria-selected="true">Datos de la cita</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="appointment-tab-consumptions" data-bs-toggle="tab" data-bs-target="#appointment-pane-consumptions" type="button" role="tab" aria-controls="appointment-pane-consumptions" aria-selected="false">Consumibles y venta</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="appointment-tab-payments" data-bs-toggle="tab" data-bs-target="#appointment-pane-payments" type="button" role="tab" aria-controls="appointment-pane-payments" aria-selected="false">Pagos</button>
+                            </li>
+                        </ul>
                     </div>
-                    <div class="col-12">
-                        <div class="appointment-payment-summary">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="appointments-form-section-title mb-0">Pago de la cita</span>
-                                <button type="button" class="btn btn-outline-dark btn-sm mb-0" data-bs-toggle="collapse" data-bs-target="#appointmentPaymentCollapse" aria-expanded="false" aria-controls="appointmentPaymentCollapse">Detalles de pago</button>
-                            </div>
-                            <div class="appointment-payment-summary-grid">
-                                <div class="appointment-payment-summary-item">
-                                    <span class="appointment-payment-summary-label">Precio servicio USD</span>
-                                    <span class="appointment-payment-summary-value" id="appointmentServicePriceUsd">0.00</span>
+
+                    <div class="col-12 tab-content pt-3" id="appointmentBookingTabContent">
+                        <div class="tab-pane fade show active" id="appointment-pane-data" role="tabpanel" aria-labelledby="appointment-tab-data" tabindex="0">
+                            <div class="row g-2">
+                                <div class="col-12 col-lg-6">
+                                    <label class="form-label">Servicio</label>
+                                    <select name="appointment_service_id" id="appointmentServiceSelect" class="form-control border border-1 p-2" required>
+                                        <option value="">Seleccione</option>
+                                        @foreach($services as $service)
+                                            <option value="{{ $service->id }}" {{ (string) old('appointment_service_id') === (string) $service->id ? 'selected' : '' }}>{{ $service->display_name }} · {{ $service->duration_minutes }} min</option>
+                                        @endforeach
+                                    </select>
+                                    <small id="appointmentServiceMeta" class="appointment-inline-note d-block mt-1">Selecciona el servicio-producto a reservar.</small>
                                 </div>
-                                <div class="appointment-payment-summary-item">
-                                    <span class="appointment-payment-summary-label">Precio servicio Bs</span>
-                                    <span class="appointment-payment-summary-value" id="appointmentServicePriceBs">0.00</span>
+                                <div class="col-12 col-lg-6">
+                                    <label class="form-label">Profesional</label>
+                                    <select name="user_id" id="appointmentUserSelect" class="form-control border border-1 p-2" required>
+                                        <option value="">Seleccione</option>
+                                        @foreach($professionals as $professional)
+                                            <option value="{{ $professional->id }}" {{ (string) old('user_id', $selectedUserId > 0 ? $selectedUserId : '') === (string) $professional->id ? 'selected' : '' }}>{{ $professional->name }}</option>
+                                        @endforeach
+                                    </select>
                                 </div>
-                                <div class="appointment-payment-summary-item">
-                                    <span class="appointment-payment-summary-label">Monto pagado</span>
-                                    <span class="appointment-payment-summary-value" id="appointmentPaidAmountLabel">0.00</span>
+                                <div class="col-md-6 col-lg-4">
+                                    <label class="form-label">Fecha</label>
+                                    <input type="date" name="scheduled_date" id="appointmentDateInput" class="form-control border border-1 p-2" value="{{ old('scheduled_date', $selectedDate->toDateString()) }}" required>
                                 </div>
-                                <div class="appointment-payment-summary-item">
-                                    <span class="appointment-payment-summary-label">Saldo pendiente</span>
-                                    <span class="appointment-payment-summary-value" id="appointmentPendingAmountLabel">0.00</span>
+                                <div class="col-md-6 col-lg-4">
+                                    <label class="form-label">Hora disponible</label>
+                                    <select name="start_time" id="appointmentSlotSelect" class="form-control border border-1 p-2" required>
+                                        <option value="">Seleccione un servicio, profesional y fecha</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 col-lg-4">
+                                    <label class="form-label">Estado de la cita</label>
+                                    <select name="status" id="appointmentStatusSelect" class="form-control border border-1 p-2">
+                                        @foreach(\App\Models\Appointment::STATUSES as $statusKey => $statusLabel)
+                                            <option value="{{ $statusKey }}" {{ old('status', 'scheduled') === $statusKey ? 'selected' : '' }}>{{ $statusLabel }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-12 d-flex justify-content-end">
+                                    <button type="button" class="appointment-toggle-chip mb-0" id="appointmentToggleNewCustomerBtn">Cliente nuevo</button>
+                                </div>
+                                <div class="col-12 col-lg-8" id="appointmentExistingCustomerWrap">
+                                    <label class="form-label mb-1">Cliente existente</label>
+                                    <select name="customer_id" id="appointmentCustomerSelect" class="form-control border border-1 p-2">
+                                        <option value="">Sin cliente registrado</option>
+                                        @foreach($customers as $customer)
+                                            <option value="{{ $customer->id }}" {{ (string) old('customer_id') === (string) $customer->id ? 'selected' : '' }}>{{ $customer->name }}{{ $customer->phone_number ? ' · ' . $customer->phone_number : '' }}</option>
+                                        @endforeach
+                                    </select>
+                                    <small class="appointment-inline-note d-block mt-1" id="appointmentCustomerModeHint">Selecciona cliente existente o activa “Cliente nuevo”.</small>
+                                </div>
+                                <div class="col-12 d-none" id="appointmentNewCustomerFormWrap">
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <label class="form-label">Nombre de contacto</label>
+                                            <input type="text" name="contact_name" id="appointmentContactNameInput" class="form-control border border-1 p-2" value="{{ old('contact_name') }}" placeholder="Nombre del cliente nuevo">
+                                        </div>
+                                        <div class="col-4 col-md-2">
+                                            <label class="form-label">Código</label>
+                                            <select name="contact_phone_code" id="appointmentContactPhoneCodeInput" class="form-control border border-1 p-2">
+                                                <option value="+58" {{ old('contact_phone_code', '+58') === '+58' ? 'selected' : '' }}>+58</option>
+                                                <option value="+1" {{ old('contact_phone_code') === '+1' ? 'selected' : '' }}>+1</option>
+                                                <option value="+52" {{ old('contact_phone_code') === '+52' ? 'selected' : '' }}>+52</option>
+                                                <option value="+57" {{ old('contact_phone_code') === '+57' ? 'selected' : '' }}>+57</option>
+                                                <option value="+51" {{ old('contact_phone_code') === '+51' ? 'selected' : '' }}>+51</option>
+                                                <option value="+54" {{ old('contact_phone_code') === '+54' ? 'selected' : '' }}>+54</option>
+                                                <option value="+34" {{ old('contact_phone_code') === '+34' ? 'selected' : '' }}>+34</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-8 col-md-4">
+                                            <label class="form-label">Teléfono</label>
+                                            <input type="text" name="contact_phone" id="appointmentContactPhoneInput" class="form-control border border-1 p-2" value="{{ old('contact_phone') }}" placeholder="4120000000">
+                                        </div>
+                                        <div class="col-md-6 d-none" id="appointmentNewCustomerExtra">
+                                            <label class="form-label">Email cliente (opcional)</label>
+                                            <input type="email" name="customer_email" id="appointmentCustomerEmailInput" class="form-control border border-1 p-2" value="{{ old('customer_email') }}" placeholder="cliente@correo.com">
+                                        </div>
+                                        <div class="col-md-6 d-none" id="appointmentNewCustomerExtraDni">
+                                            <label class="form-label">DNI cliente (opcional)</label>
+                                            <input type="text" name="customer_dni" id="appointmentCustomerDniInput" class="form-control border border-1 p-2" value="{{ old('customer_dni') }}">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                                        <a href="#" target="_blank" rel="noopener" class="btn btn-outline-success btn-sm mb-0 d-none" id="appointmentAdminWhatsappButton">WhatsApp cliente</a>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Notas</label>
+                                    <textarea name="notes" class="form-control border border-1 p-2" rows="2">{{ old('notes') }}</textarea>
+                                </div>
+                                <div class="col-12 d-none" id="appointmentWorkflowActionsWrap">
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <button type="button" class="btn btn-outline-dark btn-sm mb-0" data-appointment-workflow-action="call_customer">Llamar cliente</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm mb-0" data-appointment-workflow-action="confirm_attendance">Confirmar asistencia</button>
+                                        <button type="button" class="btn btn-outline-primary btn-sm mb-0" data-appointment-workflow-action="reschedule">Reprogramar</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm mb-0" data-appointment-workflow-action="cancel">Cancelar</button>
+                                        <button type="button" class="btn btn-outline-warning btn-sm mb-0" data-appointment-workflow-action="no_show">No asistió</button>
+                                        <button type="button" class="btn btn-success btn-sm mb-0" data-appointment-workflow-action="confirm_payment">Confirmar pago y crear venta</button>
+                                    </div>
+                                    <small class="appointment-inline-note d-block mt-1">Estas acciones aplican a citas ya existentes y disparan notificaciones del flujo.</small>
                                 </div>
                             </div>
-                            <small class="appointment-inline-note d-block mt-2" id="appointmentFractionedBadge">Pago único o sin pago registrado.</small>
+                        </div>
+
+                        <div class="tab-pane fade" id="appointment-pane-consumptions" role="tabpanel" aria-labelledby="appointment-tab-consumptions" tabindex="0">
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <div class="appointment-payment-summary">
+                                        <div class="appointments-form-section-title mb-2">Venta asociada a la cita</div>
+                                        <div class="appointment-inline-note" id="appointmentAssociatedServiceLabel">Servicio asociado: sin seleccionar.</div>
+                                        <div class="appointment-inline-note mt-1" id="appointmentSaleStatusText">No hay venta asociada todavía.</div>
+                                        <a href="#" target="_blank" rel="noopener" class="btn btn-outline-dark btn-sm mt-2 d-none" id="appointmentSaleOpenButton">Ver venta asociada</a>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label mb-0">Consumibles utilizados</label>
+                                        <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="addAppointmentConsumptionBtn">Agregar consumible</button>
+                                    </div>
+                                    <div id="appointmentConsumptionsWrapper" class="d-flex flex-column gap-2"></div>
+                                    <small class="appointment-inline-note d-block mt-1">Registra solo los consumibles realmente usados en la atención.</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-pane fade" id="appointment-pane-payments" role="tabpanel" aria-labelledby="appointment-tab-payments" tabindex="0">
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <div class="appointment-payment-summary">
+                                        <div class="appointments-form-section-title mb-2">Pago de la cita</div>
+                                        <div class="appointment-payment-summary-grid">
+                                            <div class="appointment-payment-summary-item">
+                                                <span class="appointment-payment-summary-label">Precio servicio USD</span>
+                                                <span class="appointment-payment-summary-value" id="appointmentServicePriceUsd">0.00</span>
+                                            </div>
+                                            <div class="appointment-payment-summary-item">
+                                                <span class="appointment-payment-summary-label">Precio servicio Bs</span>
+                                                <span class="appointment-payment-summary-value" id="appointmentServicePriceBs">0.00</span>
+                                            </div>
+                                            <div class="appointment-payment-summary-item">
+                                                <span class="appointment-payment-summary-label">Monto pagado</span>
+                                                <span class="appointment-payment-summary-value" id="appointmentPaidAmountLabel">0.00</span>
+                                            </div>
+                                            <div class="appointment-payment-summary-item">
+                                                <span class="appointment-payment-summary-label">Saldo pendiente</span>
+                                                <span class="appointment-payment-summary-value" id="appointmentPendingAmountLabel">0.00</span>
+                                            </div>
+                                        </div>
+                                        <small class="appointment-inline-note d-block mt-2" id="appointmentFractionedBadge">Pago único o sin pago registrado.</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Método de pago</label>
+                                    <select name="payment_method_id" id="appointmentPaymentMethodSelect" class="form-control border border-1 p-2">
+                                        <option value="">Sin pago registrado</option>
+                                        @foreach($paymentMethods as $paymentMethod)
+                                            <option value="{{ $paymentMethod->id }}" data-has-reference="{{ $paymentMethod->usesReference() ? '1' : '0' }}" data-currency="{{ $paymentMethod->currency->code ?? '' }}" {{ (string) old('payment_method_id') === (string) $paymentMethod->id ? 'selected' : '' }}>{{ $paymentMethod->name }}{{ !empty($paymentMethod->currency?->code) ? ' · ' . $paymentMethod->currency->code : '' }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Monto pagado</label>
+                                    <input type="number" step="0.01" min="0" name="paid_amount" id="appointmentPaidAmountInput" class="form-control border border-1 p-2" value="{{ old('paid_amount') }}" placeholder="0.00">
+                                </div>
+                                <div class="col-md-6" id="appointmentPaymentReferenceGroup">
+                                    <label class="form-label">Referencia de pago</label>
+                                    <input type="text" name="payment_reference" id="appointmentPaymentReferenceInput" class="form-control border border-1 p-2" value="{{ old('payment_reference') }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Estado del pago</label>
+                                    <select name="payment_status" id="appointmentPaymentStatusSelect" class="form-control border border-1 p-2">
+                                        @foreach(\App\Models\Appointment::PAYMENT_STATUSES as $statusKey => $statusLabel)
+                                            <option value="{{ $statusKey }}" {{ old('payment_status', 'pending') === $statusKey ? 'selected' : '' }}>{{ $statusLabel }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="col-12 collapse" id="appointmentPaymentCollapse">
-                        <div class="row g-2">
-                            <div class="col-md-6">
-                                <label class="form-label">Método de pago</label>
-                                <select name="payment_method_id" id="appointmentPaymentMethodSelect" class="form-control border border-1 p-2">
-                                    <option value="">Sin pago registrado</option>
-                                    @foreach($paymentMethods as $paymentMethod)
-                                        <option value="{{ $paymentMethod->id }}" data-has-reference="{{ $paymentMethod->usesReference() ? '1' : '0' }}" data-currency="{{ $paymentMethod->currency->code ?? '' }}" {{ (string) old('payment_method_id') === (string) $paymentMethod->id ? 'selected' : '' }}>{{ $paymentMethod->name }}{{ !empty($paymentMethod->currency?->code) ? ' · ' . $paymentMethod->currency->code : '' }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Monto pagado</label>
-                                <input type="number" step="0.01" min="0" name="paid_amount" id="appointmentPaidAmountInput" class="form-control border border-1 p-2" value="{{ old('paid_amount') }}" placeholder="0.00">
-                            </div>
-                            <div class="col-md-6" id="appointmentPaymentReferenceGroup">
-                                <label class="form-label">Referencia de pago</label>
-                                <input type="text" name="payment_reference" id="appointmentPaymentReferenceInput" class="form-control border border-1 p-2" value="{{ old('payment_reference') }}">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Estado del pago</label>
-                                <select name="payment_status" id="appointmentPaymentStatusSelect" class="form-control border border-1 p-2">
-                                    @foreach(\App\Models\Appointment::PAYMENT_STATUSES as $statusKey => $statusLabel)
-                                        <option value="{{ $statusKey }}" {{ old('payment_status', 'pending') === $statusKey ? 'selected' : '' }}>{{ $statusLabel }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Estado de la cita</label>
-                        <select name="status" class="form-control border border-1 p-2">
-                            @foreach(\App\Models\Appointment::STATUSES as $statusKey => $statusLabel)
-                                <option value="{{ $statusKey }}" {{ old('status', 'scheduled') === $statusKey ? 'selected' : '' }}>{{ $statusLabel }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Notas</label>
-                        <textarea name="notes" class="form-control border border-1 p-2" rows="2">{{ old('notes') }}</textarea>
-                    </div>
-                    <div class="col-12 d-none" id="appointmentWorkflowActionsWrap">
-                        <div class="d-flex flex-wrap gap-2">
-                            <button type="button" class="btn btn-outline-dark btn-sm mb-0" data-appointment-workflow-action="call_customer">Llamar cliente</button>
-                            <a href="#" target="_blank" rel="noopener" class="btn btn-outline-success btn-sm mb-0 d-none" id="appointmentAdminWhatsappButton">WhatsApp cliente</a>
-                            <button type="button" class="btn btn-outline-success btn-sm mb-0" data-appointment-workflow-action="confirm_attendance">Confirmar asistencia</button>
-                            <button type="button" class="btn btn-outline-primary btn-sm mb-0" data-appointment-workflow-action="reschedule">Reprogramar</button>
-                            <button type="button" class="btn btn-outline-danger btn-sm mb-0" data-appointment-workflow-action="cancel">Cancelar</button>
-                            <button type="button" class="btn btn-outline-warning btn-sm mb-0" data-appointment-workflow-action="no_show">No asistió</button>
-                            <button type="button" class="btn btn-success btn-sm mb-0" data-appointment-workflow-action="confirm_payment">Confirmar pago y crear venta</button>
-                        </div>
-                        <small class="appointment-inline-note d-block mt-1">Estas acciones aplican a citas ya existentes y disparan notificaciones del flujo.</small>
-                    </div>
+
                     <div class="col-12">
                         <button class="btn btn-success w-100 mb-0" id="appointmentSubmitButton" type="submit">Agendar cita</button>
                     </div>
@@ -1059,15 +1122,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const appointmentIdInput = document.getElementById('appointmentIdInput');
     const createCustomerInput = document.getElementById('appointmentCreateCustomerInput');
     const customerSelect = document.getElementById('appointmentCustomerSelect');
+    const existingCustomerWrap = document.getElementById('appointmentExistingCustomerWrap');
+    const newCustomerFormWrap = document.getElementById('appointmentNewCustomerFormWrap');
     const toggleNewCustomerBtn = document.getElementById('appointmentToggleNewCustomerBtn');
     const customerModeHint = document.getElementById('appointmentCustomerModeHint');
     const customerEmailInput = document.getElementById('appointmentCustomerEmailInput');
     const customerDniInput = document.getElementById('appointmentCustomerDniInput');
     const newCustomerExtra = document.getElementById('appointmentNewCustomerExtra');
     const newCustomerExtraDni = document.getElementById('appointmentNewCustomerExtraDni');
+    const appointmentStatusSelect = document.getElementById('appointmentStatusSelect');
     const submitButton = document.getElementById('appointmentSubmitButton');
     const workflowActionsWrap = document.getElementById('appointmentWorkflowActionsWrap');
     const workflowActionButtons = Array.from(document.querySelectorAll('[data-appointment-workflow-action]'));
+    const bookingTabDataButton = document.getElementById('appointment-tab-data');
+    const bookingTabConsumptionsButton = document.getElementById('appointment-tab-consumptions');
+    const bookingTabPaymentsButton = document.getElementById('appointment-tab-payments');
     const serviceMeta = document.getElementById('appointmentServiceMeta');
     const paymentMethodSelect = document.getElementById('appointmentPaymentMethodSelect');
     const paymentStatusSelect = document.getElementById('appointmentPaymentStatusSelect');
@@ -1085,6 +1154,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const serviceNameInput = document.getElementById('appointmentServiceNameInput');
     const bookingModalElement = document.getElementById('appointmentBookingModal');
     const adminWhatsappButton = document.getElementById('appointmentAdminWhatsappButton');
+    const appointmentAssociatedServiceLabel = document.getElementById('appointmentAssociatedServiceLabel');
+    const appointmentSaleStatusText = document.getElementById('appointmentSaleStatusText');
+    const appointmentSaleOpenButton = document.getElementById('appointmentSaleOpenButton');
     const contactNameInput = bookingForm?.querySelector('[name="contact_name"]') || null;
     const contactPhoneInput = bookingForm?.querySelector('[name="contact_phone"]') || null;
     const contactPhoneCodeInput = document.getElementById('appointmentContactPhoneCodeInput');
@@ -1098,6 +1170,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const appointmentsWeekCountValue = document.getElementById('appointmentsWeekCountValue');
     const appointmentsWeekRangeNote = document.getElementById('appointmentsWeekRangeNote');
     const appointmentsWeekRangeTitle = document.getElementById('appointmentsWeekRangeTitle');
+    const appointmentsCalendarViewInput = document.getElementById('appointmentsCalendarViewInput');
+    const calendarNavGroups = Array.from(document.querySelectorAll('[data-calendar-nav-view]'));
     const filtersCollapseElement = document.getElementById('appointmentsFiltersCollapse');
     const filtersToggleButton = document.getElementById('appointmentsFiltersToggleButton');
     const filtersToggleLabel = document.getElementById('appointmentsFiltersToggleLabel');
@@ -1106,10 +1180,78 @@ document.addEventListener('DOMContentLoaded', () => {
     const bookingModal = bookingModalElement && typeof bootstrap !== 'undefined'
         ? bootstrap.Modal.getOrCreateInstance(bookingModalElement)
         : null;
-    let calendarView = isMobileQuery.matches ? 'day' : 'week';
+    let calendarView = @json($selectedCalendarView) || (isMobileQuery.matches ? 'day' : 'week');
     let activeCalendarDate = (calendarDays.find((day) => day.is_today)?.date)
         || (dateInput?.value || '')
         || (calendarDays[0]?.date || '');
+
+    function formatCalendarTitleDate(dateValue) {
+        const normalized = String(dateValue || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+            return normalized;
+        }
+
+        const [yearRaw, monthRaw, dayRaw] = normalized.split('-');
+        const parsedDate = new Date(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw));
+        if (Number.isNaN(parsedDate.getTime())) {
+            return normalized;
+        }
+
+        return parsedDate.toLocaleDateString('es-ES', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        });
+    }
+
+    function formatCalendarTitleMonth(dateValue) {
+        const normalized = String(dateValue || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+            return normalized;
+        }
+
+        const [yearRaw, monthRaw, dayRaw] = normalized.split('-');
+        const parsedDate = new Date(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw));
+        if (Number.isNaN(parsedDate.getTime())) {
+            return normalized;
+        }
+
+        return parsedDate.toLocaleDateString('es-ES', {
+            month: 'long',
+            year: 'numeric',
+        });
+    }
+
+    function syncCalendarHeaderByView() {
+        if (!appointmentsWeekRangeTitle) {
+            return;
+        }
+
+        calendarNavGroups.forEach((group) => {
+            const groupView = String(group.dataset.calendarNavView || 'week');
+            group.classList.toggle('d-none', groupView !== calendarView);
+        });
+
+        if (appointmentsCalendarViewInput) {
+            appointmentsCalendarViewInput.value = calendarView;
+        }
+
+        if (calendarView === 'day') {
+            const dayLabel = formatCalendarTitleDate(activeCalendarDate || dateInput?.value || '');
+            appointmentsWeekRangeTitle.textContent = dayLabel || String(appointmentsWeekRangeTitle.dataset.titleDay || '');
+            return;
+        }
+
+        if (calendarView === 'month') {
+            const monthFromDate = String(activeCalendarDate || dateInput?.value || '').slice(0, 7);
+            const fallbackDate = monthFromDate && /^\d{4}-\d{2}$/.test(monthFromDate) ? `${monthFromDate}-01` : '';
+            const monthLabel = fallbackDate ? formatCalendarTitleMonth(fallbackDate) : '';
+            appointmentsWeekRangeTitle.textContent = monthLabel || String(appointmentsWeekRangeTitle.dataset.titleMonth || '');
+            return;
+        }
+
+        appointmentsWeekRangeTitle.textContent = String(appointmentsWeekRangeTitle.dataset.titleWeek || appointmentsWeekRangeTitle.textContent || '');
+    }
 
     function resetBookingFormMode() {
         if (appointmentIdInput) {
@@ -1130,6 +1272,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         setCreateCustomerMode(false);
+        syncAssociatedSaleState();
+        showBookingTab(bookingTabDataButton);
     }
 
     function setBookingFormEditMode() {
@@ -1184,6 +1328,41 @@ document.addEventListener('DOMContentLoaded', () => {
         contactPhoneInput.value = `${normalizedCode}${rawDigits}`;
     }
 
+    function showBookingTab(tabButton) {
+        if (!tabButton || typeof bootstrap === 'undefined' || !bootstrap.Tab) {
+            return;
+        }
+
+        bootstrap.Tab.getOrCreateInstance(tabButton).show();
+    }
+
+    function syncAssociatedSaleState(eventData = null) {
+        if (appointmentAssociatedServiceLabel) {
+            const selectedServiceLabel = String(serviceSelect?.selectedOptions?.[0]?.textContent || '').trim();
+            appointmentAssociatedServiceLabel.textContent = selectedServiceLabel
+                ? `Servicio asociado: ${selectedServiceLabel}`
+                : 'Servicio asociado: sin seleccionar.';
+        }
+
+        if (!appointmentSaleStatusText || !appointmentSaleOpenButton) {
+            return;
+        }
+
+        const salesOrderId = Number(eventData?.sales_order_id || 0);
+        const publicOrderUrl = String(eventData?.public_order_url || '').trim();
+
+        if (salesOrderId > 0) {
+            appointmentSaleStatusText.textContent = `Venta asociada #${salesOrderId}.`;
+            appointmentSaleOpenButton.classList.remove('d-none');
+            appointmentSaleOpenButton.setAttribute('href', publicOrderUrl || `/publicOrder/${salesOrderId}`);
+            return;
+        }
+
+        appointmentSaleStatusText.textContent = 'No hay venta asociada todavía.';
+        appointmentSaleOpenButton.classList.add('d-none');
+        appointmentSaleOpenButton.setAttribute('href', '#');
+    }
+
     function setCreateCustomerMode(enabled) {
         const isEnabled = !!enabled;
 
@@ -1193,9 +1372,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (customerSelect) {
             customerSelect.disabled = isEnabled;
+            customerSelect.required = !isEnabled;
             if (isEnabled) {
                 customerSelect.value = '';
             }
+        }
+
+        existingCustomerWrap?.classList.toggle('d-none', isEnabled);
+        newCustomerFormWrap?.classList.toggle('d-none', !isEnabled);
+
+        if (contactNameInput) {
+            contactNameInput.required = isEnabled;
+        }
+
+        if (contactPhoneInput) {
+            contactPhoneInput.required = isEnabled;
         }
 
         newCustomerExtra?.classList.toggle('d-none', !isEnabled);
@@ -1458,6 +1649,8 @@ document.addEventListener('DOMContentLoaded', () => {
             button.classList.toggle('btn-outline-secondary', !isActiveView);
         });
 
+        syncCalendarHeaderByView();
+
         if (calendarView === 'month') {
             calendarScroll.classList.add('d-none');
             monthView.classList.remove('d-none');
@@ -1654,7 +1847,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 appointmentsWeekCountValue.textContent = String(Number(payload?.calendar_week_events_count || appointmentEvents.length || 0));
             }
             if (appointmentsWeekRangeTitle && payload?.calendar_week_title) {
-                appointmentsWeekRangeTitle.textContent = String(payload.calendar_week_title);
+                appointmentsWeekRangeTitle.dataset.titleWeek = String(payload.calendar_week_title);
+                if (calendarView === 'week') {
+                    appointmentsWeekRangeTitle.textContent = String(payload.calendar_week_title);
+                }
             }
             if (appointmentsWeekRangeNote && payload?.calendar_week_note) {
                 appointmentsWeekRangeNote.textContent = String(payload.calendar_week_note);
@@ -1683,6 +1879,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (serviceMeta) {
                 serviceMeta.textContent = 'Selecciona el servicio-producto a reservar.';
             }
+            syncAssociatedSaleState();
             syncPaymentSummary();
             return;
         }
@@ -1697,6 +1894,7 @@ document.addEventListener('DOMContentLoaded', () => {
             userSelect.value = String(selectedService.assigned_user_id);
         }
 
+        syncAssociatedSaleState();
         syncPaymentSummary();
     }
 
@@ -1816,7 +2014,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (eventData) {
             const paidAmountInput = bookingForm?.querySelector('[name="paid_amount"]');
             const paymentStatusSelect = bookingForm?.querySelector('[name="payment_status"]');
-            const statusSelect = bookingForm?.querySelector('[name="status"]');
             const notesInput = bookingForm?.querySelector('[name="notes"]');
 
             if (contactNameInput) contactNameInput.value = eventData.contact_name || '';
@@ -1831,13 +2028,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (paidAmountInput) paidAmountInput.value = Number(eventData.paid_amount || 0) > 0 ? String(eventData.paid_amount) : '';
             if (paymentReferenceInput) paymentReferenceInput.value = eventData.payment_reference || '';
             if (paymentStatusSelect) paymentStatusSelect.value = eventData.payment_status_key || 'pending';
-            if (statusSelect) statusSelect.value = eventData.status_key || 'scheduled';
+            if (appointmentStatusSelect) appointmentStatusSelect.value = eventData.status_key || 'scheduled';
             if (notesInput) notesInput.value = eventData.notes || '';
             setCreateCustomerMode(false);
 
             syncAdminWhatsappLink(eventData);
+            syncAssociatedSaleState(eventData);
         } else {
             syncAdminWhatsappLink();
+            syncAssociatedSaleState();
         }
 
         syncServiceMetadata();
@@ -1929,6 +2128,9 @@ document.addEventListener('DOMContentLoaded', () => {
     calendarViewButtons.forEach((button) => {
         button.addEventListener('click', () => {
             calendarView = button.dataset.calendarView || 'week';
+            if (appointmentsCalendarViewInput) {
+                appointmentsCalendarViewInput.value = calendarView;
+            }
             applyCalendarView();
         });
     });
@@ -1985,7 +2187,27 @@ document.addEventListener('DOMContentLoaded', () => {
         setCreateCustomerMode(!currentlyNew);
     });
 
-    bookingForm?.addEventListener('submit', () => {
+    bookingForm?.addEventListener('submit', (event) => {
+        const createNewCustomer = String(createCustomerInput?.value || '0') === '1';
+        if (createNewCustomer) {
+            const contactName = String(contactNameInput?.value || '').trim();
+            const contactPhone = String(contactPhoneInput?.value || '').trim();
+            if (!contactName || !contactPhone) {
+                alert('Si seleccionas "Cliente nuevo", debes completar nombre y teléfono.');
+                showBookingTab(bookingTabDataButton);
+                event.preventDefault();
+                return;
+            }
+        } else {
+            const selectedCustomerId = Number(customerSelect?.value || 0);
+            if (selectedCustomerId <= 0) {
+                alert('Si no es cliente nuevo, debes seleccionar un cliente existente.');
+                showBookingTab(bookingTabDataButton);
+                event.preventDefault();
+                return;
+            }
+        }
+
         normalizePhoneForSubmit();
     });
     serviceProductSelect?.addEventListener('change', () => {
@@ -2043,7 +2265,7 @@ document.addEventListener('DOMContentLoaded', () => {
     syncPaymentReferenceRequirement();
     syncPaymentSummary();
     resetBookingFormMode();
-    if (calendarCard && isMobileQuery.matches) {
+    if (calendarCard && isMobileQuery.matches && !@json($selectedCalendarView)) {
         calendarView = 'day';
     }
     renderCalendar();

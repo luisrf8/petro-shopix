@@ -7,7 +7,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use App\Models\Appointment;
 use App\Models\SalesOrder;
+use App\Models\User;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class NotificationController extends Controller
@@ -146,8 +148,22 @@ class NotificationController extends Controller
 
     private function resolveNotificationTargetUrl($notification, $user): ?string
     {
-        $orderId = $notification->data['order_id'] ?? null;
-        $paymentId = $notification->data['payment_id'] ?? null;
+        $data = is_array($notification->data ?? null) ? $notification->data : [];
+        $orderId = $data['order_id'] ?? null;
+        $paymentId = $data['payment_id'] ?? null;
+        $appointmentId = $data['appointment_id'] ?? ($data['meta']['appointment_id'] ?? null);
+        $targetUrl = $data['target_url'] ?? null;
+
+        if (is_string($targetUrl) && trim($targetUrl) !== '') {
+            return $targetUrl;
+        }
+
+        $canonicalRole = null;
+        try {
+            $canonicalRole = User::canonicalRoleName(optional($user->role)->name);
+        } catch (\Throwable $exception) {
+            $canonicalRole = null;
+        }
 
         if ($orderId) {
             $order = SalesOrder::select('id', 'user_id', 'tenant_id')->find($orderId);
@@ -159,8 +175,32 @@ class NotificationController extends Controller
                 return url('/publicOrder/' . $order->id);
             }
 
-            if (!empty($user->tenant_id) && (int) $order->tenant_id === (int) $user->tenant_id) {
+            if (!empty($user->tenant_id)
+                && (int) $order->tenant_id === (int) $user->tenant_id
+                && in_array((string) $canonicalRole, ['owner', 'admin', 'seller', 'warehouse', 'delivery'], true)
+            ) {
                 return url('/sales/' . $order->id) . ($paymentId ? '#payment-' . $paymentId : '');
+            }
+
+            return null;
+        }
+
+        if ($appointmentId) {
+            $appointment = Appointment::query()->select('id', 'tenant_id', 'starts_at', 'customer_id')->find($appointmentId);
+            if (!$appointment) {
+                return null;
+            }
+
+            if ((int) ($appointment->customer_id ?? 0) === (int) ($user->id ?? 0)) {
+                return url('/');
+            }
+
+            if (!empty($user->tenant_id)
+                && (int) $appointment->tenant_id === (int) $user->tenant_id
+                && in_array((string) $canonicalRole, ['owner', 'admin', 'seller', 'warehouse', 'delivery'], true)
+            ) {
+                $date = optional($appointment->starts_at)->format('Y-m-d');
+                return url('/appointments' . ($date ? ('?date=' . $date) : ''));
             }
         }
 

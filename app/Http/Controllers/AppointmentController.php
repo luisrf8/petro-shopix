@@ -361,10 +361,20 @@ class AppointmentController extends Controller
         }
 
         $shouldCreateCustomer = (bool) ($validated['create_customer'] ?? false);
+        if (!$shouldCreateCustomer && !$customerId) {
+            return back()->withErrors([
+                'customer_id' => 'Selecciona un cliente existente o activa la opción de cliente nuevo.',
+            ])->withInput();
+        }
+
         if (!$customerId && $shouldCreateCustomer) {
             $customerName = trim((string) ($validated['contact_name'] ?? ''));
             if ($customerName === '') {
                 return back()->withErrors(['contact_name' => 'Indica el nombre para registrar el nuevo cliente.'])->withInput();
+            }
+
+            if ($normalizedContactPhone === '') {
+                return back()->withErrors(['contact_phone' => 'Indica el teléfono para registrar el nuevo cliente.'])->withInput();
             }
 
             $providedEmail = trim((string) ($validated['customer_email'] ?? ''));
@@ -427,7 +437,9 @@ class AppointmentController extends Controller
             ->filter(fn ($item) => !empty($item['variant_id']) && !empty($item['quantity']))
             ->values();
 
-        DB::transaction(function () use ($tenantId, $service, $targetUser, $customerId, $validated, $startAt, $endAt, $paymentMethod, $paidAmount, $paymentStatus, $paymentReference, $consumptions, $editingAppointment, $normalizedContactPhone) {
+        $savedAppointment = null;
+
+        DB::transaction(function () use ($tenantId, $service, $targetUser, $customerId, $validated, $startAt, $endAt, $paymentMethod, $paidAmount, $paymentStatus, $paymentReference, $consumptions, $editingAppointment, $normalizedContactPhone, &$savedAppointment) {
             $appointmentPayload = [
                 'tenant_id' => $tenantId,
                 'appointment_service_id' => (int) $service->id,
@@ -456,6 +468,8 @@ class AppointmentController extends Controller
                 $appointment = Appointment::create($appointmentPayload);
             }
 
+            $savedAppointment = $appointment;
+
             foreach ($consumptions as $item) {
                 $variant = $this->consumableVariantsQuery($tenantId)->whereKey((int) $item['variant_id'])->firstOrFail();
                 $quantity = round((float) $item['quantity'], 2);
@@ -475,6 +489,17 @@ class AppointmentController extends Controller
         $message = $editingAppointment
             ? 'Cita actualizada correctamente.'
             : 'Cita registrada correctamente.';
+
+        $actor = auth()->user();
+        if ($savedAppointment && $actor) {
+            $savedAppointment->refresh();
+            $this->notifyAppointmentWorkflow(
+                $savedAppointment,
+                $editingAppointment ? 'updated' : 'created',
+                $actor,
+                null
+            );
+        }
 
         return redirect()->route('appointments.index', ['date' => $selectedDate->toDateString()])->with('success', $message);
     }
@@ -575,6 +600,23 @@ class AppointmentController extends Controller
             })
             ->values();
 
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $paymentMethods = PaymentMethod::query()
+            ->with('currency')
+            ->where('tenant_id', $tenantId)
+            ->active()
+            ->orderBy('name')
+            ->get()
+            ->map(function (PaymentMethod $method) {
+                return [
+                    'id' => (int) $method->id,
+                    'name' => (string) ($method->name ?? 'Método de pago'),
+                    'currency_code' => (string) (optional($method->currency)->code ?? 'USD'),
+                    'uses_reference' => (bool) $method->usesReference(),
+                ];
+            })
+            ->values();
+
         return response()->json([
             'success' => true,
             'summary' => $summary,
@@ -587,6 +629,7 @@ class AppointmentController extends Controller
                 'to' => $validated['to'] ?? null,
                 'limit' => $limit,
             ],
+            'payment_methods' => $paymentMethods,
             'appointments' => $appointments->map(function (Appointment $appointment) {
                 $startsAt = $appointment->starts_at;
                 $isFuture = $startsAt ? $startsAt->isFuture() : false;
@@ -608,6 +651,7 @@ class AppointmentController extends Controller
                     'status_label' => (string) $appointment->status_label,
                     'payment_status' => (string) ($appointment->payment_status ?? 'pending'),
                     'payment_status_label' => (string) $appointment->payment_status_label,
+                    'payment_method_id' => $appointment->payment_method_id ? (int) $appointment->payment_method_id : null,
                     'paid_amount' => $paidAmount,
                     'service_price' => $servicePrice,
                     'pending_amount' => $pendingAmount,
@@ -1012,6 +1056,8 @@ class AppointmentController extends Controller
     private function workflowActionMessage(string $action): string
     {
         return match ($action) {
+            'created' => 'Cita registrada.',
+            'updated' => 'Cita actualizada.',
             'call_customer' => 'Se registró la llamada al cliente.',
             'confirm_attendance' => 'La asistencia quedó confirmada.',
             'cancel' => 'La cita fue cancelada.',

@@ -640,6 +640,281 @@
       color: #334155;
     }
 
+    .products-main-grid {
+      display: block;
+    }
+
+    .catalog-appointments-section {
+      margin-top: 1.15rem;
+      grid-column: 1 / -1;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .catalog-appointments-section .filter-panel-card {
+      width: 100%;
+      max-width: none;
+    }
+
+    .catalog-appointments-toolbar {
+      display: grid;
+      grid-template-columns: minmax(180px, 260px) minmax(220px, 1fr) auto;
+      gap: 0.65rem;
+      align-items: end;
+      margin-bottom: 0.7rem;
+    }
+
+    .catalog-appointments-view-group {
+      display: inline-flex;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .catalog-appointments-view-group .btn {
+      border-radius: 0;
+      border: 0;
+      min-width: 74px;
+    }
+
+    .catalog-appointments-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      justify-self: end;
+    }
+
+    .catalog-appointments-nav .btn {
+      min-width: 98px;
+    }
+
+    .catalog-appointments-range {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 0.85rem;
+    }
+
+    .catalog-agenda-board {
+      overflow-x: auto;
+      border: 1px solid #dbe4f0;
+      border-radius: 16px;
+      background: #ffffff;
+      padding: 0.7rem;
+    }
+
+    .catalog-agenda-grid {
+      display: grid;
+      grid-template-columns: 78px repeat(7, minmax(140px, 1fr));
+      gap: 0.5rem;
+      min-width: 1040px;
+    }
+
+    .catalog-agenda-grid.day-view {
+      grid-template-columns: 78px minmax(280px, 1fr);
+      min-width: 0;
+    }
+
+    .catalog-agenda-hours-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #94a3b8;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      align-self: end;
+      padding-bottom: 0.35rem;
+    }
+
+    .catalog-agenda-day-head {
+      border: 1px solid #dbe4f0;
+      background: #f8fafc;
+      border-radius: 14px;
+      padding: 0.55rem;
+      text-align: center;
+      min-height: 64px;
+    }
+
+    .catalog-agenda-day-head.active {
+      background: #0f172a;
+      color: #ffffff;
+      border-color: #0f172a;
+    }
+
+    .catalog-agenda-day-head.available {
+      background: #16a34a;
+      color: #ffffff;
+      border-color: #15803d;
+    }
+
+    .catalog-agenda-day-head.occupied {
+      background: #dc2626;
+      color: #ffffff;
+      border-color: #b91c1c;
+    }
+
+    .catalog-agenda-day-head.closed,
+    .catalog-agenda-day-head.past {
+      background: #6b7280;
+      color: #ffffff;
+      border-color: #4b5563;
+    }
+
+    .catalog-agenda-day-weekday {
+      display: block;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      font-weight: 700;
+      opacity: 0.85;
+    }
+
+    .catalog-agenda-day-date {
+      display: block;
+      font-weight: 700;
+      font-size: 1.05rem;
+      margin-top: 0.15rem;
+      line-height: 1.15;
+    }
+
+    .catalog-agenda-hour {
+      border-top: 1px solid #edf2f7;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      padding-right: 0.35rem;
+    }
+
+    .catalog-agenda-cell {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #f8fafc;
+      min-height: 58px;
+      padding: 0.25rem;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    .catalog-agenda-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 0.15rem 0.45rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      line-height: 1;
+      margin-top: 0.15rem;
+    }
+
+    .catalog-agenda-pill.available {
+      background: rgba(22, 163, 74, 0.12);
+      color: #166534;
+      border: 1px solid rgba(22, 163, 74, 0.32);
+    }
+
+    .catalog-agenda-pill.occupied {
+      background: rgba(239, 68, 68, 0.1);
+      color: #b91c1c;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .catalog-agenda-pill.past {
+      background: rgba(107, 114, 128, 0.15);
+      color: #374151;
+      border: 1px solid rgba(107, 114, 128, 0.4);
+    }
+
+    .catalog-agenda-cell.past {
+      background: #e5e7eb;
+      border-color: #cbd5e1;
+    }
+
+    .catalog-appointments-note {
+      margin-top: 0.6rem;
+      color: #64748b;
+    }
+
+    .catalog-day-status-card {
+      width: 100%;
+      border: 1px solid #dbe4f0;
+      border-radius: 14px;
+      padding: 0.75rem;
+      color: #fff;
+      text-align: left;
+      min-height: 96px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.2rem;
+    }
+
+    .catalog-day-status-card.available {
+      background: #16a34a;
+      border-color: #15803d;
+    }
+
+    .catalog-day-status-card.occupied {
+      background: #dc2626;
+      border-color: #b91c1c;
+    }
+
+    .catalog-day-status-card.closed {
+      background: #6b7280;
+      border-color: #4b5563;
+    }
+
+    .catalog-day-status-card.past {
+      background: #9ca3af;
+      border-color: #6b7280;
+    }
+
+    .catalog-day-status-card .weekday {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      opacity: 0.9;
+    }
+
+    .catalog-day-status-card .date {
+      font-size: 1.2rem;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .catalog-day-status-card .state {
+      font-size: 0.85rem;
+      font-weight: 700;
+      opacity: 0.95;
+    }
+
+    .catalog-day-selected {
+      box-shadow: 0 0 0 2px #0f172a inset;
+    }
+
+    .catalog-appointments-legend {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      font-size: 0.78rem;
+      color: #475569;
+    }
+
+    .catalog-appointments-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .catalog-appointments-legend i {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+
     .price-neo-chip {
       display: inline-flex;
       align-items: center;
@@ -682,8 +957,21 @@
         grid-template-columns: 1fr;
       }
 
+      .products-main-grid {
+        grid-template-columns: 1fr;
+      }
+
       .filters-panel {
         display: none;
+      }
+
+      .catalog-appointments-toolbar {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .catalog-appointments-nav {
+        justify-self: start;
       }
 
       .mobile-filter-shell {
@@ -986,7 +1274,13 @@
           </div>
         </aside>
 
-        <div>
+        <div class="products-main-grid">
+          <div>
+          <div class="products-summary mb-3">
+            <span id="products-counter">Mostrando {{ $products->count() }} resultado{{ $products->count() == 1 ? '' : 's' }}</span>
+            <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn">Ver todos los productos</a>
+          </div>
+
           <div class="row" id="products-container">
             @foreach($products as $product)
               <div class="col-6 col-sm-6 col-md-4 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
@@ -1110,7 +1404,48 @@
           <div id="packages-empty" class="empty-state" style="display: none;">
             No encontramos paquetes con los filtros seleccionados.
           </div>
+          </div>
+
         </div>
+
+      </div>
+
+      <section class="catalog-appointments-section" data-shopix-catalog-appointment>
+        <div class="filter-panel-card">
+          <h3 class="h5 fw-bold mb-2">Calendario de citas</h3>
+          <p class="small text-muted mb-3">Visual informativa de ocupación/disponibilidad.</p>
+
+          <div class="catalog-appointments-toolbar">
+            <div>
+              <label class="small text-muted mb-1 d-block">Profesional</label>
+              <select class="form-select form-select-sm" data-catalog-appointment-professional>
+                <option value="">Cargando profesionales...</option>
+              </select>
+            </div>
+
+            <div class="catalog-appointments-view-group" role="group" aria-label="Vista disponibilidad">
+              <button type="button" class="btn btn-outline-dark btn-sm" data-catalog-appointment-view="day">Día</button>
+              <button type="button" class="btn btn-outline-dark btn-sm active" data-catalog-appointment-view="week">Semana</button>
+              <button type="button" class="btn btn-outline-dark btn-sm" data-catalog-appointment-view="month">Mes</button>
+            </div>
+
+            <div class="catalog-appointments-nav">
+              <button type="button" class="btn btn-outline-dark btn-sm" data-catalog-appointment-prev-week>Anterior</button>
+              <button type="button" class="btn btn-outline-dark btn-sm" data-catalog-appointment-today>Hoy</button>
+              <button type="button" class="btn btn-outline-dark btn-sm" data-catalog-appointment-next-week>Siguiente</button>
+            </div>
+          </div>
+
+          <div class="catalog-appointments-range" data-catalog-appointment-range>-</div>
+          <div class="catalog-agenda-board" data-catalog-appointment-days></div>
+          <small class="catalog-appointments-note d-block" data-catalog-appointment-note>Consultando disponibilidad...</small>
+
+          <div class="catalog-appointments-legend mt-2">
+            <span><i style="background:#16a34a;"></i>Disponible</span>
+            <span><i style="background:#ef4444;"></i>Ocupada</span>
+          </div>
+        </div>
+      </section>
       </div>
     </div>
   </section>

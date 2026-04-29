@@ -2458,11 +2458,19 @@ class TenantController extends Controller
 
                     $cursor = $calendarMonthStart->copy();
                     while ($cursor->lessThanOrEqualTo($calendarMonthEnd)) {
+                        $isWorkingDay = UserScheduleRule::query()
+                            ->where('tenant_id', (int) $tenant->id)
+                            ->where('user_id', (int) $professional->id)
+                            ->where('day_of_week', (int) $cursor->dayOfWeek)
+                            ->where('is_active', true)
+                            ->exists();
+
                         $daySlots = $this->buildPublicAppointmentSlots((int) $tenant->id, $professional, $service, $cursor);
                         $calendar[] = [
                             'date' => $cursor->toDateString(),
                             'slots_count' => count($daySlots),
                             'has_slots' => count($daySlots) > 0,
+                            'is_working_day' => $isWorkingDay,
                             'is_today' => $cursor->isSameDay($today),
                         ];
 

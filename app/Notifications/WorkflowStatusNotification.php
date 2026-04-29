@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Appointment;
 use App\Models\SalesOrder;
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -106,6 +107,13 @@ class WorkflowStatusNotification extends Notification
         $orderId = $this->payload['order_id'] ?? null;
         $paymentId = $this->payload['payment_id'] ?? null;
         $appointmentId = $this->payload['meta']['appointment_id'] ?? null;
+        $canonicalRole = null;
+
+        try {
+            $canonicalRole = User::canonicalRoleName(optional($notifiable->role)->name);
+        } catch (\Throwable $exception) {
+            $canonicalRole = null;
+        }
 
         if (!$orderId) {
             if ($appointmentId) {
@@ -118,7 +126,10 @@ class WorkflowStatusNotification extends Notification
                         return url('/');
                     }
 
-                    if (!empty($notifiable->tenant_id) && (int) $appointment->tenant_id === (int) $notifiable->tenant_id) {
+                    if (!empty($notifiable->tenant_id)
+                        && (int) $appointment->tenant_id === (int) $notifiable->tenant_id
+                        && in_array((string) $canonicalRole, ['owner', 'admin', 'seller', 'warehouse', 'delivery'], true)
+                    ) {
                         $date = optional($appointment->starts_at)->format('Y-m-d');
                         return url('/appointments' . ($date ? ('?date=' . $date) : ''));
                     }
@@ -140,7 +151,10 @@ class WorkflowStatusNotification extends Notification
             return url('/publicOrder/' . $order->id);
         }
 
-        if (!empty($notifiable->tenant_id) && (int) $order->tenant_id === (int) $notifiable->tenant_id) {
+        if (!empty($notifiable->tenant_id)
+            && (int) $order->tenant_id === (int) $notifiable->tenant_id
+            && in_array((string) $canonicalRole, ['owner', 'admin', 'seller', 'warehouse', 'delivery'], true)
+        ) {
             return url('/sales/' . $order->id) . ($paymentId ? '#payment-' . $paymentId : '');
         }
 

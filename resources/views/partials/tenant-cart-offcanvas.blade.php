@@ -1387,6 +1387,7 @@
     const proAppointmentStatusWrap = document.getElementById('tenant-pro-appointment-status-wrap');
     const proAppointmentStatusBadge = document.getElementById('tenant-pro-appointment-status-badge');
     const proAppointmentStatusNote = document.getElementById('tenant-pro-appointment-status-note');
+    const catalogAppointmentSections = Array.from(document.querySelectorAll('[data-shopix-catalog-appointment]'));
     const tenantProCheckoutModalElement = document.getElementById('tenantProCheckoutModal');
     const proShippingUseProfileLocationBtn = document.getElementById('tenant-pro-shipping-use-profile-location');
     const proShippingUseCurrentLocationBtn = document.getElementById('tenant-pro-shipping-use-current-location');
@@ -2486,6 +2487,7 @@
     const authTokenKey = 'shopix_ecomm_token';
     const authUserKey = 'shopix_ecomm_user';
     const authResumeKey = `shopix_resume_checkout_${tenantSlug}`;
+    const catalogAppointmentSelectionKey = `shopix_catalog_appointment_${tenantSlug}`;
     const tenantAuthAlert = document.getElementById('tenant-pro-auth-alert');
     let proPaymentMethods = [];
     let proDollarRate = 0;
@@ -2504,6 +2506,10 @@
     let appointmentLockedServiceId = 0;
     let appointmentStatusPollingInterval = null;
     let trackedAppointmentId = 0;
+    let catalogAppointmentWeekStart = '';
+    let catalogAppointmentSelectedDate = '';
+    let catalogAppointmentSelectedTime = '';
+    let catalogAppointmentView = 'week';
 
     function clearAppointmentStatusPolling() {
       if (appointmentStatusPollingInterval) {
@@ -2760,6 +2766,678 @@
         month: 'long',
         year: 'numeric',
       });
+    }
+
+    function readCatalogAppointmentSelection() {
+      try {
+        const raw = localStorage.getItem(catalogAppointmentSelectionKey);
+        const parsed = raw ? JSON.parse(raw) : null;
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function persistCatalogAppointmentSelection(selection) {
+      if (!selection) {
+        localStorage.removeItem(catalogAppointmentSelectionKey);
+        return;
+      }
+
+      localStorage.setItem(catalogAppointmentSelectionKey, JSON.stringify(selection));
+    }
+
+    function getCatalogAppointmentPanelControls(section) {
+      if (!section) {
+        return null;
+      }
+
+      return {
+        section,
+        professionalSelect: section.querySelector('[data-catalog-appointment-professional]'),
+        prevWeekButton: section.querySelector('[data-catalog-appointment-prev-week]'),
+        todayButton: section.querySelector('[data-catalog-appointment-today]'),
+        nextWeekButton: section.querySelector('[data-catalog-appointment-next-week]'),
+        daysWrap: section.querySelector('[data-catalog-appointment-days]'),
+        note: section.querySelector('[data-catalog-appointment-note]'),
+        range: section.querySelector('[data-catalog-appointment-range]'),
+        viewButtons: Array.from(section.querySelectorAll('[data-catalog-appointment-view]')),
+      };
+    }
+
+    function forEachCatalogAppointmentPanel(callback) {
+      catalogAppointmentSections.forEach((section) => {
+        const controls = getCatalogAppointmentPanelControls(section);
+        if (controls) {
+          callback(controls);
+        }
+      });
+    }
+
+    function shiftIsoDate(dateValue, days) {
+      const normalized = String(dateValue || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        return '';
+      }
+
+      const [yearRaw, monthRaw, dayRaw] = normalized.split('-');
+      const date = new Date(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw));
+      if (Number.isNaN(date.getTime())) {
+        return '';
+      }
+
+      date.setDate(date.getDate() + Number(days || 0));
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    }
+
+    function getStartOfWeekIso(dateValue) {
+      const normalized = /^\d{4}-\d{2}-\d{2}$/.test(String(dateValue || '').trim())
+        ? String(dateValue).trim()
+        : getCurrentLocalDateValue();
+      const [yearRaw, monthRaw, dayRaw] = normalized.split('-');
+      const date = new Date(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw));
+      if (Number.isNaN(date.getTime())) {
+        return getCurrentLocalDateValue();
+      }
+
+      const day = date.getDay();
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      date.setDate(date.getDate() + diffToMonday);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    }
+
+    function formatCatalogAppointmentDayLabel(dateValue) {
+      const normalized = String(dateValue || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        return normalized;
+      }
+
+      const [yearRaw, monthRaw, dayRaw] = normalized.split('-');
+      const parsedDate = new Date(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw));
+      if (Number.isNaN(parsedDate.getTime())) {
+        return normalized;
+      }
+
+      return parsedDate.toLocaleDateString('es-ES', {
+        weekday: 'short',
+        day: '2-digit',
+        month: '2-digit',
+      });
+    }
+
+    function getCatalogSelectedProfessionalId() {
+      for (const section of catalogAppointmentSections) {
+        const select = section.querySelector('[data-catalog-appointment-professional]');
+        const selectedId = Number(select?.value || 0);
+        if (selectedId > 0) {
+          return selectedId;
+        }
+      }
+
+      return 0;
+    }
+
+    function syncCatalogProfessionalSelection(professionalId) {
+      forEachCatalogAppointmentPanel(({ professionalSelect }) => {
+        if (!professionalSelect) {
+          return;
+        }
+
+        professionalSelect.value = professionalId > 0 ? String(professionalId) : '';
+      });
+    }
+
+    function resolveCatalogAppointmentServiceId(professionalId) {
+      const byProfessional = appointmentCheckoutServices.find((service) => {
+        const assignedUserId = Number(service?.assigned_user_id || 0);
+        return assignedUserId <= 0 || assignedUserId === professionalId;
+      });
+
+      return Number(byProfessional?.id || appointmentCheckoutServices[0]?.id || 0);
+    }
+
+    function syncCatalogAppointmentViewButtons() {
+      forEachCatalogAppointmentPanel(({ viewButtons }) => {
+        viewButtons.forEach((button) => {
+          const view = String(button.getAttribute('data-catalog-appointment-view') || 'week');
+          const active = view === catalogAppointmentView;
+          button.classList.toggle('active', active);
+          button.classList.toggle('btn-dark', active);
+          button.classList.toggle('btn-outline-dark', !active);
+        });
+      });
+    }
+
+    function formatCatalogAgendaHeader(dateValue) {
+      const normalized = String(dateValue || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        return { weekday: '', dateLabel: normalized };
+      }
+
+      const [yearRaw, monthRaw, dayRaw] = normalized.split('-');
+      const parsedDate = new Date(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw));
+      if (Number.isNaN(parsedDate.getTime())) {
+        return { weekday: '', dateLabel: normalized };
+      }
+
+      return {
+        weekday: parsedDate.toLocaleDateString('en-US', { weekday: 'long' }),
+        dateLabel: parsedDate.toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
+      };
+    }
+
+    function toHourNumber(timeValue) {
+      const normalized = String(timeValue || '').trim();
+      const match = normalized.match(/^(\d{2}):(\d{2})/);
+      if (!match) {
+        return null;
+      }
+
+      const hour = Number(match[1]);
+      if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
+        return null;
+      }
+
+      return hour;
+    }
+
+    function isPastIsoDate(dateValue) {
+      const normalized = String(dateValue || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        return false;
+      }
+
+      return normalized < getCurrentLocalDateValue();
+    }
+
+    function isPastDateHour(dateValue, hourValue) {
+      const normalized = String(dateValue || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized) || !Number.isFinite(Number(hourValue))) {
+        return false;
+      }
+
+      const [yearRaw, monthRaw, dayRaw] = normalized.split('-');
+      const slotDate = new Date(Number(yearRaw), Number(monthRaw) - 1, Number(dayRaw), Number(hourValue), 0, 0, 0);
+      if (Number.isNaN(slotDate.getTime())) {
+        return false;
+      }
+
+      return slotDate.getTime() < Date.now();
+    }
+
+    function resolveCatalogCalendarDayState(row, dateValue = '') {
+      if (isPastIsoDate(dateValue)) {
+        return 'past';
+      }
+
+      if (!row || typeof row !== 'object') {
+        return 'closed';
+      }
+
+      if (row.has_slots === true) {
+        return 'available';
+      }
+
+      if (row.is_working_day === false) {
+        return 'closed';
+      }
+
+      return 'occupied';
+    }
+
+    function getCatalogDayStateLabel(state) {
+      if (state === 'available') {
+        return 'Disponible';
+      }
+      if (state === 'occupied') {
+        return 'Ocupada';
+      }
+      if (state === 'past') {
+        return 'Pasado';
+      }
+      return 'No laborable';
+    }
+
+    function buildCatalogDayAgendaHtml(dateValue, row, slots = []) {
+      const header = formatCatalogAgendaHeader(dateValue);
+      const state = resolveCatalogCalendarDayState(row, dateValue);
+      const hours = Array.from({ length: 16 }).map((_, idx) => idx + 6);
+      const slotHours = new Set((Array.isArray(slots) ? slots : []).map(slot => toHourNumber(slot?.start_time)).filter(hour => Number.isFinite(hour)));
+
+      const cells = ['<div class="catalog-agenda-hours-title">HORAS</div>'];
+      cells.push(`
+        <button type="button" class="catalog-agenda-day-head ${state}" data-catalog-appointment-day="${dateValue}">
+          <span class="catalog-agenda-day-weekday">${escapeHtml(header.weekday)}</span>
+          <span class="catalog-agenda-day-date">${escapeHtml(header.dateLabel)}</span>
+        </button>
+      `);
+
+      hours.forEach((hourValue) => {
+        const hourLabel = `${String(hourValue).padStart(2, '0')}:00`;
+        const isPastHour = isPastDateHour(dateValue, hourValue);
+        let badgeHtml = '';
+
+        if (isPastHour) {
+          badgeHtml = '';
+        } else if (state === 'closed' && hourValue === 13) {
+          badgeHtml = '<span class="catalog-agenda-pill occupied">Cerrado</span>';
+        } else if (state === 'occupied' && hourValue === 13) {
+          badgeHtml = '<span class="catalog-agenda-pill occupied">Ocupado</span>';
+        } else if (state === 'available' && slotHours.has(hourValue)) {
+          badgeHtml = '<span class="catalog-agenda-pill available">Disponible</span>';
+        }
+
+        cells.push(`<div class="catalog-agenda-hour">${hourLabel}</div>`);
+        cells.push(`<div class="catalog-agenda-cell ${isPastHour ? 'past' : ''}">${badgeHtml}</div>`);
+      });
+
+      return `<div class="catalog-agenda-grid day-view">${cells.join('')}</div>`;
+    }
+
+    function buildCatalogWeekAgendaHtml(calendarByDate, selectedDate, slots = []) {
+      const weekStart = getStartOfWeekIso(selectedDate);
+      const weekDays = Array.from({ length: 7 }).map((_, index) => shiftIsoDate(weekStart, index));
+      const hours = Array.from({ length: 16 }).map((_, idx) => idx + 6);
+      const selectedDaySlotHours = new Set((Array.isArray(slots) ? slots : []).map(slot => toHourNumber(slot?.start_time)).filter(hour => Number.isFinite(hour)));
+
+      const cells = ['<div class="catalog-agenda-hours-title">HORAS</div>'];
+      weekDays.forEach((dateValue) => {
+        const header = formatCatalogAgendaHeader(dateValue);
+        const isSelected = dateValue === selectedDate;
+        cells.push(`
+          <button type="button" class="catalog-agenda-day-head ${isSelected ? 'active' : ''}" data-catalog-appointment-day="${dateValue}">
+            <span class="catalog-agenda-day-weekday">${escapeHtml(header.weekday)}</span>
+            <span class="catalog-agenda-day-date">${escapeHtml(header.dateLabel)}</span>
+          </button>
+        `);
+      });
+
+      hours.forEach((hourValue) => {
+        const hourLabel = `${String(hourValue).padStart(2, '0')}:00`;
+        cells.push(`<div class="catalog-agenda-hour">${hourLabel}</div>`);
+
+        weekDays.forEach((dateValue) => {
+          const dayRow = calendarByDate.get(dateValue);
+          const dayState = resolveCatalogCalendarDayState(dayRow, dateValue);
+          const hasSlots = dayState === 'available';
+          const isSelectedDay = dateValue === selectedDate;
+          const isPastHour = isPastDateHour(dateValue, hourValue);
+          let badgeHtml = '';
+
+          if (isPastHour) {
+            badgeHtml = '';
+          } else if (dayState === 'past' && hourValue === 13) {
+            badgeHtml = '<span class="catalog-agenda-pill past">Pasado</span>';
+          } else if (dayState === 'closed' && hourValue === 13) {
+            badgeHtml = '<span class="catalog-agenda-pill occupied">Cerrado</span>';
+          } else if (dayState === 'occupied' && hourValue === 13) {
+            badgeHtml = '<span class="catalog-agenda-pill occupied">Sin citas</span>';
+          } else if (isSelectedDay && selectedDaySlotHours.has(hourValue)) {
+            badgeHtml = '<span class="catalog-agenda-pill available">Disponible</span>';
+          } else if (!isSelectedDay && hasSlots && hourValue === 9) {
+            badgeHtml = '<span class="catalog-agenda-pill available">Con cupos</span>';
+          }
+
+          cells.push(`<div class="catalog-agenda-cell ${isPastHour ? 'past' : ''}">${badgeHtml}</div>`);
+        });
+      });
+
+      return {
+        html: `<div class="catalog-agenda-grid">${cells.join('')}</div>`,
+        rangeLabel: `${formatCatalogAppointmentDayLabel(weekStart)} - ${formatCatalogAppointmentDayLabel(weekDays[6] || selectedDate)}`,
+      };
+    }
+
+    function renderCatalogAppointmentCalendar(calendarDays, slots = []) {
+      const calendarByDate = new Map((Array.isArray(calendarDays) ? calendarDays : []).map(row => [String(row?.date || ''), {
+        has_slots: !!row?.has_slots,
+        is_working_day: row?.is_working_day !== false,
+      }]));
+      const selectedDate = String(catalogAppointmentSelectedDate || getCurrentLocalDateValue()).trim();
+      const selectedMonth = getMonthFromDateValue(selectedDate) || getCurrentLocalMonthValue();
+
+      forEachCatalogAppointmentPanel(({ daysWrap, range }) => {
+        if (!daysWrap) {
+          return;
+        }
+
+        if (catalogAppointmentView === 'day') {
+          const selectedRow = calendarByDate.get(selectedDate) || {
+            has_slots: slots.length > 0,
+            is_working_day: true,
+          };
+          daysWrap.innerHTML = buildCatalogDayAgendaHtml(selectedDate, selectedRow, slots);
+          if (range) {
+            range.textContent = formatAppointmentSelectedDateLabel(selectedDate);
+          }
+          return;
+        }
+
+        if (catalogAppointmentView === 'week') {
+          const weekAgenda = buildCatalogWeekAgendaHtml(calendarByDate, selectedDate, slots);
+          daysWrap.innerHTML = weekAgenda.html;
+          if (range) {
+            range.textContent = weekAgenda.rangeLabel;
+          }
+          return;
+        }
+
+        const parsedMonth = parseAppointmentMonth(selectedMonth);
+        if (!parsedMonth) {
+          daysWrap.innerHTML = '';
+          if (range) {
+            range.textContent = '-';
+          }
+          return;
+        }
+
+        const monthDate = new Date(parsedMonth.year, parsedMonth.month - 1, 1);
+        const monthEnd = new Date(parsedMonth.year, parsedMonth.month, 0);
+        const startWeekday = (monthDate.getDay() + 6) % 7;
+        const totalDays = monthEnd.getDate();
+        const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+        const cells = [];
+        weekdayLabels.forEach(label => {
+          cells.push(`<div class="small text-muted text-center">${label}</div>`);
+        });
+        for (let i = 0; i < startWeekday; i += 1) {
+          cells.push('<div></div>');
+        }
+        for (let day = 1; day <= totalDays; day += 1) {
+          const dateValue = `${parsedMonth.year}-${String(parsedMonth.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const dayRow = calendarByDate.get(dateValue);
+          const state = resolveCatalogCalendarDayState(dayRow, dateValue);
+          const isSelected = selectedDate === dateValue;
+          const toneClass = state === 'available'
+            ? 'btn-success'
+            : ((state === 'closed' || state === 'past') ? 'btn-secondary' : 'btn-danger');
+          cells.push(`<button type="button" class="btn btn-sm w-100 ${toneClass} ${isSelected ? 'catalog-day-selected' : ''}" data-catalog-appointment-day="${dateValue}">${String(day).padStart(2, '0')}</button>`);
+        }
+
+        daysWrap.innerHTML = `<div class="d-grid gap-1" style="grid-template-columns: repeat(7, minmax(0, 1fr));">${cells.join('')}</div>`;
+        if (range) {
+          range.textContent = formatAppointmentCalendarLabel(selectedMonth);
+        }
+      });
+    }
+
+    async function refreshCatalogAppointmentSlots() {
+      const selectedProfessionalId = getCatalogSelectedProfessionalId();
+      const selectedDate = String(catalogAppointmentSelectedDate || getCurrentLocalDateValue()).trim();
+
+      if (selectedProfessionalId <= 0) {
+        forEachCatalogAppointmentPanel(({ daysWrap, note, range }) => {
+          if (daysWrap) {
+            daysWrap.innerHTML = '';
+          }
+          if (range) {
+            range.textContent = '-';
+          }
+          if (note) {
+            note.textContent = 'Selecciona un profesional para visualizar ocupación.';
+          }
+        });
+        return;
+      }
+
+      const serviceId = resolveCatalogAppointmentServiceId(selectedProfessionalId);
+      if (serviceId <= 0) {
+        forEachCatalogAppointmentPanel(({ daysWrap, note, range }) => {
+          if (daysWrap) {
+            daysWrap.innerHTML = '';
+          }
+          if (range) {
+            range.textContent = '-';
+          }
+          if (note) {
+            note.textContent = 'No hay servicios de citas configurados para mostrar agenda.';
+          }
+        });
+        return;
+      }
+
+      const month = getMonthFromDateValue(selectedDate) || getCurrentLocalMonthValue();
+      const params = new URLSearchParams({
+        service_id: String(serviceId),
+        user_id: String(selectedProfessionalId),
+        date: selectedDate,
+        month,
+      });
+
+      let payload = {};
+      try {
+        const response = await fetch(`${tenantAppointmentAvailabilityEndpoint}?${params.toString()}`, {
+          headers: { Accept: 'application/json' },
+        });
+
+        if (!response.ok) {
+          throw new Error('catalog_slots_failed');
+        }
+
+        payload = await response.json().catch(() => ({}));
+      } catch (error) {
+        forEachCatalogAppointmentPanel(({ daysWrap, note }) => {
+          if (daysWrap) {
+            daysWrap.innerHTML = '';
+          }
+          if (note) {
+            note.textContent = 'No se pudo consultar disponibilidad en este momento.';
+          }
+        });
+        return;
+      }
+
+      const calendar = Array.isArray(payload?.calendar) ? payload.calendar : [];
+      const slots = Array.isArray(payload?.slots) ? payload.slots : [];
+      renderCatalogAppointmentCalendar(calendar, slots);
+
+      forEachCatalogAppointmentPanel(({ note }) => {
+        if (!note) {
+          return;
+        }
+
+        if (catalogAppointmentView === 'day') {
+          const selectedRow = calendar.find(row => String(row?.date || '') === selectedDate) || null;
+          const state = resolveCatalogCalendarDayState(selectedRow, selectedDate);
+          note.textContent = state === 'available'
+            ? `Día disponible (${slots.length} horario(s)).`
+            : (state === 'closed'
+              ? 'No laboran este día en la tienda.'
+              : (state === 'past' ? 'Este día ya pasó.' : 'Día ocupado o sin horarios disponibles.'));
+          return;
+        }
+
+        const availableDays = calendar.filter(row => !!row?.has_slots).length;
+        note.textContent = availableDays > 0
+          ? `${availableDays} día(s) disponibles en ${formatAppointmentCalendarLabel(month)}.`
+          : `No hay días disponibles en ${formatAppointmentCalendarLabel(month)}.`;
+      });
+
+      persistCatalogAppointmentSelection({
+        user_id: selectedProfessionalId,
+        date: selectedDate,
+        view: catalogAppointmentView,
+      });
+    }
+
+    function syncCatalogAppointmentProfessionals() {
+      const options = ['<option value="">Selecciona un profesional</option>', ...appointmentCheckoutProfessionals.map((professional) => `<option value="${Number(professional?.id || 0)}">${escapeHtml(String(professional?.name || 'Profesional'))}</option>`)];
+
+      forEachCatalogAppointmentPanel(({ professionalSelect }) => {
+        if (!professionalSelect) {
+          return;
+        }
+
+        const previousValue = professionalSelect.value;
+        professionalSelect.innerHTML = options.join('');
+        if (previousValue && appointmentCheckoutProfessionals.some(professional => Number(professional?.id || 0) === Number(previousValue))) {
+          professionalSelect.value = previousValue;
+        }
+      });
+
+      let selectedProfessionalId = getCatalogSelectedProfessionalId();
+      if (selectedProfessionalId <= 0 && appointmentCheckoutProfessionals.length > 0) {
+        selectedProfessionalId = Number(appointmentCheckoutProfessionals[0]?.id || 0);
+        syncCatalogProfessionalSelection(selectedProfessionalId);
+      }
+    }
+
+    async function refreshCatalogAppointmentSection() {
+      if (catalogAppointmentSections.length === 0) {
+        return;
+      }
+
+      if (!appointmentCheckoutEnabled || appointmentCheckoutServices.length === 0 || appointmentCheckoutProfessionals.length === 0) {
+        forEachCatalogAppointmentPanel(({ section }) => {
+          section.classList.add('d-none');
+        });
+        return;
+      }
+
+      forEachCatalogAppointmentPanel(({ section }) => {
+        section.classList.remove('d-none');
+      });
+
+      const persisted = readCatalogAppointmentSelection();
+      if (persisted) {
+        catalogAppointmentSelectedDate = String(persisted?.date || '').trim() || catalogAppointmentSelectedDate;
+        catalogAppointmentView = ['day', 'week', 'month'].includes(String(persisted?.view || '').trim())
+          ? String(persisted.view).trim()
+          : catalogAppointmentView;
+      }
+
+      if (!catalogAppointmentSelectedDate) {
+        catalogAppointmentSelectedDate = getCurrentLocalDateValue();
+      }
+
+      syncCatalogAppointmentProfessionals();
+      syncCatalogAppointmentViewButtons();
+      await refreshCatalogAppointmentSlots();
+    }
+
+    function bindCatalogAppointmentSectionEvents() {
+      if (catalogAppointmentSections.length === 0) {
+        return;
+      }
+
+      forEachCatalogAppointmentPanel((controls) => {
+        const {
+          section,
+          professionalSelect,
+          prevWeekButton,
+          todayButton,
+          nextWeekButton,
+          daysWrap,
+          viewButtons,
+        } = controls;
+
+        if (!section || section.dataset.catalogAppointmentBound === '1') {
+          return;
+        }
+
+        section.dataset.catalogAppointmentBound = '1';
+
+        professionalSelect?.addEventListener('change', async () => {
+          const professionalId = Number(professionalSelect.value || 0);
+          syncCatalogProfessionalSelection(professionalId);
+          await refreshCatalogAppointmentSlots();
+        });
+
+        viewButtons.forEach((button) => {
+          button.addEventListener('click', async () => {
+            const nextView = String(button.getAttribute('data-catalog-appointment-view') || 'week');
+            if (!['day', 'week', 'month'].includes(nextView)) {
+              return;
+            }
+
+            catalogAppointmentView = nextView;
+            syncCatalogAppointmentViewButtons();
+            await refreshCatalogAppointmentSlots();
+          });
+        });
+
+        prevWeekButton?.addEventListener('click', async () => {
+          if (catalogAppointmentView === 'month') {
+            const currentMonth = getMonthFromDateValue(catalogAppointmentSelectedDate || getCurrentLocalDateValue()) || getCurrentLocalMonthValue();
+            const prevMonth = shiftMonthValue(currentMonth, -1);
+            catalogAppointmentSelectedDate = `${prevMonth}-01`;
+          } else {
+            const step = catalogAppointmentView === 'day' ? -1 : -7;
+            catalogAppointmentSelectedDate = shiftIsoDate(catalogAppointmentSelectedDate || getCurrentLocalDateValue(), step);
+          }
+          await refreshCatalogAppointmentSlots();
+        });
+
+        nextWeekButton?.addEventListener('click', async () => {
+          if (catalogAppointmentView === 'month') {
+            const currentMonth = getMonthFromDateValue(catalogAppointmentSelectedDate || getCurrentLocalDateValue()) || getCurrentLocalMonthValue();
+            const nextMonth = shiftMonthValue(currentMonth, 1);
+            catalogAppointmentSelectedDate = `${nextMonth}-01`;
+          } else {
+            const step = catalogAppointmentView === 'day' ? 1 : 7;
+            catalogAppointmentSelectedDate = shiftIsoDate(catalogAppointmentSelectedDate || getCurrentLocalDateValue(), step);
+          }
+          await refreshCatalogAppointmentSlots();
+        });
+
+        todayButton?.addEventListener('click', async () => {
+          catalogAppointmentSelectedDate = getCurrentLocalDateValue();
+          await refreshCatalogAppointmentSlots();
+        });
+
+        daysWrap?.addEventListener('click', async (event) => {
+          const button = event.target.closest('[data-catalog-appointment-day]');
+          if (!button || button.hasAttribute('disabled')) {
+            return;
+          }
+
+          const selectedDate = String(button.getAttribute('data-catalog-appointment-day') || '').trim();
+          if (!selectedDate) {
+            return;
+          }
+
+          catalogAppointmentSelectedDate = selectedDate;
+          await refreshCatalogAppointmentSlots();
+        });
+      });
+    }
+
+    async function applyCatalogAppointmentSelectionToCheckout() {
+      const selection = readCatalogAppointmentSelection();
+      if (!selection || !isAppointmentCheckoutActive()) {
+        return;
+      }
+
+      const serviceId = Number(selection?.service_id || 0);
+      const userId = Number(selection?.user_id || 0);
+      const date = String(selection?.date || '').trim();
+      const startTime = String(selection?.start_time || '').trim();
+
+      if (serviceId > 0 && proAppointmentServiceSelect && appointmentLockedServiceId <= 0 && appointmentCheckoutServices.some(service => Number(service?.id || 0) === serviceId)) {
+        proAppointmentServiceSelect.value = String(serviceId);
+      }
+
+      syncAppointmentProfessionalByService();
+
+      if (userId > 0 && proAppointmentUserSelect && appointmentCheckoutProfessionals.some(user => Number(user?.id || 0) === userId)) {
+        proAppointmentUserSelect.value = String(userId);
+      }
+
+      if (date && proAppointmentDateInput) {
+        proAppointmentDateInput.value = date;
+        appointmentCalendarMonth = getMonthFromDateValue(date) || appointmentCalendarMonth;
+        syncSelectedAppointmentDateDisplay();
+      }
+
+      await refreshAppointmentSlots();
+
+      if (startTime && proAppointmentSlotSelect && Array.from(proAppointmentSlotSelect.options || []).some(option => String(option.value || '') === startTime)) {
+        proAppointmentSlotSelect.value = startTime;
+      }
+
+      syncAppointmentPaymentModeUi();
+      renderAppointmentSelectionSummary();
     }
 
     function syncSelectedAppointmentDateDisplay() {
@@ -3065,6 +3743,7 @@
 
       populateAppointmentSelectors();
       applyAppointmentCheckoutUiState();
+      await refreshCatalogAppointmentSection();
       await refreshAppointmentSlots();
     }
 
@@ -4786,6 +5465,17 @@
     }
 
     if (cartEnabled) {
+      bindCatalogAppointmentSectionEvents();
+      if (catalogAppointmentSections.length > 0) {
+        loadAppointmentCheckoutAvailability().catch(() => {
+          forEachCatalogAppointmentPanel(({ note }) => {
+            if (note) {
+              note.textContent = 'No se pudo cargar la agenda semanal en este momento.';
+            }
+          });
+        });
+      }
+
       proAppointmentServiceSelect?.addEventListener('change', async () => {
         syncAppointmentProfessionalByService();
         proAppointmentSlotSelect.value = '';
