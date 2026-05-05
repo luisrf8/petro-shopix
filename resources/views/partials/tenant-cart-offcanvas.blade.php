@@ -226,6 +226,45 @@
     border-top: 1px solid #e5e7eb;
   }
 
+  .catalog-agenda-cell.is-clickable {
+    cursor: pointer;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+
+  .catalog-agenda-cell.is-clickable:hover {
+    opacity: 0.92;
+  }
+
+  .catalog-agenda-cell.is-loading {
+    position: relative;
+    pointer-events: none;
+  }
+
+  .catalog-agenda-cell.is-loading .catalog-agenda-pill {
+    opacity: 0;
+  }
+
+  .catalog-agenda-cell.is-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 14px;
+    height: 14px;
+    margin-top: -7px;
+    margin-left: -7px;
+    border-radius: 999px;
+    border: 2px solid rgba(var(--tenant-primary-rgb), 0.25);
+    border-top-color: rgba(var(--tenant-primary-rgb), 0.95);
+    animation: catalogSlotSpin 0.75s linear infinite;
+  }
+
+  @keyframes catalogSlotSpin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   .tenant-pro-auth-wrap,
   #tenant-pro-checkout-section {
     border: 1px solid rgba(var(--tenant-accent-rgb), 0.38);
@@ -2512,6 +2551,9 @@
     let appointmentCheckoutProfessionals = [];
     let appointmentCalendarMonth = '';
     let appointmentCalendarDays = [];
+    let catalogAppointmentOccupiedSlots = [];
+    let catalogTenantOpeningTime = '';
+    let catalogTenantClosingTime = '';
     let appointmentLockedServiceId = 0;
     let appointmentStatusPollingInterval = null;
     let trackedAppointmentId = 0;
@@ -2519,6 +2561,7 @@
     let catalogAppointmentSelectedDate = '';
     let catalogAppointmentSelectedTime = '';
     let catalogAppointmentView = 'week';
+    let pendingCatalogAppointmentCheckout = false;
 
     function clearAppointmentStatusPolling() {
       if (appointmentStatusPollingInterval) {
@@ -2650,6 +2693,63 @@
       }
 
       return appointmentCheckoutProfessionals.find(user => Number(user?.id || 0) === selectedId) || null;
+    }
+
+    function resolveAppointmentServicePrice(service) {
+      const candidates = [
+        Number(service?.price || 0),
+        Number(service?.effective_price || 0),
+        Number(service?.variant_price || 0),
+        Number(service?.configured_price || 0),
+      ];
+
+      const price = candidates.find(value => Number.isFinite(value) && value > 0);
+      return Number.isFinite(price) ? Number(price) : 0;
+    }
+
+    function getAppointmentSelectedServiceBaseAmount() {
+      if (!isAppointmentCheckoutActive()) {
+        return 0;
+      }
+
+      const service = getSelectedAppointmentService();
+      const servicePrice = resolveAppointmentServicePrice(service);
+      return Number.isFinite(servicePrice) && servicePrice > 0 ? servicePrice : 0;
+    }
+
+    function getCheckoutProItemsSubtotalBase(cart = []) {
+      const baseCartSubtotal = getSubtotal(Array.isArray(cart) ? cart : []);
+      if (!isAppointmentCheckoutActive()) {
+        return baseCartSubtotal;
+      }
+
+      return baseCartSubtotal + getAppointmentSelectedServiceBaseAmount();
+    }
+
+    function buildCheckoutProItemsPayload(cart = []) {
+      const rows = Array.isArray(cart) ? cart : [];
+      const payload = rows.map(item => ({
+        variant_id: Number(item?.variantId || 0),
+        quantity: Number(item?.qty || 0),
+        unit_price: Number(item?.price || 0),
+      })).filter(item => item.variant_id > 0 && item.quantity > 0 && item.unit_price > 0);
+
+      if (!isAppointmentCheckoutActive()) {
+        return payload;
+      }
+
+      const service = getSelectedAppointmentService();
+      const serviceVariantId = Number(service?.product_variant_id || 0);
+      if (serviceVariantId > 0 && !payload.some(item => Number(item?.variant_id || 0) === serviceVariantId)) {
+        const servicePrice = resolveAppointmentServicePrice(service);
+        payload.push({
+          variant_id: serviceVariantId,
+          quantity: 1,
+          unit_price: Number.isFinite(servicePrice) && servicePrice > 0 ? servicePrice : null,
+        });
+      }
+
+      return payload;
     }
 
     function renderAppointmentSelectionSummary() {
@@ -2905,6 +3005,139 @@
       return Number(byProfessional?.id || appointmentCheckoutServices[0]?.id || 0);
     }
 
+    function markPendingCatalogAppointmentCheckout(value = true) {
+      pendingCatalogAppointmentCheckout = !!value;
+    }
+
+    function hasPendingCatalogAppointmentCheckout() {
+      return pendingCatalogAppointmentCheckout;
+    }
+
+    function normalizeAppointmentStartTimeValue(timeValue) {
+      const normalized = String(timeValue || '').trim();
+      const match = normalized.match(/^(\d{2}):(\d{2})/);
+      if (!match) {
+        return normalized;
+      }
+
+      return `${match[1]}:${match[2]}`;
+    }
+
+    function parseHourMinuteToMinutes(value) {
+      const normalized = normalizeAppointmentStartTimeValue(value);
+      const match = normalized.match(/^(\d{2}):(\d{2})$/);
+      if (!match) {
+        return null;
+      }
+
+      const hours = Number(match[1]);
+      const minutes = Number(match[2]);
+      if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        return null;
+      }
+
+      return (hours * 60) + minutes;
+    }
+
+    function isOutsideTenantBusinessWindow(hourValue) {
+      const openingMinutes = parseHourMinuteToMinutes(catalogTenantOpeningTime);
+      const closingMinutes = parseHourMinuteToMinutes(catalogTenantClosingTime);
+      const hourMinutes = Number(hourValue) * 60;
+
+      if (!Number.isFinite(hourMinutes)) {
+        return false;
+      }
+
+      if (openingMinutes !== null && hourMinutes < openingMinutes) {
+        return true;
+      }
+
+      if (closingMinutes !== null && hourMinutes >= closingMinutes) {
+        return true;
+      }
+
+      return false;
+    }
+
+    function persistCatalogAppointmentSlotSelection(selection = {}) {
+      const hasStartTime = Object.prototype.hasOwnProperty.call(selection, 'start_time');
+      const selectedProfessionalId = Number(selection.user_id || getCatalogSelectedProfessionalId() || 0);
+      const selectedDate = String(selection.date || catalogAppointmentSelectedDate || getCurrentLocalDateValue()).trim();
+      const selectedStartTime = hasStartTime
+        ? normalizeAppointmentStartTimeValue(selection.start_time || '')
+        : normalizeAppointmentStartTimeValue(catalogAppointmentSelectedTime || '');
+      const serviceId = Number(selection.service_id || resolveCatalogAppointmentServiceId(selectedProfessionalId) || 0);
+
+      catalogAppointmentSelectedDate = selectedDate;
+      catalogAppointmentSelectedTime = selectedStartTime;
+
+      persistCatalogAppointmentSelection({
+        user_id: selectedProfessionalId,
+        service_id: serviceId > 0 ? serviceId : null,
+        date: selectedDate,
+        start_time: selectedStartTime,
+        view: catalogAppointmentView,
+      });
+    }
+
+    function findSlotStartTimeByHour(slots = [], hourValue) {
+      if (!Array.isArray(slots)) {
+        return '';
+      }
+
+      const hourNumber = Number(hourValue);
+      const slot = slots.find((item) => toHourNumber(item?.start_time || item?.start || '') === hourNumber);
+      return normalizeAppointmentStartTimeValue(slot?.start || slot?.start_time || '');
+    }
+
+    function buildOccupiedHourSet(occupiedSlots = []) {
+      const hours = new Set();
+      if (!Array.isArray(occupiedSlots)) {
+        return hours;
+      }
+
+      occupiedSlots.forEach((slot) => {
+        const startHour = toHourNumber(slot?.start || slot?.start_time || '');
+        const endHour = toHourNumber(slot?.end || slot?.end_time || '');
+        if (!Number.isFinite(startHour)) {
+          return;
+        }
+
+        const normalizedEnd = Number.isFinite(endHour) && endHour > startHour
+          ? endHour
+          : startHour + 1;
+
+        for (let hour = startHour; hour < normalizedEnd; hour += 1) {
+          hours.add(hour);
+        }
+      });
+
+      return hours;
+    }
+
+    async function openCatalogAppointmentCheckoutFromSlot(dateValue, startTimeValue) {
+      const selectedProfessionalId = getCatalogSelectedProfessionalId();
+      if (selectedProfessionalId <= 0) {
+        return;
+      }
+
+      const selectedDate = String(dateValue || '').trim();
+      const selectedStartTime = String(startTimeValue || '').trim();
+      if (!selectedDate || !selectedStartTime) {
+        return;
+      }
+
+      persistCatalogAppointmentSlotSelection({
+        user_id: selectedProfessionalId,
+        service_id: resolveCatalogAppointmentServiceId(selectedProfessionalId),
+        date: selectedDate,
+        start_time: selectedStartTime,
+      });
+
+      markPendingCatalogAppointmentCheckout(true);
+      await openProCheckout({ forceAppointment: true });
+    }
+
     function syncCatalogAppointmentViewButtons() {
       forEachCatalogAppointmentPanel(({ viewButtons }) => {
         viewButtons.forEach((button) => {
@@ -3007,11 +3240,12 @@
       return 'No laborable';
     }
 
-    function buildCatalogDayAgendaHtml(dateValue, row, slots = []) {
+    function buildCatalogDayAgendaHtml(dateValue, row, slots = [], occupiedSlots = []) {
       const header = formatCatalogAgendaHeader(dateValue);
       const state = resolveCatalogCalendarDayState(row, dateValue);
       const hours = Array.from({ length: 16 }).map((_, idx) => idx + 6);
       const slotHours = new Set((Array.isArray(slots) ? slots : []).map(slot => toHourNumber(slot?.start_time)).filter(hour => Number.isFinite(hour)));
+      const occupiedHours = buildOccupiedHourSet(occupiedSlots);
 
       const cells = ['<div class="catalog-agenda-hours-title">HORAS</div>'];
       cells.push(`
@@ -3024,30 +3258,37 @@
       hours.forEach((hourValue) => {
         const hourLabel = `${String(hourValue).padStart(2, '0')}:00`;
         const isPastHour = isPastDateHour(dateValue, hourValue);
+        const isOutsideBusinessHours = isOutsideTenantBusinessWindow(hourValue);
         let badgeHtml = '';
 
         if (isPastHour) {
           badgeHtml = '';
-        } else if (state === 'closed' && hourValue === 13) {
+        } else if (isOutsideBusinessHours) {
           badgeHtml = '<span class="catalog-agenda-pill occupied">Cerrado</span>';
-        } else if (state === 'occupied' && hourValue === 13) {
+        } else if (state === 'closed') {
+          badgeHtml = '<span class="catalog-agenda-pill occupied">Cerrado</span>';
+        } else if (state === 'occupied') {
           badgeHtml = '<span class="catalog-agenda-pill occupied">Ocupado</span>';
         } else if (state === 'available' && slotHours.has(hourValue)) {
           badgeHtml = '<span class="catalog-agenda-pill available">Disponible</span>';
+        } else if (occupiedHours.has(hourValue)) {
+          badgeHtml = '<span class="catalog-agenda-pill occupied">Ocupado</span>';
         }
 
         cells.push(`<div class="catalog-agenda-hour">${hourLabel}</div>`);
-        cells.push(`<div class="catalog-agenda-cell ${isPastHour ? 'past' : ''}">${badgeHtml}</div>`);
+        const slotStartTime = state === 'available' && !isPastHour ? findSlotStartTimeByHour(slots, hourValue) : '';
+        cells.push(`<div class="catalog-agenda-cell ${isPastHour ? 'past' : ''} ${slotStartTime ? 'is-clickable' : ''}" ${slotStartTime ? `data-catalog-appointment-slot="${escapeHtml(slotStartTime)}" data-catalog-appointment-date="${dateValue}" data-catalog-appointment-time="${escapeHtml(slotStartTime)}" role="button" tabindex="0" aria-label="Solicitar cita para ${hourLabel}"` : ''}>${badgeHtml}</div>`);
       });
 
       return `<div class="catalog-agenda-grid day-view">${cells.join('')}</div>`;
     }
 
-    function buildCatalogWeekAgendaHtml(calendarByDate, selectedDate, slots = []) {
+    function buildCatalogWeekAgendaHtml(calendarByDate, selectedDate, slots = [], occupiedSlots = []) {
       const weekStart = getStartOfWeekIso(selectedDate);
       const weekDays = Array.from({ length: 7 }).map((_, index) => shiftIsoDate(weekStart, index));
       const hours = Array.from({ length: 16 }).map((_, idx) => idx + 6);
       const selectedDaySlotHours = new Set((Array.isArray(slots) ? slots : []).map(slot => toHourNumber(slot?.start_time)).filter(hour => Number.isFinite(hour)));
+      const selectedDayOccupiedHours = buildOccupiedHourSet(occupiedSlots);
 
       const cells = ['<div class="catalog-agenda-hours-title">HORAS</div>'];
       weekDays.forEach((dateValue) => {
@@ -3071,23 +3312,31 @@
           const hasSlots = dayState === 'available';
           const isSelectedDay = dateValue === selectedDate;
           const isPastHour = isPastDateHour(dateValue, hourValue);
+          const isOutsideBusinessHours = isOutsideTenantBusinessWindow(hourValue);
           let badgeHtml = '';
 
           if (isPastHour) {
             badgeHtml = '';
+          } else if (isOutsideBusinessHours) {
+            badgeHtml = '<span class="catalog-agenda-pill occupied">Cerrado</span>';
           } else if (dayState === 'past' && hourValue === 13) {
             badgeHtml = '<span class="catalog-agenda-pill past">Pasado</span>';
-          } else if (dayState === 'closed' && hourValue === 13) {
+          } else if (dayState === 'closed') {
             badgeHtml = '<span class="catalog-agenda-pill occupied">Cerrado</span>';
-          } else if (dayState === 'occupied' && hourValue === 13) {
+          } else if (dayState === 'occupied') {
             badgeHtml = '<span class="catalog-agenda-pill occupied">Sin citas</span>';
           } else if (isSelectedDay && selectedDaySlotHours.has(hourValue)) {
             badgeHtml = '<span class="catalog-agenda-pill available">Disponible</span>';
+          } else if (isSelectedDay && selectedDayOccupiedHours.has(hourValue)) {
+            badgeHtml = '<span class="catalog-agenda-pill occupied">Ocupado</span>';
           } else if (!isSelectedDay && hasSlots && hourValue === 9) {
             badgeHtml = '<span class="catalog-agenda-pill available">Con cupos</span>';
           }
 
-          cells.push(`<div class="catalog-agenda-cell ${isPastHour ? 'past' : ''}">${badgeHtml}</div>`);
+          const slotStartTime = isSelectedDay && dayState === 'available' && !isPastHour
+            ? findSlotStartTimeByHour(slots, hourValue)
+            : '';
+          cells.push(`<div class="catalog-agenda-cell ${isPastHour ? 'past' : ''} ${slotStartTime ? 'is-clickable' : ''}" ${slotStartTime ? `data-catalog-appointment-slot="${escapeHtml(slotStartTime)}" data-catalog-appointment-date="${dateValue}" data-catalog-appointment-time="${escapeHtml(slotStartTime)}" role="button" tabindex="0" aria-label="Solicitar cita para ${hourLabel}"` : ''}>${badgeHtml}</div>`);
         });
       });
 
@@ -3097,7 +3346,7 @@
       };
     }
 
-    function renderCatalogAppointmentCalendar(calendarDays, slots = []) {
+    function renderCatalogAppointmentCalendar(calendarDays, slots = [], occupiedSlots = []) {
       const calendarByDate = new Map((Array.isArray(calendarDays) ? calendarDays : []).map(row => [String(row?.date || ''), {
         has_slots: !!row?.has_slots,
         is_working_day: row?.is_working_day !== false,
@@ -3115,7 +3364,7 @@
             has_slots: slots.length > 0,
             is_working_day: true,
           };
-          daysWrap.innerHTML = buildCatalogDayAgendaHtml(selectedDate, selectedRow, slots);
+          daysWrap.innerHTML = buildCatalogDayAgendaHtml(selectedDate, selectedRow, slots, occupiedSlots);
           if (range) {
             range.textContent = formatAppointmentSelectedDateLabel(selectedDate);
           }
@@ -3123,7 +3372,7 @@
         }
 
         if (catalogAppointmentView === 'week') {
-          const weekAgenda = buildCatalogWeekAgendaHtml(calendarByDate, selectedDate, slots);
+          const weekAgenda = buildCatalogWeekAgendaHtml(calendarByDate, selectedDate, slots, occupiedSlots);
           daysWrap.innerHTML = weekAgenda.html;
           if (range) {
             range.textContent = weekAgenda.rangeLabel;
@@ -3239,7 +3488,10 @@
 
       const calendar = Array.isArray(payload?.calendar) ? payload.calendar : [];
       const slots = Array.isArray(payload?.slots) ? payload.slots : [];
-      renderCatalogAppointmentCalendar(calendar, slots);
+      catalogAppointmentOccupiedSlots = Array.isArray(payload?.occupied_slots) ? payload.occupied_slots : [];
+      catalogTenantOpeningTime = normalizeAppointmentStartTimeValue(payload?.tenant_opening_time || '');
+      catalogTenantClosingTime = normalizeAppointmentStartTimeValue(payload?.tenant_closing_time || '');
+      renderCatalogAppointmentCalendar(calendar, slots, catalogAppointmentOccupiedSlots);
 
       forEachCatalogAppointmentPanel(({ note }) => {
         if (!note) {
@@ -3263,10 +3515,9 @@
           : `No hay días disponibles en ${formatAppointmentCalendarLabel(month)}.`;
       });
 
-      persistCatalogAppointmentSelection({
+      persistCatalogAppointmentSlotSelection({
         user_id: selectedProfessionalId,
         date: selectedDate,
-        view: catalogAppointmentView,
       });
     }
 
@@ -3311,6 +3562,7 @@
       const persisted = readCatalogAppointmentSelection();
       if (persisted) {
         catalogAppointmentSelectedDate = String(persisted?.date || '').trim() || catalogAppointmentSelectedDate;
+        catalogAppointmentSelectedTime = normalizeAppointmentStartTimeValue(persisted?.start_time || '');
         catalogAppointmentView = ['day', 'week', 'month'].includes(String(persisted?.view || '').trim())
           ? String(persisted.view).trim()
           : catalogAppointmentView;
@@ -3350,6 +3602,7 @@
         professionalSelect?.addEventListener('change', async () => {
           const professionalId = Number(professionalSelect.value || 0);
           syncCatalogProfessionalSelection(professionalId);
+          catalogAppointmentSelectedTime = '';
           await refreshCatalogAppointmentSlots();
         });
 
@@ -3361,6 +3614,7 @@
             }
 
             catalogAppointmentView = nextView;
+            catalogAppointmentSelectedTime = '';
             syncCatalogAppointmentViewButtons();
             await refreshCatalogAppointmentSlots();
           });
@@ -3375,6 +3629,7 @@
             const step = catalogAppointmentView === 'day' ? -1 : -7;
             catalogAppointmentSelectedDate = shiftIsoDate(catalogAppointmentSelectedDate || getCurrentLocalDateValue(), step);
           }
+          catalogAppointmentSelectedTime = '';
           await refreshCatalogAppointmentSlots();
         });
 
@@ -3387,15 +3642,38 @@
             const step = catalogAppointmentView === 'day' ? 1 : 7;
             catalogAppointmentSelectedDate = shiftIsoDate(catalogAppointmentSelectedDate || getCurrentLocalDateValue(), step);
           }
+          catalogAppointmentSelectedTime = '';
           await refreshCatalogAppointmentSlots();
         });
 
         todayButton?.addEventListener('click', async () => {
           catalogAppointmentSelectedDate = getCurrentLocalDateValue();
+          catalogAppointmentSelectedTime = '';
           await refreshCatalogAppointmentSlots();
         });
 
         daysWrap?.addEventListener('click', async (event) => {
+          const slotTrigger = event.target.closest('[data-catalog-appointment-slot]');
+          if (slotTrigger) {
+            if (slotTrigger.dataset.loading === '1') {
+              return;
+            }
+
+            const slotDate = String(slotTrigger.getAttribute('data-catalog-appointment-date') || '').trim();
+            const slotStartTime = String(slotTrigger.getAttribute('data-catalog-appointment-time') || '').trim();
+            if (slotDate && slotStartTime) {
+              slotTrigger.dataset.loading = '1';
+              slotTrigger.classList.add('is-loading');
+              try {
+                await openCatalogAppointmentCheckoutFromSlot(slotDate, slotStartTime);
+              } finally {
+                slotTrigger.dataset.loading = '0';
+                slotTrigger.classList.remove('is-loading');
+              }
+            }
+            return;
+          }
+
           const button = event.target.closest('[data-catalog-appointment-day]');
           if (!button || button.hasAttribute('disabled')) {
             return;
@@ -3407,6 +3685,7 @@
           }
 
           catalogAppointmentSelectedDate = selectedDate;
+          catalogAppointmentSelectedTime = '';
           await refreshCatalogAppointmentSlots();
         });
       });
@@ -3415,13 +3694,14 @@
     async function applyCatalogAppointmentSelectionToCheckout() {
       const selection = readCatalogAppointmentSelection();
       if (!selection || !isAppointmentCheckoutActive()) {
+        markPendingCatalogAppointmentCheckout(false);
         return;
       }
 
       const serviceId = Number(selection?.service_id || 0);
       const userId = Number(selection?.user_id || 0);
       const date = String(selection?.date || '').trim();
-      const startTime = String(selection?.start_time || '').trim();
+      const startTime = normalizeAppointmentStartTimeValue(selection?.start_time || '');
 
       if (serviceId > 0 && proAppointmentServiceSelect && appointmentLockedServiceId <= 0 && appointmentCheckoutServices.some(service => Number(service?.id || 0) === serviceId)) {
         proAppointmentServiceSelect.value = String(serviceId);
@@ -3441,12 +3721,16 @@
 
       await refreshAppointmentSlots();
 
-      if (startTime && proAppointmentSlotSelect && Array.from(proAppointmentSlotSelect.options || []).some(option => String(option.value || '') === startTime)) {
-        proAppointmentSlotSelect.value = startTime;
+      if (startTime && proAppointmentSlotSelect) {
+        const matchingOption = Array.from(proAppointmentSlotSelect.options || []).find((option) => normalizeAppointmentStartTimeValue(option.value || '') === startTime);
+        if (matchingOption) {
+          proAppointmentSlotSelect.value = String(matchingOption.value || '');
+        }
       }
 
       syncAppointmentPaymentModeUi();
       renderAppointmentSelectionSummary();
+      markPendingCatalogAppointmentCheckout(false);
     }
 
     function syncSelectedAppointmentDateDisplay() {
@@ -3947,6 +4231,22 @@
     }
 
     function syncAppointmentPaymentModeUi() {
+      if (!isAppointmentCheckoutActive()) {
+        if (proAppointmentPaymentModeSelect) {
+          proAppointmentPaymentModeSelect.disabled = true;
+        }
+
+        if (proPaymentStepNote) {
+          proPaymentStepNote.textContent = 'Agrega tu pago con referencia y comprobante.';
+        }
+
+        proOnSitePaymentNote?.classList.add('d-none');
+        document.getElementById('tenant-pro-payment-rows')?.classList.remove('d-none');
+        document.getElementById('tenant-pro-add-payment-row')?.classList.remove('d-none');
+        updateProPaymentSummary();
+        return;
+      }
+
       const onSite = isAppointmentOnSitePayment();
       const hasSelectedSlot = String(proAppointmentSlotSelect?.value || '').trim() !== '';
 
@@ -3966,6 +4266,7 @@
       document.getElementById('tenant-pro-payment-rows')?.classList.toggle('d-none', !hasSelectedSlot || onSite);
       document.getElementById('tenant-pro-add-payment-row')?.classList.toggle('d-none', !hasSelectedSlot || onSite);
       renderAppointmentSelectionSummary();
+      updateProPaymentSummary();
     }
 
     function validateCheckoutStepOne() {
@@ -4631,7 +4932,7 @@
       } else {
         submitButton.innerHTML = submitButton.dataset.defaultLabel;
         const cart = getCart();
-        submitButton.disabled = cart.length === 0;
+        submitButton.disabled = !isAppointmentCheckoutActive() && cart.length === 0;
       }
     }
 
@@ -4715,7 +5016,7 @@
       const baseSymbol = getBaseCurrencySymbol();
       const proDeliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
       const proDeliveryContext = getTenantDeliveryContext(proDeliveryType, proShippingDistanceInput, false);
-      const totalBaseWithoutIgtf = getSubtotal(getCart()) + Number(proDeliveryContext.fee || 0);
+      const totalBaseWithoutIgtf = getCheckoutProItemsSubtotalBase(getCart()) + Number(proDeliveryContext.fee || 0);
 
       const paymentRows = Array.from(document.querySelectorAll('[data-pro-payment-row]'));
       const paidBase = roundProMoney(paymentRows.reduce((sum, row) => {
@@ -4785,7 +5086,8 @@
       clearTenantAuthAlert();
       const cart = getCart();
       const authOnly = !!options.authOnly;
-      if (!authOnly && cart.length === 0) {
+      const forceAppointmentCheckout = !!options.forceAppointment || hasPendingCatalogAppointmentCheckout();
+      if (!authOnly && cart.length === 0 && !forceAppointmentCheckout) {
         alert('Tu carrito está vacío.');
         return;
       }
@@ -4820,7 +5122,7 @@
         submitOrderButton.disabled = true;
         paymentRowsContainer.innerHTML = '';
         const deliveryContext = getTenantDeliveryContext('pickup', proShippingDistanceInput, false);
-        totalAmountElement.textContent = `${(getSubtotal(cart) + Number(deliveryContext.fee || 0)).toFixed(2)} ${getBaseCurrencySymbol()}`;
+        totalAmountElement.textContent = `${(getCheckoutProItemsSubtotalBase(cart) + Number(deliveryContext.fee || 0)).toFixed(2)} ${getBaseCurrencySymbol()}`;
 
         const loginTab = document.getElementById('tenant-login-tab');
         if (loginTab) {
@@ -4832,7 +5134,7 @@
         authSection.classList.add('d-none');
         checkoutSection.classList.remove('d-none');
         modalFooter?.classList.remove('d-none');
-        submitOrderButton.disabled = cart.length === 0;
+        submitOrderButton.disabled = !isAppointmentCheckoutActive() && cart.length === 0;
         resetCheckoutSuccessState();
         setCheckoutStep(1);
       };
@@ -4856,7 +5158,7 @@
         return;
       }
 
-      if (authOnly && cart.length === 0) {
+      if (authOnly && cart.length === 0 && !forceAppointmentCheckout) {
         showLoggedInIdleState();
 
         const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
@@ -4891,6 +5193,9 @@
       proSpecialTaxpayer = !!methodsData.special_taxpayer;
 
       await loadAppointmentCheckoutAvailability();
+      if (isAppointmentCheckoutActive()) {
+        await applyCatalogAppointmentSelectionToCheckout();
+      }
 
       if (methods.length === 0 && !isAppointmentCheckoutActive()) {
         alert('Esta tienda no tiene métodos de pago activos para checkout.');
@@ -5001,7 +5306,7 @@
       };
 
       const initialDeliveryContext = getTenantDeliveryContext(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup', proShippingDistanceInput, false);
-      totalAmountElement.textContent = `${(getSubtotal(cart) + Number(initialDeliveryContext.fee || 0)).toFixed(2)} ${getBaseCurrencySymbol()}`;
+      totalAmountElement.textContent = `${(getCheckoutProItemsSubtotalBase(cart) + Number(initialDeliveryContext.fee || 0)).toFixed(2)} ${getBaseCurrencySymbol()}`;
       updateProPaymentSummary();
       syncAppointmentPaymentModeUi();
 
@@ -5096,18 +5401,25 @@
       }
 
       const cart = getCart();
-      if (cart.length === 0) {
+      const appointmentModeActive = isAppointmentCheckoutActive();
+      const checkoutItems = buildCheckoutProItemsPayload(cart);
+
+      if (!appointmentModeActive && cart.length === 0) {
         alert('Tu carrito está vacío.');
         return;
       }
 
-      const missingVariant = cart.some(item => !item.variantId);
+      if (appointmentModeActive && checkoutItems.length === 0) {
+        alert('El servicio seleccionado no tiene un producto asociado para facturar.');
+        return;
+      }
+
+      const missingVariant = checkoutItems.some(item => Number(item?.variant_id || 0) <= 0);
       if (missingVariant) {
         alert('Hay productos antiguos en tu carrito sin variante válida. Elimínalos y vuelve a agregarlos.');
         return;
       }
 
-      const appointmentModeActive = isAppointmentCheckoutActive();
       const appointmentPaymentMode = String(proAppointmentPaymentModeSelect?.value || 'online');
       const requiresOnlinePayment = !appointmentModeActive || appointmentPaymentMode === 'online';
 
@@ -5253,7 +5565,7 @@
 
       if (requiresOnlinePayment) {
         const totalPaidBase = roundProMoney(payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
-        const totalOrderBaseWithoutIgtf = getSubtotal(cart) + Number(proDeliveryContext.fee || 0);
+        const totalOrderBaseWithoutIgtf = getCheckoutProItemsSubtotalBase(cart) + Number(proDeliveryContext.fee || 0);
         const igtfTotals = calculateProIgtfTotals(paymentRows, totalOrderBaseWithoutIgtf);
         const totalOrderBase = roundProMoney(igtfTotals.totalWithIgtf);
         if (totalPaidBase + 0.0001 < totalOrderBase) {
@@ -5263,11 +5575,7 @@
         }
       }
 
-      const items = cart.map(item => ({
-        variant_id: Number(item.variantId),
-        quantity: Number(item.qty),
-        unit_price: Number(item.price),
-      }));
+      const items = checkoutItems;
 
       let response;
       setProSubmitLoading(true);
@@ -5502,6 +5810,7 @@
         syncAppointmentProfessionalByService();
         proAppointmentSlotSelect.value = '';
         syncAppointmentPaymentModeUi();
+        updateProPaymentSummary();
         await refreshAppointmentSlots();
       });
 

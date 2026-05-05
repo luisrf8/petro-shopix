@@ -321,10 +321,7 @@ class TenantController extends Controller
         $states = State::query()->orderBy('name')->get(['id', 'name', 'country_id']);
         $cities = City::query()->orderBy('name')->get(['id', 'name', 'state_id']);
         $latestPlanPayment = $this->getTenantLatestPaidPlanPayment($tenant);
-        $currentPlanPrice = (float) ($latestPlanPayment?->plan?->price ?? -1);
-        $upgradePlans = $plans->filter(function (Plan $plan) use ($currentPlanPrice) {
-            return (float) ($plan->price ?? 0) > $currentPlanPrice;
-        })->values();
+        $upgradePlans = $plans->values();
         $planDaysRemaining = $this->calculatePlanDaysRemaining($latestPlanPayment);
         $resolvedPlanCutoffDate = $this->resolvePaymentCutoffDate($latestPlanPayment);
         $ownerRoleIds = $this->resolveOwnerRoleIds();
@@ -1156,7 +1153,7 @@ class TenantController extends Controller
             'color_secondary' => 'nullable|string|max:7',
             'color_accent'    => 'nullable|string|max:7',
             'business_type'   => ['sometimes', 'required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
-            'economic_activity' => 'sometimes|required|string|max:150|regex:/.*\S.*/',
+            'economic_activity' => 'nullable|string|max:150|regex:/.*\S.*/',
             'country'         => 'nullable|string|max:255',
             'state'           => 'nullable|string|max:255',
             'city'            => 'nullable|string|max:255',
@@ -1212,18 +1209,8 @@ class TenantController extends Controller
         $incomingPlan = !is_null($incomingPlanId)
             ? Plan::query()->findOrFail($incomingPlanId)
             : null;
-        $planChanged = !is_null($incomingPlanId) && ((int) $currentPlanId !== $incomingPlanId);
-
-        if ($planChanged && $latestPaidPlanPayment) {
-            $currentPlanPrice = (float) ($latestPaidPlanPayment?->plan?->price ?? 0);
-            $incomingPlanPrice = (float) ($incomingPlan?->price ?? 0);
-
-            if ($incomingPlanPrice <= $currentPlanPrice) {
-                throw ValidationException::withMessages([
-                    'plan_id' => 'Selecciona un plan superior al plan actual.',
-                ]);
-            }
-        }
+        $planSelectionRequested = !is_null($incomingPlanId);
+        $planChanged = $planSelectionRequested && ((int) $currentPlanId !== $incomingPlanId);
 
         $ownerRole = Role::where('name', 'owner')->first();
         $owner = $tenant->users()
@@ -1348,7 +1335,7 @@ class TenantController extends Controller
         $tenant->fill($tenantData);
         $tenantHasChanges = $tenant->isDirty();
 
-        if (!$tenantHasChanges && !$ownerHasChanges && !$planChanged) {
+        if (!$tenantHasChanges && !$ownerHasChanges && !$planSelectionRequested) {
             if ($expectsJson) {
                 return response()->json([
                     'message' => 'No se detectaron cambios para actualizar',
@@ -1389,8 +1376,8 @@ class TenantController extends Controller
             $tenant->save();
         }
 
-        // Si cambia el plan
-        if ($planChanged) {
+        // Si cambia o se renueva el plan
+        if ($planSelectionRequested) {
             $plan = $incomingPlan;
             $paidAt = Carbon::now();
             $expiresAt = (clone $paidAt)->addDays((int) ($plan->duration_days ?? 0));
@@ -1983,7 +1970,7 @@ class TenantController extends Controller
                 'appointment_date' => 'nullable|date',
                 'appointment_start_time' => 'nullable|date_format:H:i',
                 'appointment_payment_mode' => 'nullable|in:online,on_site',
-                'items' => 'required|array|min:1',
+                'items' => 'nullable|array',
                 'items.*.variant_id' => 'required|integer|exists:product_variants,id',
                 'items.*.quantity' => 'required|integer|min:1',
                 'items.*.unit_price' => 'nullable|numeric|min:0.01',
@@ -2074,20 +2061,42 @@ class TenantController extends Controller
                     throw new \RuntimeException('La hora seleccionada ya no está disponible para ese profesional.');
                 }
 
-                $containsServiceVariant = collect($validated['items'])->contains(function ($item) use ($appointmentService) {
-                    return (int) ($item['variant_id'] ?? 0) === (int) ($appointmentService->product_variant_id ?? 0);
-                });
-
-                if (!$containsServiceVariant) {
-                    throw new \RuntimeException('Debes incluir en el carrito el producto asociado al servicio que deseas agendar.');
-                }
-
                 $validated['delivery_type'] = 'pickup';
                 $validated['delivery_address'] = 'Tienda';
                 $validated['delivery_city_id'] = null;
                 $validated['delivery_distance_km'] = null;
                 $validated['delivery_latitude'] = null;
                 $validated['delivery_longitude'] = null;
+            }
+
+            $validated['items'] = is_array($validated['items'] ?? null) ? array_values($validated['items']) : [];
+
+            if ($isAppointmentOrder && $appointmentService) {
+                $serviceVariantId = (int) ($appointmentService->product_variant_id ?? 0);
+                if ($serviceVariantId <= 0) {
+                    throw new \RuntimeException('El servicio seleccionado no tiene un producto asociado para facturar.');
+                }
+
+                $containsServiceVariant = collect($validated['items'])->contains(function ($item) use ($serviceVariantId) {
+                    return (int) ($item['variant_id'] ?? 0) === $serviceVariantId;
+                });
+
+                if (!$containsServiceVariant) {
+                    $servicePrice = (float) ($appointmentService->price ?? 0);
+                    if ($servicePrice <= 0 && $appointmentService->productVariant) {
+                        $servicePrice = $this->getVariantDiscountedUnitPrice($appointmentService->productVariant);
+                    }
+
+                    $validated['items'][] = [
+                        'variant_id' => $serviceVariantId,
+                        'quantity' => 1,
+                        'unit_price' => $servicePrice > 0 ? $servicePrice : null,
+                    ];
+                }
+            }
+
+            if (!$isAppointmentOrder && count($validated['items']) === 0) {
+                throw new \RuntimeException('Debes agregar al menos un producto al carrito.');
             }
 
             if (!$isAppointmentOrder) {
@@ -2386,6 +2395,12 @@ class TenantController extends Controller
                     'payment_mode' => $appointmentPaymentMode,
                 ] : null,
             ], 201);
+        } catch (ValidationException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'errors' => $exception->errors(),
+            ], 422);
         } catch (\RuntimeException $exception) {
             return response()->json([
                 'success' => false,
@@ -2416,11 +2431,19 @@ class TenantController extends Controller
         $services = $this->publicAppointmentServicesQuery((int) $tenant->id)
             ->get()
             ->map(function (AppointmentService $service) {
+                $configuredPrice = (float) ($service->price ?? 0);
+                $variantPrice = $service->productVariant
+                    ? $this->getVariantDiscountedUnitPrice($service->productVariant)
+                    : 0.0;
+                $resolvedPrice = $configuredPrice > 0 ? $configuredPrice : $variantPrice;
+
                 return [
                     'id' => (int) $service->id,
                     'name' => (string) $service->display_name,
                     'duration_minutes' => (int) ($service->duration_minutes ?? 60),
-                    'price' => (float) ($service->price ?? 0),
+                    'price' => (float) $resolvedPrice,
+                    'configured_price' => (float) $configuredPrice,
+                    'variant_price' => (float) $variantPrice,
                     'assigned_user_id' => $service->user_id ? (int) $service->user_id : null,
                     'product_variant_id' => $service->product_variant_id ? (int) $service->product_variant_id : null,
                 ];
@@ -2456,6 +2479,7 @@ class TenantController extends Controller
         $calendarMonthEnd = $calendarMonthStart->copy()->endOfMonth();
 
         $slots = [];
+        $occupiedSlots = [];
         $calendar = [];
         if ($serviceId > 0 && $userId > 0) {
             $service = $this->publicAppointmentServicesQuery((int) $tenant->id)
@@ -2471,19 +2495,31 @@ class TenantController extends Controller
                 } else {
                     if ($date !== '') {
                         $selectedDate = Carbon::parse($date)->startOfDay();
-                        $slots = $this->buildPublicAppointmentSlots((int) $tenant->id, $professional, $service, $selectedDate);
+                        $slots = $this->buildPublicAppointmentSlots((int) $tenant->id, $professional, $service, $selectedDate, $tenant);
+
+                        $occupiedSlots = Appointment::query()
+                            ->where('tenant_id', (int) $tenant->id)
+                            ->where('user_id', (int) $professional->id)
+                            ->whereDate('starts_at', $selectedDate->toDateString())
+                            ->whereNotIn('status', ['cancelled', 'no_show'])
+                            ->orderBy('starts_at')
+                            ->get(['starts_at', 'ends_at'])
+                            ->map(function (Appointment $appointment) {
+                                return [
+                                    'start' => optional($appointment->starts_at)->format('H:i'),
+                                    'end' => optional($appointment->ends_at)->format('H:i'),
+                                ];
+                            })
+                            ->filter(fn (array $slot) => !empty($slot['start']) && !empty($slot['end']))
+                            ->values()
+                            ->all();
                     }
 
                     $cursor = $calendarMonthStart->copy();
                     while ($cursor->lessThanOrEqualTo($calendarMonthEnd)) {
-                        $isWorkingDay = UserScheduleRule::query()
-                            ->where('tenant_id', (int) $tenant->id)
-                            ->where('user_id', (int) $professional->id)
-                            ->where('day_of_week', (int) $cursor->dayOfWeek)
-                            ->where('is_active', true)
-                            ->exists();
+                        $isWorkingDay = $this->hasPublicWorkingWindowForDate((int) $tenant->id, $professional, $cursor, $tenant);
 
-                        $daySlots = $this->buildPublicAppointmentSlots((int) $tenant->id, $professional, $service, $cursor);
+                        $daySlots = $this->buildPublicAppointmentSlots((int) $tenant->id, $professional, $service, $cursor, $tenant);
                         $calendar[] = [
                             'date' => $cursor->toDateString(),
                             'slots_count' => count($daySlots),
@@ -2502,9 +2538,12 @@ class TenantController extends Controller
             'success' => true,
             'enabled' => true,
             'appointments_first_come_enabled' => (bool) ($tenant->appointments_first_come_enabled ?? false),
+            'tenant_opening_time' => !empty($tenant->opening_time) ? substr((string) $tenant->opening_time, 0, 5) : null,
+            'tenant_closing_time' => !empty($tenant->closing_time) ? substr((string) $tenant->closing_time, 0, 5) : null,
             'services' => $services,
             'professionals' => $professionals,
             'slots' => $slots,
+            'occupied_slots' => $occupiedSlots,
             'calendar' => $calendar,
             'calendar_month' => $calendarMonthStart->format('Y-m'),
             'today' => now()->toDateString(),
@@ -2724,9 +2763,20 @@ class TenantController extends Controller
             ->orderBy('name');
     }
 
-    private function buildPublicAppointmentSlots(int $tenantId, User $professional, AppointmentService $service, Carbon $selectedDate): array
+    private function buildPublicAppointmentSlots(int $tenantId, User $professional, AppointmentService $service, Carbon $selectedDate, ?Tenant $tenant = null): array
     {
         if ($service->user_id && (int) $service->user_id !== (int) $professional->id) {
+            return [];
+        }
+
+        $tenantModel = $tenant;
+        if (!$tenantModel) {
+            $tenantModel = Tenant::query()
+                ->select(['id', 'working_days', 'opening_time', 'closing_time'])
+                ->find($tenantId);
+        }
+
+        if ($tenantModel && !$this->isDateAllowedByTenantWorkingDays($tenantModel, $selectedDate)) {
             return [];
         }
 
@@ -2756,8 +2806,33 @@ class TenantController extends Controller
         $slots = [];
         foreach ($rules as $rule) {
             $interval = max(15, (int) ($rule->slot_interval_minutes ?: $durationMinutes));
-            $cursor = Carbon::parse($selectedDate->toDateString() . ' ' . $rule->start_time);
+            $windowStart = Carbon::parse($selectedDate->toDateString() . ' ' . $rule->start_time);
             $windowEnd = Carbon::parse($selectedDate->toDateString() . ' ' . $rule->end_time);
+
+            if ($tenantModel) {
+                $tenantOpeningTime = trim((string) ($tenantModel->opening_time ?? ''));
+                $tenantClosingTime = trim((string) ($tenantModel->closing_time ?? ''));
+
+                if ($tenantOpeningTime !== '') {
+                    $tenantOpenAt = Carbon::parse($selectedDate->toDateString() . ' ' . substr($tenantOpeningTime, 0, 5));
+                    if ($windowStart->lt($tenantOpenAt)) {
+                        $windowStart = $tenantOpenAt;
+                    }
+                }
+
+                if ($tenantClosingTime !== '') {
+                    $tenantCloseAt = Carbon::parse($selectedDate->toDateString() . ' ' . substr($tenantClosingTime, 0, 5));
+                    if ($windowEnd->gt($tenantCloseAt)) {
+                        $windowEnd = $tenantCloseAt;
+                    }
+                }
+            }
+
+            if ($windowStart->gte($windowEnd)) {
+                continue;
+            }
+
+            $cursor = $windowStart->copy();
 
             while ($cursor->copy()->addMinutes($durationMinutes) <= $windowEnd) {
                 $slotStart = $cursor->copy();
@@ -2780,6 +2855,88 @@ class TenantController extends Controller
         }
 
         return array_values(array_unique($slots, SORT_REGULAR));
+    }
+
+    private function hasPublicWorkingWindowForDate(int $tenantId, User $professional, Carbon $selectedDate, ?Tenant $tenant = null): bool
+    {
+        $tenantModel = $tenant;
+        if (!$tenantModel) {
+            $tenantModel = Tenant::query()
+                ->select(['id', 'working_days', 'opening_time', 'closing_time'])
+                ->find($tenantId);
+        }
+
+        if ($tenantModel && !$this->isDateAllowedByTenantWorkingDays($tenantModel, $selectedDate)) {
+            return false;
+        }
+
+        $rules = UserScheduleRule::query()
+            ->where('tenant_id', $tenantId)
+            ->where('user_id', (int) $professional->id)
+            ->where('day_of_week', (int) $selectedDate->dayOfWeek)
+            ->where('is_active', true)
+            ->orderBy('start_time')
+            ->get(['start_time', 'end_time']);
+
+        if ($rules->isEmpty()) {
+            return false;
+        }
+
+        foreach ($rules as $rule) {
+            $windowStart = Carbon::parse($selectedDate->toDateString() . ' ' . $rule->start_time);
+            $windowEnd = Carbon::parse($selectedDate->toDateString() . ' ' . $rule->end_time);
+
+            if ($tenantModel) {
+                $tenantOpeningTime = trim((string) ($tenantModel->opening_time ?? ''));
+                $tenantClosingTime = trim((string) ($tenantModel->closing_time ?? ''));
+
+                if ($tenantOpeningTime !== '') {
+                    $tenantOpenAt = Carbon::parse($selectedDate->toDateString() . ' ' . substr($tenantOpeningTime, 0, 5));
+                    if ($windowStart->lt($tenantOpenAt)) {
+                        $windowStart = $tenantOpenAt;
+                    }
+                }
+
+                if ($tenantClosingTime !== '') {
+                    $tenantCloseAt = Carbon::parse($selectedDate->toDateString() . ' ' . substr($tenantClosingTime, 0, 5));
+                    if ($windowEnd->gt($tenantCloseAt)) {
+                        $windowEnd = $tenantCloseAt;
+                    }
+                }
+            }
+
+            if ($windowStart->lt($windowEnd)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isDateAllowedByTenantWorkingDays(Tenant $tenant, Carbon $selectedDate): bool
+    {
+        $workingDays = collect($tenant->working_days ?? [])
+            ->map(fn ($day) => strtolower(trim((string) $day)))
+            ->filter()
+            ->values();
+
+        if ($workingDays->isEmpty()) {
+            return true;
+        }
+
+        $dayMap = [
+            0 => 'sunday',
+            1 => 'monday',
+            2 => 'tuesday',
+            3 => 'wednesday',
+            4 => 'thursday',
+            5 => 'friday',
+            6 => 'saturday',
+        ];
+
+        $targetDay = $dayMap[(int) $selectedDate->dayOfWeek] ?? '';
+
+        return $targetDay !== '' && $workingDays->contains($targetDay);
     }
 
     private function tenantHasProPlan(Tenant $tenant): bool
