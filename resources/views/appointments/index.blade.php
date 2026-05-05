@@ -697,14 +697,20 @@
                         <div class="tab-pane fade show active" id="appointment-pane-data" role="tabpanel" aria-labelledby="appointment-tab-data" tabindex="0">
                             <div class="row g-2">
                                 <div class="col-12 col-lg-6">
-                                    <label class="form-label">Servicio</label>
-                                    <select name="appointment_service_id" id="appointmentServiceSelect" class="form-control border border-1 p-2" required>
-                                        <option value="">Seleccione</option>
+                                    <label class="form-label">Servicios de la cita</label>
+                                    <input type="hidden" name="appointment_service_id" id="appointmentPrimaryServiceInput" value="{{ old('appointment_service_id') }}">
+                                    <select name="appointment_service_ids[]" id="appointmentServiceSelect" class="form-control border border-1 p-2" required multiple size="5">
+                                        @php
+                                            $oldServiceIds = collect(old('appointment_service_ids', []))
+                                                ->map(fn ($value) => (string) $value)
+                                                ->values()
+                                                ->all();
+                                        @endphp
                                         @foreach($services as $service)
-                                            <option value="{{ $service->id }}" {{ (string) old('appointment_service_id') === (string) $service->id ? 'selected' : '' }}>{{ $service->display_name }} · {{ $service->duration_minutes }} min</option>
+                                            <option value="{{ $service->id }}" {{ in_array((string) $service->id, $oldServiceIds, true) || (string) old('appointment_service_id') === (string) $service->id ? 'selected' : '' }}>{{ $service->display_name }} · {{ $service->duration_minutes }} min</option>
                                         @endforeach
                                     </select>
-                                    <small id="appointmentServiceMeta" class="appointment-inline-note d-block mt-1">Selecciona el servicio-producto a reservar.</small>
+                                    <small id="appointmentServiceMeta" class="appointment-inline-note d-block mt-1">Selecciona uno o varios servicios para la misma cita.</small>
                                 </div>
                                 <div class="col-12 col-lg-6">
                                     <label class="form-label">Profesional</label>
@@ -724,6 +730,9 @@
                                     <select name="start_time" id="appointmentSlotSelect" class="form-control border border-1 p-2" required>
                                         <option value="">Seleccione un servicio, profesional y fecha</option>
                                     </select>
+                                    @if((bool) ($tenant->appointments_first_come_enabled ?? false))
+                                        <small class="appointment-inline-note d-block mt-1">Modo por orden de llegada activo: el sistema toma el primer horario libre.</small>
+                                    @endif
                                 </div>
                                 <div class="col-md-6 col-lg-4">
                                     <label class="form-label">Estado de la cita</label>
@@ -1113,8 +1122,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const servicesPayload = @json($servicesPayload ?? []);
     const consumableVariants = @json($consumableVariantsPayload ?? []);
     const appointmentBsRate = Number(@json($bsRate ?? 0));
+    const appointmentFirstComeEnabled = @json((bool) ($tenant->appointments_first_come_enabled ?? false));
 
     const serviceSelect = document.getElementById('appointmentServiceSelect');
+    const primaryServiceInput = document.getElementById('appointmentPrimaryServiceInput');
     const userSelect = document.getElementById('appointmentUserSelect');
     const dateInput = document.getElementById('appointmentDateInput');
     const slotSelect = document.getElementById('appointmentSlotSelect');
@@ -1410,8 +1421,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function syncPaymentSummary() {
-        const selectedService = getSelectedService();
-        const servicePriceUsd = Number(selectedService?.price || 0);
+        const selectedServices = getSelectedServices();
+        const servicePriceUsd = selectedServices.reduce((carry, service) => carry + Number(service?.price || 0), 0);
         const paidAmount = Number(paidAmountInput?.value || 0);
         const pendingAmount = Math.max(0, servicePriceUsd - paidAmount);
         const servicePriceBs = appointmentBsRate > 0 ? (servicePriceUsd * appointmentBsRate) : 0;
@@ -1869,12 +1880,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getSelectedService() {
-        const selectedId = Number(serviceSelect?.value || 0);
-        return servicesPayload.find((service) => Number(service.id) === selectedId) || null;
+        return getSelectedServices()[0] || null;
+    }
+
+    function getSelectedServiceIds() {
+        return Array.from(serviceSelect?.selectedOptions || [])
+            .map((option) => Number(option.value || 0))
+            .filter((id) => id > 0);
+    }
+
+    function getSelectedServices() {
+        const selectedIds = getSelectedServiceIds();
+        return selectedIds
+            .map((selectedId) => servicesPayload.find((service) => Number(service.id) === selectedId) || null)
+            .filter(Boolean);
     }
 
     function syncServiceMetadata() {
-        const selectedService = getSelectedService();
+        const selectedServices = getSelectedServices();
+        const selectedService = selectedServices[0] || null;
+
+        if (primaryServiceInput) {
+            primaryServiceInput.value = selectedService ? String(selectedService.id) : '';
+        }
+
         if (!selectedService) {
             if (serviceMeta) {
                 serviceMeta.textContent = 'Selecciona el servicio-producto a reservar.';
@@ -1885,12 +1914,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (serviceMeta) {
-            const priceLabel = Number(selectedService.price || 0) > 0 ? ` · ${Number(selectedService.price).toFixed(2)}` : '';
-            const productLabel = selectedService.product_label ? ` · ${selectedService.product_label}` : '';
-            serviceMeta.textContent = `${selectedService.name}${productLabel} · ${selectedService.duration_minutes} min${priceLabel}`;
+            const totalMinutes = Math.max(15, selectedServices.reduce((carry, service) => {
+                return carry + Number(service.duration_minutes || 0) + Number(service.buffer_minutes || 0);
+            }, 0));
+            const totalPrice = selectedServices.reduce((carry, service) => carry + Number(service.price || 0), 0);
+            const names = selectedServices.map((service) => service.name).join(' + ');
+            serviceMeta.textContent = `${names} · ${totalMinutes} min · ${totalPrice.toFixed(2)} $`;
         }
 
-        if (selectedService.assigned_user_id && userSelect) {
+        if (selectedServices.length === 1 && selectedService.assigned_user_id && userSelect) {
             userSelect.value = String(selectedService.assigned_user_id);
         }
 
@@ -1992,8 +2024,14 @@ document.addEventListener('DOMContentLoaded', () => {
             resetBookingFormMode();
         }
 
-        if (eventData?.service_id && serviceSelect) {
-            serviceSelect.value = String(eventData.service_id);
+        if (serviceSelect) {
+            const preselectedServiceIds = Array.isArray(eventData?.service_ids) && eventData?.service_ids.length
+                ? eventData.service_ids.map((value) => String(value))
+                : (eventData?.service_id ? [String(eventData.service_id)] : []);
+
+            Array.from(serviceSelect.options).forEach((option) => {
+                option.selected = preselectedServiceIds.includes(String(option.value || ''));
+            });
         }
 
         if (eventData?.user_id && userSelect) {
@@ -2051,18 +2089,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadSlots() {
-        if (!serviceSelect?.value || !userSelect?.value || !dateInput?.value) {
+        const selectedServiceIds = getSelectedServiceIds();
+        if (!selectedServiceIds.length || !userSelect?.value || !dateInput?.value) {
             slotSelect.innerHTML = '<option value="">Seleccione un servicio, profesional y fecha</option>';
+            slotSelect.disabled = false;
             return [];
         }
 
         slotSelect.innerHTML = '<option value="">Cargando horarios...</option>';
+        slotSelect.disabled = false;
 
         const params = new URLSearchParams({
-            service_id: serviceSelect.value,
             user_id: userSelect.value,
             date: dateInput.value,
         });
+        params.set('service_id', String(selectedServiceIds[0] || ''));
+        selectedServiceIds.forEach((serviceId) => params.append('service_ids[]', String(serviceId)));
 
         try {
             const response = await fetch(`{{ route('appointments.availableSlots') }}?${params.toString()}`, {
@@ -2084,10 +2126,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 slotSelect.appendChild(option);
             });
 
+            if (appointmentFirstComeEnabled && slots[0]?.start) {
+                slotSelect.value = String(slots[0].start);
+            }
+
+            slotSelect.disabled = appointmentFirstComeEnabled;
+
             return slots;
         } catch (error) {
             console.error(error);
             slotSelect.innerHTML = '<option value="">No se pudieron cargar los horarios</option>';
+            slotSelect.disabled = false;
             return [];
         }
     }
@@ -2188,6 +2237,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     bookingForm?.addEventListener('submit', (event) => {
+        const selectedServiceIds = getSelectedServiceIds();
+        if (!selectedServiceIds.length) {
+            alert('Debes seleccionar al menos un servicio para agendar la cita.');
+            showBookingTab(bookingTabDataButton);
+            event.preventDefault();
+            return;
+        }
+
+        if (primaryServiceInput) {
+            primaryServiceInput.value = String(selectedServiceIds[0]);
+        }
+
         const createNewCustomer = String(createCustomerInput?.value || '0') === '1';
         if (createNewCustomer) {
             const contactName = String(contactNameInput?.value || '').trim();

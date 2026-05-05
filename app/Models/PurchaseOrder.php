@@ -40,6 +40,11 @@ class PurchaseOrder extends Model
         return $this->hasMany(PurchaseOrderConsumption::class);
     }
 
+    public function accountPayable()
+    {
+        return $this->hasOne(AccountPayable::class, 'purchase_order_id');
+    }
+
     public function getProviderDisplayNameAttribute(): string
     {
         return (string) ($this->provider->name ?? $this->provider_name ?? 'No asignado');

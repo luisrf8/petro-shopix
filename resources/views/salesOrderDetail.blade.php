@@ -15,7 +15,8 @@
       $canApproveDelivery = $currentUser?->hasStoreRole('owner', 'admin', 'warehouse', 'delivery') ?? false;
       $canRegisterReturn = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canApprovePayments = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
-      $canDownloadPdfs = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
+      $canDownloadPdfs = $currentUser?->hasStoreRole('owner', 'admin', 'seller', 'warehouse') ?? false;
+      $canDownloadInvoicePdf = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canManageAppointmentWorkflow = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $linkedAppointment = $linkedAppointment ?? null;
       $appointmentPaymentMethods = $appointmentPaymentMethods ?? collect();
@@ -120,6 +121,44 @@
         'paid' => 'Pagada',
         'waived' => 'Sin cobro',
       ];
+      $linkedAppointmentServiceTotal = round((float) ($linkedAppointment?->service?->price ?? 0), 2);
+      $linkedAppointmentPaidTotal = round((float) ($linkedAppointment?->paid_amount ?? 0), 2);
+      $linkedAppointmentPendingTotal = max(0, round($linkedAppointmentServiceTotal - $linkedAppointmentPaidTotal, 2));
+      $linkedAppointmentDollarRate = (float) (\App\Models\DollarRate::query()
+        ->where('tenant_id', (int) ($order->tenant_id ?? 0))
+        ->latest('created_at')
+        ->value('rate') ?? 0);
+      $linkedAppointmentProofUrl = null;
+      if ($linkedAppointment) {
+        $linkedAppointmentMetaPrefix = '[APPOINTMENT_PAYMENT_META]';
+        $linkedAppointmentNotes = (string) ($linkedAppointment->notes ?? '');
+        $linkedAppointmentNoteLines = preg_split('/\r\n|\r|\n/', $linkedAppointmentNotes) ?: [];
+
+        foreach (array_reverse($linkedAppointmentNoteLines) as $noteLine) {
+          $noteLine = trim((string) $noteLine);
+          if ($noteLine === '' || !str_starts_with($noteLine, $linkedAppointmentMetaPrefix)) {
+            continue;
+          }
+
+          $decodedMeta = json_decode(substr($noteLine, strlen($linkedAppointmentMetaPrefix)), true);
+          if (!is_array($decodedMeta)) {
+            continue;
+          }
+
+          $proofUrlFromMeta = trim((string) ($decodedMeta['proof_url'] ?? ''));
+          $proofPathFromMeta = trim((string) ($decodedMeta['proof_path'] ?? ''));
+
+          if ($proofUrlFromMeta !== '') {
+            $linkedAppointmentProofUrl = $proofUrlFromMeta;
+            break;
+          }
+
+          if ($proofPathFromMeta !== '') {
+            $linkedAppointmentProofUrl = \App\Support\ImageStorage::url($proofPathFromMeta);
+            break;
+          }
+        }
+      }
     @endphp
     <div class="container-fluid">
       <input type="text" id="user-name" class="d-none" value="{{ $order->user->name }}" readonly>
@@ -170,10 +209,12 @@
                     @endif
                   </select>
                 </div>
-                @if(!$hasAnnulledInvoice)
-                <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-dark mb-0">Factura PDF</a>
-                @else
-                <span class="btn btn-outline-danger mb-0 disabled" aria-disabled="true">Factura anulada</span>
+                @if($canDownloadInvoicePdf)
+                  @if(!$hasAnnulledInvoice)
+                  <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-dark mb-0">Factura PDF</a>
+                  @else
+                  <span class="btn btn-outline-danger mb-0 disabled" aria-disabled="true">Factura anulada</span>
+                  @endif
                 @endif
                 <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-dark mb-0">Orden de entrega</a>
                 @endif
@@ -354,7 +395,14 @@
 
       @unless($isDeliveryOnlyView)
       @if($linkedAppointment)
-      <div class="card mt-4 order-surface-card" id="linked-appointment-workflow" data-endpoint="{{ route('appointments.workflow', $linkedAppointment->id) }}">
+      <div
+        class="card mt-4 order-surface-card"
+        id="linked-appointment-workflow"
+        data-endpoint="{{ route('appointments.workflow', $linkedAppointment->id) }}"
+        data-service-total="{{ number_format($linkedAppointmentServiceTotal, 2, '.', '') }}"
+        data-paid-total="{{ number_format($linkedAppointmentPaidTotal, 2, '.', '') }}"
+        data-pending-total="{{ number_format($linkedAppointmentPendingTotal, 2, '.', '') }}"
+      >
         <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
           <h6 class="mb-0">Gestión de cita vinculada</h6>
           <span class="badge bg-gradient-info">Cita #{{ $linkedAppointment->id }}</span>
@@ -377,6 +425,11 @@
               <small class="text-muted d-block">Estado actual</small>
               <strong>{{ $appointmentStatusLabels[(string) ($linkedAppointment->status ?? 'scheduled')] ?? ucfirst((string) ($linkedAppointment->status ?? 'scheduled')) }}</strong>
               <small class="d-block text-muted mt-1">Pago: {{ $appointmentPaymentStatusLabels[(string) ($linkedAppointment->payment_status ?? 'pending')] ?? ucfirst((string) ($linkedAppointment->payment_status ?? 'pending')) }}</small>
+              @if(!empty($linkedAppointmentProofUrl))
+              <a href="{{ $linkedAppointmentProofUrl }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark mt-2 mb-0">
+                <i class="bi bi-image me-1"></i>Ver comprobante
+              </a>
+              @endif
             </div>
           </div>
 
@@ -402,30 +455,74 @@
             </div>
           </div>
 
+          <div class="row g-3 mb-1">
+            <div class="col-md-4">
+              <div class="linked-appointment-payment-metric">
+                <small class="text-muted d-block">Total del servicio (USD)</small>
+                <strong id="appointment-service-total">{{ number_format($linkedAppointmentServiceTotal, 2, ',', '.') }}</strong>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="linked-appointment-payment-metric">
+                <small class="text-muted d-block">Lleva pagado (USD)</small>
+                <strong id="appointment-paid-total">{{ number_format($linkedAppointmentPaidTotal, 2, ',', '.') }}</strong>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="linked-appointment-payment-metric">
+                <small class="text-muted d-block">Saldo pendiente (USD)</small>
+                <strong id="appointment-pending-total">{{ number_format($linkedAppointmentPendingTotal, 2, ',', '.') }}</strong>
+              </div>
+            </div>
+          </div>
+
           <div class="row g-3 align-items-end mt-1">
             <div class="col-md-3">
-              <label for="appointment-paid-amount" class="form-label">Monto cobrado</label>
-              <input type="number" id="appointment-paid-amount" class="form-control border border-1 p-2" min="0" step="0.01" value="{{ number_format((float) ($linkedAppointment->paid_amount ?? ($linkedAppointment->service->price ?? 0)), 2, '.', '') }}">
+              <label for="appointment-paid-amount" class="form-label">Abono a registrar</label>
+              <input type="number" id="appointment-paid-amount" class="form-control border border-1 p-2" min="0" step="0.01" value="0.00">
             </div>
             <div class="col-md-3">
               <label for="appointment-payment-method" class="form-label">Método de pago</label>
               <select id="appointment-payment-method" class="form-select border border-1 p-2">
                 <option value="">Sin método</option>
                 @foreach($appointmentPaymentMethods as $method)
-                  <option value="{{ $method->id }}" data-has-reference="{{ $method->usesReference() ? '1' : '0' }}" {{ (int) ($linkedAppointment->payment_method_id ?? 0) === (int) $method->id ? 'selected' : '' }}>
+                  @php
+                    $methodCurrencyCode = strtoupper((string) ($method->currency?->code ?? 'USD'));
+                  @endphp
+                  <option
+                    value="{{ $method->id }}"
+                    data-has-reference="{{ $method->usesReference() ? '1' : '0' }}"
+                    data-currency-code="{{ $methodCurrencyCode }}"
+                    data-currency-symbol="{{ $resolveCurrencySymbol($methodCurrencyCode) }}"
+                    {{ (int) ($linkedAppointment->payment_method_id ?? 0) === (int) $method->id ? 'selected' : '' }}
+                  >
                     {{ $method->name }}{{ !empty($method->currency?->code) ? ' · ' . $method->currency->code : '' }}
                   </option>
                 @endforeach
               </select>
             </div>
+            <div class="col-md-3">
+              <label for="appointment-payment-rate" class="form-label">Tasa del día (VES/USD)</label>
+              <input type="number" id="appointment-payment-rate" class="form-control border border-1 p-2" min="0" step="0.0001" value="{{ number_format(max($linkedAppointmentDollarRate, 0), 4, '.', '') }}">
+            </div>
+            <div class="col-md-3">
+              <label for="appointment-paid-amount-usd" class="form-label">Equivalente en USD</label>
+              <input type="text" id="appointment-paid-amount-usd" class="form-control border border-1 p-2" value="0.00" readonly>
+            </div>
             <div class="col-md-4">
               <label for="appointment-payment-reference" class="form-label">Referencia</label>
               <input type="text" id="appointment-payment-reference" class="form-control border border-1 p-2" maxlength="255" value="{{ $linkedAppointment->payment_reference ?? '' }}" placeholder="Número de referencia">
+            </div>
+            <div class="col-md-4">
+              <label for="appointment-payment-proof" class="form-label">Comprobante</label>
+              <input type="file" id="appointment-payment-proof" class="form-control border border-1 p-2" accept="image/jpeg,image/png,image/jpg,image/webp">
+              <small class="text-muted d-block mt-1" id="appointment-payment-proof-hint">Si el método lo requiere, adjunta una imagen del comprobante.</small>
             </div>
             <div class="col-md-2 d-grid">
               <button type="button" class="btn btn-dark mb-0" onclick="confirmLinkedAppointmentPayment()">Confirmar pago</button>
             </div>
           </div>
+          <small class="text-muted d-block mt-2" id="appointment-payment-calc-summary">Ingresa un abono para calcular cuánto lleva pagado y el saldo restante.</small>
           <small class="text-muted d-block mt-2" id="linked-appointment-workflow-feedback">Los cambios se aplican en tiempo real sobre la cita vinculada.</small>
           @else
           <hr>
@@ -989,6 +1086,13 @@
     padding: 1.35rem;
   }
 
+  .linked-appointment-payment-metric {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 0.9rem;
+    padding: 0.65rem 0.75rem;
+    background: #f8fafc;
+  }
+
   .order-timeline-steps {
     display: grid;
     gap: 0.95rem;
@@ -1323,24 +1427,111 @@ function submitLinkedAppointmentWorkflowAction() {
   });
 }
 
-function confirmLinkedAppointmentPayment() {
+function formatLinkedAppointmentMoney(value) {
+  return Number(value || 0).toLocaleString('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function getLinkedAppointmentPaymentContext() {
   const workflowCard = document.getElementById('linked-appointment-workflow');
   const amountInput = document.getElementById('appointment-paid-amount');
   const methodSelect = document.getElementById('appointment-payment-method');
   const referenceInput = document.getElementById('appointment-payment-reference');
+  const rateInput = document.getElementById('appointment-payment-rate');
+  const usdInput = document.getElementById('appointment-paid-amount-usd');
+  const proofInput = document.getElementById('appointment-payment-proof');
+  const proofHint = document.getElementById('appointment-payment-proof-hint');
+  const summary = document.getElementById('appointment-payment-calc-summary');
 
-  if (!workflowCard || !amountInput) {
+  if (!workflowCard || !amountInput || !methodSelect || !rateInput) {
+    return null;
+  }
+
+  const serviceTotal = Number(workflowCard.dataset.serviceTotal || 0);
+  const paidTotal = Number(workflowCard.dataset.paidTotal || 0);
+  const amountOriginal = Number(amountInput.value || 0);
+  const selectedMethod = methodSelect.selectedOptions?.[0] || null;
+  const selectedCurrency = String(selectedMethod?.dataset?.currencyCode || 'USD').toUpperCase();
+  const requiresReference = String(selectedMethod?.dataset?.hasReference || '0') === '1';
+  const exchangeRate = Number(rateInput.value || 0);
+
+  let amountInUsd = amountOriginal;
+  if (selectedCurrency === 'VES') {
+    amountInUsd = exchangeRate > 0 ? (amountOriginal / exchangeRate) : 0;
+  }
+
+  amountInUsd = Number.isFinite(amountInUsd) ? Math.max(0, amountInUsd) : 0;
+  const projectedPaidTotal = paidTotal + amountInUsd;
+  const projectedPending = Math.max(0, serviceTotal - projectedPaidTotal);
+
+  if (usdInput) {
+    usdInput.value = amountInUsd.toFixed(2);
+  }
+
+  if (summary) {
+    const currencySuffix = selectedCurrency === 'VES' ? ` (equivalente con tasa ${exchangeRate > 0 ? exchangeRate.toFixed(4) : '0.0000'})` : '';
+    summary.textContent = `Abono registrado: ${formatLinkedAppointmentMoney(amountOriginal)} ${selectedCurrency}${currencySuffix}. Pagado acumulado: ${formatLinkedAppointmentMoney(projectedPaidTotal)} USD. Saldo pendiente: ${formatLinkedAppointmentMoney(projectedPending)} USD.`;
+  }
+
+  if (proofHint) {
+    proofHint.textContent = requiresReference
+      ? 'Este método requiere referencia y comprobante.'
+      : 'Adjunta un comprobante si aplica para auditoría interna.';
+  }
+
+  return {
+    workflowCard,
+    amountInput,
+    methodSelect,
+    referenceInput,
+    rateInput,
+    proofInput,
+    amountOriginal,
+    amountInUsd,
+    selectedCurrency,
+    selectedMethod,
+    requiresReference,
+    exchangeRate,
+  };
+}
+
+function syncLinkedAppointmentPaymentUi() {
+  const context = getLinkedAppointmentPaymentContext();
+  if (!context) {
+    return;
+  }
+}
+
+function confirmLinkedAppointmentPayment() {
+  const context = getLinkedAppointmentPaymentContext();
+  if (!context) {
     return;
   }
 
-  const amount = Number(amountInput.value || 0);
+  const {
+    amountOriginal,
+    amountInUsd,
+    methodSelect,
+    referenceInput,
+    proofInput,
+    selectedCurrency,
+    requiresReference,
+    exchangeRate,
+  } = context;
+
   const paymentMethodId = Number(methodSelect?.value || 0);
   const reference = String(referenceInput?.value || '').trim();
-  const selectedMethod = methodSelect?.selectedOptions?.[0] || null;
-  const requiresReference = String(selectedMethod?.dataset?.hasReference || '0') === '1';
+  const proofFile = proofInput?.files?.[0] || null;
 
-  if (amount <= 0) {
+  if (amountOriginal <= 0) {
     alert('Indica un monto mayor a 0 para confirmar el pago de la cita.');
+    return;
+  }
+
+  if (amountInUsd <= 0) {
+    alert('No se pudo calcular el equivalente en USD. Revisa la tasa del día.');
     return;
   }
 
@@ -1349,14 +1540,36 @@ function confirmLinkedAppointmentPayment() {
     return;
   }
 
-  runLinkedAppointmentWorkflow({
-    action: 'confirm_payment',
-    paid_amount: amount,
-    payment_method_id: paymentMethodId > 0 ? paymentMethodId : null,
-    payment_reference: reference,
-    create_sale: false,
-    note: 'Pago confirmado desde detalle de orden.',
-  });
+  if (requiresReference && !proofFile) {
+    alert('Este método de pago requiere comprobante.');
+    return;
+  }
+
+  const payload = new FormData();
+  payload.append('action', 'confirm_payment');
+  payload.append('paid_amount', amountInUsd.toFixed(2));
+  payload.append('paid_amount_mode', 'increment');
+  payload.append('payment_amount_original', amountOriginal.toFixed(2));
+  payload.append('payment_currency_original', selectedCurrency);
+  payload.append('exchange_rate', String(exchangeRate > 0 ? exchangeRate.toFixed(4) : '0'));
+  payload.append('payment_currency', 'USD');
+  payload.append('create_sale', '0');
+  payload.append('require_payment_proof', requiresReference ? '1' : '0');
+  payload.append('note', 'Pago confirmado desde detalle de orden.');
+
+  if (paymentMethodId > 0) {
+    payload.append('payment_method_id', String(paymentMethodId));
+  }
+
+  if (reference) {
+    payload.append('payment_reference', reference);
+  }
+
+  if (proofFile) {
+    payload.append('payment_proof_image', proofFile);
+  }
+
+  runLinkedAppointmentWorkflow(payload);
 }
 
 function runLinkedAppointmentWorkflow(payload) {
@@ -1373,15 +1586,21 @@ function runLinkedAppointmentWorkflow(payload) {
     feedback.classList.remove('text-danger');
   }
 
+  const isFormDataPayload = typeof FormData !== 'undefined' && payload instanceof FormData;
+  const headers = {
+    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+    'Accept': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+
+  if (!isFormDataPayload) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'X-CSRF-TOKEN': '{{ csrf_token() }}',
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-    },
-    body: JSON.stringify(payload),
+    headers,
+    body: isFormDataPayload ? payload : JSON.stringify(payload),
   })
     .then(async response => {
       const data = await response.json().catch(() => ({}));
@@ -1407,6 +1626,24 @@ function runLinkedAppointmentWorkflow(payload) {
       alert(message);
     });
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const amountInput = document.getElementById('appointment-paid-amount');
+  const methodSelect = document.getElementById('appointment-payment-method');
+  const rateInput = document.getElementById('appointment-payment-rate');
+  const referenceInput = document.getElementById('appointment-payment-reference');
+
+  [amountInput, methodSelect, rateInput, referenceInput].forEach(element => {
+    if (!element) {
+      return;
+    }
+
+    element.addEventListener('input', syncLinkedAppointmentPaymentUi);
+    element.addEventListener('change', syncLinkedAppointmentPaymentUi);
+  });
+
+  syncLinkedAppointmentPaymentUi();
+});
 
 const returnForm = document.getElementById('returnForm');
 if (returnForm) {
@@ -1468,16 +1705,18 @@ if (returnForm) {
   const invoiceBtn = document.getElementById('downloadInvoiceBtn');
   const deliveryBtn = document.getElementById('downloadDeliveryBtn');
 
-  if (!currencySelect || !invoiceBtn || !deliveryBtn) {
+  if (!currencySelect || !deliveryBtn) {
     return;
   }
 
   const syncDownloadUrls = () => {
     const currencyCode = encodeURIComponent(currencySelect.value || '{{ $orderCurrencyCode ?? 'USD' }}');
-    const invoiceBase = invoiceBtn.dataset.baseUrl || invoiceBtn.getAttribute('href') || '';
+    const invoiceBase = invoiceBtn ? (invoiceBtn.dataset.baseUrl || invoiceBtn.getAttribute('href') || '') : '';
     const deliveryBase = deliveryBtn.dataset.baseUrl || deliveryBtn.getAttribute('href') || '';
 
-    invoiceBtn.href = `${invoiceBase}?currency_code=${currencyCode}&disposition=inline`;
+    if (invoiceBtn && invoiceBase !== '') {
+      invoiceBtn.href = `${invoiceBase}?currency_code=${currencyCode}&disposition=inline`;
+    }
     deliveryBtn.href = `${deliveryBase}?currency_code=${currencyCode}&disposition=inline`;
   };
 

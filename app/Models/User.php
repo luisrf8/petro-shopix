@@ -35,6 +35,7 @@ class User extends Authenticatable implements JWTSubject
         'phone_number',
         'dni',
         'is_active',
+        'commission_percentage',
         'google_id',
         'facebook_id',
         'apple_id',
@@ -63,6 +64,7 @@ class User extends Authenticatable implements JWTSubject
         'email_verified_at' => 'datetime',
         'latitude' => 'float',
         'longitude' => 'float',
+        'commission_percentage' => 'float',
         'help_disable_global' => 'boolean',
         'help_disabled_routes' => 'array',
     ];

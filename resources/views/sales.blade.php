@@ -32,7 +32,7 @@
     }
 
     .sale-flow-hero {
-        padding: 1.35rem 1.4rem;
+        padding: 0.95rem 1.1rem;
         border: 1px solid #dbe4f0;
         border-radius: 24px;
         background: radial-gradient(circle at top right, rgba(96, 165, 250, 0.18), transparent 24%), linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
@@ -49,7 +49,7 @@
     }
 
     .sale-flow-hero h1 {
-        margin-bottom: 0.35rem;
+        margin-bottom: 0.15rem;
     }
 
     .sale-step-panel {
@@ -131,7 +131,7 @@
     .sale-products-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 1rem;
+        gap: 0.6rem;
     }
 
     .sale-products-grid .product-item,
@@ -153,12 +153,12 @@
     .sale-flow-stepper {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.8rem;
+        gap: 0.55rem;
     }
 
     .sale-flow-step {
         position: relative;
-        padding: 1rem 1.05rem;
+        padding: 0.65rem 0.8rem;
         border: 1px solid #dbe4f0;
         border-radius: 20px;
         background: rgba(255, 255, 255, 0.82);
@@ -179,17 +179,17 @@
     }
 
     .sale-flow-step-number {
-        width: 34px;
-        height: 34px;
+        width: 30px;
+        height: 30px;
         border-radius: 999px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 0.85rem;
+        font-size: 0.78rem;
         font-weight: 800;
         background: #e2e8f0;
         color: #0f172a;
-        margin-bottom: 0.65rem;
+        margin-bottom: 0.38rem;
     }
 
     .sale-flow-step.is-active .sale-flow-step-number {
@@ -203,10 +203,42 @@
     }
 
     .sale-flow-step-title {
-        font-size: 1rem;
+        font-size: 0.92rem;
         font-weight: 800;
         color: #0f172a;
-        margin-bottom: 0.18rem;
+        margin-bottom: 0;
+    }
+
+    @media (min-width: 992px) {
+        .sale-flow-hero {
+            padding: 0.72rem 0.9rem;
+        }
+
+        .sale-flow-hero h1 {
+            font-size: 2.15rem;
+            line-height: 1.08;
+            margin-bottom: 0.05rem;
+        }
+
+        .sale-flow-stepper {
+            gap: 0.45rem;
+        }
+
+        .sale-flow-step {
+            padding: 0.46rem 0.62rem;
+            border-radius: 16px;
+        }
+
+        .sale-flow-step-number {
+            width: 26px;
+            height: 26px;
+            font-size: 0.72rem;
+            margin-bottom: 0.24rem;
+        }
+
+        .sale-flow-step-title {
+            font-size: 0.82rem;
+        }
     }
 
     .sale-flow-step-copy-small {
@@ -249,7 +281,32 @@
     }
 
     #categoriesContainer {
-        padding-bottom: 0.35rem !important;
+        padding-bottom: 0.1rem !important;
+        gap: 0.5rem !important;
+    }
+
+    .sale-category-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.3rem;
+        border: 1px solid #dbe4f0;
+        border-radius: 999px;
+        background: #fff;
+        color: #0f172a;
+        padding: 0.4rem 0.8rem;
+        font-size: 0.86rem;
+        font-weight: 700;
+        line-height: 1;
+        white-space: nowrap;
+        transition: all 0.18s ease;
+    }
+
+    .sale-category-pill:hover,
+    .sale-category-pill.is-active {
+        border-color: rgba(37, 99, 235, 0.45);
+        color: #1d4ed8;
+        background: #eff6ff;
     }
 
     .category-item .card,
@@ -288,16 +345,57 @@
         padding: 1rem;
     }
 
+    #itemSelector.sale-products-grid-compact {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 0.85rem;
+    }
+
+    .product-card-header {
+        cursor: pointer;
+    }
+
+    .product-card-header h5 {
+        font-size: 1.06rem;
+        margin-bottom: 0.12rem;
+    }
+
+    .product-card-header p {
+        margin-bottom: 0;
+        font-size: 0.82rem;
+        color: #64748b;
+    }
+
+    .product-variants-panel {
+        display: none;
+        margin-top: 0.7rem;
+        border-top: 1px solid #e5e7eb;
+        padding-top: 0.65rem;
+    }
+
+    .product-item.is-expanded .product-variants-panel {
+        display: block;
+    }
+
     .variant-row {
         border: 1px solid #e5e7eb;
-        border-radius: 16px;
-        padding: 0.7rem 0.85rem;
+        border-radius: 14px;
+        padding: 0.56rem 0.7rem;
         background: #fff;
-        margin-top: 0.6rem;
+        margin-top: 0.45rem;
     }
 
     .variant-row .variant-label {
         margin: 0 !important;
+    }
+
+    .variant-row .variant-copy {
+        font-size: 0.85rem;
+        color: #334155;
+    }
+
+    .variant-qty-input {
+        max-width: 78px;
     }
 
     #cart.offcanvas-admin-desktop {
@@ -345,8 +443,13 @@
             width: min(96vw, 460px);
         }
 
-        .category-item {
-            width: 160px !important;
+        .sale-category-pill {
+            font-size: 0.8rem;
+            padding: 0.36rem 0.68rem;
+        }
+
+        #itemSelector.sale-products-grid-compact {
+            grid-template-columns: 1fr;
         }
 
         .variant-row {
@@ -451,25 +554,20 @@
 
         <div class="sale-flow-shell">
         <div class="sale-flow-hero">
-            <div class="sale-flow-eyebrow">Venta asistida</div>
             <h1>Flujo de Venta</h1>
-            <p class="text-muted mb-0">Selecciona productos, registra pagos y confirma la orden en un flujo más claro y compacto.</p>
-        </div>
-        <div class="sale-flow-stepper" id="saleFlowStepper">
-            <div class="sale-flow-step is-active" data-sale-step="1">
-                <div class="sale-flow-step-number">1</div>
-                <div class="sale-flow-step-title">Selección</div>
-                <div class="sale-flow-step-copy-small">Categorías, productos y paquetes en una sola vista de trabajo.</div>
-            </div>
-            <div class="sale-flow-step" data-sale-step="2">
-                <div class="sale-flow-step-number">2</div>
-                <div class="sale-flow-step-title">Pago</div>
-                <div class="sale-flow-step-copy-small">Montos, referencias y monedas con lectura más clara.</div>
-            </div>
-            <div class="sale-flow-step" data-sale-step="3">
-                <div class="sale-flow-step-number">3</div>
-                <div class="sale-flow-step-title">Confirmación</div>
-                <div class="sale-flow-step-copy-small">Cliente, entrega y estado inicial antes de registrar la venta.</div>
+            <div class="sale-flow-stepper" id="saleFlowStepper">
+                <div class="sale-flow-step is-active" data-sale-step="1">
+                    <div class="sale-flow-step-number">1</div>
+                    <div class="sale-flow-step-title">Selección</div>
+                </div>
+                <div class="sale-flow-step" data-sale-step="2">
+                    <div class="sale-flow-step-number">2</div>
+                    <div class="sale-flow-step-title">Pago</div>
+                </div>
+                <div class="sale-flow-step" data-sale-step="3">
+                    <div class="sale-flow-step-number">3</div>
+                    <div class="sale-flow-step-title">Confirmación</div>
+                </div>
             </div>
         </div>
         <div class="row g-4">
@@ -481,98 +579,46 @@
                 <!-- Paso 1: Selección del Ítem -->
                 <div id="step1" class="step sale-step-panel-step1">
                     <div class="sale-step-title">Paso 1: Selección de productos</div>
-                    <p class="sale-step-copy">Explora el catálogo, agrega por código o arma combos sin salir del mismo flujo.</p>
 
                     <div class="sale-toolbar-grid">
-                    <div class="sale-toolbar-card">
-                        <h6>Categorías</h6>
-                        <p>Filtra la vista para acelerar la selección.</p>
-                        <input 
+
+                    </div>
+                    <div class="sale-section-card">
+                    <div class="sale-section-header">
+                        <div>
+                            <input 
                             type="text" 
                             id="searchCategory" 
                             class="form-control border border-1 p-2 bg-white" 
                             placeholder="Buscar categoría..." 
                             onkeyup="filterCategories()">
-                    </div>
-                    </div>
-                    <div class="sale-section-card">
-                    <div class="sale-section-header">
-                        <div>
-                            <h6 class="mb-1">Explorar por categoría</h6>
-                            <p>Accesos rápidos para moverte entre catálogo y paquetes.</p>
                         </div>
                     </div>
-                    <div id="categoriesContainer" class="d-flex overflow-auto gap-3 py-3 mb-2" style="scroll-snap-type: x mandatory;">
-                        <div class="category-item flex-shrink-0" style="width: 200px; scroll-snap-align: start;" data-category="all" onclick="filterProductsByCategory('all')">
-                            <a href="javascript:void(0)" class="text-decoration-none category-filter">
-                                <div class="card h-100">
-                                    <div class="card-header mx-3 p-3 text-center">
-                                        <div class="icon icon-shape icon-lg bg-gradient-dark shadow text-center border-radius-lg">
-                                            <i class="material-symbols-rounded opacity-10">all_inclusive</i>
-                                        </div>
-                                    </div>
-                                    <div class="card-body pt-0 p-3 text-center">
-                                        <h6 class="text-center mb-0 opacity-9">Todos</h6>
-                                    </div>
-                                </div>
+                    <div id="categoriesContainer" class="d-flex overflow-auto py-2 mb-1" style="scroll-snap-type: x mandatory;">
+                        <div class="category-item flex-shrink-0" style="scroll-snap-align: start;" data-category="all" onclick="filterProductsByCategory('all')">
+                            <a href="javascript:void(0)" class="text-decoration-none category-filter sale-category-pill is-active">
+                                <i class="material-symbols-rounded" style="font-size: 1rem;">all_inclusive</i>
+                                <span>Todos</span>
                             </a>
                         </div>
                         @foreach($categories as $category)
 
-                            <div class="category-item flex-shrink-0" style="width: 200px; scroll-snap-align: start;" data-category-name="{{ $category->name }}" data-category="{{ $category->id }}" onclick="filterProductsByCategory('{{ $category->id }}')">
-                                <a href="javascript:void(0)" class="text-decoration-none category-filter">
-                                    <div class="card h-100">
-                                        <div class="card-header mx-3 p-3 text-center">
-                                            <div class="icon icon-shape icon-lg bg-gradient-dark shadow text-center border-radius-lg">
-                                                <i class="material-symbols-rounded opacity-10"></i>
-                                            </div>
-                                        </div>
-                                        <div class="card-body pt-0 p-3 text-center">
-                                            <h6 class="text-center mb-0 opacity-9">{{ $category->name }}</h6>
-                                        </div>
-                                    </div>
+                            <div class="category-item flex-shrink-0" style="scroll-snap-align: start;" data-category-name="{{ $category->name }}" data-category="{{ $category->id }}" onclick="filterProductsByCategory('{{ $category->id }}')">
+                                <a href="javascript:void(0)" class="text-decoration-none category-filter sale-category-pill">
+                                    <span>{{ $category->name }}</span>
                                 </a>
                             </div>
                         @endforeach
 
                         @if(isset($materialPackages) && $materialPackages->count() > 0)
-                            <div class="category-item flex-shrink-0" style="width: 200px; scroll-snap-align: start;" data-category-name="paquetes" data-category="packages" onclick="filterProductsByCategory('packages')">
-                                <a href="javascript:void(0)" class="text-decoration-none category-filter">
-                                    <div class="card h-100">
-                                        <div class="card-header mx-3 p-3 text-center">
-                                            <div class="icon icon-shape icon-lg bg-gradient-dark shadow text-center border-radius-lg">
-                                                <i class="material-symbols-rounded opacity-10">inventory_2</i>
-                                            </div>
-                                        </div>
-                                        <div class="card-body pt-0 p-3 text-center">
-                                            <h6 class="text-center mb-0 opacity-9">Paquetes</h6>
-                                        </div>
-                                    </div>
+                            <div class="category-item flex-shrink-0" style="scroll-snap-align: start;" data-category-name="paquetes" data-category="packages" onclick="filterProductsByCategory('packages')">
+                                <a href="javascript:void(0)" class="text-decoration-none category-filter sale-category-pill">
+                                    <i class="material-symbols-rounded" style="font-size: 1rem;">inventory_2</i>
+                                    <span>Paquetes</span>
                                 </a>
                             </div>
                         @endif
                     </div>
-                    </div>
-                    <div class="sale-toolbar-card mb-3">
-                        <h6>Productos y búsqueda rápida</h6>
-                        <p>Busca productos por nombre o agrega por QR / código de barras.</p>
-                        <input 
-                            type="text" 
-                            id="searchInput" 
-                            class="form-control border border-1 p-2 bg-white" 
-                            placeholder="Buscar producto..." 
-                            onkeyup="filterProducts()">
-                    </div>
-
-                    <div class="sale-toolbar-card mb-3">
-                        <div class="card-body">
-                            <h6 class="mb-2">Agregar por QR / Código de barras</h6>
-                            <div class="d-flex gap-2 flex-wrap">
-                                <input type="text" id="scanCodeInput" class="form-control border border-1 p-2 bg-white" placeholder="Escanea o pega el código">
-                                <button type="button" class="btn btn-dark mb-0" id="scanCodeBtn">Agregar</button>
-                                <button type="button" class="btn btn-outline-dark mb-0" id="openQrScannerBtn" data-bs-toggle="modal" data-bs-target="#scanQrModal">Escanear con cámara</button>
-                            </div>
-                        </div>
                     </div>
 
                                 @if(isset($materialPackages) && $materialPackages->count() > 0)
@@ -649,12 +695,25 @@
                     <div class="sale-section-header">
                         <div>
                             <h6 class="mb-1">Productos del catálogo</h6>
-                            <p>Selecciona variantes, revisa stock y agrega al carrito sin salir del flujo.</p>
+                        </div>
+                                                <input 
+                            type="text" 
+                            id="searchInput" 
+                            class="form-control border border-1 p-2 bg-white" 
+                            placeholder="Buscar producto..." 
+                            onkeyup="filterProducts()">
+                    </div>
+                    <div class="sale-toolbar-card mb-2">
+                        <h6 class="mb-2">Agregar por QR / Código de barras</h6>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <input type="text" id="scanCodeInput" class="form-control border border-1 p-2 bg-white" placeholder="Escanea o pega el código">
+                            <button type="button" class="btn btn-dark mb-0" id="scanCodeBtn">Agregar</button>
+                            <button type="button" class="btn btn-outline-dark mb-0" id="openQrScannerBtn" data-bs-toggle="modal" data-bs-target="#scanQrModal">Escanear con cámara</button>
                         </div>
                     </div>
-                    <div id="itemSelector" class="row row-cols-1 row-cols-md-3 g-3 sale-products-grid">
+                    <div id="itemSelector" class="sale-products-grid">
                         @foreach($productItems as $item)
-                            <div class="col product-item" data-category="{{ $item->category_id }}" data-name="{{ strtolower($item->name) }}">
+                            <div class="product-item" data-category="{{ $item->category_id }}" data-name="{{ strtolower($item->name) }}">
                                 <div class="card h-100">
                                     <div class="card-body">
                                         <div class="d-flex gap-4 align-items-center">
@@ -876,11 +935,26 @@
                             </div>
                             <div class="col-12 col-md-6">
                                 <label for="newCustomerEmail" class="form-label mb-1">Correo</label>
-                                <input type="email" id="newCustomerEmail" class="form-control border border-1 p-2 bg-white" placeholder="correo@ejemplo.com">
+                                <input type="email" id="newCustomerEmail" class="form-control border border-1 p-2 bg-white" placeholder="correo@ejemplo.com (opcional)">
                             </div>
                             <div class="col-12 col-md-6">
                                 <label for="newCustomerPhone" class="form-label mb-1">Teléfono</label>
-                                <input type="text" id="newCustomerPhone" class="form-control border border-1 p-2 bg-white" placeholder="Ej: +58 412 1234567">
+                                <div class="row g-2">
+                                    <div class="col-4">
+                                        <select id="newCustomerPhoneCode" class="form-control border border-1 p-2 bg-white">
+                                            <option value="+58" selected>+58</option>
+                                            <option value="+1">+1</option>
+                                            <option value="+52">+52</option>
+                                            <option value="+57">+57</option>
+                                            <option value="+51">+51</option>
+                                            <option value="+54">+54</option>
+                                            <option value="+34">+34</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-8">
+                                        <input type="text" id="newCustomerPhone" class="form-control border border-1 p-2 bg-white" placeholder="4121234567">
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-12 col-md-6">
                                 <label for="newCustomerDni" class="form-label mb-1">DNI</label>
@@ -900,17 +974,17 @@
                                 <label class="form-check-label" for="delivery_pickup">Retiro en tienda</label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="radio" name="delivery_type" id="delivery_shipping" value="shipping" {{ $salesDeliveryEnabled ? '' : 'disabled' }}>
+                                <input class="form-check-input" type="radio" name="delivery_type" id="delivery_shipping" value="shipping">
                                 <label class="form-check-label" for="delivery_shipping">Envío</label>
                             </div>
                         </div>
                         <small class="text-muted d-block mt-2" id="deliveryModeHelper">
                             @if($salesFreePlanLock)
-                                El plan Free solo permite retiro en tienda en el flujo administrativo de ventas.
+                                Delivery habilitado para esta venta administrativa.
                             @elseif($salesDeliveryEnabled)
                                 Modelo activo: {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
                             @else
-                                El delivery está desactivado para esta tienda. Solo se permite retiro en tienda.
+                                Delivery disponible (sin configuración de tarifa, se tomará costo 0).
                             @endif
                         </small>
 
@@ -1453,41 +1527,39 @@
 
             rows.innerHTML = '';
             pendingPackageSelection.components.forEach((component, componentIndex) => {
-                const choicesHtml = component.choices.map((choice, choiceIndex) => {
-                    return `
-                        <div class="row g-2 align-items-center mb-2">
-                            <div class="col-12 col-md-6">
-                                <div class="d-flex align-items-center gap-2">
-                                    <img src="${choice.image_src || '/assets/img/shopix5.png'}" alt="${choice.product_name || 'Producto'}" style="width:56px;height:56px;object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;flex-shrink:0;" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
-                                    <div>
-                                        <small class="text-muted d-block">Variante</small>
-                                        <strong>${choice.product_name} ${choice.variant_size || ''}</strong>
-                                    </div>
+                const choicesHtml = component.choices.map((choice, choiceIndex) => `
+                    <div class="row g-2 align-items-center mb-2">
+                        <div class="col-12 col-md-6">
+                            <div class="d-flex align-items-center gap-2">
+                                <img src="${choice.image_src || '/assets/img/shopix5.png'}" alt="${choice.product_name || 'Producto'}" style="width:56px;height:56px;object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;flex-shrink:0;" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
+                                <div>
+                                    <small class="text-muted d-block">Variante</small>
+                                    <strong>${choice.product_name} ${choice.variant_size || ''}</strong>
                                 </div>
                             </div>
-                            <div class="col-6 col-md-3">
-                                <small class="text-muted d-block">Stock</small>
-                                <span>${choice.variant_stock}</span>
-                            </div>
-                            <div class="col-6 col-md-3">
-                                <small class="text-muted d-block">Cantidad</small>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="${choice.variant_stock}"
-                                    step="0.01"
-                                    class="form-control form-control-sm"
-                                    value="${choice.quantity}"
-                                    data-package-component-index="${componentIndex}"
-                                    data-package-choice-index="${choiceIndex}"
-                                    oninput="updatePackageChoiceQty(this)">
-                            </div>
                         </div>
-                    `;
-                }).join('');
+                        <div class="col-6 col-md-3">
+                            <small class="text-muted d-block">Stock</small>
+                            <span>${choice.variant_stock}</span>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <small class="text-muted d-block">Cantidad</small>
+                            <input
+                                type="number"
+                                min="0"
+                                max="${choice.variant_stock}"
+                                step="0.01"
+                                class="form-control form-control-sm"
+                                value="${choice.quantity}"
+                                data-package-component-index="${componentIndex}"
+                                data-package-choice-index="${choiceIndex}"
+                            >
+                        </div>
+                    </div>
+                `).join('');
 
                 rows.insertAdjacentHTML('beforeend', `
-                    <div class="card border">
+                    <div class="card border mb-2">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <h6 class="mb-0">${component.product_name}</h6>
@@ -1500,44 +1572,30 @@
             });
         }
 
-        function updatePackageChoiceQty(input) {
-            if (!pendingPackageSelection) {
-                return;
-            }
-
-            const componentIndex = Number(input.dataset.packageComponentIndex);
-            const choiceIndex = Number(input.dataset.packageChoiceIndex);
-            const component = pendingPackageSelection.components[componentIndex];
-            const choice = component?.choices?.[choiceIndex];
-            if (!component || !choice) {
-                return;
-            }
-
-            const parsed = Math.max(0, Math.min(Number(choice.variant_stock || 0), Number.parseFloat(input.value || '0') || 0));
-            choice.quantity = parsed;
-            input.value = String(parsed);
-        }
-
         function confirmPackageFlavorSelection() {
             if (!pendingPackageSelection) {
                 return;
             }
 
             const pkg = pendingPackageSelection.package;
-            const packageDiscount = Math.max(0, Math.min(100, Number(pkg.discount_percentage || 0)));
+            const packageDiscount = Math.max(0, Math.min(100, parseFloat(pkg.discount_percentage || 0)));
             const selectedRows = [];
 
-            for (const component of pendingPackageSelection.components) {
-                const totalSelectedQty = component.choices.reduce((sum, choice) => sum + (Number(choice.quantity || 0)), 0);
-                if (Math.round(totalSelectedQty * 1000) !== Math.round(Number(component.required_qty || 0) * 1000)) {
-                    alert(`Debes completar exactamente ${component.required_qty} unidades para ${component.product_name}.`);
-                    return;
-                }
+            for (let componentIndex = 0; componentIndex < pendingPackageSelection.components.length; componentIndex += 1) {
+                const component = pendingPackageSelection.components[componentIndex];
 
-                for (const choice of component.choices) {
-                    const qty = Number(choice.quantity || 0);
+                for (let choiceIndex = 0; choiceIndex < component.choices.length; choiceIndex += 1) {
+                    const choice = component.choices[choiceIndex];
+                    const qtyInput = document.querySelector(`[data-package-component-index="${componentIndex}"][data-package-choice-index="${choiceIndex}"]`);
+                    const qty = parseFloat(qtyInput?.value || '0') || 0;
+
                     if (qty <= 0) {
                         continue;
+                    }
+
+                    if (qty > Number(choice.variant_stock || 0)) {
+                        alert(`La cantidad para ${choice.product_name} ${choice.variant_size || ''} supera el stock.`);
+                        return;
                     }
 
                     selectedRows.push({
@@ -1551,6 +1609,11 @@
                         taxes: Array.isArray(choice.taxes) ? choice.taxes : [],
                     });
                 }
+            }
+
+            if (selectedRows.length === 0) {
+                alert('Debes seleccionar al menos una variante para continuar.');
+                return;
             }
 
             const packageBaseTotal = selectedRows.reduce((sum, row) => {
@@ -1675,6 +1738,7 @@
             renderCart();
             alert(`Paquete "${pkg.name}" agregado al carrito.`);
         }
+
         document.addEventListener('DOMContentLoaded', function () {
             // Escuchar todos los checkboxes
             const checkboxes = document.querySelectorAll('input[name="selectedVariants[]"]');
@@ -1725,6 +1789,8 @@
             const price = parseFloat(checkbox.getAttribute('data-price')) || 0;
             const taxesString = checkbox.getAttribute('data-taxes');
             const imageSrc = checkbox.getAttribute('data-image-src') || '';
+            const selectedQty = Math.max(1, parseInt(checkbox.dataset.selectedQty || '1', 10) || 1);
+            delete checkbox.dataset.selectedQty;
 
             // Convertir a JSON
             const taxes = taxesString ? JSON.parse(taxesString) : [];
@@ -1748,7 +1814,7 @@
                     productSize,
                     price,
                     stock,
-                    quantity: 1,
+                    quantity: selectedQty,
                     line_discount_percentage: 0,
                     imageSrc,
                     taxes,
@@ -1756,26 +1822,15 @@
                     taxAmount,
                     totalPrice // <--- Guardar precio con impuestos
                 });
-
-                // Sumar al total general
-                totalAmount += totalPrice;
-                subTotalAmount += price;
-                console.log("Selected Items:", selectedItems);
             } else {
-                const removedItem = selectedItems.find(item => item.id === id);
-                if (removedItem) totalAmount -= removedItem.totalPrice;
-
                 selectedItems = selectedItems.filter(item => item.id !== id);
             }
 
+            recalcSubtotals();
             renderCart();
         }
 
         function getAdminDeliveryModeLabel(mode, distanceKm = null) {
-            if (!tenantDeliveryConfig?.enabled) {
-                return 'Retiro en tienda';
-            }
-
             if (mode === 'distance') {
                 return distanceKm && distanceKm > 0
                     ? `Delivery por km (${distanceKm.toFixed(2)} km)`
@@ -1810,12 +1865,11 @@
 
             if (!tenantDeliveryConfig?.enabled) {
                 return {
-                    valid: false,
+                    valid: true,
                     fee: 0,
-                    mode: 'pickup',
+                    mode: 'free',
                     distanceKm: null,
-                    label: 'Retiro en tienda',
-                    message: 'La tienda no tiene delivery activo.',
+                    label: 'Delivery gratis',
                 };
             }
 
@@ -2032,31 +2086,74 @@ function updateQuantity(id, newQty) {
         let activeCategory = 'all';
 
         function filterProductsByCategory(categoryId) {
-            activeCategory = categoryId;
+            activeCategory = String(categoryId || 'all').trim();
             const productItems = document.querySelectorAll('.product-item');
             const packagesSection = document.getElementById('materialPackagesSection');
+            const categoryButtons = document.querySelectorAll('.category-filter.sale-category-pill');
+
+            categoryButtons.forEach(button => button.classList.remove('is-active'));
+            const activeCategoryItem = document.querySelector(`.category-item[data-category="${activeCategory}"] .category-filter.sale-category-pill`);
+            if (activeCategoryItem) {
+                activeCategoryItem.classList.add('is-active');
+            }
+
+            const isAll = activeCategory === 'all';
+            const isPackages = activeCategory === 'packages';
 
             productItems.forEach(item => {
-                const itemCategory = item.getAttribute('data-category');
-                if (categoryId === 'all' || (categoryId !== 'packages' && itemCategory === categoryId)) {
-                    item.style.display = 'block'; // Mostrar si coincide con la categoría seleccionada
-                } else {
-                    item.style.display = 'none'; // Ocultar si no coincide
-                }
+                const itemCategory = String(item.getAttribute('data-category') || '').trim();
+                const shouldShow = isAll || (!isPackages && itemCategory === activeCategory);
+                item.classList.toggle('d-none', !shouldShow);
             });
 
             if (packagesSection) {
-                const showPackages = categoryId === 'all' || categoryId === 'packages';
-                packagesSection.style.display = showPackages ? 'block' : 'none';
+                const showPackages = isAll || isPackages;
+                packagesSection.classList.toggle('d-none', !showPackages);
             }
 
             // Limpiar el campo de búsqueda de productos al cambiar de categoría
-            document.getElementById('searchInput').value = '';
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+        }
+
+        function toggleProductVariantPanel(productId) {
+            const card = document.getElementById(`productCard_${productId}`);
+            if (!card) {
+                return;
+            }
+
+            card.classList.toggle('is-expanded');
+        }
+
+        function addVariantFromProductCard(variantId, qtyInputId) {
+            const checkbox = document.getElementById(`variant_${variantId}`);
+            const qtyInput = document.getElementById(qtyInputId);
+            const qty = Math.max(1, parseInt(qtyInput?.value || '1', 10) || 1);
+
+            if (!checkbox) {
+                return;
+            }
+
+            if (checkbox.checked) {
+                const existing = selectedItems.find(item => String(item.id) === String(variantId));
+                if (existing) {
+                    existing.quantity = Number(existing.quantity || 0) + qty;
+                    recalcSubtotals();
+                    renderCart();
+                }
+                return;
+            }
+
+            checkbox.dataset.selectedQty = String(qty);
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change'));
         }
         
         function filterProducts() {
             const searchInput = document.getElementById('searchInput');
-            const filter = searchInput.value.toLowerCase();
+            const filter = String(searchInput?.value || '').toLowerCase().trim();
             const productItems = document.querySelectorAll('.product-item');
             const packageItems = document.querySelectorAll('.package-item');
             const packagesSection = document.getElementById('materialPackagesSection');
@@ -2065,15 +2162,12 @@ function updateQuantity(id, newQty) {
             const isPackages = activeCategory === 'packages';
 
             productItems.forEach(item => {
-                const name = item.getAttribute('data-name');
-                const itemCategory = item.getAttribute('data-category');
+                const name = String(item.getAttribute('data-name') || '');
+                const itemCategory = String(item.getAttribute('data-category') || '').trim();
                 const matchCategory = isAll || (!isPackages && itemCategory === activeCategory);
+                const shouldShow = matchCategory && name.includes(filter);
 
-                if (matchCategory && name.includes(filter)) {
-                    item.style.display = 'block'; // Mostrar si coincide
-                } else {
-                    item.style.display = 'none'; // Ocultar si no coincide
-                }
+                item.classList.toggle('d-none', !shouldShow);
             });
 
             if (packagesSection) {
@@ -2082,13 +2176,13 @@ function updateQuantity(id, newQty) {
                 packageItems.forEach(item => {
                     const name = item.getAttribute('data-name') || '';
                     const shouldShow = (isAll || isPackages) && name.includes(filter);
-                    item.style.display = shouldShow ? 'block' : 'none';
+                    item.classList.toggle('d-none', !shouldShow);
                     if (shouldShow) {
                         hasVisiblePackage = true;
                     }
                 });
 
-                packagesSection.style.display = hasVisiblePackage ? 'block' : 'none';
+                packagesSection.classList.toggle('d-none', !hasVisiblePackage);
             }
         }
 
@@ -3324,14 +3418,14 @@ function updateQuantity(id, newQty) {
 
     if (shouldCreateNewCustomer) {
         const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!newCustomerName || !newCustomerEmail || !newCustomerPhone || !newCustomerDni) {
-            alert('Para crear un cliente nuevo debes completar nombre, correo, teléfono y DNI.');
+        if (!newCustomerName || !newCustomerPhone || !newCustomerDni) {
+            alert('Para crear un cliente nuevo debes completar nombre, teléfono y DNI.');
             button.disabled = false;
             button.innerHTML = originalText;
             return;
         }
 
-        if (!emailPattern.test(newCustomerEmail)) {
+        if (newCustomerEmail && !emailPattern.test(newCustomerEmail)) {
             alert('El correo del nuevo cliente no es válido.');
             button.disabled = false;
             button.innerHTML = originalText;
@@ -3360,7 +3454,8 @@ function updateQuantity(id, newQty) {
         customer_new: shouldCreateNewCustomer
             ? {
                 name: newCustomerName,
-                email: newCustomerEmail,
+                email: newCustomerEmail || null,
+                phone_code: document.getElementById('newCustomerPhoneCode')?.value || '+58',
                 phone_number: newCustomerPhone,
                 dni: newCustomerDni,
             }

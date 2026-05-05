@@ -10,10 +10,12 @@ use App\Models\ProductVariantWarehouseStock;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderDetail;
 use App\Models\PurchaseOrderConsumption;
+use App\Models\AccountPayable;
 use App\Models\Warehouse;
 use App\Models\Tenant;
 use App\Support\ImageStorage;
 use App\Support\TenantCurrency;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -280,6 +282,14 @@ class PurchaseOrderController extends Controller
                     $warehouseStock->quantity = (float) ($warehouseStock->quantity ?? 0) + (float) $detail['quantity'];
                     $warehouseStock->save();
                 }
+
+                $this->syncPurchaseAccountPayable(
+                    $purchaseOrder,
+                    (int) $user->tenant_id,
+                    (int) ($user->id ?? 0),
+                    (string) $purchaseDate,
+                    (string) $baseCurrencyCode
+                );
             }
 
             DB::commit();
@@ -291,6 +301,46 @@ class PurchaseOrderController extends Controller
                 'detail' => $exception->getMessage(),
             ], 500);
         }
+    }
+
+    private function syncPurchaseAccountPayable(PurchaseOrder $purchaseOrder, int $tenantId, int $actorUserId, string $issuedAt, string $baseCurrencyCode): void
+    {
+        if ((string) ($purchaseOrder->entry_mode ?? 'purchase') !== 'purchase') {
+            return;
+        }
+
+        $purchaseOrder->loadMissing(['detalles', 'provider']);
+
+        $amountTotal = round((float) $purchaseOrder->detalles->sum('amount'), 4);
+        if ($amountTotal <= 0) {
+            return;
+        }
+
+        $currencyCode = strtoupper(trim((string) ($purchaseOrder->provider?->payment_currency_code ?: $baseCurrencyCode)));
+        if (!in_array($currencyCode, ['USD', 'EUR', 'VES'], true)) {
+            $currencyCode = strtoupper(trim($baseCurrencyCode)) ?: 'USD';
+        }
+
+        $dueAt = Carbon::parse($issuedAt)->addDays(30)->toDateString();
+
+        AccountPayable::updateOrCreate(
+            [
+                'tenant_id' => $tenantId,
+                'purchase_order_id' => (int) $purchaseOrder->id,
+            ],
+            [
+                'provider_id' => $purchaseOrder->provider_id,
+                'issued_at' => $issuedAt,
+                'due_at' => $dueAt,
+                'amount_total' => $amountTotal,
+                'amount_paid' => 0,
+                'amount_pending' => $amountTotal,
+                'currency_code' => $currencyCode,
+                'status' => Carbon::parse($dueAt)->isPast() ? 'overdue' : 'pending',
+                'notes' => 'Cuenta por pagar generada automáticamente desde la orden de compra #' . $purchaseOrder->id . '.',
+                'created_by' => $actorUserId > 0 ? $actorUserId : null,
+            ]
+        );
     }
 
     public function viewOrders()

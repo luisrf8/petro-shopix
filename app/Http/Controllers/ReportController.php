@@ -37,12 +37,15 @@ class ReportController extends Controller
         $selectedAppointmentStatus = strtolower(trim((string) $request->query('appointment_status', 'all')));
         $selectedAppointmentPaymentStatus = strtolower(trim((string) $request->query('appointment_payment_status', 'all')));
         $selectedAppointmentServiceId = (int) $request->query('appointment_service_id', 0);
+        $selectedIncomeUserId = (int) $request->query('income_user_id', 0);
+        $selectedIncomeCustomerId = (int) $request->query('income_customer_id', 0);
 
         $appointmentServices = AppointmentService::query()
+            ->with(['productVariant.product'])
             ->where('tenant_id', (int) $user->tenant_id)
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'product_variant_id']);
 
         $expenseCategories = StoreExpense::query()
             ->where('tenant_id', $user->tenant_id)
@@ -53,9 +56,38 @@ class ReportController extends Controller
             ->pluck('category')
             ->values();
 
+        $incomeUsers = User::query()
+            ->with('role')
+            ->where('tenant_id', (int) $user->tenant_id)
+            ->where('is_active', 1)
+            ->orderBy('name')
+            ->get(['id', 'name', 'role_id', 'tenant_id'])
+            ->filter(fn (User $candidate) => $candidate->hasStoreRole('owner', 'admin', 'seller'))
+            ->values();
+
+        $incomeCustomers = User::query()
+            ->where('tenant_id', (int) $user->tenant_id)
+            ->whereHas('salesOrders', function ($query) use ($user) {
+                $query->where('tenant_id', (int) $user->tenant_id);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->values();
+
+        [$appointmentsPreviewRows, $appointmentsPreviewSummary] = $this->buildAppointmentsWorkflowReportData($request);
+        $appointmentsPreviewRows = $appointmentsPreviewRows->take(5)->values();
+
+        $selectedAppointmentServiceLabel = null;
+        if ($selectedAppointmentServiceId > 0) {
+            $selectedAppointmentServiceLabel = (string) optional($appointmentServices->firstWhere('id', $selectedAppointmentServiceId))->name;
+        }
+
         return view('reports.index', [
             'expenseCategories' => $expenseCategories,
             'appointmentServices' => $appointmentServices,
+            'appointmentsPreviewRows' => $appointmentsPreviewRows,
+            'appointmentsPreviewSummary' => $appointmentsPreviewSummary,
+            'selectedAppointmentServiceLabel' => $selectedAppointmentServiceLabel,
             'baseCurrencyCode' => $baseCurrencyCode,
             'selectedCurrencyCode' => $selectedCurrencyCode,
             'selectedSalesBookSource' => in_array($selectedSalesBookSource, ['shopix', 'hka'], true) ? $selectedSalesBookSource : 'shopix',
@@ -66,6 +98,10 @@ class ReportController extends Controller
                 ? $selectedAppointmentPaymentStatus
                 : 'all',
             'selectedAppointmentServiceId' => $selectedAppointmentServiceId,
+            'incomeUsers' => $incomeUsers,
+            'incomeCustomers' => $incomeCustomers,
+            'selectedIncomeUserId' => $selectedIncomeUserId,
+            'selectedIncomeCustomerId' => $selectedIncomeCustomerId,
         ]);
     }
 
@@ -308,7 +344,7 @@ class ReportController extends Controller
         $csvRows = $rows->map(function (Appointment $appointment) {
             return [
                 (string) $appointment->id,
-                (string) ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio'),
+                (string) ($appointment->service_label_report ?? ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio')),
                 (string) ($appointment->assignedUser->name ?? 'Profesional'),
                 (string) ($appointment->customer->name ?? 'Cliente'),
                 (string) optional($appointment->starts_at)?->format('d/m/Y H:i'),
@@ -665,6 +701,39 @@ class ReportController extends Controller
         );
     }
 
+    public function incomeByUserPdf(Request $request)
+    {
+        [$rows, $summary] = $this->buildIncomeByUserReportData($request);
+
+        return $this->renderPdf(
+            'reports.pdf.income-by-user',
+            compact('rows', 'summary'),
+            'reporte_ingresos_por_usuario'
+        );
+    }
+
+    public function incomeByUserExcel(Request $request)
+    {
+        [$rows, $summary] = $this->buildIncomeByUserReportData($request);
+
+        $csvRows = $rows->map(function ($row) {
+            return [
+                (string) ($row['seller_name'] ?? 'Sin vendedor asignado'),
+                (string) ($row['orders_count'] ?? 0),
+                (string) ($row['customers_count'] ?? 0),
+                number_format((float) ($row['total_amount'] ?? 0), 2, '.', ''),
+                number_format((float) ($row['total_paid'] ?? 0), 2, '.', ''),
+                number_format((float) ($row['collection_rate'] ?? 0), 2, '.', ''),
+            ];
+        })->all();
+
+        return $this->downloadCsv(
+            'reporte_ingresos_por_usuario',
+            ['Usuario', 'Ordenes', 'Clientes', 'Vendido_' . ($summary['currency_code'] ?? 'USD'), 'Cobrado_' . ($summary['currency_code'] ?? 'USD'), 'Cobranza_%'],
+            $csvRows
+        );
+    }
+
     private function resolveDateRange(Request $request): array
     {
         $startInput = $request->query('start_date');
@@ -868,7 +937,7 @@ class ReportController extends Controller
         $serviceId = (int) $request->query('appointment_service_id', 0);
 
         $rows = Appointment::query()
-            ->with(['service', 'assignedUser', 'customer'])
+            ->with(['service', 'serviceItems.service', 'assignedUser', 'customer'])
             ->where('tenant_id', $user->tenant_id)
             ->whereDate('starts_at', '>=', $startDate->toDateString())
             ->whereDate('starts_at', '<=', $endDate->toDateString())
@@ -879,15 +948,23 @@ class ReportController extends Controller
                 $query->where('payment_status', $appointmentPaymentStatus);
             })
             ->when($serviceId > 0, function ($query) use ($serviceId) {
-                $query->where('appointment_service_id', $serviceId);
+                $query->where(function ($innerQuery) use ($serviceId) {
+                    $innerQuery
+                        ->where('appointment_service_id', $serviceId)
+                        ->orWhereHas('serviceItems', function ($serviceItemsQuery) use ($serviceId) {
+                            $serviceItemsQuery->where('appointment_service_id', $serviceId);
+                        });
+                });
             })
             ->orderByDesc('starts_at')
             ->get();
 
         $rows->transform(function (Appointment $appointment) use ($currency, $user) {
-            $servicePrice = (float) ($appointment->service->price ?? 0);
+            $servicePrice = $this->resolveAppointmentReportServicePrice($appointment);
             $paidAmount = (float) ($appointment->paid_amount ?? 0);
             $pendingAmount = max(0, round($servicePrice - $paidAmount, 2));
+
+            $appointment->service_label_report = $this->resolveAppointmentReportServiceLabel($appointment);
 
             $appointment->service_price_report = TenantCurrency::convertAmount($servicePrice, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
             $appointment->paid_amount_report = TenantCurrency::convertAmount($paidAmount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
@@ -915,6 +992,120 @@ class ReportController extends Controller
         ];
 
         return [$rows, $summary];
+    }
+
+    private function buildIncomeByUserReportData(Request $request): array
+    {
+        $user = auth()->user();
+        $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
+        [$startDate, $endDate] = $this->resolveDateRange($request);
+        $incomeUserId = (int) $request->query('income_user_id', 0);
+        $incomeCustomerId = (int) $request->query('income_customer_id', 0);
+
+        $orders = SalesOrder::query()
+            ->with(['salesRepresentative', 'user', 'payments'])
+            ->where('tenant_id', (int) $user->tenant_id)
+            ->whereDate('date', '>=', $startDate->toDateString())
+            ->whereDate('date', '<=', $endDate->toDateString())
+            ->where('status', '!=', 2)
+            ->when($incomeUserId > 0, function ($query) use ($incomeUserId) {
+                $query->where('sales_rep_user_id', $incomeUserId);
+            })
+            ->when($incomeCustomerId > 0, function ($query) use ($incomeCustomerId) {
+                $query->where('user_id', $incomeCustomerId);
+            })
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->get();
+
+        $rows = $orders
+            ->groupBy(function (SalesOrder $order) {
+                return (int) ($order->sales_rep_user_id ?? 0);
+            })
+            ->map(function ($groupOrders, $sellerId) use ($currency, $user) {
+                /** @var \Illuminate\Support\Collection<int, SalesOrder> $groupOrders */
+                $firstOrder = $groupOrders->first();
+                $sellerName = (int) $sellerId > 0
+                    ? (string) ($firstOrder?->salesRepresentative?->name ?? ('Usuario #' . $sellerId))
+                    : 'Sin vendedor asignado';
+
+                $grossTotal = (float) $groupOrders->sum(function (SalesOrder $order) {
+                    return (float) $order->gross_total;
+                });
+
+                $approvedPaidTotal = (float) $groupOrders->sum(function (SalesOrder $order) {
+                    return (float) $order->payments->where('status', 1)->sum('amount');
+                });
+
+                $grossTotal = TenantCurrency::convertAmount($grossTotal, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+                $approvedPaidTotal = TenantCurrency::convertAmount($approvedPaidTotal, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+
+                $collectionRate = $grossTotal > 0
+                    ? round(($approvedPaidTotal / $grossTotal) * 100, 2)
+                    : 0.0;
+
+                return [
+                    'seller_user_id' => (int) $sellerId,
+                    'seller_name' => $sellerName,
+                    'orders_count' => (int) $groupOrders->count(),
+                    'customers_count' => (int) $groupOrders->pluck('user_id')->filter()->unique()->count(),
+                    'total_amount' => (float) $grossTotal,
+                    'total_paid' => (float) $approvedPaidTotal,
+                    'collection_rate' => (float) $collectionRate,
+                ];
+            })
+            ->sortByDesc('total_paid')
+            ->values();
+
+        $summary = [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'rows_count' => (int) $rows->count(),
+            'orders_count' => (int) $orders->count(),
+            'customers_count' => (int) $orders->pluck('user_id')->filter()->unique()->count(),
+            'total_amount' => (float) $rows->sum('total_amount'),
+            'total_paid' => (float) $rows->sum('total_paid'),
+            'currency_code' => $currency['code'],
+            'income_user_id' => $incomeUserId,
+            'income_customer_id' => $incomeCustomerId,
+        ];
+
+        return [$rows, $summary];
+    }
+
+    private function resolveAppointmentReportServiceLabel(Appointment $appointment): string
+    {
+        $appointment->loadMissing(['service', 'serviceItems.service']);
+
+        $labels = $appointment->serviceItems
+            ->pluck('service')
+            ->filter()
+            ->map(function ($service) {
+                return trim((string) ($service->display_name ?? $service->name ?? 'Servicio'));
+            })
+            ->filter(fn (string $label) => $label !== '')
+            ->values();
+
+        if ($labels->isEmpty()) {
+            return (string) ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio');
+        }
+
+        return $labels->join(' + ');
+    }
+
+    private function resolveAppointmentReportServicePrice(Appointment $appointment): float
+    {
+        $appointment->loadMissing(['service', 'serviceItems']);
+
+        $multiServicePrice = (float) $appointment->serviceItems->sum(function ($item) {
+            return (float) ($item->price ?? 0);
+        });
+
+        if ($multiServicePrice > 0) {
+            return round($multiServicePrice, 2);
+        }
+
+        return round((float) ($appointment->service->price ?? 0), 2);
     }
 
     private function buildSalesBookData(Request $request): array

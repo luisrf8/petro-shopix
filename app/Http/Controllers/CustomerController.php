@@ -102,24 +102,26 @@ class CustomerController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email',
+            'email' => 'nullable|email|max:255|unique:users,email',
             'phone_number' => 'nullable|string|max:20',
             'dni' => 'nullable|string|max:100',
             'is_active' => 'nullable|boolean',
         ]);
 
+        $temporaryPassword = strtoupper(Str::random(8));
+
         User::create([
             'name' => trim((string) $validated['name']),
-            'email' => trim((string) $validated['email']),
+            'email' => trim((string) ($validated['email'] ?? '')) ?: null,
             'phone_number' => trim((string) ($validated['phone_number'] ?? '')),
             'dni' => trim((string) ($validated['dni'] ?? '')),
             'tenant_id' => $tenantId,
             'role_id' => $this->resolveCustomerRoleId(),
-            'password' => Hash::make(Str::random(24)),
+            'password' => Hash::make($temporaryPassword),
             'is_active' => (int) ($validated['is_active'] ?? 1),
         ]);
 
-        return back()->with('success', 'Cliente creado correctamente.');
+        return back()->with('success', 'Cliente creado correctamente. Contraseña temporal: ' . $temporaryPassword);
     }
 
     public function update(Request $request, User $customer)
@@ -131,7 +133,7 @@ class CustomerController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255|unique:users,email,' . $customer->id,
+            'email' => 'nullable|email|max:255|unique:users,email,' . $customer->id,
             'phone_number' => 'nullable|string|max:20',
             'dni' => 'nullable|string|max:100',
             'is_active' => 'nullable|boolean',
@@ -139,7 +141,7 @@ class CustomerController extends Controller
 
         $customer->update([
             'name' => trim((string) $validated['name']),
-            'email' => trim((string) $validated['email']),
+            'email' => trim((string) ($validated['email'] ?? '')) ?: null,
             'phone_number' => trim((string) ($validated['phone_number'] ?? '')),
             'dni' => trim((string) ($validated['dni'] ?? '')),
             'is_active' => (int) ($validated['is_active'] ?? 0),

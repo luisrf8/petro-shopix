@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Appointment;
 use App\Models\AppointmentConsumption;
 use App\Models\AppointmentService;
+use App\Models\AppointmentServiceItem;
 use App\Models\AppointmentPackage;
 use App\Models\AppointmentPackageSession;
 use App\Models\PaymentMethod;
@@ -19,6 +20,7 @@ use App\Models\UserScheduleRule;
 use App\Support\TenantCurrency;
 use App\Support\WorkflowNotifier;
 use App\Support\TenantPlanCapabilities;
+use App\Support\ImageStorage;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -76,7 +78,7 @@ class AppointmentController extends Controller
             ->get();
 
         $dayAppointments = Appointment::query()
-            ->with(['service', 'assignedUser', 'customer'])
+            ->with(['service', 'serviceItems.service', 'assignedUser', 'customer'])
             ->where('tenant_id', (int) $tenant->id)
             ->whereDate('starts_at', $selectedDate->toDateString())
             ->when($selectedUserId > 0, fn ($query) => $query->where('user_id', $selectedUserId))
@@ -84,7 +86,7 @@ class AppointmentController extends Controller
             ->get();
 
         $upcomingAppointments = Appointment::query()
-            ->with(['service.productVariant.product', 'assignedUser', 'customer', 'consumptions.variant.product', 'paymentMethod.currency'])
+            ->with(['service.productVariant.product', 'serviceItems.service.productVariant.product', 'assignedUser', 'customer', 'consumptions.variant.product', 'paymentMethod.currency'])
             ->where('tenant_id', (int) $tenant->id)
             ->where('starts_at', '>=', now()->startOfDay())
             ->orderBy('starts_at')
@@ -92,7 +94,7 @@ class AppointmentController extends Controller
             ->get();
 
         $calendarAppointments = Appointment::query()
-            ->with(['service.productVariant.product', 'assignedUser', 'customer', 'consumptions.variant.product', 'paymentMethod.currency'])
+            ->with(['service.productVariant.product', 'serviceItems.service.productVariant.product', 'assignedUser', 'customer', 'consumptions.variant.product', 'paymentMethod.currency'])
             ->where('tenant_id', (int) $tenant->id)
             ->whereBetween('starts_at', [$calendarWeekStart->copy()->startOfDay(), $calendarWeekEnd->copy()->endOfDay()])
             ->when($selectedUserId > 0, fn ($query) => $query->where('user_id', $selectedUserId))
@@ -141,6 +143,7 @@ class AppointmentController extends Controller
         if ($request->expectsJson() || $request->boolean('realtime')) {
             return response()->json([
                 'success' => true,
+                'appointments_first_come_enabled' => (bool) ($tenant->appointments_first_come_enabled ?? false),
                 'selected_date' => $selectedDate->toDateString(),
                 'selected_user_id' => $selectedUserId,
                 'calendar_week_start' => $calendarWeekStart->toDateString(),
@@ -183,20 +186,34 @@ class AppointmentController extends Controller
     {
         $user = auth()->user();
         $tenantId = (int) ($user->tenant_id ?? 0);
+        $tenant = Tenant::query()->findOrFail($tenantId);
 
         $validated = $request->validate([
             'user_id' => ['required', 'integer'],
-            'service_id' => ['required', 'integer'],
+            'service_id' => ['nullable', 'integer'],
+            'service_ids' => ['nullable', 'array'],
+            'service_ids.*' => ['integer'],
             'date' => ['required', 'date'],
         ]);
 
         $targetUser = $this->appointmentUsersQuery($tenantId)->whereKey((int) $validated['user_id'])->firstOrFail();
-        $service = AppointmentService::query()->where('tenant_id', $tenantId)->whereKey((int) $validated['service_id'])->firstOrFail();
+        $selectedServices = $this->resolveAppointmentServicesFromPayload($tenantId, $targetUser, $validated);
+        if ($selectedServices->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debes seleccionar al menos un servicio válido.',
+                'slots' => [],
+            ], 422);
+        }
+
+        $primaryService = $selectedServices->first();
         $selectedDate = Carbon::parse($validated['date']);
+        $totalMinutes = $this->calculateTotalAppointmentMinutes($selectedServices);
 
         return response()->json([
             'success' => true,
-            'slots' => $this->buildAvailableSlots($tenantId, $targetUser, $service, $selectedDate),
+            'appointments_first_come_enabled' => (bool) ($tenant->appointments_first_come_enabled ?? false),
+            'slots' => $this->buildAvailableSlots($tenantId, $targetUser, $primaryService, $selectedDate, null, $totalMinutes),
         ]);
     }
 
@@ -296,12 +313,15 @@ class AppointmentController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $tenant = Tenant::query()->findOrFail($tenantId);
         $validated = $request->validate([
-            'appointment_service_id' => ['required', 'integer'],
+            'appointment_service_id' => ['nullable', 'integer'],
+            'appointment_service_ids' => ['nullable', 'array'],
+            'appointment_service_ids.*' => ['integer'],
             'appointment_id' => ['nullable', 'integer'],
             'user_id' => ['required', 'integer'],
             'scheduled_date' => ['required', 'date'],
-            'start_time' => ['required', 'date_format:H:i'],
+            'start_time' => ['nullable', 'date_format:H:i'],
             'customer_id' => ['nullable', 'integer'],
             'create_customer' => ['nullable', 'boolean'],
             'contact_name' => ['required_without:customer_id', 'nullable', 'string', 'max:255'],
@@ -321,7 +341,12 @@ class AppointmentController extends Controller
         ]);
 
         $targetUser = $this->appointmentUsersQuery($tenantId)->whereKey((int) $validated['user_id'])->firstOrFail();
-        $service = AppointmentService::query()->with(['productVariant.product'])->where('tenant_id', $tenantId)->whereKey((int) $validated['appointment_service_id'])->firstOrFail();
+        $selectedServices = $this->resolveAppointmentServicesFromPayload($tenantId, $targetUser, $validated);
+        if ($selectedServices->isEmpty()) {
+            return back()->withErrors(['appointment_service_ids' => 'Debes seleccionar al menos un servicio válido.'])->withInput();
+        }
+
+        $service = $selectedServices->first();
         $editingAppointment = null;
 
         if (!empty($validated['appointment_id'])) {
@@ -331,22 +356,32 @@ class AppointmentController extends Controller
                 ->firstOrFail();
         }
 
-        if ($service->user_id && (int) $service->user_id !== (int) $targetUser->id) {
-            return back()->withErrors(['user_id' => 'Este servicio está asignado a otro profesional.'])->withInput();
-        }
-
         $selectedDate = Carbon::parse($validated['scheduled_date']);
-        $startAt = Carbon::parse($selectedDate->toDateString() . ' ' . $validated['start_time']);
-        $endAt = (clone $startAt)->addMinutes((int) $service->duration_minutes);
+        $totalMinutes = $this->calculateTotalAppointmentMinutes($selectedServices);
 
         $availableSlots = collect($this->buildAvailableSlots(
             $tenantId,
             $targetUser,
             $service,
             $selectedDate,
-            $editingAppointment?->id ? (int) $editingAppointment->id : null
+            $editingAppointment?->id ? (int) $editingAppointment->id : null,
+            $totalMinutes
         ));
-        if (!$availableSlots->firstWhere('start', $startAt->format('H:i'))) {
+
+        if ($availableSlots->isEmpty()) {
+            return back()->withErrors(['start_time' => 'No hay horarios disponibles para el profesional y servicios seleccionados.'])->withInput();
+        }
+
+        $firstComeEnabled = (bool) ($tenant->appointments_first_come_enabled ?? false);
+        $requestedStart = trim((string) ($validated['start_time'] ?? ''));
+        if ($firstComeEnabled || $requestedStart === '') {
+            $requestedStart = (string) ($availableSlots->first()['start'] ?? '');
+        }
+
+        $startAt = Carbon::parse($selectedDate->toDateString() . ' ' . $requestedStart);
+        $endAt = (clone $startAt)->addMinutes($totalMinutes);
+
+        if (!$firstComeEnabled && !$availableSlots->firstWhere('start', $startAt->format('H:i'))) {
             return back()->withErrors(['start_time' => 'La hora seleccionada no está disponible para ese profesional.'])->withInput();
         }
 
@@ -439,7 +474,7 @@ class AppointmentController extends Controller
 
         $savedAppointment = null;
 
-        DB::transaction(function () use ($tenantId, $service, $targetUser, $customerId, $validated, $startAt, $endAt, $paymentMethod, $paidAmount, $paymentStatus, $paymentReference, $consumptions, $editingAppointment, $normalizedContactPhone, &$savedAppointment) {
+        DB::transaction(function () use ($tenantId, $service, $selectedServices, $targetUser, $customerId, $validated, $startAt, $endAt, $paymentMethod, $paidAmount, $paymentStatus, $paymentReference, $consumptions, $editingAppointment, $normalizedContactPhone, &$savedAppointment) {
             $appointmentPayload = [
                 'tenant_id' => $tenantId,
                 'appointment_service_id' => (int) $service->id,
@@ -469,6 +504,7 @@ class AppointmentController extends Controller
             }
 
             $savedAppointment = $appointment;
+            $this->syncAppointmentServiceItems($appointment, $selectedServices, $startAt);
 
             foreach ($consumptions as $item) {
                 $variant = $this->consumableVariantsQuery($tenantId)->whereKey((int) $item['variant_id'])->firstOrFail();
@@ -521,13 +557,20 @@ class AppointmentController extends Controller
             'start_time' => ['nullable', 'date_format:H:i'],
             'payment_method_id' => ['nullable', 'integer'],
             'paid_amount' => ['nullable', 'numeric', 'min:0'],
+            'paid_amount_mode' => ['nullable', Rule::in(['replace', 'increment'])],
             'payment_reference' => ['nullable', 'string', 'max:255'],
+            'payment_currency' => ['nullable', 'string', 'max:10'],
+            'payment_currency_original' => ['nullable', 'string', 'max:10'],
+            'payment_amount_original' => ['nullable', 'numeric', 'min:0'],
+            'exchange_rate' => ['nullable', 'numeric', 'min:0'],
+            'require_payment_proof' => ['nullable', 'boolean'],
+            'payment_proof_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
             'note' => ['nullable', 'string', 'max:1000'],
             'create_sale' => ['nullable', 'boolean'],
         ]);
 
         $actor = auth()->user();
-        $result = $this->applyWorkflowAction($appointment, $validated, $actor, false);
+        $result = $this->applyWorkflowAction($appointment, $validated, $actor, false, $request);
 
         return response()->json($result);
     }
@@ -549,8 +592,13 @@ class AppointmentController extends Controller
         $limit = (int) ($validated['limit'] ?? 80);
         $now = now();
 
+        $relations = ['service', 'assignedUser', 'paymentMethod.currency', 'salesOrder'];
+        if ($this->appointmentServiceItemsTableExists()) {
+            $relations[] = 'serviceItems.service';
+        }
+
         $query = Appointment::query()
-            ->with(['service', 'assignedUser', 'paymentMethod.currency', 'salesOrder'])
+            ->with($relations)
             ->where('customer_id', $customerId)
             ->when(!empty($validated['status']), fn ($builder) => $builder->where('status', (string) $validated['status']))
             ->when(!empty($validated['payment_status']), fn ($builder) => $builder->where('payment_status', (string) $validated['payment_status']))
@@ -586,12 +634,12 @@ class AppointmentController extends Controller
                     'total' => $items->count(),
                     'pending_payment' => $items->whereIn('payment_status', ['pending', 'partial'])->count(),
                     'items' => $items->map(function (Appointment $appointment) {
-                        $service = $appointment->service;
+                        $serviceLabel = $this->resolveAppointmentDisplayName($appointment);
                         return [
                             'id' => (int) $appointment->id,
                             'starts_at' => optional($appointment->starts_at)?->toDateTimeString(),
                             'ends_at' => optional($appointment->ends_at)?->toDateTimeString(),
-                            'service' => (string) (optional($service)->display_name ?? optional($service)->name ?? 'Servicio'),
+                            'service' => $serviceLabel,
                             'status' => (string) ($appointment->status ?? 'scheduled'),
                             'payment_status' => (string) ($appointment->payment_status ?? 'pending'),
                         ];
@@ -636,14 +684,14 @@ class AppointmentController extends Controller
                 $isPast = $startsAt ? $startsAt->isPast() : false;
                 $service = $appointment->service;
                 $professional = $appointment->assignedUser;
-                $servicePrice = round((float) (optional($service)->price ?? 0), 2);
+                $servicePrice = $this->calculateAppointmentServicesTotalPrice($appointment);
                 $paidAmount = round((float) ($appointment->paid_amount ?? 0), 2);
                 $pendingAmount = $servicePrice > 0 ? max(0, round($servicePrice - $paidAmount, 2)) : 0;
 
                 return [
                     'id' => (int) $appointment->id,
                     'tenant_id' => (int) $appointment->tenant_id,
-                    'service' => (string) (optional($service)->display_name ?? optional($service)->name ?? 'Servicio'),
+                    'service' => $this->resolveAppointmentDisplayName($appointment),
                     'professional' => (string) (optional($professional)->name ?? 'Profesional'),
                     'starts_at' => optional($appointment->starts_at)?->toDateTimeString(),
                     'ends_at' => optional($appointment->ends_at)?->toDateTimeString(),
@@ -691,8 +739,11 @@ class AppointmentController extends Controller
 
         $service = $appointment->service;
         $targetUser = $appointment->assignedUser;
+        $serviceItems = $this->resolveAppointmentServicesFromAppointment($appointment);
+        $primaryService = $serviceItems->first() ?: $service;
+        $totalMinutes = $this->calculateTotalAppointmentMinutes($serviceItems);
 
-        if (!$service || !$targetUser) {
+        if (!$primaryService || !$targetUser) {
             return response()->json([
                 'success' => false,
                 'message' => 'La cita no tiene servicio o profesional asignado.',
@@ -717,13 +768,13 @@ class AppointmentController extends Controller
 
         $calendarMonthEnd = $calendarMonthStart->copy()->endOfMonth();
         $slots = !empty($validated['date'])
-            ? $this->buildAvailableSlots((int) $appointment->tenant_id, $targetUser, $service, $selectedDate, (int) $appointment->id)
+            ? $this->buildAvailableSlots((int) $appointment->tenant_id, $targetUser, $primaryService, $selectedDate, (int) $appointment->id, $totalMinutes)
             : [];
 
         $calendar = [];
         $cursor = $calendarMonthStart->copy();
         while ($cursor->lessThanOrEqualTo($calendarMonthEnd)) {
-            $daySlots = $this->buildAvailableSlots((int) $appointment->tenant_id, $targetUser, $service, $cursor, (int) $appointment->id);
+            $daySlots = $this->buildAvailableSlots((int) $appointment->tenant_id, $targetUser, $primaryService, $cursor, (int) $appointment->id, $totalMinutes);
             $calendar[] = [
                 'date' => $cursor->toDateString(),
                 'slots_count' => count($daySlots),
@@ -738,7 +789,7 @@ class AppointmentController extends Controller
             'success' => true,
             'date' => $selectedDate->toDateString(),
             'appointment_id' => (int) $appointment->id,
-            'service_id' => (int) ($service->id ?? 0),
+            'service_id' => (int) ($primaryService->id ?? 0),
             'user_id' => (int) ($targetUser->id ?? 0),
             'calendar_month' => $calendarMonthStart->format('Y-m'),
             'calendar' => $calendar,
@@ -766,7 +817,14 @@ class AppointmentController extends Controller
             'start_time' => ['nullable', 'date_format:H:i'],
             'payment_method_id' => ['nullable', 'integer'],
             'paid_amount' => ['nullable', 'numeric', 'min:0'],
+            'paid_amount_mode' => ['nullable', Rule::in(['replace', 'increment'])],
             'payment_reference' => ['nullable', 'string', 'max:255'],
+            'payment_currency' => ['nullable', 'string', 'max:10'],
+            'payment_currency_original' => ['nullable', 'string', 'max:10'],
+            'payment_amount_original' => ['nullable', 'numeric', 'min:0'],
+            'exchange_rate' => ['nullable', 'numeric', 'min:0'],
+            'require_payment_proof' => ['nullable', 'boolean'],
+            'payment_proof_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
             'note' => ['nullable', 'string', 'max:1000'],
             'create_sale' => ['nullable', 'boolean'],
         ]);
@@ -780,7 +838,7 @@ class AppointmentController extends Controller
         }
 
         $actor = auth()->user();
-        $result = $this->applyWorkflowAction($appointment, $validated, $actor, true);
+        $result = $this->applyWorkflowAction($appointment, $validated, $actor, true, $request);
 
         return response()->json($result);
     }
@@ -885,13 +943,16 @@ class AppointmentController extends Controller
         return back()->with('success', 'Paquete de citas creado correctamente con ' . $sessionsCount . ' sesiones.');
     }
 
-    private function applyWorkflowAction(Appointment $appointment, array $validated, User $actor, bool $fromCustomer): array
+    private function applyWorkflowAction(Appointment $appointment, array $validated, User $actor, bool $fromCustomer, ?Request $request = null): array
     {
         $tenantId = (int) $appointment->tenant_id;
         $action = (string) ($validated['action'] ?? '');
         $note = trim((string) ($validated['note'] ?? '')) ?: null;
 
-        if ($action === 'reschedule' && (empty($validated['scheduled_date']) || empty($validated['start_time']))) {
+        $tenant = Tenant::query()->find((int) $tenantId);
+        $firstComeEnabled = (bool) ($tenant?->appointments_first_come_enabled ?? false);
+
+        if ($action === 'reschedule' && (empty($validated['scheduled_date']) || (!$firstComeEnabled && empty($validated['start_time'])))) {
             return [
                 'success' => false,
                 'message' => 'Para reprogramar debes indicar fecha y hora.',
@@ -899,7 +960,7 @@ class AppointmentController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($appointment, $validated, $action, $note, $actor, $fromCustomer, $tenantId) {
+            DB::transaction(function () use ($appointment, $validated, $action, $note, $actor, $fromCustomer, $tenantId, $firstComeEnabled) {
                 $appointment->loadMissing(['service', 'assignedUser', 'customer', 'paymentMethod.currency', 'salesOrder']);
 
                 switch ($action) {
@@ -934,21 +995,47 @@ class AppointmentController extends Controller
 
                     case 'reschedule':
                         $selectedDate = Carbon::parse((string) $validated['scheduled_date'])->startOfDay();
-                        $startAt = Carbon::parse($selectedDate->toDateString() . ' ' . (string) $validated['start_time']);
-                        $service = $appointment->service;
+                        $serviceItems = $this->resolveAppointmentServicesFromAppointment($appointment);
+                        $service = $serviceItems->first();
                         $targetUser = $appointment->assignedUser;
+                        $requestedStart = trim((string) ($validated['start_time'] ?? ''));
+
+                        if ($selectedDate->toDateString() < now()->toDateString()) {
+                            throw new \RuntimeException('No puedes reprogramar citas para fechas pasadas.');
+                        }
 
                         if (!$service || !$targetUser) {
                             throw new \RuntimeException('No se pudo reprogramar porque faltan datos de servicio o profesional.');
                         }
+
+                        $totalMinutes = $this->calculateTotalAppointmentMinutes($serviceItems);
 
                         $availableSlots = collect($this->buildAvailableSlots(
                             $tenantId,
                             $targetUser,
                             $service,
                             $selectedDate,
-                            (int) $appointment->id
+                            (int) $appointment->id,
+                            $totalMinutes
                         ));
+
+                        if ($availableSlots->isEmpty()) {
+                            throw new \RuntimeException('No hay horarios disponibles para reprogramar esta cita.');
+                        }
+
+                        if ($firstComeEnabled || $requestedStart === '') {
+                            $requestedStart = (string) ($availableSlots->first()['start'] ?? '');
+                        }
+
+                        $startAt = Carbon::parse($selectedDate->toDateString() . ' ' . $requestedStart);
+
+                        if ($this->isRescheduleDateTimeInPast($startAt)) {
+                            throw new \RuntimeException('La nueva hora debe ser futura.');
+                        }
+
+                        if ($fromCustomer && !$this->passesCustomerRescheduleLeadTime($startAt)) {
+                            throw new \RuntimeException('Para reprogramar desde cliente, selecciona una hora con al menos 60 minutos de anticipación.');
+                        }
 
                         if (!$availableSlots->firstWhere('start', $startAt->format('H:i'))) {
                             throw new \RuntimeException('La hora elegida no está disponible para reprogramar esta cita.');
@@ -958,21 +1045,32 @@ class AppointmentController extends Controller
                         $appointment->rescheduled_at = now();
                         $appointment->rescheduled_by_user_id = (int) $actor->id;
                         $appointment->starts_at = $startAt;
-                        $appointment->ends_at = $startAt->copy()->addMinutes(max(15, (int) ($service->duration_minutes ?? 60)));
+                        $appointment->ends_at = $startAt->copy()->addMinutes($totalMinutes);
                         $appointment->confirmation_reminder_sent_at = null;
                         $appointment->status = 'scheduled';
                         $appointment->workflow_tag = 'rescheduled';
                         $appointment->workflow_note = $note ?: 'Cita reprogramada.';
+                        $this->syncAppointmentServiceItems($appointment, $serviceItems, $startAt);
                         break;
 
                     case 'confirm_payment':
-                        $paidAmount = isset($validated['paid_amount'])
+                        $rawPaidAmount = isset($validated['paid_amount'])
                             ? (float) $validated['paid_amount']
                             : (float) ($appointment->paid_amount ?? 0);
-                        $paidAmount = round(max($paidAmount, 0), 2);
+                        $rawPaidAmount = round(max($rawPaidAmount, 0), 2);
 
-                        if ($paidAmount <= 0) {
-                            $servicePrice = (float) ($appointment->service->price ?? 0);
+                        $paidAmountMode = (string) ($validated['paid_amount_mode'] ?? 'replace');
+                        $paidAmount = $rawPaidAmount;
+                        if ($paidAmountMode === 'increment') {
+                            $paidAmount = round(max(0, (float) ($appointment->paid_amount ?? 0)) + $rawPaidAmount, 2);
+                        }
+
+                        if ($paidAmountMode === 'increment' && $rawPaidAmount <= 0) {
+                            throw new \RuntimeException('Debes indicar un abono mayor a 0 para confirmar el pago.');
+                        }
+
+                        if ($paidAmountMode !== 'increment' && $paidAmount <= 0) {
+                            $servicePrice = $this->calculateAppointmentServicesTotalPrice($appointment);
                             if ($servicePrice > 0) {
                                 $paidAmount = round($servicePrice, 2);
                             }
@@ -998,14 +1096,42 @@ class AppointmentController extends Controller
                             throw new \RuntimeException('Este método de pago requiere referencia.');
                         }
 
-                        $servicePrice = round((float) ($appointment->service->price ?? 0), 2);
+                        $requirePaymentProof = (bool) ($validated['require_payment_proof'] ?? false);
+                        $proofFile = $request?->file('payment_proof_image');
+                        if ($requirePaymentProof && $paymentMethod && $paymentMethod->usesReference() && !$proofFile) {
+                            throw new \RuntimeException('Este método de pago requiere comprobante.');
+                        }
+
+                        $proofPath = null;
+                        $proofUrl = null;
+                        if ($proofFile) {
+                            $proofPath = ImageStorage::storeUploadedImageAsWebp($proofFile, 'appointment_payment_proofs');
+                            $proofUrl = ImageStorage::url($proofPath);
+                        }
+
+                        $servicePrice = $this->calculateAppointmentServicesTotalPrice($appointment);
                         $paymentStatus = ($servicePrice > 0 && $paidAmount < $servicePrice)
                             ? 'partial'
                             : 'paid';
 
+                        $paymentCurrency = strtoupper(trim((string) ($validated['payment_currency']
+                            ?? $paymentMethod?->currency?->code
+                            ?? ($appointment->payment_currency ?: 'USD'))));
+                        if ($paymentCurrency === '') {
+                            $paymentCurrency = 'USD';
+                        }
+
+                        $paymentCurrencyOriginal = strtoupper(trim((string) ($validated['payment_currency_original'] ?? '')));
+                        $paymentAmountOriginal = isset($validated['payment_amount_original'])
+                            ? round(max(0, (float) $validated['payment_amount_original']), 2)
+                            : null;
+                        $exchangeRate = isset($validated['exchange_rate'])
+                            ? round(max(0, (float) $validated['exchange_rate']), 4)
+                            : null;
+
                         $appointment->paid_amount = $paidAmount;
                         $appointment->payment_method_id = $paymentMethod?->id;
-                        $appointment->payment_currency = (string) ($paymentMethod?->currency?->code ?: ($appointment->payment_currency ?: 'USD'));
+                        $appointment->payment_currency = $paymentCurrency;
                         $appointment->payment_reference = $paymentReference;
                         $appointment->payment_status = $paymentStatus;
                         $appointment->status = 'confirmed';
@@ -1015,6 +1141,23 @@ class AppointmentController extends Controller
                         $appointment->workflow_note = $note ?: ($paymentStatus === 'partial'
                             ? 'Pago parcial registrado en cita.'
                             : 'Pago confirmado en cita.');
+
+                        $paymentMeta = [
+                            'mode' => $paidAmountMode,
+                            'amount_registered' => $paidAmount,
+                            'amount_original' => $paymentAmountOriginal,
+                            'currency_original' => $paymentCurrencyOriginal !== '' ? $paymentCurrencyOriginal : null,
+                            'currency_base' => $paymentCurrency,
+                            'exchange_rate' => $exchangeRate,
+                            'proof_path' => $proofPath,
+                            'proof_url' => $proofUrl,
+                            'recorded_at' => now()->toDateTimeString(),
+                        ];
+
+                        $notePrefix = '[APPOINTMENT_PAYMENT_META]';
+                        $existingNotes = trim((string) ($appointment->notes ?? ''));
+                        $metaLine = $notePrefix . json_encode($paymentMeta, JSON_UNESCAPED_UNICODE);
+                        $appointment->notes = trim($existingNotes === '' ? $metaLine : ($existingNotes . "\n" . $metaLine));
 
                         $createSale = (bool) ($validated['create_sale'] ?? !$fromCustomer);
                         if ($createSale) {
@@ -1295,14 +1438,21 @@ class AppointmentController extends Controller
         return $appointments->map(function (Appointment $appointment) use ($startHour) {
             $startMinutes = ((int) $appointment->starts_at->format('G') * 60) + (int) $appointment->starts_at->format('i');
             $endMinutes = ((int) $appointment->ends_at->format('G') * 60) + (int) $appointment->ends_at->format('i');
+            $serviceItems = $this->resolveAppointmentServicesFromAppointment($appointment);
+            $primaryService = $serviceItems->first() ?: $appointment->service;
+            $serviceIds = $serviceItems->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+            if (empty($serviceIds) && $appointment->appointment_service_id) {
+                $serviceIds = [(int) $appointment->appointment_service_id];
+            }
 
             return [
                 'id' => (int) $appointment->id,
-                'service_id' => (int) ($appointment->appointment_service_id ?? 0),
+                'service_id' => (int) ($primaryService->id ?? $appointment->appointment_service_id ?? 0),
+                'service_ids' => $serviceIds,
                 'user_id' => (int) ($appointment->user_id ?? 0),
                 'customer_id' => (int) ($appointment->customer_id ?? 0),
                 'date' => $appointment->starts_at->toDateString(),
-                'title' => (string) ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio'),
+                'title' => $this->resolveAppointmentDisplayName($appointment, $serviceItems),
                 'professional' => (string) ($appointment->assignedUser->name ?? 'Profesional'),
                 'customer' => (string) ($appointment->customer->name ?? $appointment->contact_name ?? 'Cliente sin registro'),
                 'start_time' => $appointment->starts_at->format('H:i'),
@@ -1319,15 +1469,23 @@ class AppointmentController extends Controller
                 'contact_phone' => (string) ($appointment->contact_phone ?: ($appointment->customer->phone_number ?? '')),
                 'paid_amount' => (float) ($appointment->paid_amount ?? 0),
                 'payment_currency' => (string) ($appointment->payment_currency ?? ''),
-                'color_hex' => (string) ($appointment->service->color_hex ?? '#0f172a'),
+                'color_hex' => (string) ($primaryService->color_hex ?? $appointment->service->color_hex ?? '#0f172a'),
                 'notes' => (string) ($appointment->notes ?? ''),
             ];
         })->values()->all();
     }
 
-    private function buildAvailableSlots(int $tenantId, User $targetUser, AppointmentService $service, Carbon $selectedDate, ?int $ignoreAppointmentId = null): array
+    private function buildAvailableSlots(int $tenantId, User $targetUser, AppointmentService $service, Carbon $selectedDate, ?int $ignoreAppointmentId = null, ?int $totalDurationMinutes = null): array
     {
         if ($service->user_id && (int) $service->user_id !== (int) $targetUser->id) {
+            return [];
+        }
+
+        $tenant = Tenant::query()
+            ->select(['id', 'working_days', 'opening_time', 'closing_time'])
+            ->find($tenantId);
+
+        if ($tenant && !$this->isDateAllowedByTenantWorkingDays($tenant, $selectedDate)) {
             return [];
         }
 
@@ -1343,8 +1501,7 @@ class AppointmentController extends Controller
             return [];
         }
 
-        $durationMinutes = max(15, (int) ($service->duration_minutes ?? 60));
-        $bufferMinutes = max(0, (int) ($service->buffer_minutes ?? 0));
+        $durationMinutes = max(15, (int) ($totalDurationMinutes ?? ((int) ($service->duration_minutes ?? 60) + (int) ($service->buffer_minutes ?? 0))));
         $existingAppointments = Appointment::query()
             ->where('tenant_id', $tenantId)
             ->where('user_id', (int) $targetUser->id)
@@ -1359,12 +1516,37 @@ class AppointmentController extends Controller
         $slots = [];
         foreach ($rules as $rule) {
             $interval = max(15, (int) ($rule->slot_interval_minutes ?: $durationMinutes));
-            $cursor = Carbon::parse($selectedDate->toDateString() . ' ' . $rule->start_time);
+            $windowStart = Carbon::parse($selectedDate->toDateString() . ' ' . $rule->start_time);
             $windowEnd = Carbon::parse($selectedDate->toDateString() . ' ' . $rule->end_time);
+
+            if ($tenant) {
+                $tenantOpeningTime = trim((string) ($tenant->opening_time ?? ''));
+                $tenantClosingTime = trim((string) ($tenant->closing_time ?? ''));
+
+                if ($tenantOpeningTime !== '') {
+                    $tenantOpenAt = Carbon::parse($selectedDate->toDateString() . ' ' . substr($tenantOpeningTime, 0, 5));
+                    if ($windowStart->lt($tenantOpenAt)) {
+                        $windowStart = $tenantOpenAt;
+                    }
+                }
+
+                if ($tenantClosingTime !== '') {
+                    $tenantCloseAt = Carbon::parse($selectedDate->toDateString() . ' ' . substr($tenantClosingTime, 0, 5));
+                    if ($windowEnd->gt($tenantCloseAt)) {
+                        $windowEnd = $tenantCloseAt;
+                    }
+                }
+            }
+
+            if ($windowStart->gte($windowEnd)) {
+                continue;
+            }
+
+            $cursor = $windowStart->copy();
 
             while ($cursor->copy()->addMinutes($durationMinutes) <= $windowEnd) {
                 $slotStart = $cursor->copy();
-                $slotEnd = $cursor->copy()->addMinutes($durationMinutes + $bufferMinutes);
+                $slotEnd = $cursor->copy()->addMinutes($durationMinutes);
 
                 $hasConflict = $existingAppointments->contains(function (Appointment $appointment) use ($slotStart, $slotEnd) {
                     return $slotStart < $appointment->ends_at && $slotEnd > $appointment->starts_at;
@@ -1383,6 +1565,214 @@ class AppointmentController extends Controller
         }
 
         return array_values(array_unique($slots, SORT_REGULAR));
+    }
+
+    private function isDateAllowedByTenantWorkingDays(Tenant $tenant, Carbon $selectedDate): bool
+    {
+        $workingDays = collect($tenant->working_days ?? [])
+            ->map(fn ($day) => strtolower(trim((string) $day)))
+            ->filter()
+            ->values();
+
+        if ($workingDays->isEmpty()) {
+            return true;
+        }
+
+        $dayMap = [
+            0 => 'sunday',
+            1 => 'monday',
+            2 => 'tuesday',
+            3 => 'wednesday',
+            4 => 'thursday',
+            5 => 'friday',
+            6 => 'saturday',
+        ];
+
+        $targetDay = $dayMap[(int) $selectedDate->dayOfWeek] ?? '';
+
+        return $targetDay !== '' && $workingDays->contains($targetDay);
+    }
+
+    private function resolveAppointmentServicesFromPayload(int $tenantId, User $targetUser, array $validated): Collection
+    {
+        $serviceIds = collect($validated['appointment_service_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->values();
+
+        if ($serviceIds->isEmpty() && !empty($validated['service_ids']) && is_array($validated['service_ids'])) {
+            $serviceIds = collect($validated['service_ids'])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn (int $id) => $id > 0)
+                ->values();
+        }
+
+        if ($serviceIds->isEmpty() && !empty($validated['appointment_service_id'])) {
+            $serviceIds = collect([(int) $validated['appointment_service_id']]);
+        }
+
+        if ($serviceIds->isEmpty() && !empty($validated['service_id'])) {
+            $serviceIds = collect([(int) $validated['service_id']]);
+        }
+
+        if ($serviceIds->isEmpty()) {
+            return collect();
+        }
+
+        $services = AppointmentService::query()
+            ->with(['productVariant.product'])
+            ->where('tenant_id', $tenantId)
+            ->whereIn('id', $serviceIds->all())
+            ->get()
+            ->keyBy('id');
+
+        $ordered = $serviceIds
+            ->map(fn (int $serviceId) => $services->get($serviceId))
+            ->filter()
+            ->values();
+
+        if ($ordered->count() !== $serviceIds->count()) {
+            return collect();
+        }
+
+        $invalidAssigned = $ordered->first(function (AppointmentService $service) use ($targetUser) {
+            return $service->user_id && (int) $service->user_id !== (int) $targetUser->id;
+        });
+
+        if ($invalidAssigned) {
+            return collect();
+        }
+
+        return $ordered;
+    }
+
+    private function resolveAppointmentServicesFromAppointment(Appointment $appointment): Collection
+    {
+        if ($this->appointmentServiceItemsTableExists()) {
+            $appointment->loadMissing(['serviceItems.service', 'service']);
+        } else {
+            $appointment->loadMissing(['service']);
+        }
+
+        $items = collect();
+        if ($this->appointmentServiceItemsTableExists()) {
+            $items = $appointment->serviceItems
+                ->pluck('service')
+                ->filter()
+                ->values();
+        }
+
+        if ($items->isNotEmpty()) {
+            return $items;
+        }
+
+        if ($appointment->service) {
+            return collect([$appointment->service]);
+        }
+
+        return collect();
+    }
+
+    private function appointmentServiceItemsTableExists(): bool
+    {
+        static $exists = null;
+
+        if ($exists !== null) {
+            return $exists;
+        }
+
+        try {
+            $exists = DB::getSchemaBuilder()->hasTable('appointment_service_items');
+        } catch (\Throwable $exception) {
+            $exists = false;
+        }
+
+        return (bool) $exists;
+    }
+
+    private function calculateTotalAppointmentMinutes(Collection $services): int
+    {
+        $total = (int) $services->sum(function (AppointmentService $service) {
+            $duration = max(15, (int) ($service->duration_minutes ?? 60));
+            $buffer = max(0, (int) ($service->buffer_minutes ?? 0));
+
+            return $duration + $buffer;
+        });
+
+        return max(15, $total);
+    }
+
+    private function calculateAppointmentServicesTotalPrice(Appointment $appointment): float
+    {
+        $services = $this->resolveAppointmentServicesFromAppointment($appointment);
+        $total = (float) $services->sum(function (AppointmentService $service) {
+            return round((float) ($service->price ?? 0), 2);
+        });
+
+        if ($total > 0) {
+            return round($total, 2);
+        }
+
+        return round((float) (optional($appointment->service)->price ?? 0), 2);
+    }
+
+    private function isRescheduleDateTimeInPast(Carbon $startsAt): bool
+    {
+        return $startsAt->lessThan(now()->startOfMinute());
+    }
+
+    private function passesCustomerRescheduleLeadTime(Carbon $startsAt): bool
+    {
+        return $startsAt->greaterThanOrEqualTo(now()->addMinutes(60)->startOfMinute());
+    }
+
+    private function resolveAppointmentDisplayName(Appointment $appointment, ?Collection $services = null): string
+    {
+        $services = $services ?: $this->resolveAppointmentServicesFromAppointment($appointment);
+        $labels = $services
+            ->map(function (AppointmentService $service) {
+                return trim((string) ($service->display_name ?? $service->name ?? 'Servicio'));
+            })
+            ->filter(fn (string $label) => $label !== '')
+            ->values();
+
+        if ($labels->isEmpty()) {
+            return (string) ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio');
+        }
+
+        if ($labels->count() === 1) {
+            return (string) $labels->first();
+        }
+
+        return (string) $labels->join(' + ');
+    }
+
+    private function syncAppointmentServiceItems(Appointment $appointment, Collection $services, Carbon $startAt): void
+    {
+        $appointment->serviceItems()->delete();
+
+        $cursor = $startAt->copy();
+
+        foreach ($services->values() as $index => $service) {
+            $durationMinutes = max(15, (int) ($service->duration_minutes ?? 60));
+            $bufferMinutes = max(0, (int) ($service->buffer_minutes ?? 0));
+            $segmentStartsAt = $cursor->copy();
+            $segmentEndsAt = $cursor->copy()->addMinutes($durationMinutes + $bufferMinutes);
+
+            AppointmentServiceItem::create([
+                'tenant_id' => (int) $appointment->tenant_id,
+                'appointment_id' => (int) $appointment->id,
+                'appointment_service_id' => (int) $service->id,
+                'sequence' => $index + 1,
+                'duration_minutes' => $durationMinutes,
+                'buffer_minutes' => $bufferMinutes,
+                'price' => round((float) ($service->price ?? 0), 2),
+                'starts_at' => $segmentStartsAt,
+                'ends_at' => $segmentEndsAt,
+            ]);
+
+            $cursor = $segmentEndsAt;
+        }
     }
 
     private function normalizePhoneWithCode(?string $phoneValue, mixed $phoneCode = null): ?string

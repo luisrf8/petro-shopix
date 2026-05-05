@@ -1416,9 +1416,17 @@ class ProductController extends Controller
     
     public function update(Request $request, $id)
     {
-        DB::raw("SET @user_id = " . auth()->id());
+        $authUser = auth()->user();
+        if (!$authUser) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sesión expirada. Inicia sesión nuevamente.',
+            ], 401);
+        }
 
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        DB::raw("SET @user_id = " . $authUser->id);
+
+        $tenantId = (int) ($authUser->tenant_id ?? 0);
 
         $product = Product::findOrFail($id);
 
@@ -1432,14 +1440,23 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:500',
-            'category' => 'required|exists:categories,id',
+            'category' => 'nullable|exists:categories,id',
+            'category_id' => 'nullable|exists:categories,id',
             'is_active' => 'required|boolean',
             'is_consumable' => 'nullable|boolean',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
 
+        $categoryId = (int) ($validated['category'] ?? $validated['category_id'] ?? 0);
+        if ($categoryId <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Debes seleccionar una categoría válida.',
+            ], 422);
+        }
+
         $categoryBelongsToTenant = Category::query()
-            ->where('id', $validated['category'])
+            ->where('id', $categoryId)
             ->where('tenant_id', (int) $product->tenant_id)
             ->exists();
 
@@ -1454,7 +1471,7 @@ class ProductController extends Controller
             'name' => $validated['name'],
             'slug' => $this->generateUniqueProductSlug((string) $validated['name'], (int) $product->tenant_id, (int) $product->id),
             'description' => $validated['description'] ?? null,
-            'category_id' => $validated['category'],
+            'category_id' => $categoryId,
             'is_active' => $validated['is_active'],
             'is_consumable' => (bool) ($validated['is_consumable'] ?? false),
             'discount_percentage' => (float) ($validated['discount_percentage'] ?? 0),

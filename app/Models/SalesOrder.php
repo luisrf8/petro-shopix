@@ -9,7 +9,7 @@ class SalesOrder extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'date', 'address', 'status', 'preference', 'deliver_status', 'tenant_id', 'document_issue_mode', 'sale_currency_code', 'delivery_fee', 'delivery_fee_mode', 'delivery_distance_km', 'delivery_latitude', 'delivery_longitude', 'delivery_assigned_user_id'];
+    protected $fillable = ['user_id', 'sales_rep_user_id', 'date', 'address', 'status', 'preference', 'deliver_status', 'tenant_id', 'document_issue_mode', 'sale_currency_code', 'delivery_fee', 'delivery_fee_mode', 'delivery_distance_km', 'delivery_latitude', 'delivery_longitude', 'delivery_assigned_user_id'];
 
     protected $casts = [
         'delivery_fee' => 'float',
@@ -39,6 +39,16 @@ class SalesOrder extends Model
     public function assignedDeliveryUser()
     {
         return $this->belongsTo(User::class, 'delivery_assigned_user_id');
+    }
+
+    public function salesRepresentative()
+    {
+        return $this->belongsTo(User::class, 'sales_rep_user_id');
+    }
+
+    public function sellerCommission()
+    {
+        return $this->hasOne(SellerCommission::class, 'sales_order_id');
     }
 
     public function returns()

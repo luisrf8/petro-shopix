@@ -116,10 +116,12 @@
       $canSeePaidPendingDeliveries = $isOwner || $isAdmin || $isSeller || $isWarehouse || $isDelivery;
       $canSeeTenantElectronicDocuments = $isOwner || $isAdmin || $isSeller;
       $canSeeCustomers = $isOwner || $isAdmin || $isSeller;
+      $canSeeSellerCommissions = $isOwner || $isAdmin || $isSeller;
       $canSeeAccountsReceivable = $isOwner || $isAdmin;
       $canInventoryEntries = $isOwner || $isAdmin || $isWarehouse;
       $canSeeWarehouses = $isOwner || $isAdmin || $isSeller || $isWarehouse;
       $canSeeMaterials = $isOwner || $isAdmin || $isSeller || $isWarehouse;
+      $canSeeAccountsPayable = $isOwner || $isAdmin || $isWarehouse;
       $canManageStore = $isOwner || $isAdmin;
       $canSeeReports = $isOwner || $isAdmin;
       $canSeeStoreExpenses = $isOwner || $isAdmin;
@@ -174,6 +176,7 @@
         $showSalesSection = ($canSell && $planCanSales)
           || ($canSeeAppointments && $planCanAppointments && $isServiceStore)
           || ($canSeeCustomers && $planCanCustomers)
+          || ($canSeeSellerCommissions && $planCanSales)
           || ($canSeeAccountsReceivable && $planCanAccountsReceivable)
           || ($canSeePaidPendingDeliveries && $planCanPaidPendingDeliveries)
           || ($canSeePendingOrders && $planCanPendingOrders)
@@ -183,6 +186,7 @@
           || ($canInventoryEntries && $planCanProviders)
           || ($canSeeWarehouses && $planCanWarehouses)
           || ($canSeeMaterials && $planCanMaterials)
+          || ($canSeeAccountsPayable && $planCanPurchaseHistory)
           || ($canInventoryEntries && $planCanPurchaseHistory);
 
         $showManagementSection = ($canSeeTenantElectronicDocuments && $planCanElectronicDocuments)
@@ -303,6 +307,15 @@
           </li>
         @endif
 
+        @if($canSeeSellerCommissions && $planCanSales)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/seller-commissions">
+              <i class="material-symbols-rounded opacity-5">payments</i>
+              <span class="nav-link-text ms-1">Comisiones</span>
+            </a>
+          </li>
+        @endif
+
         @if($canSeeAccountsReceivable && $planCanAccountsReceivable)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/accounts-receivable">
@@ -366,6 +379,15 @@
             <a class="nav-link text-dark" href="/purchase-orders">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
               <span class="nav-link-text ms-1">Historial de Entradas</span>
+            </a>
+          </li>
+        @endif
+
+        @if($canSeeAccountsPayable && $planCanPurchaseHistory)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="/accounts-payable">
+              <i class="material-symbols-rounded opacity-5">account_balance_wallet</i>
+              <span class="nav-link-text ms-1">Cuentas por Pagar</span>
             </a>
           </li>
         @endif

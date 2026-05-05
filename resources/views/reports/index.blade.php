@@ -87,7 +87,25 @@
                             <select id="appointment_service_id" name="appointment_service_id" class="form-control border border-1 p-2">
                                 <option value="0">Todos los servicios</option>
                                 @foreach(($appointmentServices ?? []) as $serviceOption)
-                                    <option value="{{ $serviceOption->id }}" {{ (int) request('appointment_service_id', $selectedAppointmentServiceId ?? 0) === (int) $serviceOption->id ? 'selected' : '' }}>{{ $serviceOption->name }}</option>
+                                    <option value="{{ $serviceOption->id }}" {{ (int) request('appointment_service_id', $selectedAppointmentServiceId ?? 0) === (int) $serviceOption->id ? 'selected' : '' }}>{{ $serviceOption->display_name ?? $serviceOption->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="income_user_id" class="form-label">Usuario (ingresos por usuario)</label>
+                            <select id="income_user_id" name="income_user_id" class="form-control border border-1 p-2">
+                                <option value="0">Todos</option>
+                                @foreach(($incomeUsers ?? []) as $incomeUser)
+                                    <option value="{{ $incomeUser->id }}" {{ (int) request('income_user_id', $selectedIncomeUserId ?? 0) === (int) $incomeUser->id ? 'selected' : '' }}>{{ $incomeUser->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="income_customer_id" class="form-label">Paciente/Cliente (ingresos por usuario)</label>
+                            <select id="income_customer_id" name="income_customer_id" class="form-control border border-1 p-2">
+                                <option value="0">Todos</option>
+                                @foreach(($incomeCustomers ?? []) as $incomeCustomer)
+                                    <option value="{{ $incomeCustomer->id }}" {{ (int) request('income_customer_id', $selectedIncomeCustomerId ?? 0) === (int) $incomeCustomer->id ? 'selected' : '' }}>{{ $incomeCustomer->name }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -109,8 +127,81 @@
                             'appointment_status' => request('appointment_status', $selectedAppointmentStatus ?? 'all'),
                             'appointment_payment_status' => request('appointment_payment_status', $selectedAppointmentPaymentStatus ?? 'all'),
                             'appointment_service_id' => request('appointment_service_id', $selectedAppointmentServiceId ?? 0),
+                            'income_user_id' => request('income_user_id', $selectedIncomeUserId ?? 0),
+                            'income_customer_id' => request('income_customer_id', $selectedIncomeCustomerId ?? 0),
                         ];
                     @endphp
+
+                    <div class="card border mb-3">
+                        <div class="card-body">
+                            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+                                <div>
+                                    <h6 class="mb-1">Vista previa de citas (multi-servicio)</h6>
+                                    <p class="text-sm text-muted mb-0">Este resumen respeta los filtros actuales y considera todos los servicios asociados a cada cita.</p>
+                                </div>
+                                <div class="text-sm text-muted">
+                                    Servicio filtrado:
+                                    <strong>{{ $selectedAppointmentServiceLabel ?: 'Todos los servicios' }}</strong>
+                                </div>
+                            </div>
+
+                            <div class="row g-2 mt-2">
+                                <div class="col-6 col-md-3">
+                                    <div class="border rounded p-2 h-100">
+                                        <div class="text-xs text-muted">Citas</div>
+                                        <div class="fw-bold">{{ number_format((int) ($appointmentsPreviewSummary['appointments'] ?? 0)) }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="border rounded p-2 h-100">
+                                        <div class="text-xs text-muted">Pago pendiente/parcial</div>
+                                        <div class="fw-bold">{{ number_format((int) ($appointmentsPreviewSummary['pending_payment'] ?? 0)) }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="border rounded p-2 h-100">
+                                        <div class="text-xs text-muted">Precio total</div>
+                                        <div class="fw-bold">{{ number_format((float) ($appointmentsPreviewSummary['total_service_price'] ?? 0), 2) }} {{ $appointmentsPreviewSummary['currency_code'] ?? 'USD' }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="border rounded p-2 h-100">
+                                        <div class="text-xs text-muted">Pendiente</div>
+                                        <div class="fw-bold">{{ number_format((float) ($appointmentsPreviewSummary['total_pending'] ?? 0), 2) }} {{ $appointmentsPreviewSummary['currency_code'] ?? 'USD' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive mt-3">
+                                <table class="table table-sm align-items-center mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Cita</th>
+                                            <th>Servicio(s)</th>
+                                            <th>Profesional</th>
+                                            <th>Fecha</th>
+                                            <th>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @forelse(($appointmentsPreviewRows ?? collect()) as $previewAppointment)
+                                            <tr>
+                                                <td>#{{ $previewAppointment->id }}</td>
+                                                <td>{{ $previewAppointment->service_label_report ?? ($previewAppointment->service->display_name ?? $previewAppointment->service->name ?? 'Servicio') }}</td>
+                                                <td>{{ $previewAppointment->assignedUser->name ?? 'Profesional' }}</td>
+                                                <td>{{ optional($previewAppointment->starts_at)?->format('d/m/Y H:i') }}</td>
+                                                <td>{{ $previewAppointment->status_label ?? ucfirst((string) ($previewAppointment->status ?? 'scheduled')) }}</td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="5" class="text-muted text-center py-3">No hay citas para el filtro actual.</td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="row g-3">
                         <div class="col-md-6 col-xl-4">
@@ -238,6 +329,19 @@
                                     <div class="d-flex gap-2 flex-wrap">
                                         <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.storeExpenses.pdf', $params) }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0" href="{{ route('reports.storeExpenses.excel', $params) }}">Excel</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 col-xl-4">
+                            <div class="card h-100 border">
+                                <div class="card-body">
+                                    <h6 class="mb-2">Ingresos por usuario</h6>
+                                    <p class="text-sm text-muted mb-3">Ingresos vendidos/cobrados por usuario, con filtro por paciente o cliente.</p>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.income.byUser.pdf', $params) }}">PDF</a>
+                                        <a class="btn btn-outline-success btn-sm mb-0" href="{{ route('reports.income.byUser.excel', $params) }}">Excel</a>
                                     </div>
                                 </div>
                             </div>

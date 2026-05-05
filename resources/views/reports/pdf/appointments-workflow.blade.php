@@ -49,7 +49,7 @@
             @forelse($rows as $appointment)
                 <tr>
                     <td>{{ $appointment->id }}</td>
-                    <td>{{ $appointment->service->display_name ?? $appointment->service->name ?? 'Servicio' }}</td>
+                    <td>{{ $appointment->service_label_report ?? ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio') }}</td>
                     <td>{{ $appointment->assignedUser->name ?? 'Profesional' }}</td>
                     <td>{{ $appointment->customer->name ?? 'Cliente' }}</td>
                     <td>{{ optional($appointment->starts_at)?->format('d/m/Y H:i') }}</td>

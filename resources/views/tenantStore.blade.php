@@ -359,8 +359,8 @@
                                     ];
                                 @endphp
 
-                                <div class="mb-4" id="physicalStoreScheduleFields" style="display: {{ $tenantBusinessType === 'tienda' ? 'block' : 'none' }};">
-                                    <label class="form-label fw-bold d-block">Días laborales y horario (tienda física)</label>
+                                <div class="mb-4" id="physicalStoreScheduleFields">
+                                    <label class="form-label fw-bold d-block">Horario general de la tienda (base operativa)</label>
                                     <div class="row g-2 mb-3">
                                         @foreach($weekDays as $dayKey => $dayLabel)
                                             <div class="col-6 col-md-3">
@@ -381,7 +381,26 @@
                                             <input type="time" class="form-control border border-1 p-2" id="closing_time" name="closing_time" value="{{ !empty($tenant->closing_time) ? \Illuminate\Support\Str::substr((string) $tenant->closing_time, 0, 5) : '' }}">
                                         </div>
                                     </div>
-                                    <small class="text-muted d-block mt-2">Estos campos son opcionales y solo se muestran en la landing si tienen datos.</small>
+                                    <small class="text-muted d-block mt-2">Este horario define cuándo opera la tienda. Los turnos de cada vendedor/profesional se aplican sobre esta base.</small>
+                                </div>
+
+                                <div class="mb-4" id="serviceAppointmentConfigFields" style="display: {{ $tenantBusinessType === 'servicio' ? 'block' : 'none' }};">
+                                    <label class="form-label fw-bold d-block">Configuración de agenda de citas</label>
+                                    <input type="hidden" name="appointments_first_come_enabled" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
+                                            id="appointments_first_come_enabled"
+                                            name="appointments_first_come_enabled"
+                                            value="1"
+                                            {{ (bool) ($tenant->appointments_first_come_enabled ?? false) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="appointments_first_come_enabled">
+                                            Activar modo por orden de llegada
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">Cuando está activo, la agenda asigna automáticamente el primer horario disponible para cada profesional.</small>
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">Eslogan</label>
@@ -1800,12 +1819,17 @@ function initMap() {
 
     const syncPhysicalStoreScheduleVisibility = () => {
         const scheduleBlock = document.getElementById('physicalStoreScheduleFields');
+        const serviceAppointmentConfigBlock = document.getElementById('serviceAppointmentConfigFields');
         if (!scheduleBlock || !businessTypeSelect) {
             return;
         }
 
-        const isPhysicalStore = String(businessTypeSelect.value || '').toLowerCase() === 'tienda';
-        scheduleBlock.style.display = isPhysicalStore ? 'block' : 'none';
+        const businessType = String(businessTypeSelect.value || '').toLowerCase();
+        const isServiceBusiness = businessType === 'servicio';
+        scheduleBlock.style.display = 'block';
+        if (serviceAppointmentConfigBlock) {
+            serviceAppointmentConfigBlock.style.display = isServiceBusiness ? 'block' : 'none';
+        }
     };
 
     if (businessTypeSelect) {

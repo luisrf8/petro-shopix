@@ -49,11 +49,12 @@ class AuthenticatedSessionController extends Controller
 
     public function authenticateCustomer(LoginRequest $request)
     {
-        $credentials = $request->only('email', 'password');
+        $login = trim((string) ($request->input('login') ?? $request->input('email') ?? ''));
+        $password = (string) $request->input('password', '');
 
-        if (!Auth::attempt($credentials)) {
+        if (!$this->attemptLoginByIdentifier($login, $password)) {
             AuditLogger::logEvent('auth', 'CUSTOMER_LOGIN_FAILED', 'Intento fallido de inicio de sesión cliente.', null, [
-                'email' => $credentials['email'] ?? null,
+                'login' => $login,
             ]);
 
             return response()->json([
@@ -204,13 +205,17 @@ class AuthenticatedSessionController extends Controller
     public function authenticateAdmin(Request $request): JsonResponse
     {
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'login' => ['required_without:email', 'string', 'max:255'],
+            'email' => ['nullable', 'string', 'max:255'],
             'password' => ['required'],
         ]);
+
+        $login = trim((string) ($credentials['login'] ?? $credentials['email'] ?? ''));
+        $password = (string) ($credentials['password'] ?? '');
  
-        if (!Auth::attempt($credentials)) {
+        if (!$this->attemptLoginByIdentifier($login, $password)) {
             AuditLogger::logEvent('auth', 'ADMIN_LOGIN_FAILED', 'Intento fallido de login admin.', null, [
-                'email' => $credentials['email'] ?? null,
+                'login' => $login,
             ]);
 
             return response()->json([
@@ -321,7 +326,7 @@ class AuthenticatedSessionController extends Controller
         // Validación de los datos
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            'email' => 'nullable|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
             'dni' => 'nullable|string|max:100',
             'phone_code' => ['nullable', 'string', 'max:10', 'regex:/^\+?[0-9]{1,4}$/'],
@@ -347,7 +352,7 @@ class AuthenticatedSessionController extends Controller
         // Crear el usuario
         $user = User::create([
             'name' => $request->name,
-            'email' => $request->email,
+            'email' => trim((string) $request->email) ?: null,
             'password' => Hash::make($request->password),  // Hashear la contraseña
             'role_id' => $this->resolveCustomerRoleId(),
             'dni' => $dni,
@@ -485,6 +490,36 @@ class AuthenticatedSessionController extends Controller
         }
 
         return (int) Role::query()->firstOrCreate(['name' => 'user'])->id;
+    }
+
+    private function attemptLoginByIdentifier(string $identifier, string $password): bool
+    {
+        if ($identifier === '' || $password === '') {
+            return false;
+        }
+
+        foreach ($this->resolveLoginColumns($identifier) as $column) {
+            if (Auth::attempt([$column => $identifier, 'password' => $password])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resolveLoginColumns(string $identifier): array
+    {
+        $columns = ['email', 'phone_number', 'name', 'dni'];
+
+        if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+            return ['email', 'phone_number', 'name', 'dni'];
+        }
+
+        if (preg_match('/^[\+\d\s\-\(\)]+$/', $identifier)) {
+            return ['phone_number', 'email', 'name', 'dni'];
+        }
+
+        return $columns;
     }
 
     private function socialProviderMeta(): array

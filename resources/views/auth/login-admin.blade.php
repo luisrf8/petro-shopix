@@ -100,6 +100,13 @@
             box-shadow: 0 0 0 0.2rem rgba(15, 23, 42, 0.12);
         }
 
+        .password-toggle-btn {
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+            border-color: #cbd5e1;
+            background: #fff;
+        }
+
         .login-submit-btn {
             border-radius: 12px;
             padding: 0.7rem;
@@ -157,12 +164,17 @@
                         <form id="shopix-login-form" class="row g-3" novalidate>
                             @csrf
                             <div class="col-12">
-                                <label for="email" class="form-label login-field-label">Correo electrónico</label>
-                                <input type="email" class="form-control login-input" id="email" name="email" placeholder="Ingresa tu correo" required>
+                                <label for="login" class="form-label login-field-label">Correo, teléfono o usuario</label>
+                                <input type="text" class="form-control login-input" id="login" name="login" placeholder="Ingresa correo, teléfono o usuario" required>
                             </div>
                             <div class="col-12">
                                 <label for="password" class="form-label login-field-label">Contraseña</label>
-                                <input type="password" class="form-control login-input" id="password" name="password" placeholder="Ingresa tu contraseña" required>
+                                <div class="input-group">
+                                    <input type="password" class="form-control login-input" id="password" name="password" placeholder="Ingresa tu contraseña" required>
+                                    <button type="button" class="btn password-toggle-btn" id="toggleAdminPassword" aria-label="Mostrar u ocultar contraseña">
+                                        <i class="bi bi-eye" id="toggleAdminPasswordIcon"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="col-12 d-grid">
                                 <button id="shopix-login-submit" type="submit" class="btn btn-dark login-submit-btn">
@@ -181,6 +193,18 @@
         const loginForm = document.getElementById('shopix-login-form');
         const submitButton = document.getElementById('shopix-login-submit');
         const loginAlert = document.getElementById('login-alert');
+        const adminPasswordInput = document.getElementById('password');
+        const adminPasswordToggle = document.getElementById('toggleAdminPassword');
+        const adminPasswordToggleIcon = document.getElementById('toggleAdminPasswordIcon');
+
+        adminPasswordToggle?.addEventListener('click', function () {
+            if (!adminPasswordInput) return;
+
+            const isHidden = adminPasswordInput.type === 'password';
+            adminPasswordInput.type = isHidden ? 'text' : 'password';
+            adminPasswordToggleIcon?.classList.toggle('bi-eye', !isHidden);
+            adminPasswordToggleIcon?.classList.toggle('bi-eye-slash', isHidden);
+        });
 
         function showLoginError(message) {
             if (!loginAlert) return;

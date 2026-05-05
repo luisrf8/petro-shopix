@@ -42,26 +42,35 @@
       @else
         <div class="list-group" id="notifications-list-group">
           @foreach($notifications as $notification)
-            <div class="list-group-item d-flex justify-content-between align-items-start {{ is_null($notification['read_at']) ? 'bg-light' : '' }}" data-notification-id="{{ $notification['id'] }}">
-              <div class="me-3">
-                <h6 class="mb-1">{{ $notification['title'] ?? 'Notificación' }}</h6>
-                <p class="mb-1 text-sm">{{ $notification['message'] ?? '' }}</p>
-                <small class="text-muted">{{ \Carbon\Carbon::parse($notification['created_at'])->format('d/m/Y H:i') }}</small>
-              </div>
-              <div class="d-flex flex-column gap-2 align-items-end">
-                @if(!empty($notification['target_url']))
-                  <a href="{{ $notification['target_url'] }}" class="btn btn-sm btn-dark mb-0 url-icon-action-btn url-icon-action-btn-sm" aria-label="Abrir" title="Abrir">
-                    <i class="material-symbols-rounded">open_in_new</i>
-                  </a>
-                @endif
-                @if(is_null($notification['read_at']))
-                  <form method="POST" action="{{ route('notifications.read', $notification['id']) }}">
-                    @csrf
-                    <button type="submit" class="btn btn-sm btn-outline-dark mb-0">Marcar leída</button>
-                  </form>
-                @else
-                  <span class="badge bg-success">Leída</span>
-                @endif
+            <div class="list-group-item rounded-3 {{ is_null($notification['read_at']) ? 'bg-light' : '' }}" data-notification-id="{{ $notification['id'] }}">
+              <div class="row g-2 align-items-start">
+                <div class="col-12 col-md">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <h6 class="mb-0">{{ $notification['title'] ?? 'Notificación' }}</h6>
+                    @if(is_null($notification['read_at']))
+                      <span class="badge text-bg-dark">Nueva</span>
+                    @else
+                      <span class="badge text-bg-light border">Leída</span>
+                    @endif
+                  </div>
+                  <p class="mb-1 text-sm">{{ $notification['message'] ?? '' }}</p>
+                  <small class="text-muted">{{ \Carbon\Carbon::parse($notification['created_at'])->format('d/m/Y H:i') }}</small>
+                </div>
+                <div class="col-12 col-md-auto">
+                  <div class="d-grid d-md-flex gap-2 justify-content-md-end">
+                    @if(!empty($notification['target_url']))
+                      <a href="{{ $notification['target_url'] }}" class="btn btn-sm btn-dark mb-0" aria-label="Abrir notificación" title="Abrir">
+                        <i class="bi bi-box-arrow-up-right me-1"></i>Abrir
+                      </a>
+                    @endif
+                    @if(is_null($notification['read_at']))
+                      <form method="POST" action="{{ route('notifications.read', $notification['id']) }}" class="mb-0">
+                        @csrf
+                        <button type="submit" class="btn btn-sm btn-outline-dark mb-0 w-100">Marcar leída</button>
+                      </form>
+                    @endif
+                  </div>
+                </div>
               </div>
             </div>
           @endforeach
@@ -91,23 +100,34 @@
       const isUnread = !notification.is_read;
       const rowClass = isUnread ? 'bg-light' : '';
       const openButton = notification.target_url
-        ? `<a href="${notification.target_url}" class="btn btn-sm btn-dark mb-0 url-icon-action-btn url-icon-action-btn-sm" aria-label="Abrir" title="Abrir"><i class="material-symbols-rounded">open_in_new</i></a>`
+        ? `<a href="${notification.target_url}" class="btn btn-sm btn-dark mb-0" aria-label="Abrir notificación" title="Abrir"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir</a>`
         : '';
       const action = isUnread
         ? `<form method="POST" action="/notifications/${notification.id}/read">
             <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''}">
-            <button type="submit" class="btn btn-sm btn-outline-dark mb-0">Marcar leída</button>
+            <button type="submit" class="btn btn-sm btn-outline-dark mb-0 w-100">Marcar leída</button>
           </form>`
-        : '<span class="badge bg-success">Leída</span>';
+        : '';
+
+      const statusBadge = isUnread
+        ? '<span class="badge text-bg-dark">Nueva</span>'
+        : '<span class="badge text-bg-light border">Leída</span>';
 
       return `
-        <div class="list-group-item d-flex justify-content-between align-items-start ${rowClass}" data-notification-id="${notification.id}">
-          <div class="me-3">
-            <h6 class="mb-1">${notification.title || 'Notificación'}</h6>
-            <p class="mb-1 text-sm">${notification.message || ''}</p>
-            <small class="text-muted">${notification.created_at || ''}</small>
+        <div class="list-group-item rounded-3 ${rowClass}" data-notification-id="${notification.id}">
+          <div class="row g-2 align-items-start">
+            <div class="col-12 col-md">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <h6 class="mb-0">${notification.title || 'Notificación'}</h6>
+                ${statusBadge}
+              </div>
+              <p class="mb-1 text-sm">${notification.message || ''}</p>
+              <small class="text-muted">${notification.created_at || ''}</small>
+            </div>
+            <div class="col-12 col-md-auto">
+              <div class="d-grid d-md-flex gap-2 justify-content-md-end">${openButton}${action}</div>
+            </div>
           </div>
-          <div class="d-flex flex-column gap-2 align-items-end">${openButton}${action}</div>
         </div>
       `;
     }

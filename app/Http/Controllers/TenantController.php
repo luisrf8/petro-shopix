@@ -1460,6 +1460,7 @@ class TenantController extends Controller
                 'phone_number'    => 'nullable|string|max:20',
                 'working_days'    => 'nullable|array',
                 'working_days.*'  => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
+                'appointments_first_come_enabled' => 'nullable|boolean',
                 'opening_time'    => 'nullable|date_format:H:i',
                 'closing_time'    => 'nullable|date_format:H:i',
                 'address'         => 'nullable|string|max:255',
@@ -1641,6 +1642,7 @@ class TenantController extends Controller
                 'working_days'    => array_key_exists('working_days', $validated)
                     ? $this->normalizeWorkingDays($validated['working_days'] ?? null)
                     : $tenant->working_days,
+                'appointments_first_come_enabled' => (bool) ($validated['appointments_first_come_enabled'] ?? false),
                 'opening_time'    => $validated['opening_time'] ?? $tenant->opening_time,
                 'closing_time'    => $validated['closing_time'] ?? $tenant->closing_time,
                 'address'         => $validated['address'] ?? $tenant->address,
@@ -2015,8 +2017,9 @@ class TenantController extends Controller
                 $appointmentDateRaw = trim((string) ($validated['appointment_date'] ?? ''));
                 $appointmentStartRaw = trim((string) ($validated['appointment_start_time'] ?? ''));
                 $appointmentPaymentMode = (string) ($validated['appointment_payment_mode'] ?? 'online');
+                $firstComeEnabled = (bool) ($tenant->appointments_first_come_enabled ?? false);
 
-                if ($appointmentServiceId <= 0 || $appointmentUserId <= 0 || $appointmentDateRaw === '' || $appointmentStartRaw === '') {
+                if ($appointmentServiceId <= 0 || $appointmentUserId <= 0 || $appointmentDateRaw === '' || (!$firstComeEnabled && $appointmentStartRaw === '')) {
                     throw new \RuntimeException('Debes seleccionar servicio, profesional, fecha y hora para programar tu cita.');
                 }
 
@@ -2045,12 +2048,27 @@ class TenantController extends Controller
                 $appointmentDate = Carbon::parse($appointmentDateRaw)->startOfDay();
                 $appointmentStartTime = $appointmentStartRaw;
 
+                if ($appointmentDate->toDateString() < now()->toDateString()) {
+                    throw new \RuntimeException('No puedes agendar citas en fechas pasadas.');
+                }
+
                 $availableSlots = collect($this->buildPublicAppointmentSlots(
                     (int) $tenant->id,
                     $appointmentProfessional,
                     $appointmentService,
                     $appointmentDate
                 ));
+
+                if ($firstComeEnabled && $appointmentStartTime === '') {
+                    $appointmentStartTime = (string) ($availableSlots->first()['start'] ?? '');
+                }
+
+                if ($appointmentStartTime !== '') {
+                    $appointmentStartAt = Carbon::parse($appointmentDate->toDateString() . ' ' . $appointmentStartTime);
+                    if ($appointmentStartAt->lessThan(now()->startOfMinute())) {
+                        throw new \RuntimeException('La hora de cita debe ser futura.');
+                    }
+                }
 
                 if (!$availableSlots->firstWhere('start', $appointmentStartTime)) {
                     throw new \RuntimeException('La hora seleccionada ya no está disponible para ese profesional.');
@@ -2483,6 +2501,7 @@ class TenantController extends Controller
         return response()->json([
             'success' => true,
             'enabled' => true,
+            'appointments_first_come_enabled' => (bool) ($tenant->appointments_first_come_enabled ?? false),
             'services' => $services,
             'professionals' => $professionals,
             'slots' => $slots,

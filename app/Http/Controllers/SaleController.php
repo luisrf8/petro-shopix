@@ -39,6 +39,7 @@ use App\Models\City;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\ElectronicDocument;
+use App\Models\SellerCommission;
 use App\Events\DeliveryAssignmentUpdated;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -128,7 +129,8 @@ class SaleController extends Controller
             'customer_existing_id' => 'nullable|integer|required_unless:create_new_customer,true',
             'customer_new' => 'nullable|array',
             'customer_new.name' => 'required_if:create_new_customer,true|string|max:255',
-            'customer_new.email' => 'required_if:create_new_customer,true|email|unique:users,email',
+            'customer_new.email' => 'nullable|email|unique:users,email',
+            'customer_new.phone_code' => ['nullable', 'string', 'max:10', 'regex:/^\+?[0-9]{1,4}$/'],
             'customer_new.phone_number' => 'required_if:create_new_customer,true|string|max:20',
             'customer_new.dni' => 'required_if:create_new_customer,true|string|max:100',
             'payments' => 'nullable|array',
@@ -158,8 +160,11 @@ class SaleController extends Controller
 
             $createdCustomer = User::create([
                 'name' => trim((string) ($customerPayload['name'] ?? 'Cliente')),
-                'email' => trim((string) ($customerPayload['email'] ?? '')),
-                'phone_number' => trim((string) ($customerPayload['phone_number'] ?? '')),
+                'email' => trim((string) ($customerPayload['email'] ?? '')) ?: null,
+                'phone_number' => $this->normalizeCustomerPhone(
+                    (string) ($customerPayload['phone_number'] ?? ''),
+                    $customerPayload['phone_code'] ?? null
+                ),
                 'dni' => trim((string) ($customerPayload['dni'] ?? '')),
                 'password' => Hash::make($defaultCustomerPassword),
                 'tenant_id' => $tenantId,
@@ -243,6 +248,7 @@ class SaleController extends Controller
         // Crear orden de venta
         $salesOrder = SalesOrder::create([
             'user_id' => $customerId,
+            'sales_rep_user_id' => $this->resolveSalesRepresentativeId(),
             'date' => now()->toDateString(),
             'status' => $markSaleCompleted ? 1 : 0,
             'address' => $address,
@@ -255,6 +261,10 @@ class SaleController extends Controller
 
         // Crear detalles y actualizar stock
         foreach ($itemsSelected as $item) {
+            if (in_array($deliveryType, ['delivery', 'shipping'], true) && (int) ($item['quantity'] ?? 0) > 1) {
+                return response()->json(['error' => 'Las ventas con delivery/envío solo permiten cantidades al detal (1 unidad por ítem).'], 422);
+            }
+
             $productVariant = ProductVariant::with('product')->find($item['id']);
             if (!$productVariant) {
                 return response()->json(['error' => 'Variante no encontrada: ' . $item['id']], 400);
@@ -370,8 +380,12 @@ class SaleController extends Controller
             'details',
             'details.taxes.tax',
             'details.variant.product',
-            'payments.payment'
+            'payments.payment',
+            'returns.items',
+            'salesRepresentative'
         ])->findOrFail($salesOrder->id);
+
+        $this->syncSellerCommissionForOrder($order);
 
     // =====================================
     //   GENERAR PDF SI HAY PAGOS APROBADOS
@@ -487,6 +501,31 @@ class SaleController extends Controller
         return $roleIds;
     }
 
+    private function normalizeCustomerPhone(string $phoneNumber, mixed $phoneCode = null): ?string
+    {
+        $rawPhone = trim($phoneNumber);
+        if ($rawPhone === '') {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $rawPhone);
+        if ($digits === '') {
+            return null;
+        }
+
+        if (str_starts_with($rawPhone, '+')) {
+            return '+' . $digits;
+        }
+
+        $rawCode = trim((string) ($phoneCode ?? ''));
+        $codeDigits = preg_replace('/\D+/', '', $rawCode);
+        if ($codeDigits !== '') {
+            return '+' . $codeDigits . $digits;
+        }
+
+        return $digits;
+    }
+
     private function customerCandidatesQuery(int $tenantId)
     {
         $excludedRoleIds = Role::query()
@@ -591,12 +630,20 @@ class SaleController extends Controller
         // Agrupar y procesar datos de productos
         $groupedData = [];
         foreach ($itemsSelected as $item) {
-            $variant = $item['item']; // Accedemos a la información del producto
+            $variant = $item['item'] ?? null; // Accedemos a la información del producto
+            $variantId = (int) ($variant['id'] ?? 0);
+            $quantity = (int) ($item['quantity'] ?? 0);
+            $price = (float) ($variant['price'] ?? 0);
+
+            if ($variantId <= 0 || $quantity <= 0 || $price <= 0) {
+                return response()->json(['error' => 'Uno de los productos enviados es inválido.'], 422);
+            }
+
             $groupedData[] = [
-                'product_variant_id' => $variant['id'],
-                'quantity' => $item['quantity'],
-                'price' => $variant['price'],
-                'amount' => $variant['price'] * $item['quantity'],
+                'product_variant_id' => $variantId,
+                'quantity' => $quantity,
+                'price' => $price,
+                'amount' => $price * $quantity,
             ];
         }
     
@@ -642,6 +689,7 @@ class SaleController extends Controller
         // Crear orden de venta con status en 0 (pendiente)
         $salesOrder = SalesOrder::create([
             'user_id' => $customerId,
+            'sales_rep_user_id' => $this->resolveSalesRepresentativeId(),
             'date' => now()->toDateString(),
             'status' => 0, // Pendiente por defecto en eCommerce
             'address' => $address ?? 'Tienda',
@@ -654,6 +702,10 @@ class SaleController extends Controller
 
         // Crear detalles de la venta y actualizar stock
         foreach ($groupedData as $detail) {
+            if (in_array($deliveryType, ['delivery', 'shipping'], true) && (int) ($detail['quantity'] ?? 0) > 1) {
+                return response()->json(['error' => 'Las ventas con delivery/envío solo permiten cantidades al detal (1 unidad por ítem).'], 422);
+            }
+
             SalesOrderDetail::create([
                 'sales_order_id' => $salesOrder->id,
                 'product_variant_id' => $detail['product_variant_id'],
@@ -669,9 +721,12 @@ class SaleController extends Controller
                 $productVariant->stock -= $detail['quantity'];
                 $productVariant->save();
             } else {
-                return response()->json(['error' => 'Stock insuficiente para el producto: ' . $productVariant->id], 400);
+                return response()->json(['error' => 'Stock insuficiente para el producto: ' . ((int) ($detail['product_variant_id'] ?? 0))], 400);
             }
         }
+
+        $salesOrder->loadMissing(['payments', 'details', 'returns.items', 'salesRepresentative']);
+        $this->syncSellerCommissionForOrder($salesOrder);
 
         try {
             $deliveryPricing = DeliveryManager::calculate($tenantForSale, $deliveryType, $itemsSubtotal, $deliveryDistanceKm);
@@ -1358,6 +1413,13 @@ class SaleController extends Controller
     public function downloadStoredPdf(Request $request, int $id, string $type)
     {
         $order = SalesOrder::with(['user', 'details', 'details.variant.product', 'details.taxes', 'payments.payment'])->findOrFail($id);
+        $authUser = auth()->user();
+        $isWarehouseOnly = ($authUser?->hasStoreRole('warehouse') ?? false)
+            && !($authUser?->hasStoreRole('owner', 'admin', 'seller') ?? false);
+
+        if ($isWarehouseOnly && $type === 'invoice') {
+            abort(403, 'El rol Almacenista solo puede descargar la orden de entrega.');
+        }
 
         if ($type === 'invoice' && ($order->document_issue_mode ?? 'delivery_note') === 'electronic_invoice') {
             return $this->downloadElectronicInvoicePdf(
@@ -1429,7 +1491,9 @@ class SaleController extends Controller
         $qrCodeImage = $writer->write($qrCode);
         $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
 
-        $deliveryHtml = view('orderPdf', compact(
+        $deliveryPdfView = $this->resolveDeliveryPdfViewName();
+
+        $deliveryHtml = view($deliveryPdfView, compact(
             'order',
             'totalOrden',
             'totalTaxes',
@@ -1516,7 +1580,9 @@ class SaleController extends Controller
         $writer = new PngWriter();
         $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($writer->write($qrCode)->getString());
 
-        $viewName = $type === 'delivery' ? 'orderPdf' : 'fiscalOrderPdf';
+        $viewName = $type === 'delivery'
+            ? $this->resolveDeliveryPdfViewName()
+            : 'fiscalOrderPdf';
         $html = view($viewName, compact(
             'order',
             'totalOrden',
@@ -1537,6 +1603,19 @@ class SaleController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $fileName, (string) $request->query('disposition', 'attachment')),
         ]);
+    }
+
+    private function resolveDeliveryPdfViewName(): string
+    {
+        $authUser = auth()->user();
+        $isWarehouseOnly = ($authUser?->hasStoreRole('warehouse') ?? false)
+            && !($authUser?->hasStoreRole('owner', 'admin', 'seller') ?? false);
+
+        if ($isWarehouseOnly) {
+            return 'orderPdfWarehouse';
+        }
+
+        return 'orderPdf';
     }
 
     private function downloadElectronicInvoicePdf(Request $request, SalesOrder $order, string $disposition = 'attachment')
@@ -1849,6 +1928,7 @@ class SaleController extends Controller
         // Actualizar el estado de la orden
         $order->status = $request->status;
         $order->save();
+        $this->syncSellerCommissionForOrder($order);
 
         if ((int) $order->status === 2) {
             ActionReason::log('sales_orders', 'ORDER_CANCELLED', (string) $reason, [
@@ -2074,6 +2154,11 @@ class SaleController extends Controller
         $payment->save();
         $payment->loadMissing(['salesOrder.user']);
 
+        if ($payment->salesOrder) {
+            $payment->salesOrder->loadMissing(['payments', 'details', 'returns.items', 'salesRepresentative']);
+            $this->syncSellerCommissionForOrder($payment->salesOrder);
+        }
+
         if ((int) $payment->status === 3) {
             ActionReason::log('payments', 'PAYMENT_REVERTED', (string) $reason, [
                 'payment_id' => $payment->id,
@@ -2237,6 +2322,89 @@ class SaleController extends Controller
         }
 
         return ['ok' => true];
+    }
+
+    private function resolveSalesRepresentativeId(): ?int
+    {
+        $authUser = auth()->user();
+        if (!$authUser) {
+            return null;
+        }
+
+        if ($authUser->hasStoreRole('owner', 'admin', 'seller')) {
+            return (int) $authUser->id;
+        }
+
+        return null;
+    }
+
+    private function syncSellerCommissionForOrder(SalesOrder $order): void
+    {
+        $order->loadMissing(['payments', 'details', 'returns.items', 'salesRepresentative']);
+
+        $sellerId = (int) ($order->sales_rep_user_id ?? 0);
+        if ($sellerId <= 0) {
+            return;
+        }
+
+        $seller = $order->salesRepresentative;
+        if (!$seller || !$seller->hasStoreRole('owner', 'admin', 'seller')) {
+            return;
+        }
+
+        $commissionRate = max(0, min(100, (float) ($seller->commission_percentage ?? 0)));
+        $approvedPaid = (float) $order->payments->where('status', 1)->sum('amount');
+        $returnsTotal = (float) $order->returns->flatMap->items->sum(function ($item) {
+            return (float) $item->price * (float) $item->quantity;
+        });
+        $netOrderTotal = (float) $order->totalAfterReturns($returnsTotal);
+        $commissionBase = round(max(0, min($netOrderTotal, $approvedPaid)), 4);
+
+        $existing = SellerCommission::query()
+            ->where('tenant_id', (int) $order->tenant_id)
+            ->where('sales_order_id', (int) $order->id)
+            ->first();
+
+        if ($commissionRate <= 0 || $commissionBase <= 0) {
+            if ($existing && (string) ($existing->status ?? 'pending') !== 'paid') {
+                $existing->delete();
+            }
+
+            return;
+        }
+
+        $commissionAmount = round(($commissionBase * $commissionRate) / 100, 4);
+
+        if ($existing) {
+            if ((string) ($existing->status ?? 'pending') === 'paid') {
+                return;
+            }
+
+            $existing->update([
+                'seller_user_id' => $sellerId,
+                'commission_base_amount' => $commissionBase,
+                'commission_rate' => $commissionRate,
+                'commission_amount' => $commissionAmount,
+                'currency_code' => (string) ($order->sale_currency_code ?? 'USD'),
+                'status' => 'pending',
+                'calculated_at' => now(),
+            ]);
+
+            return;
+        }
+
+        SellerCommission::create([
+            'tenant_id' => (int) $order->tenant_id,
+            'seller_user_id' => $sellerId,
+            'sales_order_id' => (int) $order->id,
+            'commission_base_amount' => $commissionBase,
+            'commission_rate' => $commissionRate,
+            'commission_amount' => $commissionAmount,
+            'currency_code' => (string) ($order->sale_currency_code ?? 'USD'),
+            'status' => 'pending',
+            'calculated_at' => now(),
+            'created_by' => auth()->id(),
+        ]);
     }
 
     private function resolveTenantCityId(Tenant $tenant): int

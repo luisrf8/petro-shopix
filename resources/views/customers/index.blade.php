@@ -194,7 +194,7 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Correo</label>
-            <input type="email" name="email" class="form-control border border-1 p-2" required>
+            <input type="email" name="email" class="form-control border border-1 p-2" placeholder="Opcional">
           </div>
           <div class="mb-3">
             <label class="form-label">Teléfono</label>
@@ -207,6 +207,9 @@
           <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" role="switch" id="createCustomerActive" name="is_active" value="1" checked>
             <label class="form-check-label" for="createCustomerActive">Activo</label>
+          </div>
+          <div class="mt-2">
+            <small class="text-muted">Se generará automáticamente una contraseña temporal para el cliente.</small>
           </div>
         </div>
         <div class="modal-footer">
@@ -235,7 +238,7 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Correo</label>
-            <input type="email" name="email" id="editCustomerEmail" class="form-control border border-1 p-2" required>
+            <input type="email" name="email" id="editCustomerEmail" class="form-control border border-1 p-2" placeholder="Opcional">
           </div>
           <div class="mb-3">
             <label class="form-label">Teléfono</label>

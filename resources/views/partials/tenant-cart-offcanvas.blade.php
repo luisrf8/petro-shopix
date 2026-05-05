@@ -864,10 +864,13 @@
                 <div class="tab-pane fade show active" id="tenant-login-panel" role="tabpanel">
                   <form id="tenant-pro-login-form" class="row g-2">
                     <div class="col-12 col-md-6">
-                      <input type="email" class="form-control" id="tenant-pro-login-email" placeholder="Email" required>
+                      <input type="text" class="form-control" id="tenant-pro-login-email" placeholder="Correo, teléfono o usuario" required>
                     </div>
                     <div class="col-12 col-md-6">
-                      <input type="password" class="form-control" id="tenant-pro-login-password" placeholder="Contraseña" required>
+                      <div class="input-group">
+                        <input type="password" class="form-control" id="tenant-pro-login-password" placeholder="Contraseña" required>
+                        <button type="button" class="btn btn-outline-secondary" data-password-toggle="tenant-pro-login-password" aria-label="Mostrar u ocultar contraseña"><i class="bi bi-eye"></i></button>
+                      </div>
                     </div>
                     <div class="col-12">
                       <button type="submit" class="btn btn-dark">Entrar</button>
@@ -880,13 +883,19 @@
                       <input type="text" class="form-control" id="tenant-pro-register-name" placeholder="Nombre" required>
                     </div>
                     <div class="col-12 col-md-6">
-                      <input type="email" class="form-control" id="tenant-pro-register-email" placeholder="Email" required>
+                      <input type="email" class="form-control" id="tenant-pro-register-email" placeholder="Email (opcional)">
                     </div>
                     <div class="col-12 col-md-6">
-                      <input type="password" class="form-control" id="tenant-pro-register-password" placeholder="Contraseña" minlength="8" required>
+                      <div class="input-group">
+                        <input type="password" class="form-control" id="tenant-pro-register-password" placeholder="Contraseña" minlength="8" required>
+                        <button type="button" class="btn btn-outline-secondary" data-password-toggle="tenant-pro-register-password" aria-label="Mostrar u ocultar contraseña"><i class="bi bi-eye"></i></button>
+                      </div>
                     </div>
                     <div class="col-12 col-md-6">
-                      <input type="password" class="form-control" id="tenant-pro-register-password-confirmation" placeholder="Confirmar contraseña" minlength="8" required>
+                      <div class="input-group">
+                        <input type="password" class="form-control" id="tenant-pro-register-password-confirmation" placeholder="Confirmar contraseña" minlength="8" required>
+                        <button type="button" class="btn btn-outline-secondary" data-password-toggle="tenant-pro-register-password-confirmation" aria-label="Mostrar u ocultar contraseña"><i class="bi bi-eye"></i></button>
+                      </div>
                     </div>
                     <div class="col-12 col-md-6">
                       <input type="text" class="form-control" id="tenant-pro-register-dni" placeholder="DNI (opcional)">
@@ -1073,7 +1082,7 @@
                     </div>
                     <small class="text-muted d-block mt-1" id="tenant-pro-appointment-calendar-note">Selecciona servicio y profesional para visualizar disponibilidad por día.</small>
                   </div>
-                  <div class="col-12">
+                  <div class="col-12 d-none">
                     <label class="form-label">Fecha seleccionada</label>
                     <input type="text" id="tenant-pro-appointment-date-display" class="form-control" placeholder="Haz click en un día del calendario" readonly>
                   </div>
@@ -5005,7 +5014,7 @@
     async function loginProCustomer(event) {
       event.preventDefault();
       clearTenantAuthAlert();
-      const email = document.getElementById('tenant-pro-login-email').value.trim();
+      const login = document.getElementById('tenant-pro-login-email').value.trim();
       const password = document.getElementById('tenant-pro-login-password').value;
 
       const response = await fetch('/api/loginEcomm', {
@@ -5017,7 +5026,7 @@
           'X-Requested-With': 'XMLHttpRequest',
           'X-CSRF-TOKEN': getCsrfToken(),
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ login, password })
       });
 
       const data = await response.json().catch(() => ({}));
@@ -5443,6 +5452,19 @@
 
     document.getElementById('tenant-pro-login-form')?.addEventListener('submit', loginProCustomer);
     document.getElementById('tenant-pro-register-form')?.addEventListener('submit', registerProCustomer);
+    document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const inputId = button.getAttribute('data-password-toggle');
+        const input = inputId ? document.getElementById(inputId) : null;
+        const icon = button.querySelector('i');
+        if (!input) return;
+
+        const isHidden = input.type === 'password';
+        input.type = isHidden ? 'text' : 'password';
+        icon?.classList.toggle('bi-eye', !isHidden);
+        icon?.classList.toggle('bi-eye-slash', isHidden);
+      });
+    });
 
     const resumedCheckoutState = consumeCheckoutResumeState();
     if (resumedCheckoutState) {

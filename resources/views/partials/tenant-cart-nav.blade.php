@@ -190,6 +190,36 @@
     margin-bottom: 0;
   }
 
+  .tenant-notification-card {
+    border-radius: 12px;
+  }
+
+  .tenant-notification-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  @media (max-width: 575.98px) {
+    .tenant-notification-meta {
+      width: 100%;
+    }
+
+    .tenant-notification-actions {
+      width: 100%;
+      justify-content: stretch;
+    }
+
+    .tenant-notification-actions .btn,
+    .tenant-notification-actions .badge {
+      width: 100%;
+      justify-content: center;
+      text-align: center;
+    }
+  }
+
   .tenant-order-meta {
     color: #5f6368;
     font-size: 0.9rem;
@@ -801,7 +831,7 @@
               <small class="text-muted d-block mt-1" id="tenant-appointment-reschedule-calendar-note">Selecciona un día disponible para ver horarios.</small>
               <input type="hidden" id="tenant-appointment-reschedule-date">
             </div>
-            <div class="col-12">
+            <div class="col-12 d-none">
               <label for="tenant-appointment-reschedule-date-display" class="tenant-customer-info-label">Fecha seleccionada</label>
               <input type="text" id="tenant-appointment-reschedule-date-display" class="form-control" readonly>
             </div>
@@ -846,10 +876,13 @@
           <div class="tab-pane fade show active" id="tenant-public-login-panel" role="tabpanel">
             <form id="tenant-public-login-form" class="row g-2">
               <div class="col-12">
-                <input type="email" class="form-control" id="tenant-public-login-email" placeholder="Email" required>
+                <input type="text" class="form-control" id="tenant-public-login-email" placeholder="Correo, teléfono o usuario" required>
               </div>
               <div class="col-12">
-                <input type="password" class="form-control" id="tenant-public-login-password" placeholder="Contraseña" required>
+                <div class="input-group">
+                  <input type="password" class="form-control" id="tenant-public-login-password" placeholder="Contraseña" required>
+                  <button type="button" class="btn btn-outline-secondary" data-password-toggle="tenant-public-login-password" aria-label="Mostrar u ocultar contraseña"><i class="bi bi-eye"></i></button>
+                </div>
               </div>
               <div class="col-12">
                 <button type="submit" class="btn btn-dark w-100 tenant-auth-primary-btn">Entrar</button>
@@ -862,13 +895,19 @@
                 <input type="text" class="form-control" id="tenant-public-register-name" placeholder="Nombre" required>
               </div>
               <div class="col-12">
-                <input type="email" class="form-control" id="tenant-public-register-email" placeholder="Email" required>
+                <input type="email" class="form-control" id="tenant-public-register-email" placeholder="Email (opcional)">
               </div>
               <div class="col-12">
-                <input type="password" class="form-control" id="tenant-public-register-password" placeholder="Contraseña" minlength="8" required>
+                <div class="input-group">
+                  <input type="password" class="form-control" id="tenant-public-register-password" placeholder="Contraseña" minlength="8" required>
+                  <button type="button" class="btn btn-outline-secondary" data-password-toggle="tenant-public-register-password" aria-label="Mostrar u ocultar contraseña"><i class="bi bi-eye"></i></button>
+                </div>
               </div>
               <div class="col-12">
-                <input type="password" class="form-control" id="tenant-public-register-password-confirmation" placeholder="Confirmar contraseña" minlength="8" required>
+                <div class="input-group">
+                  <input type="password" class="form-control" id="tenant-public-register-password-confirmation" placeholder="Confirmar contraseña" minlength="8" required>
+                  <button type="button" class="btn btn-outline-secondary" data-password-toggle="tenant-public-register-password-confirmation" aria-label="Mostrar u ocultar contraseña"><i class="bi bi-eye"></i></button>
+                </div>
               </div>
               <div class="col-12">
                 <input type="text" class="form-control" id="tenant-public-register-dni" placeholder="DNI (opcional)">
@@ -1688,7 +1727,7 @@
     async function submitTenantPublicLogin(event) {
       event.preventDefault();
 
-      const email = document.getElementById('tenant-public-login-email')?.value.trim() || '';
+      const login = document.getElementById('tenant-public-login-email')?.value.trim() || '';
       const password = document.getElementById('tenant-public-login-password')?.value || '';
 
       const response = await fetch('/api/loginEcomm', {
@@ -1698,7 +1737,7 @@
           'Accept': 'application/json',
           'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
         },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ login, password })
       });
 
       const data = await response.json().catch(() => ({}));
@@ -2238,18 +2277,25 @@
           ? '<span class="badge bg-success">Leída</span>'
           : `<button type="button" class="btn btn-sm btn-outline-dark" data-mark-read="${row.id}">Marcar leída</button>`;
         const openButton = row.target_url
-          ? `<a href="${row.target_url}" class="btn btn-sm btn-dark url-icon-action-btn url-icon-action-btn-sm" aria-label="Abrir" title="Abrir"${row.is_read ? '' : ` data-mark-read-link="${row.id}"`}><i class="material-symbols-rounded">open_in_new</i></a>`
+          ? `<a href="${row.target_url}" class="btn btn-sm btn-dark" aria-label="Abrir notificación" title="Abrir"${row.is_read ? '' : ` data-mark-read-link="${row.id}"`}><i class="bi bi-box-arrow-up-right me-1"></i>Abrir</a>`
           : '';
+        const statusBadge = row.is_read
+          ? '<span class="badge text-bg-light border">Leída</span>'
+          : '<span class="badge text-bg-dark">Nueva</span>';
 
         return `
-          <div class="border rounded p-2 ${unreadClass}">
-            <div class="d-flex justify-content-between align-items-start gap-2">
-              <div>
-                <div class="fw-semibold">${row.title || 'Notificación'}</div>
-                <div class="small text-muted">${row.message || ''}</div>
-                <div class="small text-secondary mt-1">${row.created_at || ''}</div>
+          <div class="border rounded p-3 tenant-notification-card ${unreadClass}">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+              <div class="fw-semibold">${row.title || 'Notificación'}</div>
+              ${statusBadge}
+            </div>
+            <div class="small text-muted">${row.message || ''}</div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2">
+              <div class="small text-secondary tenant-notification-meta">${row.created_at || ''}</div>
+              <div class="tenant-notification-actions">
+                ${openButton}
+                ${row.is_read ? '' : actionButton}
               </div>
-              <div class="d-flex flex-column gap-1 align-items-end">${openButton}${actionButton}</div>
             </div>
           </div>
         `;
@@ -2860,6 +2906,19 @@
 
     document.getElementById('tenant-public-login-form')?.addEventListener('submit', submitTenantPublicLogin);
     document.getElementById('tenant-public-register-form')?.addEventListener('submit', submitTenantPublicRegister);
+    document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const inputId = button.getAttribute('data-password-toggle');
+        const input = inputId ? document.getElementById(inputId) : null;
+        const icon = button.querySelector('i');
+        if (!input) return;
+
+        const isHidden = input.type === 'password';
+        input.type = isHidden ? 'text' : 'password';
+        icon?.classList.toggle('bi-eye', !isHidden);
+        icon?.classList.toggle('bi-eye-slash', isHidden);
+      });
+    });
 
     ordersButton?.addEventListener('click', async () => {
       const hasSession = !!currentToken && !!currentUser?.id;

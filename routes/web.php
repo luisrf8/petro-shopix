@@ -16,6 +16,7 @@ use App\Http\Controllers\{
     UserController,
     CustomerController,
     StoreExpenseController,
+    AccountsPayableController,
     TenantController,
     PlanController,
     TaxController,
@@ -28,7 +29,8 @@ use App\Http\Controllers\{
     GoogleDriveController,
     ReportController,
     ElectronicInvoicingController,
-    SalesFiscalController
+    SalesFiscalController,
+    SellerCommissionController
 };
 
 // RUTAS DE INVITADOS
@@ -241,7 +243,10 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::post('/create-sale', [SaleController::class, 'store'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller');
     Route::post('/sales/scan-code', [SaleController::class, 'resolveScanCode'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.resolveScanCode');
     Route::get('/sales-orders/{id}/pdf', [SaleController::class, 'downloadPdf'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller');
-    Route::get('/sales-orders/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.orders.pdfs');
+    Route::get('/sales-orders/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.orders.pdfs');
+    Route::get('/seller-commissions', [SellerCommissionController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('seller-commissions.index');
+    Route::put('/seller-commissions/rate/{seller}', [SellerCommissionController::class, 'updateSellerRate'])->middleware('role.name:owner,admin,administrador')->name('seller-commissions.rate.update');
+    Route::post('/seller-commissions/{commission}/mark-paid', [SellerCommissionController::class, 'markAsPaid'])->middleware('role.name:owner,admin,administrador')->name('seller-commissions.mark-paid');
     Route::get('/appointments', [AppointmentController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.index');
     Route::post('/appointments', [AppointmentController::class, 'store'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.store');
     Route::post('/appointments/{appointment}/workflow', [AppointmentController::class, 'workflowAction'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.workflow');
@@ -268,6 +273,8 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/reports/appointments/workflow/excel', [ReportController::class, 'appointmentsWorkflowExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.appointments.workflow.excel');
     Route::get('/reports/accounts-receivable/pdf', [ReportController::class, 'receivablesPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.accountsReceivable.pdf');
     Route::get('/reports/accounts-receivable/excel', [ReportController::class, 'receivablesExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.accountsReceivable.excel');
+    Route::get('/reports/income/by-user/pdf', [ReportController::class, 'incomeByUserPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.income.byUser.pdf');
+    Route::get('/reports/income/by-user/excel', [ReportController::class, 'incomeByUserExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.income.byUser.excel');
     Route::get('/reports/sales/book/pdf', [ReportController::class, 'salesBookPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.sales.book.pdf');
     Route::get('/reports/sales/book/excel', [ReportController::class, 'salesBookExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.sales.book.excel');
     Route::get('/reports/store-expenses/pdf', [ReportController::class, 'storeExpensesPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.storeExpenses.pdf');
@@ -282,6 +289,9 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/store-expenses', [StoreExpenseController::class, 'index'])->middleware('role.name:owner,admin,administrador')->name('store-expenses.index');
     Route::post('/store-expenses', [StoreExpenseController::class, 'store'])->middleware('role.name:owner,admin,administrador')->name('store-expenses.store');
     Route::put('/store-expenses/{expense}', [StoreExpenseController::class, 'update'])->middleware('role.name:owner,admin,administrador')->name('store-expenses.update');
+    Route::get('/accounts-payable', [AccountsPayableController::class, 'index'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('accounts.payable.index');
+    Route::post('/accounts-payable', [AccountsPayableController::class, 'store'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('accounts.payable.store');
+    Route::post('/accounts-payable/{accountPayable}/payments', [AccountsPayableController::class, 'registerPayment'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('accounts.payable.payments.store');
     Route::get('/purchase-orders', [PurchaseOrderController::class, 'viewOrders'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('purchase.orders');
     Route::get('/order/{id}', [PurchaseOrderController::class, 'showByOrder'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('showByOrder');
 

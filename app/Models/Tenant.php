@@ -39,6 +39,7 @@ class Tenant extends Model
         'phone_code',
         'phone_number',
         'working_days',
+        'appointments_first_come_enabled',
         'opening_time',
         'closing_time',
         'base_currency',
@@ -68,6 +69,7 @@ class Tenant extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'working_days' => 'array',
+        'appointments_first_come_enabled' => 'boolean',
         'electronic_invoicing_enabled' => 'boolean',
         'special_taxpayer' => 'boolean',
         'printer_tax_change_enabled' => 'boolean',
