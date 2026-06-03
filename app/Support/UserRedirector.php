@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\TenantPlanPayment;
 use App\Models\User;
 use Illuminate\Support\Str;
 
@@ -82,12 +81,7 @@ class UserRedirector
             return [false, false];
         }
 
-        $latestPaid = TenantPlanPayment::with('plan')
-            ->where('tenant_id', (int) $user->tenant_id)
-            ->where('status', 'paid')
-            ->orderByDesc('paid_at')
-            ->orderByDesc('id')
-            ->first();
+        $latestPaid = TenantPlanResolver::latestPaidForTenant((int) $user->tenant_id);
 
         $planName = Str::lower(Str::ascii((string) ($latestPaid?->plan?->name ?? '')));
         $isFreePlan = (float) ($latestPaid?->plan?->price ?? -1) <= 0;

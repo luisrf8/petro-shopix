@@ -30,6 +30,22 @@
 
                     <form action="{{ route('tenants.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
+                        <input type="hidden" name="import_payload" id="createTenantImportPayload" value="{{ old('import_payload') }}">
+
+                        <div class="alert alert-light border mb-4">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-12 col-lg-7">
+                                    <label for="createTenantSetupDocx" class="form-label fw-bold">Importar formulario Shopix (.docx)</label>
+                                    <input type="file" id="createTenantSetupDocx" class="form-control border border-radius-lg p-2" accept=".docx">
+                                    <small class="text-muted d-block mt-1">Importa el documento formal de levantamiento para precargar la tienda, usuarios y el payload de catálogo/servicios.</small>
+                                </div>
+                                <div class="col-12 col-lg-5">
+                                    <button type="button" class="btn btn-outline-dark w-100" id="createTenantImportBtn">Importar documento</button>
+                                </div>
+                            </div>
+                            <div id="createTenantImportStatus" class="small text-muted mt-3"></div>
+                            <div id="createTenantImportSummary" class="small mt-2"></div>
+                        </div>
 
                         {{-- Nombre --}}
                         <div class="mb-3">
@@ -41,6 +57,12 @@
                         <div class="mb-3">
                             <label for="slug" class="form-label">Slug / URL de Landing</label>
                             <input type="text" name="slug" id="slug" class="form-control border border-radius-lg p-2" placeholder="/ejemplo-mi-empresa" value="{{ old('slug') }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="external_url" class="form-label">URL propia (opcional)</label>
+                            <input type="text" name="external_url" id="external_url" class="form-control border border-radius-lg p-2" placeholder="https://mitienda.com" value="{{ old('external_url') }}">
+                            <small class="text-muted">Si la indicas, el directorio de Shopix llevara a esta URL externa.</small>
                         </div>
 
                         {{-- Email --}}
@@ -272,6 +294,7 @@
 @push('scripts')
 <script>
 document.addEventListener("DOMContentLoaded", () => {
+    const createTenantImportEndpoint = "{{ route('tenant.importSetupDocx', [], false) }}";
     // Mostrar / ocultar contraseña
     document.querySelectorAll(".toggle-password").forEach(btn => {
         btn.addEventListener("click", () => {
@@ -308,6 +331,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const logoPreview = document.getElementById("logo-preview");
     const businessTypeSelect = document.getElementById("business_type");
     const economicActivitySelect = document.getElementById("economic_activity");
+    const importInput = document.getElementById('createTenantSetupDocx');
+    const importButton = document.getElementById('createTenantImportBtn');
+    const importPayloadInput = document.getElementById('createTenantImportPayload');
+    const importStatus = document.getElementById('createTenantImportStatus');
+    const importSummary = document.getElementById('createTenantImportSummary');
 
     const businessCatalog = {
         tienda: [
@@ -438,6 +466,150 @@ document.addEventListener("DOMContentLoaded", () => {
     if (economicActivitySelect) {
         economicActivitySelect.addEventListener('change', () => refreshEconomicActivities(economicActivitySelect.value));
         refreshEconomicActivities(economicActivitySelect.dataset.selected || '');
+    }
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        || document.querySelector('input[name="_token"]')?.value
+        || '';
+
+    const setCreateImportStatus = (message, type = 'muted') => {
+        if (!importStatus) {
+            return;
+        }
+
+        importStatus.className = `small mt-3 text-${type}`;
+        importStatus.textContent = message || '';
+    };
+
+    const renderCreateImportSummary = (summary = {}) => {
+        if (!importSummary) {
+            return;
+        }
+
+        const parts = [
+            ['users', 'usuarios'],
+            ['payment_methods', 'métodos de pago'],
+            ['store_catalog', 'items de tienda'],
+            ['service_catalog', 'servicios'],
+            ['schedule_rules', 'horarios'],
+        ]
+            .map(([key, label]) => {
+                const count = Number(summary?.[key] || 0);
+                return count > 0 ? `${count} ${label}` : null;
+            })
+            .filter(Boolean);
+
+        importSummary.textContent = parts.length
+            ? `Detectado: ${parts.join(', ')}.`
+            : 'Documento leído sin bloques repetibles detectados.';
+    };
+
+    const setCheckboxValues = (selector, values = []) => {
+        document.querySelectorAll(selector).forEach((checkbox) => {
+            checkbox.checked = values.includes(String(checkbox.value || '').toLowerCase());
+        });
+    };
+
+    const canonicalRoleKey = (role) => {
+        const normalized = String(role || '').trim().toLowerCase();
+        if (["owner"].includes(normalized)) return 'owner';
+        if (["admin", "administrador"].includes(normalized)) return 'admin';
+        if (["seller", "vendor", "vendedor"].includes(normalized)) return 'vendor';
+        return normalized;
+    };
+
+    const applyImportedCreateTenantData = (payload = {}) => {
+        const tenant = payload.tenant || {};
+        const users = Array.isArray(payload.users) ? payload.users : [];
+
+        if (tenant.name) document.getElementById('name').value = tenant.name;
+        if (tenant.slug) document.getElementById('slug').value = tenant.slug;
+        if (tenant.email) document.getElementById('email').value = tenant.email;
+        if (tenant.business_type && businessTypeSelect) {
+            businessTypeSelect.value = String(tenant.business_type).toLowerCase() === 'servicio' ? 'servicio' : 'tienda';
+        }
+        refreshEconomicActivities(tenant.economic_activity || '');
+        if (tenant.economic_activity && economicActivitySelect) {
+            economicActivitySelect.value = tenant.economic_activity;
+            refreshEconomicActivities(tenant.economic_activity);
+        }
+
+        if (tenant.opening_time) document.getElementById('opening_time').value = String(tenant.opening_time).slice(0, 5);
+        if (tenant.closing_time) document.getElementById('closing_time').value = String(tenant.closing_time).slice(0, 5);
+        setCheckboxValues('input[name="working_days[]"]', Array.isArray(tenant.working_days) ? tenant.working_days : []);
+
+        users.forEach((user) => {
+            const roleKey = canonicalRoleKey(user.role);
+            if (!roleKey) {
+                return;
+            }
+
+            const prefix = roleKey;
+            const resolvedPrefix = prefix === 'vendor' ? 'vendor' : prefix;
+            const nameInput = document.getElementById(`${resolvedPrefix}_name`);
+            const emailInput = document.getElementById(`${resolvedPrefix}_email`);
+            const passwordInput = document.getElementById(`${resolvedPrefix}_password`);
+
+            if (nameInput && user.name) nameInput.value = user.name;
+            if (emailInput && user.email) emailInput.value = user.email;
+            if (passwordInput && user.password) passwordInput.value = user.password;
+        });
+
+        if (businessTypeSelect) {
+            businessTypeSelect.dispatchEvent(new Event('change'));
+            if (tenant.economic_activity && economicActivitySelect) {
+                economicActivitySelect.value = tenant.economic_activity;
+                refreshEconomicActivities(tenant.economic_activity);
+            }
+        }
+    };
+
+    if (importButton && importInput && importPayloadInput) {
+        importButton.addEventListener('click', async () => {
+            const file = importInput.files?.[0];
+            if (!file) {
+                setCreateImportStatus('Selecciona un archivo .docx para importar.', 'warning');
+                return;
+            }
+
+            setCreateImportStatus('Importando documento...', 'muted');
+            importButton.disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('setup_docx', file);
+                formData.append('_token', csrfToken);
+
+                const response = await fetch(createTenantImportEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                    body: formData,
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) {
+                    const errorMessage = data?.errors
+                        ? Object.values(data.errors).flat()[0]
+                        : (data.message || 'No se pudo importar el documento.');
+                    setCreateImportStatus(errorMessage, 'danger');
+                    return;
+                }
+
+                importPayloadInput.value = JSON.stringify(data.payload || {});
+                applyImportedCreateTenantData(data.payload || {});
+                renderCreateImportSummary(data.summary || {});
+                setCreateImportStatus(data.message || 'Documento importado correctamente.', 'success');
+            } catch (error) {
+                setCreateImportStatus('No se pudo conectar con el servidor para importar el documento.', 'danger');
+            } finally {
+                importButton.disabled = false;
+            }
+        });
     }
 });
 </script>

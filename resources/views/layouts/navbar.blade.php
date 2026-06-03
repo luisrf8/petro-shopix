@@ -90,7 +90,6 @@
 }
 
 </style>
-<body class="bg-gray-100">
     @php
       use App\Models\Tenant;
       use App\Models\User as UserModel;
@@ -487,6 +486,12 @@
               <span class="nav-link-text ms-1">Logs</span>
             </a>
           </li>
+                    <li class="nav-item">
+                      <a class="nav-link text-dark" href="/documentation">
+                        <i class="material-symbols-rounded opacity-5">description</i>
+                        <span class="nav-link-text ms-1">Documentación</span>
+                      </a>
+                    </li>
           <li class="nav-item">
             <a class="nav-link text-dark" href="/users">
               <i class="material-symbols-rounded opacity-5">person</i>
@@ -975,6 +980,12 @@
       const iconSidenav = document.getElementById('iconSidenav');
       const btnOpenNav = document.getElementById('btnOpenNav');
       const btnCloseNav = document.getElementById('btnCloseNav');
+
+      // Defensive cleanup for stale overlays after login/redirects.
+      document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop').forEach((el) => el.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+      document.body.style.paddingRight = '';
 
         let backdrop = document.getElementById('sidenav-backdrop');
         if (!backdrop) {

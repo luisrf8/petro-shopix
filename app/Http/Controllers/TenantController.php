@@ -35,6 +35,8 @@ use App\Support\ImageStorage;
 use App\Support\ActionReason;
 use App\Support\TenantPlanCapabilities;
 use App\Services\GeminiImageService;
+use App\Services\ShopixSetupDocumentService;
+use App\Services\ShopixSetupImportService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Database\QueryException;
@@ -49,6 +51,22 @@ use Carbon\Carbon;
 
 class TenantController extends Controller
 {
+    public function importSetupDocument(Request $request, ShopixSetupDocumentService $documentService)
+    {
+        $request->validate([
+            'setup_docx' => 'required|file|mimes:docx|max:5120',
+        ]);
+
+        $result = $documentService->parseUploadedFile($request->file('setup_docx'));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Documento importado correctamente.',
+            'payload' => $result['payload'],
+            'summary' => $result['summary'],
+        ]);
+    }
+
     public function generateTenantCopy(Request $request)
     {
         $validated = $request->validate([
@@ -281,14 +299,69 @@ class TenantController extends Controller
 
     public function index()
     {
-        // Trae todos los tenants con todos sus planes asociados
-        $tenants = Tenant::with(['tenantPlanPayments.plan', 'tenantPlanPayments.reviewer', 'users.role'])->get();
+        $ownerRoleIds = $this->resolveOwnerRoleIds();
 
-        $tenantsWithDueData = $tenants->map(function (Tenant $tenant) {
-            $latestPaid = $this->getTenantLatestPaidPlanPayment($tenant);
+        $tenants = Tenant::query()
+            ->with([
+                'users' => function ($query) {
+                    $query
+                        ->select(['id', 'tenant_id', 'name', 'role_id'])
+                        ->with(['role:id,name']);
+                },
+                'tenantPlanPayments' => function ($query) {
+                    $query
+                        ->select([
+                            'id',
+                            'tenant_id',
+                            'plan_id',
+                            'amount',
+                            'status',
+                            'paid_at',
+                            'expires_at',
+                            'payment_reference',
+                            'payment_proof',
+                            'created_at',
+                        ])
+                        ->whereIn('status', ['paid', 'pending'])
+                        ->with(['plan:id,name,duration_days']);
+                },
+            ])
+            ->orderBy('name')
+            ->get();
+
+        $tenantsWithDueData = $tenants->map(function (Tenant $tenant) use ($ownerRoleIds) {
+            $latestPaid = $tenant->tenantPlanPayments
+                ->where('status', 'paid')
+                ->sortByDesc(function (TenantPlanPayment $payment) {
+                    return sprintf(
+                        '%s-%010d',
+                        optional($payment->paid_at)->format('YmdHisu') ?? '00000000000000',
+                        (int) $payment->id
+                    );
+                })
+                ->first();
+
+            $latestPending = $tenant->tenantPlanPayments
+                ->where('status', 'pending')
+                ->sortByDesc(function (TenantPlanPayment $payment) {
+                    return sprintf(
+                        '%s-%010d',
+                        optional($payment->created_at)->format('YmdHisu') ?? '00000000000000',
+                        (int) $payment->id
+                    );
+                })
+                ->first();
+
+            $owner = $tenant->users->first(function (User $user) use ($ownerRoleIds) {
+                return in_array((int) $user->role_id, $ownerRoleIds, true);
+            }) ?? $tenant->users->first();
+
             $daysRemaining = $this->calculatePlanDaysRemaining($latestPaid);
             $tenant->latest_paid_plan_payment = $latestPaid;
+            $tenant->latest_pending_plan_payment = $latestPending;
             $tenant->plan_days_remaining = $daysRemaining;
+            $tenant->owner_user = $owner;
+            $tenant->users_count_snapshot = $tenant->users->count();
 
             return $tenant;
         });
@@ -308,6 +381,8 @@ class TenantController extends Controller
         // $tenants = Tenant::with(['activePlanPayment.plan'])->get();
 
         $plans = Plan::all();
+
+        $tenants = $tenantsWithDueData;
 
         return view('tenant', compact('tenants', 'plans', 'nearDueTenants', 'overdueTenants'));
     }
@@ -789,6 +864,7 @@ class TenantController extends Controller
             'name'            => 'required|string|max:255',
             'slug'            => 'required|string|max:255',
             'email'           => 'required|email|unique:tenants,email',
+            'external_url'    => 'nullable|string|max:255',
             'logo'            => 'nullable|image|mimes:png,svg,webp|max:2048',
             'color_primary'   => 'required|string|max:7',
             'color_secondary' => 'required|string|max:7',
@@ -809,6 +885,7 @@ class TenantController extends Controller
             'users.*.email'   => 'nullable|email|unique:users,email',
             'users.*.password'=> 'nullable|string|min:8',
             'plan_id'         => 'required|exists:plans,id',
+            'import_payload'  => 'nullable|string',
         ]);
 
         $this->assertEconomicActivityAllowed(
@@ -836,6 +913,13 @@ class TenantController extends Controller
                 ->withInput();
         }
 
+        $normalizedExternalUrl = $this->normalizeExternalUrl($validated['external_url'] ?? null);
+        if (($validated['external_url'] ?? null) !== null && trim((string) $validated['external_url']) !== '' && !$normalizedExternalUrl) {
+            return back()
+                ->withErrors(['external_url' => 'La URL propia no es valida.'])
+                ->withInput();
+        }
+
         DB::beginTransaction();
 
         try {
@@ -849,6 +933,7 @@ class TenantController extends Controller
                 'name'            => $validated['name'],
                 'slug'            => $normalizedSlug,
                 'email'           => $validated['email'],
+                'external_url'    => $normalizedExternalUrl,
                 'logo'            => $logoPath,
                 'color_primary'   => $validated['color_primary'],
                 'color_secondary' => $validated['color_secondary'],
@@ -923,18 +1008,21 @@ class TenantController extends Controller
                 $tenant->save();
             }
 
+            $importSummary = $this->applyImportedSetupPayload($request->input('import_payload'), $tenant);
+
             DB::commit();
 
             if ($request->expectsJson() || $request->wantsJson()) {
                 return response()->json([
-                    'message' => 'Creado Exitosamente',
+                    'message' => $this->appendImportSummaryToMessage('Creado Exitosamente', $importSummary),
                     'tenant'  => $tenant,
+                    'import_summary' => $importSummary,
                 ]);
             }
 
             return redirect()
                 ->route('tenant.index')
-                ->with('status', 'Tienda creada correctamente.');
+                ->with('status', $this->appendImportSummaryToMessage('Tienda creada correctamente.', $importSummary));
         } catch (QueryException $e) {
             DB::rollBack();
 
@@ -975,6 +1063,7 @@ class TenantController extends Controller
             'name'                  => 'required|string|max:255',
             'slug'                  => 'required|string|max:255',
             'email'                 => 'required|email|unique:tenants,email',
+            'external_url'          => 'nullable|string|max:255',
             'logo'                  => 'nullable|image|mimes:png,svg,webp|max:2048',
             'background_image'      => 'nullable|image|mimes:png,jpg,jpeg,webp|max:4096',
             'color_primary'         => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
@@ -1024,6 +1113,13 @@ class TenantController extends Controller
                 ->withInput();
         }
 
+        $normalizedExternalUrl = $this->normalizeExternalUrl($validated['external_url'] ?? null);
+        if (($validated['external_url'] ?? null) !== null && trim((string) $validated['external_url']) !== '' && !$normalizedExternalUrl) {
+            return back()
+                ->withErrors(['external_url' => 'La URL propia no es valida.'])
+                ->withInput();
+        }
+
         DB::beginTransaction();
 
         try {
@@ -1041,6 +1137,7 @@ class TenantController extends Controller
                 'name'            => $validated['name'],
                 'slug'            => $normalizedSlug,
                 'email'           => $validated['email'],
+                'external_url'    => $normalizedExternalUrl,
                 'logo'            => $logoPath,
                 'color_primary'   => $validated['color_primary'],
                 'color_secondary' => $validated['color_secondary'],
@@ -1151,6 +1248,7 @@ class TenantController extends Controller
             'name'  => 'sometimes|string|max:255',
             'slug'  => 'sometimes|string|max:255|unique:tenants,slug,' . $tenant->id,
             'email' => 'nullable|email|unique:tenants,email,' . $tenant->id,
+            'external_url' => 'sometimes|nullable|string|max:255',
             'logo'  => 'nullable|string',
             'color_primary'   => 'nullable|string|max:7',
             'color_secondary' => 'nullable|string|max:7',
@@ -1199,6 +1297,16 @@ class TenantController extends Controller
                 $validated['business_type'] ?? $tenant->business_type,
                 $validated['economic_activity'] ?? null
             );
+        }
+
+        $normalizedExternalUrl = null;
+        if (array_key_exists('external_url', $validated)) {
+            $normalizedExternalUrl = $this->normalizeExternalUrl($validated['external_url']);
+            if (trim((string) $validated['external_url']) !== '' && !$normalizedExternalUrl) {
+                throw ValidationException::withMessages([
+                    'external_url' => 'La URL propia no es valida.',
+                ]);
+            }
         }
 
         $latestPaidPlanPayment = $tenant->tenantPlanPayments()
@@ -1300,6 +1408,7 @@ class TenantController extends Controller
             'name' => $validated['name'] ?? $tenant->name,
             'slug' => array_key_exists('slug', $validated) ? Str::slug((string) $validated['slug']) : $tenant->slug,
             'email' => $validated['email'] ?? $tenant->email,
+            'external_url' => array_key_exists('external_url', $validated) ? $normalizedExternalUrl : $tenant->external_url,
             'logo' => $validated['logo'] ?? $tenant->logo,
             'color_primary' => $validated['color_primary'] ?? $tenant->color_primary,
             'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
@@ -1445,6 +1554,7 @@ class TenantController extends Controller
             $validated = $request->validate([
                 'name'            => 'nullable|string|max:255',
                 'slug'            => 'nullable|string|max:255|unique:tenants,slug,' . $tenant->id,
+                'external_url'    => 'nullable|string|max:255',
                 'slogan'          => 'nullable|string|max:255',
                 'description'     => 'nullable|string',
                 'business_type'   => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
@@ -1479,6 +1589,7 @@ class TenantController extends Controller
                 'delivery_fixed_fee' => 'nullable|numeric|min:0',
                 'delivery_fee_per_km' => 'nullable|numeric|min:0',
                 'delivery_notifications_enabled' => 'nullable|boolean',
+                'import_payload' => 'nullable|string',
             ]);
 
             $this->assertEconomicActivityAllowed(
@@ -1491,6 +1602,16 @@ class TenantController extends Controller
                 $validated['state'] ?? null,
                 $validated['city'] ?? null
             );
+
+            $normalizedExternalUrl = null;
+            if (array_key_exists('external_url', $validated)) {
+                $normalizedExternalUrl = $this->normalizeExternalUrl($validated['external_url']);
+                if (trim((string) $validated['external_url']) !== '' && !$normalizedExternalUrl) {
+                    throw ValidationException::withMessages([
+                        'external_url' => 'La URL propia no es valida.',
+                    ]);
+                }
+            }
 
             if ($isFreePlanTenant) {
                 $validated['special_taxpayer'] = false;
@@ -1627,6 +1748,7 @@ class TenantController extends Controller
             $tenant->update([
                 'name'            => $validated['name'] ?? $tenant->name,
                 'slug'            => isset($validated['slug']) ? Str::slug($validated['slug']) : $tenant->slug,
+                'external_url'    => array_key_exists('external_url', $validated) ? $normalizedExternalUrl : $tenant->external_url,
                 'slogan'          => $validated['slogan'] ?? $tenant->slogan,
                 'description'     => $validated['description'] ?? $tenant->description,
                 'business_type'   => $this->normalizeBusinessType($validated['business_type']),
@@ -1676,15 +1798,18 @@ class TenantController extends Controller
                 ]);
             }
 
+            $importSummary = $this->applyImportedSetupPayload($request->input('import_payload'), $tenant);
+
             if ($expectsJson) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'Tenant actualizado correctamente',
+                    'message' => $this->appendImportSummaryToMessage('Tenant actualizado correctamente', $importSummary),
                     'tenant'  => $tenant,
+                    'import_summary' => $importSummary,
                 ]);
             }
 
-            return redirect()->route('tenant.store')->with('success', 'Tenant actualizado correctamente');
+            return redirect()->route('tenant.store')->with('success', $this->appendImportSummaryToMessage('Tenant actualizado correctamente', $importSummary));
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             if ($expectsJson) {
@@ -2565,6 +2690,50 @@ class TenantController extends Controller
         return empty($normalized) ? null : $normalized;
     }
 
+    private function applyImportedSetupPayload(?string $payloadJson, Tenant $tenant): array
+    {
+        $payloadJson = trim((string) $payloadJson);
+        if ($payloadJson === '') {
+            return [];
+        }
+
+        $payload = json_decode($payloadJson, true);
+        if (!is_array($payload)) {
+            throw ValidationException::withMessages([
+                'import_payload' => ['El payload importado del documento no es válido.'],
+            ]);
+        }
+
+        return app(ShopixSetupImportService::class)->applyToTenant($tenant, $payload);
+    }
+
+    private function appendImportSummaryToMessage(string $message, array $summary): string
+    {
+        if (empty($summary)) {
+            return $message;
+        }
+
+        $parts = [];
+        foreach ([
+            'users_synced' => 'usuarios',
+            'payment_methods_synced' => 'métodos de pago',
+            'store_items_synced' => 'items de tienda',
+            'service_items_synced' => 'servicios',
+            'schedule_rules_synced' => 'horarios',
+        ] as $key => $label) {
+            $count = (int) ($summary[$key] ?? 0);
+            if ($count > 0) {
+                $parts[] = $count . ' ' . $label;
+            }
+        }
+
+        if (empty($parts)) {
+            return $message;
+        }
+
+        return $message . ' Importación aplicada: ' . implode(', ', $parts) . '.';
+    }
+
     private function getVariantDiscountedUnitPrice(ProductVariant $variant): float
     {
         $basePrice = (float) ($variant->price ?? 0);
@@ -2795,6 +2964,20 @@ class TenantController extends Controller
         }
 
         return $normalized === 'servicio' ? 'Servicio' : 'Tienda';
+    }
+
+    private function normalizeExternalUrl(?string $value): ?string
+    {
+        $url = trim((string) $value);
+        if ($url === '') {
+            return null;
+        }
+
+        if (!Str::startsWith(Str::lower($url), ['http://', 'https://'])) {
+            $url = 'https://' . $url;
+        }
+
+        return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
     }
 
     private function normalizeEconomicActivity(?string $value, ?string $businessType = null): ?string

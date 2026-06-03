@@ -1066,8 +1066,22 @@
                   @php
                     $directoryTypeLabel = mb_strtolower(trim((string) ($tenant->directory_type ?? 'tienda')));
                     $directoryActionLabel = str_contains($directoryTypeLabel, 'servicio') ? 'Ver servicio' : 'Ver tienda';
+                    $externalUrl = trim((string) ($tenant->external_url ?? ''));
+                    if ($externalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($externalUrl), ['http://', 'https://'])) {
+                        $externalUrl = 'https://' . $externalUrl;
+                    }
+                    $directoryTargetUrl = $externalUrl !== '' ? $externalUrl : url('/' . $tenant->slug);
+                    $isExternalDirectoryLink = $externalUrl !== '';
                   @endphp
-                  <a href="/{{ $tenant->slug }}" class="btn btn-dark w-100 rounded-3" data-directory-tenant-link>{{ $directoryActionLabel }}</a>
+                  <a
+                    href="{{ $directoryTargetUrl }}"
+                    class="btn btn-dark w-100 rounded-3"
+                    data-directory-tenant-link
+                    @if($isExternalDirectoryLink)
+                      target="_blank"
+                      rel="noopener"
+                    @endif
+                  >{{ $directoryActionLabel }}</a>
                 </div>
               </div>
             </div>

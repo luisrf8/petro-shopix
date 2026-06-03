@@ -28,6 +28,7 @@ class Tenant extends Model
         'name',
         'slug',
         'email',
+        'external_url',
         'is_active',
         'logo',
         'color_primary',

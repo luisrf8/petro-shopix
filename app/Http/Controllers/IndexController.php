@@ -23,6 +23,7 @@ use App\Models\SalesOrderDetail;
 use App\Support\TenantPlanCapabilities;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -479,6 +480,75 @@ class IndexController extends Controller
         ];
 
         return view('logs', compact('logs', 'filters', 'filterOptions'));
+    }
+
+    public function documentationIndex()
+    {
+        $documents = collect($this->documentationCatalog())
+            ->map(function (array $document, string $key) {
+                $path = base_path($document['path']);
+                $exists = File::exists($path);
+
+                return [
+                    'key' => $key,
+                    'title' => $document['title'],
+                    'description' => $document['description'],
+                    'filename' => basename($document['path']),
+                    'exists' => $exists,
+                    'size' => $exists ? File::size($path) : null,
+                    'updated_at' => $exists ? date('Y-m-d H:i:s', File::lastModified($path)) : null,
+                ];
+            })
+            ->values();
+
+        return view('documentation.index', compact('documents'));
+    }
+
+    public function documentationDownload(string $document)
+    {
+        $catalog = $this->documentationCatalog();
+        abort_unless(isset($catalog[$document]), 404);
+
+        $path = base_path($catalog[$document]['path']);
+        abort_unless(File::exists($path), 404);
+
+        return response()->download($path, basename($path));
+    }
+
+    private function documentationCatalog(): array
+    {
+        return [
+            'brochure-comercial' => [
+                'title' => 'Brochure Comercial',
+                'description' => 'Documento de presentacion comercial de la plataforma.',
+                'path' => 'docs/shopix_brochure_comercial.docx',
+            ],
+            'documentacion-general' => [
+                'title' => 'Documentacion General',
+                'description' => 'Documento funcional general de Shopix.',
+                'path' => 'docs/shopix_documentacion_general.docx',
+            ],
+            'documento-tecnico-interno' => [
+                'title' => 'Documento Tecnico Interno',
+                'description' => 'Documento tecnico de referencia para equipos internos.',
+                'path' => 'docs/shopix_documento_tecnico_interno.docx',
+            ],
+            'formulario-alta-servicio' => [
+                'title' => 'Formulario Alta Servicio Cliente',
+                'description' => 'Plantilla de levantamiento orientada al alta de servicios.',
+                'path' => 'docs/shopix_formulario_alta_servicio_cliente.docx',
+            ],
+            'formulario-levantamiento-operativo' => [
+                'title' => 'Formulario Levantamiento Operativo Importable',
+                'description' => 'Plantilla importable para levantamiento operativo.',
+                'path' => 'docs/shopix_formulario_levantamiento_operativo_importable.docx',
+            ],
+            'manual-tecnico-operativo-unificado' => [
+                'title' => 'Manual Tecnico Operativo Unificado',
+                'description' => 'Version unificada de brochure y documentacion tecnico-operativa.',
+                'path' => 'docs/shopix_manual_tecnico_operativo_unificado.md',
+            ],
+        ];
     }
 
     private function decodeAuditPayload(?string $description): array

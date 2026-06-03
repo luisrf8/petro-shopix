@@ -157,10 +157,15 @@
 
 @php
     $authUser = auth()->user();
+    $isSuperAdmin = \App\Support\UserRedirector::isSuperAdmin($authUser);
     $tenantPlanCapabilities = $tenantPlanCapabilities ?? \App\Support\TenantPlanCapabilities::forTenant($tenant ?? null);
     $canAssignStoreRoles = ($authUser?->canAssignStoreRoles() ?? false) && !$tenantPlanCapabilities->isFree();
     $isOwnerRole = $authUser?->isOwner() ?? false;
-    $tenantStoreUrl = $tenant->full_url ?? (url('/').'/'.$tenant->slug);
+    $tenantExternalUrl = trim((string) ($tenant->external_url ?? ''));
+    if ($tenantExternalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($tenantExternalUrl), ['http://', 'https://'])) {
+        $tenantExternalUrl = 'https://' . $tenantExternalUrl;
+    }
+    $tenantStoreUrl = $tenantExternalUrl !== '' ? $tenantExternalUrl : (url('/').'/'.$tenant->slug);
     $freePlanOperationalLock = !$tenantPlanCapabilities->allowsOperationalDeliverySettings();
     $tenantBusinessType = \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'tienda'));
     $currentPlanName = $currentPlanPayment?->plan?->name ?? 'Sin plan activo';
@@ -288,18 +293,34 @@
                         </li>
 
                         {{-- NUEVO: Usuarios de la tienda --}}
-                        @if(!($isFreePlanTenant ?? false))
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">
-                                    Usuarios
-                                </button>
-                            </li>
-                        @endif
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">
+                                Usuarios
+                            </button>
+                        </li>
                     </ul>
 
                     {{-- Formulario principal --}}
                     <form id="tenantForm" action="{{ route('tenant.update') }}" method="POST" enctype="multipart/form-data" novalidate data-submit-mode="native">
                         @csrf
+                        <input type="hidden" name="import_payload" id="tenantImportPayload" value="">
+
+                        @if($isSuperAdmin)
+                            <div class="alert alert-light border mb-4">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-12 col-lg-7">
+                                        <label for="tenantSetupDocx" class="form-label fw-bold">Importar formulario Shopix (.docx)</label>
+                                        <input type="file" id="tenantSetupDocx" class="form-control border border-radius-lg p-2" accept=".docx">
+                                        <small class="text-muted d-block mt-1">Carga el documento formal del cliente para precargar datos visibles y agregar catálogo, métodos de pago, servicios y horarios al guardar.</small>
+                                    </div>
+                                    <div class="col-12 col-lg-5">
+                                        <button type="button" class="btn btn-outline-dark w-100" id="tenantImportBtn">Importar documento</button>
+                                    </div>
+                                </div>
+                                <div id="tenantSetupImportStatus" class="small text-muted mt-3"></div>
+                                <div id="tenantSetupImportSummary" class="small mt-2"></div>
+                            </div>
+                        @endif
 
                         <div class="tab-content" id="tenantTabsContent">
 
@@ -410,6 +431,18 @@
                                 <div class="mb-3">
                                     <label class="form-label">Descripción</label>
                                     <textarea class="form-control p-2 border border-radius-lg" name="description" rows="3">{{ $tenant->description ?? '' }}</textarea>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">URL propia (opcional)</label>
+                                    <input
+                                        type="text"
+                                        class="form-control p-2 border border-radius-lg"
+                                        id="storeExternalUrlInput"
+                                        name="external_url"
+                                        value="{{ old('external_url', $tenant->external_url ?? '') }}"
+                                        placeholder="https://mitienda.com">
+                                    <small class="text-muted d-block mt-1">Si la completas, el directorio de Shopix redireccionara hacia esta URL.</small>
                                 </div>
 
                                 @unless($freePlanOperationalLock)
@@ -740,40 +773,14 @@
                             </div>
 
                             {{-- TAB 5: Usuarios --}}
-                            @if(!($isFreePlanTenant ?? false))
                             <div class="tab-pane fade" id="users" role="tabpanel">
                                 <h5 class="mt-2">Usuarios de la tienda</h5>
-                                <div class="accordion mb-4" id="rolesAccordion">
-                                    @foreach(($roleDefinitions ?? []) as $roleKey => $roleDefinition)
-                                        <div class="accordion-item border rounded-3 mb-2 overflow-hidden">
-                                            <h2 class="accordion-header" id="heading-{{ $roleKey }}">
-                                                <button class="accordion-button collapsed fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ $roleKey }}" aria-expanded="false" aria-controls="collapse-{{ $roleKey }}">
-                                                    <span>{{ $roleDefinition['name'] }}</span>
-                                                    <span class="badge bg-dark text-white ms-2">{{ strtoupper($roleKey) }}</span>
-                                                </button>
-                                            </h2>
-                                            <div id="collapse-{{ $roleKey }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ $roleKey }}" data-bs-parent="#rolesAccordion">
-                                                <div class="accordion-body">
-                                                    <p class="text-sm text-muted mb-2">{{ $roleDefinition['description'] }}</p>
-                                                    <ul class="text-sm mb-0 ps-3">
-                                                        @foreach(($roleDefinition['permissions'] ?? []) as $permission)
-                                                            <li>{{ $permission }}</li>
-                                                        @endforeach
-                                                    </ul>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    @endforeach
-                                </div>
-
-                                @if($canAssignStoreRoles)
-                                    <div class="alert alert-info border mb-4">
-                                        @if($isOwnerRole)
-                                            Como owner puedes crear usuarios y asignar roles de admin, vendedor, almacenista y delivery.
-                                        @else
-                                            Como admin puedes crear usuarios operativos y asignar roles de vendedor, almacenista y delivery. La asignacion de admin queda reservada al owner.
-                                        @endif
+                                @if($isFreePlanTenant ?? false)
+                                    <div class="alert alert-secondary border mb-4">
+                                        En plan Free puedes visualizar los usuarios existentes, pero no crear usuarios adicionales desde esta pantalla.
                                     </div>
+                                @endif
+                                @if($canAssignStoreRoles)
                                     @if($isBasicPlanTenant ?? false)
                                         <div class="alert alert-warning border mb-4">
                                             En plan Básico solo puedes tener un owner y un admin. Solo se permite crear un usuario admin si aún no existe.
@@ -785,20 +792,38 @@
                                     </div>
                                 @endif
 
-                                <ul class="list-group mb-4">
-                                    @forelse($tenant->users as $user)
-                                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                                            <div>
-                                                <strong>{{ $user->name }}</strong>
-                                                <small class="d-block text-muted">{{ $user->email }}</small>
-                                                <small class="d-block text-muted">{{ ($roleDefinitions[\App\Models\User::canonicalRoleName(optional($user->role)->name)]['description'] ?? 'Usuario operativo de la tienda.') }}</small>
+                                <div class="d-flex justify-content-end mb-4">
+                                    <button type="button" class="btn btn-outline-dark mb-0" data-bs-toggle="modal" data-bs-target="#tenantUsersModal">
+                                        Ver usuarios registrados
+                                    </button>
+                                </div>
+
+                                <div class="modal fade" id="tenantUsersModal" tabindex="-1" aria-labelledby="tenantUsersModalLabel" aria-hidden="true">
+                                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title" id="tenantUsersModalLabel">Usuarios de la tienda</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                             </div>
-                                            <span class="badge bg-dark text-white">{{ \App\Models\User::displayRoleName(optional($user->role)->name) }}</span>
-                                        </li>
-                                    @empty
-                                        <li class="list-group-item text-center text-muted">No hay usuarios registrados.</li>
-                                    @endforelse
-                                </ul>
+                                            <div class="modal-body">
+                                                <ul class="list-group">
+                                                    @forelse($tenant->users as $user)
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <div>
+                                                                <strong>{{ $user->name }}</strong>
+                                                                <small class="d-block text-muted">{{ $user->email }}</small>
+                                                                <small class="d-block text-muted">{{ ($roleDefinitions[\App\Models\User::canonicalRoleName(optional($user->role)->name)]['description'] ?? 'Usuario operativo de la tienda.') }}</small>
+                                                            </div>
+                                                            <span class="badge bg-dark text-white">{{ \App\Models\User::displayRoleName(optional($user->role)->name) }}</span>
+                                                        </li>
+                                                    @empty
+                                                        <li class="list-group-item text-center text-muted">No hay usuarios registrados.</li>
+                                                    @endforelse
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 @if($canAssignStoreRoles)
                                     <h6 class="mb-3">Agregar nuevo usuario</h6>
@@ -835,7 +860,6 @@
                                     </div>
                                 @endif
                             </div>
-                            @endif
                         </div>
 
                         <button type="submit" class="btn btn-sm btn-dark text-white w-100 mt-3">Guardar Cambios</button>
@@ -1102,6 +1126,7 @@
   let map, marker;
         const tenantAiImageEndpoint = "{{ route('tenant.ai-image', [], false) }}";
         const tenantUpdateEndpoint = "{{ route('tenant.update', [], false) }}";
+    const tenantImportSetupEndpoint = "{{ route('tenant.importSetupDocx', [], false) }}";
     const tenantCsrfRefreshEndpoint = "{{ route('csrf.token', [], false) }}";
     let tenantCsrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
                 || document.querySelector('#tenantForm input[name="_token"]')?.value
@@ -1171,6 +1196,171 @@
         if (button.dataset.originalHtml) {
             button.innerHTML = button.dataset.originalHtml;
         }
+    }
+
+    function setTenantImportStatus(message, type = 'muted') {
+        const statusNode = document.getElementById('tenantSetupImportStatus');
+        if (!statusNode) {
+            return;
+        }
+
+        statusNode.className = `small mt-3 text-${type}`;
+        statusNode.textContent = message || '';
+    }
+
+    function renderTenantImportSummary(summary = {}) {
+        const summaryNode = document.getElementById('tenantSetupImportSummary');
+        if (!summaryNode) {
+            return;
+        }
+
+        const parts = [
+            ['users', 'usuarios'],
+            ['payment_methods', 'métodos de pago'],
+            ['store_catalog', 'items de tienda'],
+            ['service_catalog', 'servicios'],
+            ['schedule_rules', 'horarios'],
+        ]
+            .map(([key, label]) => {
+                const count = Number(summary?.[key] || 0);
+                return count > 0 ? `${count} ${label}` : null;
+            })
+            .filter(Boolean);
+
+        summaryNode.textContent = parts.length
+            ? `Detectado: ${parts.join(', ')}.`
+            : 'Documento leído sin bloques repetibles detectados.';
+    }
+
+    function setFormCheckboxValue(selector, checked) {
+        const input = document.querySelector(selector);
+        if (!input) {
+            return;
+        }
+
+        input.checked = Boolean(checked);
+    }
+
+    function setWorkingDays(values = []) {
+        document.querySelectorAll('input[name="working_days[]"]').forEach((checkbox) => {
+            checkbox.checked = values.includes(String(checkbox.value || '').toLowerCase());
+        });
+    }
+
+    function findOptionValueByText(select, expectedText) {
+        if (!select || !expectedText) {
+            return '';
+        }
+
+        const normalizedText = String(expectedText).trim().toLowerCase();
+        const match = Array.from(select.options || []).find((option) => String(option.textContent || '').trim().toLowerCase() === normalizedText);
+
+        return match?.value || '';
+    }
+
+    async function fetchJson(url) {
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        });
+
+        if (!response.ok) {
+            throw new Error('Request failed');
+        }
+
+        return response.json();
+    }
+
+    async function applyTenantLocationImport(tenantPayload = {}) {
+        const countrySelect = document.getElementById('country');
+        const stateSelect = document.getElementById('state');
+        const citySelect = document.getElementById('city');
+
+        if (!countrySelect || !stateSelect || !citySelect) {
+            return;
+        }
+
+        const countryValue = findOptionValueByText(countrySelect, tenantPayload.country_name || '');
+        if (!countryValue) {
+            return;
+        }
+
+        countrySelect.value = countryValue;
+        const states = await fetchJson('/get-states/' + countryValue);
+        stateSelect.innerHTML = '<option value="">Selecciona un estado</option>';
+        states.forEach((state) => {
+            stateSelect.insertAdjacentHTML('beforeend', `<option value="${state.id}">${state.name}</option>`);
+        });
+
+        const stateValue = findOptionValueByText(stateSelect, tenantPayload.state_name || '');
+        if (!stateValue) {
+            citySelect.innerHTML = '<option value="">Selecciona una ciudad</option>';
+            return;
+        }
+
+        stateSelect.value = stateValue;
+        const cities = await fetchJson('/get-cities/' + stateValue);
+        citySelect.innerHTML = '<option value="">Selecciona una ciudad</option>';
+        cities.forEach((city) => {
+            citySelect.insertAdjacentHTML('beforeend', `<option value="${city.id}">${city.name}</option>`);
+        });
+
+        const cityValue = findOptionValueByText(citySelect, tenantPayload.city_name || '');
+        if (cityValue) {
+            citySelect.value = cityValue;
+        }
+    }
+
+    async function applyTenantImportPayload(payload = {}) {
+        const tenant = payload.tenant || {};
+
+        const setValue = (selector, value) => {
+            const input = document.querySelector(selector);
+            if (input && value !== undefined && value !== null && value !== '') {
+                input.value = value;
+            }
+        };
+
+        setValue('input[name="name"]', tenant.name);
+        setValue('select[name="business_type"]', String(tenant.business_type || '').toLowerCase() === 'servicio' ? 'servicio' : 'tienda');
+        setValue('#phone_code', tenant.phone_code);
+        setValue('#phone_number', tenant.phone_number);
+        setValue('#opening_time', String(tenant.opening_time || '').slice(0, 5));
+        setValue('#closing_time', String(tenant.closing_time || '').slice(0, 5));
+        setValue('input[name="slogan"]', tenant.slogan);
+        setValue('textarea[name="description"]', tenant.description);
+        setValue('#address', tenant.address);
+        setValue('#tiktok', tenant.tiktok);
+        setValue('#instagram', tenant.instagram);
+        setValue('#facebook', tenant.facebook);
+        setValue('#color_primary', tenant.color_primary);
+        setValue('#color_secondary', tenant.color_secondary);
+        setValue('#color_accent', tenant.color_accent);
+        setValue('select[name="delivery_fee_mode"]', tenant.delivery_fee_mode);
+        setValue('input[name="delivery_fixed_fee"]', tenant.delivery_fixed_fee);
+        setValue('input[name="delivery_fee_per_km"]', tenant.delivery_fee_per_km);
+
+        if (tenant.economic_activity) {
+            const economicActivitySelect = document.getElementById('economic_activity');
+            if (economicActivitySelect) {
+                economicActivitySelect.dataset.selected = tenant.economic_activity;
+                const businessTypeSelect = document.getElementById('business_type');
+                businessTypeSelect?.dispatchEvent(new Event('change'));
+                economicActivitySelect.value = tenant.economic_activity;
+            }
+        }
+
+        setWorkingDays(Array.isArray(tenant.working_days) ? tenant.working_days : []);
+        setFormCheckboxValue('#appointments_first_come_enabled', tenant.appointments_first_come_enabled);
+        setFormCheckboxValue('#special_taxpayer', tenant.special_taxpayer);
+        setFormCheckboxValue('#delivery_enabled', tenant.delivery_enabled);
+        setFormCheckboxValue('#restrict_delivery_city_to_tenant', tenant.restrict_delivery_city_to_tenant);
+        setFormCheckboxValue('#delivery_notifications_enabled', tenant.delivery_notifications_enabled);
+
+        await applyTenantLocationImport(tenant);
     }
 
     function getTenantCookie(name) {
@@ -1641,6 +1831,7 @@ function initMap() {
     const openLogoAiModalBtn = document.getElementById('openLogoAiModalBtn');
     const openBackgroundAiModalBtn = document.getElementById('openBackgroundAiModalBtn');
     const storeSlugInput = document.getElementById('storeSlugInput');
+    const storeExternalUrlInput = document.getElementById('storeExternalUrlInput');
     const storePublicUrlInput = document.getElementById('storePublicUrlInput');
     const openStoreUrlBtn = document.getElementById('openStoreUrlBtn');
     const copyStoreUrlBtn = document.getElementById('copyStoreUrlBtn');
@@ -1751,7 +1942,19 @@ function initMap() {
         .replace(/^-+|-+$/g, '');
 
     const updateStorePublicUrl = () => {
-        if (!storeSlugInput || !storePublicUrlInput || !openStoreUrlBtn) {
+        if (!storePublicUrlInput || !openStoreUrlBtn) {
+            return;
+        }
+
+        const externalRaw = String(storeExternalUrlInput?.value || '').trim();
+        if (externalRaw !== '') {
+            const externalUrl = /^https?:\/\//i.test(externalRaw) ? externalRaw : `https://${externalRaw}`;
+            storePublicUrlInput.value = externalUrl;
+            openStoreUrlBtn.href = externalUrl;
+            return;
+        }
+
+        if (!storeSlugInput) {
             return;
         }
 
@@ -1788,8 +1991,13 @@ function initMap() {
 
     if (storeSlugInput) {
         storeSlugInput.addEventListener('input', updateStorePublicUrl);
-        updateStorePublicUrl();
     }
+
+    if (storeExternalUrlInput) {
+        storeExternalUrlInput.addEventListener('input', updateStorePublicUrl);
+    }
+
+    updateStorePublicUrl();
 
     if (selectAllScheduleDaysBtn) {
         selectAllScheduleDaysBtn.addEventListener('click', () => {
@@ -2140,6 +2348,61 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
         }
     });
     const form = document.getElementById('tenantForm');
+    const tenantImportInput = document.getElementById('tenantSetupDocx');
+    const tenantImportButton = document.getElementById('tenantImportBtn');
+    const tenantImportPayloadInput = document.getElementById('tenantImportPayload');
+
+    if (tenantImportButton && tenantImportInput && tenantImportPayloadInput) {
+        tenantImportButton.addEventListener('click', async () => {
+            const file = tenantImportInput.files?.[0];
+            if (!file) {
+                setTenantImportStatus('Selecciona un archivo .docx para importar.', 'warning');
+                return;
+            }
+
+            tenantImportButton.disabled = true;
+            setTenantImportStatus('Importando documento...', 'muted');
+
+            try {
+                const formData = new FormData();
+                formData.append('setup_docx', file);
+                formData.append('_token', getTenantCsrfToken());
+
+                const response = await fetch(tenantImportSetupEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': getTenantCsrfToken(),
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin',
+                    body: formData
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) {
+                    const errorMessage = data?.errors
+                        ? Object.values(data.errors).flat()[0]
+                        : (data.message || 'No se pudo importar el documento.');
+                    setTenantImportStatus(errorMessage, 'danger');
+                    showTenantToast(errorMessage, 'warning');
+                    return;
+                }
+
+                tenantImportPayloadInput.value = JSON.stringify(data.payload || {});
+                await applyTenantImportPayload(data.payload || {});
+                renderTenantImportSummary(data.summary || {});
+                setTenantImportStatus(data.message || 'Documento importado correctamente.', 'success');
+                showTenantToast('Documento importado. Revisa los campos y guarda para aplicar.', 'success');
+            } catch (error) {
+                setTenantImportStatus('No se pudo conectar con el servidor para importar el documento.', 'danger');
+                showTenantToast('No se pudo importar el documento.', 'error');
+            } finally {
+                tenantImportButton.disabled = false;
+            }
+        });
+    }
+
     form.addEventListener('submit', async (e) => {
         if (form.dataset.submitMode === 'native') {
             return;

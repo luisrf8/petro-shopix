@@ -23,6 +23,22 @@
     margin-top: 0.5rem;
   }
 
+  .products-primary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    justify-content: flex-end;
+  }
+
+  .products-primary-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 40px;
+    border-radius: 0.7rem;
+    white-space: nowrap;
+  }
+
   .product-card-clean {
     border: 1px solid var(--bs-border-color);
     border-radius: 1rem;
@@ -114,8 +130,44 @@
 
   .products-categories-track .category-item,
   .products-categories-track > .flex-shrink-0 {
-    width: 200px;
+    width: auto;
     scroll-snap-align: start;
+  }
+
+  .category-filter-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.7rem;
+    padding: 0.42rem 0.72rem;
+    font-size: 0.83rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--bs-dark);
+    background: var(--bs-body-bg);
+    white-space: nowrap;
+    text-decoration: none;
+    transition: all 0.16s ease;
+  }
+
+  .category-filter-link:hover {
+    color: var(--bs-dark);
+    border-color: var(--bs-dark);
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+
+  .category-filter-link.is-active {
+    background: linear-gradient(195deg, #42424a, #191919);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 0.2rem 0.6rem rgba(0, 0, 0, 0.2);
+  }
+
+  .category-filter-icon {
+    font-size: 1rem;
+    line-height: 1;
   }
 
   @media (max-width: 768px) {
@@ -124,9 +176,23 @@
       align-items: stretch;
     }
 
+    .products-primary-actions {
+      justify-content: stretch;
+    }
+
+    .products-primary-actions .btn {
+      flex: 1 1 calc(50% - 0.6rem);
+      justify-content: center;
+    }
+
     .products-categories-track .category-item,
     .products-categories-track > .flex-shrink-0 {
-      width: 170px;
+      width: auto;
+    }
+
+    .category-filter-link {
+      font-size: 0.78rem;
+      padding: 0.4rem 0.64rem;
     }
 
     .product-card-clean {
@@ -159,25 +225,16 @@
             <input type="text" id="searchCategory" class="admin-mobile-search form-control border border-1 p-2 bg-white" placeholder="Buscar categoría...">
           </div>
           <!-- Carrusel scrollable -->
-          <div id="categoriesContainer" class="products-categories-track d-flex overflow-auto gap-3 px-2 py-3" style="scroll-snap-type: x mandatory;">
+          <div id="categoriesContainer" class="products-categories-track d-flex overflow-auto gap-2 px-2 py-2" style="scroll-snap-type: x mandatory;">
             <div class="flex-shrink-0">
-              <a  href="/products" class="text-decoration-none">
-                <div class="card h-100">
-                  <div class="card-header mx-3 p-3 text-center">
-                    <div class="icon icon-shape icon-lg bg-gradient-dark shadow text-center border-radius-lg">
-                      <i class="material-symbols-rounded opacity-10">all_inclusive</i>
-                    </div>
-                  </div>
-                  <div class="card-body pt-0 p-3 text-center">
-                    <h6 class="text-center mb-0 opacity-9">Todos</h6>
-                    <span class="text-xs"></span>
-                  </div>
-                </div>
+              <a href="/products" class="category-filter-link {{ isset($category) ? '' : 'is-active' }}" aria-label="Filtrar por todas las categorias">
+                <i class="material-symbols-rounded category-filter-icon">all_inclusive</i>
+                <span>Todos</span>
               </a>
             </div>
-            @foreach($categories as $category)
+            @foreach($categories as $categoryItem)
               @php
-                switch ($category->name) {
+                switch ($categoryItem->name) {
                   case 'Chemises':
                     $icon = 'accessibility_new';
                   break;
@@ -194,19 +251,10 @@
                     $icon = 'category'; // ícono por defecto
                 }
               @endphp
-              <div class="category-item flex-shrink-0" data-name="{{ strtolower($category['name']) }}">
-                <a href="{{ route('products.byCategory', $category->id) }}" class="text-decoration-none">
-                  <div class="card h-100">
-                    <div class="card-header mx-3 p-3 text-center">
-                      <div class="icon icon-shape icon-lg bg-gradient-dark shadow text-center border-radius-lg">
-                        <i class="material-symbols-rounded opacity-10">{{ $icon }}</i>
-                      </div>
-                    </div>
-                    <div class="card-body pt-0 p-3 text-center">
-                      <h6 class="text-center mb-0 opacity-9">{{ $category['name'] }}</h6>
-                      <span class="text-xs">{{ $category['description'] }}</span>
-                    </div>
-                  </div>
+              <div class="category-item flex-shrink-0" data-name="{{ strtolower($categoryItem['name']) }}">
+                <a href="{{ route('products.byCategory', $categoryItem->id) }}" class="category-filter-link {{ (isset($category) && (int) $category->id === (int) $categoryItem->id) ? 'is-active' : '' }}" aria-label="Filtrar por categoria {{ $categoryItem['name'] }}">
+                  <i class="material-symbols-rounded category-filter-icon">{{ $icon }}</i>
+                  <span>{{ $categoryItem['name'] }}</span>
                 </a>
               </div>
             @endforeach
@@ -220,18 +268,22 @@
             <div class="px-3 w-100" style="max-width: 420px;">
               <input type="text" id="searchProduct" class="w-100 form-control border border-1 p-2 bg-white" placeholder="Buscar producto...">
             </div>
-            <div class="px-3 admin-mobile-actions justify-content-end align-items-center">
-              <a class="nav-link text-black mb-0 admin-mobile-action-trigger" href="/createProduct">
-                + Agregar Producto
+            <div class="px-3 products-primary-actions align-items-center">
+              <a class="btn btn-dark mb-0 admin-mobile-action-trigger" href="/createProduct">
+                <i class="material-symbols-rounded">add_box</i>
+                <span>Agregar Producto</span>
               </a>
-              <a class="nav-link text-black mb-0 admin-mobile-action-trigger" href="javascript:;" data-bs-toggle="modal" data-bs-target="#importCatalogModal">
-                + Importar Catálogo
+              <a class="btn btn-outline-dark mb-0 admin-mobile-action-trigger" href="javascript:;" data-bs-toggle="modal" data-bs-target="#importCatalogModal">
+                <i class="material-symbols-rounded">upload_file</i>
+                <span>Importar Catálogo</span>
               </a>
               @unless($productsToolbarFreePlan)
-                <a class="nav-link text-black mb-0 admin-mobile-action-trigger" href="/purchase">
-                  + Generar Compra
+                <a class="btn btn-outline-dark mb-0 admin-mobile-action-trigger" href="/purchase">
+                  <i class="material-symbols-rounded">shopping_bag</i>
+                  <span>Generar Compra</span>
                 </a>
                 <button id="generateReport" class="btn btn-dark mb-0 admin-mobile-action-trigger" onclick="getReport()">
+                  <i class="material-symbols-rounded">assessment</i>
                   Generar Reporte
                 </button>
               @endunless

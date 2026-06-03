@@ -31,12 +31,7 @@ class TenantPlanCapabilities
         $latestPaidPlan = null;
 
         if (!$isSuperAdmin && $tenant?->id) {
-            $latestPaidPlan = TenantPlanPayment::with('plan')
-                ->where('tenant_id', (int) $tenant->id)
-                ->where('status', 'paid')
-                ->orderByDesc('paid_at')
-                ->orderByDesc('id')
-                ->first();
+            $latestPaidPlan = TenantPlanResolver::latestPaidForTenant((int) $tenant->id);
         }
 
         return new self($tenant, $isSuperAdmin, $latestPaidPlan);

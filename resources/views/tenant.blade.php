@@ -66,8 +66,18 @@
     min-width: 320px;
   }
 
+  .tenant-url-cell {
+    min-width: 220px;
+    max-width: 260px;
+  }
+
   .tenant-url-link {
-    word-break: break-word;
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: top;
   }
 
   .tenant-alert-list {
@@ -91,6 +101,37 @@
 
   .tenant-actions-cell {
     min-width: 120px;
+    white-space: nowrap;
+    vertical-align: middle !important;
+    text-align: center;
+    background: #fff;
+  }
+
+  .tenant-actions-cell--edit,
+  .tenant-actions-cell--delete,
+  .tenant-actions-head--edit,
+  .tenant-actions-head--delete {
+    position: sticky;
+    z-index: 2;
+    background: #fff;
+  }
+
+  .tenant-actions-cell--delete,
+  .tenant-actions-head--delete {
+    right: 0;
+    min-width: 120px;
+  }
+
+  .tenant-actions-cell--edit,
+  .tenant-actions-head--edit {
+    right: 120px;
+    min-width: 120px;
+  }
+
+  .tenant-actions-head--edit,
+  .tenant-actions-head--delete {
+    background: #f8f9fa;
+    z-index: 3;
   }
 
   @media (max-width: 991.98px) {
@@ -309,7 +350,7 @@
                 <tr>
                   <th>Logo</th>
                   <th>Nombre</th>
-                  <th>URL</th>
+                  <th class="tenant-url-cell">URL</th>
                   <th>Email</th>
                   <th>Tipo</th>
                   <th>Rubro</th>
@@ -318,8 +359,8 @@
                   <th>Envío solo ciudad tienda</th>
                   <th>Estado</th>
                   <th class="tenant-plan-cell">Plan</th>
-                  <th>Editar</th>
-                  <th>Eliminar</th>
+                  <th class="tenant-actions-head--edit">Editar</th>
+                  <th class="tenant-actions-head--delete">Eliminar</th>
                 </tr>
               </thead>
               <tbody class="text-center">
@@ -334,7 +375,7 @@
                       style="object-fit: contain;">
                     </td>
                     <td>{{ $tenant->name }}</td>
-                    <td>
+                    <td class="tenant-url-cell">
                       <a class="tenant-url-link" href="{{ route('tenant.public', $tenant) }}" target="_blank" rel="noopener">
                         {{ route('tenant.public', $tenant) }}
                       </a>
@@ -374,26 +415,12 @@
 
                     <td class="tenant-plan-cell">
                       @php
-                        $owner = $tenant->users->first(function($user) {
-                          return optional($user->role)->name === 'owner';
-                        }) ?? $tenant->users->first();
-
-                        $latestPayment = $tenant->tenantPlanPayments
-                          ->where('status', 'paid')
-                          ->sortBy(function ($payment) {
-                            return optional($payment->paid_at)->timestamp ?? 0;
-                          })
-                          ->last();
-
-                        $latestPendingPayment = $tenant->tenantPlanPayments
-                          ->where('status', 'pending')
-                          ->sortBy(function ($payment) {
-                            return optional($payment->created_at)->timestamp ?? 0;
-                          })
-                          ->last();
+                        $owner = $tenant->owner_user;
+                        $latestPayment = $tenant->latest_paid_plan_payment;
+                        $latestPendingPayment = $tenant->latest_pending_plan_payment;
                       @endphp
                       <p class="mb-1">Dueño: {{ $owner?->name ?? 'Sin dueño' }}</p>
-                      <p class="mb-1">Usuarios: {{ $tenant->users->count() }}</p>
+                      <p class="mb-1">Usuarios: {{ $tenant->users_count_snapshot }}</p>
                       @if($latestPayment)
                         @php
                           $daysRemaining = null;
@@ -458,10 +485,10 @@
                       {{-- <p>Plan activo: {{ $tenant->activePlanPayment->plan->name ?? 'Sin plan' }}</p> --}}
                     </td>
 
-                    <td class="tenant-actions-cell">
+                    <td class="tenant-actions-cell tenant-actions-cell--edit">
                       <a href="{{ route('tenants.edit', $tenant) }}" class="btn btn-outline-dark btn-sm mb-0">Editar</a>
                     </td>
-                    <td class="tenant-actions-cell">
+                    <td class="tenant-actions-cell tenant-actions-cell--delete">
                       <a href="javascript:;" 
                          class="text-danger font-weight-bold text-xs btn-delete-tenant"
                          data-id="{{ $tenant->id }}">

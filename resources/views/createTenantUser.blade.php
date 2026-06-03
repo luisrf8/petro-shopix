@@ -252,6 +252,12 @@
                 </div>
 
                 <div class="mb-3">
+                  <label for="external_url" class="form-label fw-bold">URL propia (opcional)</label>
+                  <input type="text" name="external_url" id="external_url" class="form-control form-control-lg" placeholder="https://mitienda.com" value="{{ old('external_url') }}">
+                  <small class="text-muted">Si la agregas, en el directorio de Shopix tu tarjeta abrira esa URL.</small>
+                </div>
+
+                <div class="mb-3">
                   <label for="email" class="form-label fw-bold">Correo de contacto</label>
                   <input type="email" name="email" id="email" class="form-control form-control-lg" placeholder="correo@empresa.com" required>
                 </div>

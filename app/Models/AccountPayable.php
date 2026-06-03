@@ -9,6 +9,8 @@ class AccountPayable extends Model
 {
     use HasFactory;
 
+    protected $table = 'accounts_payables';
+
     protected $fillable = [
         'tenant_id',
         'provider_id',

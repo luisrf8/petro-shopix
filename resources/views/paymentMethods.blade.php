@@ -2,97 +2,187 @@
 
 @section('title', 'Categorías')
 
+@push('styles')
+<style>
+  .pm-header {
+    margin-bottom: 0.4rem;
+  }
+
+  .pm-rate-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    align-items: center;
+  }
+
+  .pm-rate-item {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .pm-action-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .pm-action-group .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    min-height: 42px;
+  }
+
+  .pm-currency-chip {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.8rem;
+    padding: 0.72rem 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    background: var(--bs-body-bg);
+    font-weight: 600;
+    min-height: 52px;
+  }
+
+  .pm-currency-row {
+    display: flex;
+    gap: 0.55rem;
+    flex-wrap: nowrap;
+  }
+
+  .pm-currency-col {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .pm-method-chip {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.85rem;
+    padding: 0.68rem 0.78rem;
+    background: var(--bs-body-bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.7rem;
+    min-height: 58px;
+  }
+
+  .pm-method-main {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+
+  .pm-method-name {
+    font-weight: 600;
+    margin: 0;
+    line-height: 1;
+  }
+
+  .pm-method-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-left: auto;
+  }
+
+  .pm-method-edit {
+    color: var(--bs-dark);
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  .pm-toggle-link {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .pm-toggle-link.text-success,
+  .pm-toggle-link.text-danger {
+    opacity: 0.95;
+  }
+
+  @media (max-width: 768px) {
+    .pm-header {
+      margin-top: 0.3rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .pm-rate-list {
+      width: 100%;
+      gap: 0.35rem;
+    }
+
+    .pm-rate-item {
+      font-size: 1.45rem;
+      width: 100%;
+    }
+
+    .pm-action-group {
+      display: grid;
+      grid-template-columns: 1fr;
+      width: 100%;
+      gap: 0.45rem;
+    }
+
+    .pm-action-group .btn {
+      width: 100%;
+    }
+
+    .pm-currency-row {
+      flex-wrap: wrap;
+    }
+
+    .pm-currency-col {
+      flex: 1 1 100%;
+    }
+
+    .pm-method-chip {
+      min-height: 56px;
+      padding: 0.64rem 0.7rem;
+    }
+
+    .pm-method-name {
+      font-size: 0.9rem;
+    }
+  }
+</style>
+@endpush
+
 @section('content')
     <div class="container-fluid py-2">
-      <div class="row align-items-center">
-        <div class="col-md-6 d-flex flex-column align-items-start">
-          <h6 class="mb-1">Tasa USD: <span id="currentDollarRate">{{$dollarRate ? number_format($dollarRate->rate, 2) : 'N/A'}}</span> VES / USD</h6>
-          <h6 class="mb-0">Tasa EUR: <span id="currentEuroRate">{{$euroRate ? number_format($euroRate->rate, 2) : 'N/A'}}</span> VES / EUR</h6>
-        </div>
-        <div class="col-md-6 text-md-end mt-2 mt-md-0 d-flex flex-column align-items-md-end gap-2">
-          <button class="btn btn-outline-dark mb-0" data-bs-toggle="modal" data-bs-target="#rateHistoryModal">
-            <i class="material-symbols-rounded text-sm">history</i>&nbsp;&nbsp;Historial y exportaciones
-          </button>
-          <button class="btn bg-gradient-success mb-0" data-bs-toggle="modal" data-bs-target="#updateDollarRateModal">
-            <i class="material-symbols-rounded text-sm">currency_exchange</i>&nbsp;&nbsp;Actualizar Tasa del Dólar
-          </button>
-          <button class="btn bg-gradient-info mb-0" data-bs-toggle="modal" data-bs-target="#updateEuroRateModal">
-            <i class="material-symbols-rounded text-sm">currency_exchange</i>&nbsp;&nbsp;Actualizar Tasa del Euro
-          </button>
-        </div>
-      </div>
-      <div class="row mt-4 g-4">
-        <div class="col-12 col-xl-6">
-          <div class="card h-100">
-            <div class="card-header pb-0 p-3 d-flex justify-content-between align-items-center">
-              <div>
-                <h6 class="mb-0">Histórico BCV USD</h6>
-                <p class="text-sm text-muted mb-0">Registro de solo lectura. No se puede editar ni eliminar.</p>
-              </div>
-              <span class="badge bg-gradient-dark">Inmutable</span>
+      <div class="row align-items-center g-2 pm-header">
+        <div class="col-12">
+          <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3">
+            <div class="pm-rate-list">
+              <h6 class="pm-rate-item">Tasa USD: <span id="currentDollarRate">{{$dollarRate ? number_format($dollarRate->rate, 2) : 'N/A'}}</span> VES / USD</h6>
+              <h6 class="pm-rate-item">Tasa EUR: <span id="currentEuroRate">{{$euroRate ? number_format($euroRate->rate, 2) : 'N/A'}}</span> VES / EUR</h6>
             </div>
-            <div class="card-body px-0 pt-3 pb-0">
-              <div class="table-responsive">
-                <table class="table align-items-center mb-0">
-                  <thead>
-                    <tr>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fecha BCV</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Tasa</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Registrada</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @forelse($dollarRateHistory as $rateItem)
-                      <tr>
-                        <td><p class="text-sm mb-0 px-3">{{ optional($rateItem->date)->format('d/m/Y') ?? 'Sin fecha' }}</p></td>
-                        <td><p class="text-sm mb-0">{{ number_format((float) $rateItem->rate, 4) }} Bs</p></td>
-                        <td><p class="text-sm text-secondary mb-0">{{ optional($rateItem->created_at)->format('d/m/Y H:i') ?? 'Sin registro' }}</p></td>
-                      </tr>
-                    @empty
-                      <tr>
-                        <td colspan="3" class="text-center text-muted py-4">Sin histórico registrado.</td>
-                      </tr>
-                    @endforelse
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-12 col-xl-6">
-          <div class="card h-100">
-            <div class="card-header pb-0 p-3 d-flex justify-content-between align-items-center">
-              <div>
-                <h6 class="mb-0">Histórico BCV EUR</h6>
-                <p class="text-sm text-muted mb-0">Registro de solo lectura. No se puede editar ni eliminar.</p>
-              </div>
-              <span class="badge bg-gradient-dark">Inmutable</span>
-            </div>
-            <div class="card-body px-0 pt-3 pb-0">
-              <div class="table-responsive">
-                <table class="table align-items-center mb-0">
-                  <thead>
-                    <tr>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fecha BCV</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Tasa</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Registrada</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @forelse($euroRateHistory as $rateItem)
-                      <tr>
-                        <td><p class="text-sm mb-0 px-3">{{ optional($rateItem->date)->format('d/m/Y') ?? 'Sin fecha' }}</p></td>
-                        <td><p class="text-sm mb-0">{{ number_format((float) $rateItem->rate, 4) }} Bs</p></td>
-                        <td><p class="text-sm text-secondary mb-0">{{ optional($rateItem->created_at)->format('d/m/Y H:i') ?? 'Sin registro' }}</p></td>
-                      </tr>
-                    @empty
-                      <tr>
-                        <td colspan="3" class="text-center text-muted py-4">Sin histórico registrado.</td>
-                      </tr>
-                    @endforelse
-                  </tbody>
-                </table>
-              </div>
+            <div class="pm-action-group">
+              <button class="btn btn-outline-dark mb-0" data-bs-toggle="modal" data-bs-target="#rateHistoryModal">
+                <i class="material-symbols-rounded text-sm">history</i>&nbsp;&nbsp;Historial y exportaciones
+              </button>
+              <button class="btn bg-gradient-success mb-0" data-bs-toggle="modal" data-bs-target="#updateDollarRateModal">
+                <i class="material-symbols-rounded text-sm">currency_exchange</i>&nbsp;&nbsp;Actualizar Tasa del Dólar
+              </button>
+              <button class="btn bg-gradient-info mb-0" data-bs-toggle="modal" data-bs-target="#updateEuroRateModal">
+                <i class="material-symbols-rounded text-sm">currency_exchange</i>&nbsp;&nbsp;Actualizar Tasa del Euro
+              </button>
             </div>
           </div>
         </div>
@@ -108,39 +198,87 @@
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+              <div class="row g-4 mb-3">
+                <div class="col-12 col-xl-6">
+                  <div class="card h-100">
+                    <div class="card-header pb-0 p-3 d-flex justify-content-between align-items-center">
+                      <div>
+                        <h6 class="mb-0">Histórico BCV USD</h6>
+                        <p class="text-sm text-muted mb-0">Registro de solo lectura. No se puede editar ni eliminar.</p>
+                      </div>
+                      <span class="badge bg-gradient-dark">Inmutable</span>
+                    </div>
+                    <div class="card-body px-0 pt-3 pb-0">
+                      <div class="table-responsive">
+                        <table class="table align-items-center mb-0">
+                          <thead>
+                            <tr>
+                              <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fecha BCV</th>
+                              <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Tasa</th>
+                              <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Registrada</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @forelse($dollarRateHistory as $rateItem)
+                              <tr>
+                                <td><p class="text-sm mb-0 px-3">{{ optional($rateItem->date)->format('d/m/Y') ?? 'Sin fecha' }}</p></td>
+                                <td><p class="text-sm mb-0">{{ number_format((float) $rateItem->rate, 4) }} Bs</p></td>
+                                <td><p class="text-sm text-secondary mb-0">{{ optional($rateItem->created_at)->format('d/m/Y H:i') ?? 'Sin registro' }}</p></td>
+                              </tr>
+                            @empty
+                              <tr>
+                                <td colspan="3" class="text-center text-muted py-4">Sin histórico registrado.</td>
+                              </tr>
+                            @endforelse
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-12 col-xl-6">
+                  <div class="card h-100">
+                    <div class="card-header pb-0 p-3 d-flex justify-content-between align-items-center">
+                      <div>
+                        <h6 class="mb-0">Histórico BCV EUR</h6>
+                        <p class="text-sm text-muted mb-0">Registro de solo lectura. No se puede editar ni eliminar.</p>
+                      </div>
+                      <span class="badge bg-gradient-dark">Inmutable</span>
+                    </div>
+                    <div class="card-body px-0 pt-3 pb-0">
+                      <div class="table-responsive">
+                        <table class="table align-items-center mb-0">
+                          <thead>
+                            <tr>
+                              <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fecha BCV</th>
+                              <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Tasa</th>
+                              <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7 ps-2">Registrada</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @forelse($euroRateHistory as $rateItem)
+                              <tr>
+                                <td><p class="text-sm mb-0 px-3">{{ optional($rateItem->date)->format('d/m/Y') ?? 'Sin fecha' }}</p></td>
+                                <td><p class="text-sm mb-0">{{ number_format((float) $rateItem->rate, 4) }} Bs</p></td>
+                                <td><p class="text-sm text-secondary mb-0">{{ optional($rateItem->created_at)->format('d/m/Y H:i') ?? 'Sin registro' }}</p></td>
+                              </tr>
+                            @empty
+                              <tr>
+                                <td colspan="3" class="text-center text-muted py-4">Sin histórico registrado.</td>
+                              </tr>
+                            @endforelse
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div class="d-flex flex-wrap justify-content-end gap-2 mb-3">
                 <a href="{{ route('paymentMethods.rates.export', 'excel') }}" class="btn btn-outline-success btn-sm">Exportar Excel</a>
                 <a href="{{ route('paymentMethods.rates.export', 'csv') }}" class="btn btn-outline-primary btn-sm">Exportar CSV</a>
                 <a href="{{ route('paymentMethods.rates.export', 'pdf') }}" class="btn btn-outline-dark btn-sm">Exportar PDF</a>
-              </div>
-              <div class="table-responsive">
-                <table class="table align-items-center mb-0">
-                  <thead>
-                    <tr>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Moneda</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Fecha BCV</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Tasa</th>
-                      <th class="text-uppercase text-secondary text-xxs font-weight-bolder opacity-7">Registrada</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @forelse($rateHistoryEntries as $entry)
-                      <tr>
-                        <td>
-                          <span class="fw-semibold">{{ $entry['currency_name'] }}</span>
-                          <div class="text-xs text-muted">{{ $entry['currency_code'] }}</div>
-                        </td>
-                        <td>{{ $entry['rate_date']->format('d/m/Y') }}</td>
-                        <td>{{ number_format((float) $entry['rate'], 4) }} Bs</td>
-                        <td>{{ optional($entry['created_at'])->format('d/m/Y H:i') ?? 'Sin registro' }}</td>
-                      </tr>
-                    @empty
-                      <tr>
-                        <td colspan="4" class="text-center text-muted py-4">Sin histórico registrado.</td>
-                      </tr>
-                    @endforelse
-                  </tbody>
-                </table>
               </div>
             </div>
           </div>
@@ -163,11 +301,12 @@
           </div>
           <div class="card-body p-3">
             <!-- Lista de Monedas -->
-            <div class="row d-flex flex-wrap">
+            <div class="pm-currency-row">
               @foreach($currencies as $currency)
-                <div class="col-6">
-                  <div class="card card-body border card-plain border-radius-lg d-flex justify-content-between align-items-center flex-row py-4 mb-4">
-                    <h6 class="mb-0">{{ $currency->name }} / {{$currency->code}}</h6>
+                <div class="pm-currency-col">
+                  <div class="pm-currency-chip">
+                    <i class="material-symbols-rounded text-sm">payments</i>
+                    <span>{{ $currency->name }} / {{$currency->code}}</span>
                     <!-- <button class="btn btn-sm toggle-status-currency-btn pt-4 {{ $currency->status ? 'text-success' : 'text-danger'}}" 
                         data-id="{{ $currency->id }}" 
                         data-status="{{ $currency->status ? 'active' : 'inactive' }}">
@@ -240,10 +379,10 @@
           <div class="card-body p-3">
             @foreach($groupedPaymentMethods as $currencyName => $methods)
               <h6 class="mb-2">{{ $currencyName }}</h6>
-              <div class="row">
+              <div class="row g-2">
               @foreach($methods as $method)
-                <div class="col-md-6 mb-md-0 mb-4">
-                  <div class="card card-body border border-radius-lg d-flex justify-content-between align-items-center flex-row mb-4 p-0">
+                <div class="col-12 col-sm-6 col-xl-3 mb-2">
+                  <div class="pm-method-chip">
                     @php
                         $qrImages = isset($method->qr_image) && is_string($method->qr_image) ? json_decode($method->qr_image, true) : [];
                     @endphp
@@ -251,10 +390,13 @@
                         alt="Imagen del producto" 
                         class="d-none" 
                         style="width: 20%; height: 20%; object-fit: cover; border-radius: inherit;">
-                    <div class="d-flex gap-2 align-items-center px-3">
-                      <h6 class="mb-0">{{ $method->name }}</h6>
+                    <div class="pm-method-main">
+                      <p class="pm-method-name">{{ $method->name }}</p>
                       <span class="badge bg-gradient-{{ $method->usesReference() ? 'info' : 'secondary' }}">{{ $method->usesReference() ? 'Posee referencia' : 'Sin referencia' }}</span>
-                      <i class="material-symbols-rounded ms-auto text-dark cursor-pointer btn-edit-method" 
+                    </div>
+
+                    <div class="pm-method-actions">
+                      <i class="material-symbols-rounded pm-method-edit btn-edit-method" 
                         title="Editar Método"
                         data-bs-toggle="modal" 
                         data-bs-target="#editPaymentMethod" 
@@ -267,12 +409,12 @@
                         data-dni="{{ $method->dni }}"
                         data-description="{{ $method->description }}"
                         data-has-reference="{{ $method->usesReference() ? '1' : '0' }}">edit</i>
+                      <button class="pm-toggle-link toggle-status-btn {{ $method->status ? 'text-success' : 'text-danger'}}" 
+                          data-id="{{ $method->id }}" 
+                          data-status="{{ $method->status ? 'active' : 'inactive' }}">
+                            {{ $method->status ? 'Inactivar' : 'Activar' }}
+                      </button>
                     </div>
-                    <button class="btn btn-sm toggle-status-btn pt-4 {{ $method->status ? 'text-success' : 'text-danger'}}" 
-                        data-id="{{ $method->id }}" 
-                        data-status="{{ $method->status ? 'active' : 'inactive' }}">
-                          {{ $method->status ? 'Inactivar' : 'Activar' }}
-                    </button>
                   </div>
                 </div>
               @endforeach

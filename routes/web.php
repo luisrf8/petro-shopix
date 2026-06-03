@@ -315,6 +315,7 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/create-tenant', [TenantController::class, 'createIndex'])->middleware('role.name:4')->name('createTenant');
     Route::get('/tenant-store', [TenantController::class, 'getTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.store');
     Route::post('/tenant-update', [TenantController::class, 'updateTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.update');
+    Route::post('/tenant-import-setup-docx', [TenantController::class, 'importSetupDocument'])->middleware('role.name:4')->name('tenant.importSetupDocx');
     Route::post('/tenant-store/plan-payment-request', [TenantController::class, 'submitPlanPaymentRequest'])->middleware('role.name:owner')->name('tenant.planPayment.request');
     Route::post('/tenants/{tenant}/plan-payments/{payment}/approve', [TenantController::class, 'approvePlanPayment'])->middleware('role.name:4')->name('tenant.planPayment.approve');
     Route::post('/tenants/{tenant}/plan-payments/{payment}/cutoff', [TenantController::class, 'updatePlanPaymentCutoffDate'])->middleware('role.name:4')->name('tenant.planPayment.cutoff.update');
@@ -332,6 +333,8 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
 
     // Logs
     Route::get('/logs', [IndexController::class, 'indexLog'])->middleware('role.name:4')->name('logs.index');
+    Route::get('/documentation', [IndexController::class, 'documentationIndex'])->middleware('role.name:4')->name('documentation.index');
+    Route::get('/documentation/download/{document}', [IndexController::class, 'documentationDownload'])->middleware('role.name:4')->name('documentation.download');
 });
 
 require __DIR__.'/auth.php';

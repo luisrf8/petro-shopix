@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\TenantPlanPayment;
+use App\Support\TenantPlanResolver;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -45,12 +45,7 @@ class RestrictBasicPlanAccess
 
     private function isBasicPlanTenant(int $tenantId): bool
     {
-        $latestPaid = TenantPlanPayment::with('plan')
-            ->where('tenant_id', $tenantId)
-            ->where('status', 'paid')
-            ->orderByDesc('paid_at')
-            ->orderByDesc('id')
-            ->first();
+        $latestPaid = TenantPlanResolver::latestPaidForTenant($tenantId);
 
         if (!$latestPaid || !$latestPaid->plan) {
             return false;

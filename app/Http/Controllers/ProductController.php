@@ -1438,16 +1438,16 @@ class ProductController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string|max:500',
-            'category' => 'nullable|exists:categories,id',
-            'category_id' => 'nullable|exists:categories,id',
-            'is_active' => 'required|boolean',
+            'name' => 'sometimes|required|string|max:255',
+            'description' => 'nullable|string',
+            'category' => 'sometimes|nullable|exists:categories,id',
+            'category_id' => 'sometimes|nullable|exists:categories,id',
+            'is_active' => 'sometimes|required|boolean',
             'is_consumable' => 'nullable|boolean',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
 
-        $categoryId = (int) ($validated['category'] ?? $validated['category_id'] ?? 0);
+        $categoryId = (int) ($validated['category'] ?? $validated['category_id'] ?? $product->category_id ?? 0);
         if ($categoryId <= 0) {
             return response()->json([
                 'success' => false,
@@ -1468,13 +1468,13 @@ class ProductController extends Controller
         }
 
         $product->update([
-            'name' => $validated['name'],
-            'slug' => $this->generateUniqueProductSlug((string) $validated['name'], (int) $product->tenant_id, (int) $product->id),
-            'description' => $validated['description'] ?? null,
+            'name' => $validated['name'] ?? $product->name,
+            'slug' => $this->generateUniqueProductSlug((string) ($validated['name'] ?? $product->name), (int) $product->tenant_id, (int) $product->id),
+            'description' => array_key_exists('description', $validated) ? ($validated['description'] ?? null) : $product->description,
             'category_id' => $categoryId,
-            'is_active' => $validated['is_active'],
-            'is_consumable' => (bool) ($validated['is_consumable'] ?? false),
-            'discount_percentage' => (float) ($validated['discount_percentage'] ?? 0),
+            'is_active' => array_key_exists('is_active', $validated) ? (bool) $validated['is_active'] : (bool) $product->is_active,
+            'is_consumable' => array_key_exists('is_consumable', $validated) ? (bool) $validated['is_consumable'] : (bool) $product->is_consumable,
+            'discount_percentage' => array_key_exists('discount_percentage', $validated) ? (float) $validated['discount_percentage'] : (float) ($product->discount_percentage ?? 0),
         ]);
 
         return response()->json([

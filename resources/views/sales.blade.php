@@ -416,7 +416,9 @@
         #cart.offcanvas-admin-desktop {
             position: sticky;
             top: 90px;
-            height: calc(100vh - 120px);
+            height: calc((85vh - 120px));
+            width: min(100%, 360px);
+            margin-left: auto;
             border: 1px solid #e3e6ea;
             border-radius: .75rem;
             background: #fff;
@@ -571,29 +573,14 @@
             </div>
         </div>
         <div class="row g-4">
-        <div class="col-12 col-xl-8">
+        <div class="col-12 col-xl-9">
             <span id="baseRate" data-rate="{{ number_format($baseRateToBs ?? 0, 2, '.', '') }}"></span>
             <span id="customerId" data-rate="{{ $customerId}}"></span>
             <form id="purchaseForm">
                 @csrf
                 <!-- Paso 1: Selección del Ítem -->
                 <div id="step1" class="step sale-step-panel-step1">
-                    <div class="sale-step-title">Paso 1: Selección de productos</div>
-
-                    <div class="sale-toolbar-grid">
-
-                    </div>
                     <div class="sale-section-card">
-                    <div class="sale-section-header">
-                        <div>
-                            <input 
-                            type="text" 
-                            id="searchCategory" 
-                            class="form-control border border-1 p-2 bg-white" 
-                            placeholder="Buscar categoría..." 
-                            onkeyup="filterCategories()">
-                        </div>
-                    </div>
                     <div id="categoriesContainer" class="d-flex overflow-auto py-2 mb-1" style="scroll-snap-type: x mandatory;">
                         <div class="category-item flex-shrink-0" style="scroll-snap-align: start;" data-category="all" onclick="filterProductsByCategory('all')">
                             <a href="javascript:void(0)" class="text-decoration-none category-filter sale-category-pill is-active">
@@ -621,97 +608,115 @@
                     </div>
                     </div>
 
-                                @if(isset($materialPackages) && $materialPackages->count() > 0)
-                                    <div id="materialPackagesSection" class="sale-section-card mb-3 material-packages-section" data-category="packages">
-                                        <div class="sale-section-header">
-                                            <div>
-                                                <h6 class="mb-1">Paquetes / Listas de materiales</h6>
-                                                <p>Combos rápidos con precio fijo o composición flexible.</p>
+                    <div class="sale-section-card">
+                        <div class="row g-3 mb-3">
+                            <div class="col-12 col-lg-6">
+                                <div class="sale-toolbar-card h-100 mb-0">
+                                    <h6 class="mb-2">Buscar producto</h6>
+                                    <input
+                                        type="text"
+                                        id="searchInput"
+                                        class="form-control border border-1 p-2 bg-white"
+                                        placeholder="Buscar producto..."
+                                        onkeyup="filterProducts()">
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-lg-6">
+                                <div class="sale-toolbar-card h-100 mb-0">
+                                    <h6 class="mb-2">Agregar por QR / Código de barras</h6>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <input type="text" id="scanCodeInput" class="form-control border border-1 p-2 bg-white" placeholder="Escanea o pega el código">
+                                        <button type="button" class="btn btn-dark mb-0" id="scanCodeBtn">Agregar</button>
+                                        <button type="button" class="btn btn-outline-dark mb-0" id="openQrScannerBtn" data-bs-toggle="modal" data-bs-target="#scanQrModal">Escanear con cámara</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    <div id="itemSelector" class="sale-products-grid">
+                        @if(isset($materialPackages) && $materialPackages->count() > 0)
+                            @foreach($materialPackages as $package)
+                                @php
+                                    $firstItem = $package->items->first();
+                                    $firstImage = $firstItem && $firstItem->variant && $firstItem->variant->product && isset($firstItem->variant->product->images[0])
+                                        ? (\App\Support\ImageStorage::url($firstItem->variant->product->images[0]->path) ?? asset('assets/img/shopix5.png'))
+                                        : null;
+                                    $packageTotalBeforeDiscount = $package->items->sum(function($it) {
+                                        $basePrice = (float) ($it->variant->price ?? 0);
+                                        $productDiscount = (float) ($it->variant->product->discount_percentage ?? 0);
+                                        $variantDiscount = (float) ($it->variant->discount_percentage ?? 0);
+                                        $price = $basePrice
+                                            * ((100 - $productDiscount) / 100)
+                                            * ((100 - $variantDiscount) / 100);
+                                        $qty = (float) ($it->quantity ?? 0);
+                                        return $price * $qty;
+                                    });
+                                    $packageDiscount = (float) ($package->discount_percentage ?? 0);
+                                    $packageTotalCalculated = $packageTotalBeforeDiscount * ((100 - $packageDiscount) / 100);
+                                    $packageTotal = !is_null($package->package_price)
+                                        ? (float) $package->package_price
+                                        : $packageTotalCalculated;
+
+                                    $packageSearchParts = [mb_strtolower((string) ($package->name ?? ''))];
+                                    $packageCategoryIds = [];
+                                    foreach (($package->items ?? []) as $pkgItem) {
+                                        $pkgProduct = $pkgItem->variant->product ?? null;
+                                        if ($pkgProduct) {
+                                            $packageSearchParts[] = mb_strtolower((string) ($pkgProduct->name ?? ''));
+                                            $packageSearchParts[] = mb_strtolower((string) ($pkgProduct->description ?? ''));
+                                            if (!is_null($pkgProduct->category_id)) {
+                                                $packageCategoryIds[] = (string) $pkgProduct->category_id;
+                                            }
+                                        }
+                                        $packageSearchParts[] = mb_strtolower((string) ($pkgItem->variant->size ?? ''));
+                                    }
+                                    $packageSearchText = trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($packageSearchParts))));
+                                    $packageCategoryIds = array_values(array_unique(array_filter($packageCategoryIds)));
+                                @endphp
+                                <div
+                                    class="product-item package-item"
+                                    data-category="packages"
+                                    data-name="{{ mb_strtolower((string) $package->name) }}"
+                                    data-search="{{ $packageSearchText }}"
+                                    data-package-categories="{{ implode(',', $packageCategoryIds) }}"
+                                >
+                                    <div class="card h-100 shadow-sm">
+                                        <div class="card-body">
+                                            <div class="d-flex gap-3 align-items-center mb-2">
+                                                <div class="icon icon-shape icon-xl shadow bg-transparent text-center border border-1 border-black text-info border-radius-lg flex-shrink-0" style="width: 70px; height: 70px;">
+                                                    @if($firstImage)
+                                                        <img src="{{ $firstImage }}" alt="{{ $package->name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
+                                                    @else
+                                                        <i class="material-symbols-rounded text-dark">inventory_2</i>
+                                                    @endif
+                                                </div>
+                                                <div class="flex-grow-1">
+                                                    <h6 class="mb-1">{{ $package->name }}</h6>
+                                                    <p class="text-sm text-muted mb-0">{{ $package->items->count() }} materiales</p>
+                                                    <p class="text-sm fw-bold mb-0">{{ number_format($packageTotal, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</p>
+                                                    @if(!is_null($package->package_price))
+                                                        <p class="text-xs text-dark mb-0">Precio fijo combo</p>
+                                                    @endif
+                                                    @if($packageDiscount > 0)
+                                                        <p class="text-xs text-success mb-0">Descuento paquete: {{ number_format($packageDiscount, 2) }}%</p>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                            <div class="d-flex gap-2 align-items-center mt-2">
+                                                <input type="number" min="1" value="1" class="form-control form-control-sm" id="packageQty_{{ $package->id }}" style="max-width: 90px;">
+                                                <button
+                                                    type="button"
+                                                    class="btn btn-sm btn-outline-dark mb-0"
+                                                    onclick="addMaterialPackageToSale({{ $package->id }})"
+                                                >Agregar paquete</button>
                                             </div>
                                         </div>
-                                            <div class="row g-3">
-                                                @foreach($materialPackages as $package)
-                                                    @php
-                                                        $firstItem = $package->items->first();
-                                                        $firstImage = $firstItem && $firstItem->variant && $firstItem->variant->product && isset($firstItem->variant->product->images[0])
-                                                            ? (\App\Support\ImageStorage::url($firstItem->variant->product->images[0]->path) ?? asset('assets/img/shopix5.png'))
-                                                            : null;
-                                                        $packageTotalBeforeDiscount = $package->items->sum(function($it) {
-                                                            $basePrice = (float) ($it->variant->price ?? 0);
-                                                            $productDiscount = (float) ($it->variant->product->discount_percentage ?? 0);
-                                                            $variantDiscount = (float) ($it->variant->discount_percentage ?? 0);
-                                                            $price = $basePrice
-                                                                * ((100 - $productDiscount) / 100)
-                                                                * ((100 - $variantDiscount) / 100);
-                                                            $qty = (float) ($it->quantity ?? 0);
-                                                            return $price * $qty;
-                                                        });
-                                                        $packageDiscount = (float) ($package->discount_percentage ?? 0);
-                                                        $packageTotalCalculated = $packageTotalBeforeDiscount * ((100 - $packageDiscount) / 100);
-                                                        $packageTotal = !is_null($package->package_price)
-                                                            ? (float) $package->package_price
-                                                            : $packageTotalCalculated;
-                                                    @endphp
-                                                    <div class="col-12 col-md-6 col-lg-4 package-item" data-name="{{ strtolower($package->name) }}">
-                                                        <div class="card h-100 shadow-sm">
-                                                            <div class="card-body">
-                                                                <div class="d-flex gap-3 align-items-center mb-2">
-                                                                    <div class="icon icon-shape icon-xl shadow bg-transparent text-center border border-1 border-black text-info border-radius-lg flex-shrink-0" style="width: 70px; height: 70px;">
-                                                                        @if($firstImage)
-                                                                            <img src="{{ $firstImage }}" alt="{{ $package->name }}" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
-                                                                        @else
-                                                                            <i class="material-symbols-rounded text-dark">inventory_2</i>
-                                                                        @endif
-                                                                    </div>
-                                                                    <div class="flex-grow-1">
-                                                                        <h6 class="mb-1">{{ $package->name }}</h6>
-                                                                        <p class="text-sm text-muted mb-0">{{ $package->items->count() }} materiales</p>
-                                                                        <p class="text-sm fw-bold mb-0">{{ number_format($packageTotal, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</p>
-                                                                        @if(!is_null($package->package_price))
-                                                                            <p class="text-xs text-dark mb-0">Precio fijo combo</p>
-                                                                        @endif
-                                                                        @if($packageDiscount > 0)
-                                                                            <p class="text-xs text-success mb-0">Descuento paquete: {{ number_format($packageDiscount, 2) }}%</p>
-                                                                        @endif
-                                                                    </div>
-                                                                </div>
-                                                                <div class="d-flex gap-2 align-items-center mt-2">
-                                                                    <input type="number" min="1" value="1" class="form-control form-control-sm" id="packageQty_{{ $package->id }}" style="max-width: 90px;">
-                                                                    <button
-                                                                        type="button"
-                                                                        class="btn btn-sm btn-outline-dark mb-0"
-                                                                        onclick="addMaterialPackageToSale({{ $package->id }})"
-                                                                    >Agregar paquete</button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                @endforeach
-                                            </div>
                                     </div>
-                                @endif
+                                </div>
+                            @endforeach
+                        @endif
 
-                    <div class="sale-section-card">
-                    <div class="sale-section-header">
-                        <div>
-                            <h6 class="mb-1">Productos del catálogo</h6>
-                        </div>
-                                                <input 
-                            type="text" 
-                            id="searchInput" 
-                            class="form-control border border-1 p-2 bg-white" 
-                            placeholder="Buscar producto..." 
-                            onkeyup="filterProducts()">
-                    </div>
-                    <div class="sale-toolbar-card mb-2">
-                        <h6 class="mb-2">Agregar por QR / Código de barras</h6>
-                        <div class="d-flex gap-2 flex-wrap">
-                            <input type="text" id="scanCodeInput" class="form-control border border-1 p-2 bg-white" placeholder="Escanea o pega el código">
-                            <button type="button" class="btn btn-dark mb-0" id="scanCodeBtn">Agregar</button>
-                            <button type="button" class="btn btn-outline-dark mb-0" id="openQrScannerBtn" data-bs-toggle="modal" data-bs-target="#scanQrModal">Escanear con cámara</button>
-                        </div>
-                    </div>
-                    <div id="itemSelector" class="sale-products-grid">
                         @foreach($productItems as $item)
                             <div class="product-item" data-category="{{ $item->category_id }}" data-name="{{ strtolower($item->name) }}">
                                 <div class="card h-100">
@@ -1067,7 +1072,7 @@
 
             </form>
         </div>
-        <div class="col-12 col-xl-4">
+        <div class="col-12 col-xl-3">
             <div class="offcanvas offcanvas-end offcanvas-admin-desktop" tabindex="-1" id="cart" aria-labelledby="cartOffcanvasLabel" data-bs-scroll="true" data-bs-backdrop="true">
                 <div class="offcanvas-header border-bottom">
                     <h4 class="offcanvas-title m-0" id="cartOffcanvasLabel">Carrito</h4>
@@ -1076,7 +1081,7 @@
                         <button type="button" class="btn-close d-xl-none" data-bs-dismiss="offcanvas" aria-label="Close"></button>
                     </div>
                 </div>
-                <div class="offcanvas-body p-3 p-xl-4">
+                <div class="offcanvas-body p-3 p-xl-3">
                     <ul id="cartList" class="list-group gap-1"></ul>
                     <div class="mt-3">
                         <strong>Sub Total:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="cartSubTotal">0.00</span>
@@ -2088,7 +2093,6 @@ function updateQuantity(id, newQty) {
         function filterProductsByCategory(categoryId) {
             activeCategory = String(categoryId || 'all').trim();
             const productItems = document.querySelectorAll('.product-item');
-            const packagesSection = document.getElementById('materialPackagesSection');
             const categoryButtons = document.querySelectorAll('.category-filter.sale-category-pill');
 
             categoryButtons.forEach(button => button.classList.remove('is-active'));
@@ -2102,14 +2106,21 @@ function updateQuantity(id, newQty) {
 
             productItems.forEach(item => {
                 const itemCategory = String(item.getAttribute('data-category') || '').trim();
-                const shouldShow = isAll || (!isPackages && itemCategory === activeCategory);
+                let shouldShow = false;
+
+                if (itemCategory === 'packages') {
+                    const packageCategoriesRaw = String(item.getAttribute('data-package-categories') || '').trim();
+                    const packageCategories = packageCategoriesRaw === ''
+                        ? []
+                        : packageCategoriesRaw.split(',').map(v => v.trim()).filter(Boolean);
+
+                    shouldShow = isAll || isPackages || (!isPackages && packageCategories.includes(activeCategory));
+                } else {
+                    shouldShow = isAll || (!isPackages && itemCategory === activeCategory);
+                }
+
                 item.classList.toggle('d-none', !shouldShow);
             });
-
-            if (packagesSection) {
-                const showPackages = isAll || isPackages;
-                packagesSection.classList.toggle('d-none', !showPackages);
-            }
 
             // Limpiar el campo de búsqueda de productos al cambiar de categoría
             const searchInput = document.getElementById('searchInput');
@@ -2155,35 +2166,30 @@ function updateQuantity(id, newQty) {
             const searchInput = document.getElementById('searchInput');
             const filter = String(searchInput?.value || '').toLowerCase().trim();
             const productItems = document.querySelectorAll('.product-item');
-            const packageItems = document.querySelectorAll('.package-item');
-            const packagesSection = document.getElementById('materialPackagesSection');
 
             const isAll = activeCategory === 'all';
             const isPackages = activeCategory === 'packages';
 
             productItems.forEach(item => {
                 const name = String(item.getAttribute('data-name') || '');
+                const searchableText = String(item.getAttribute('data-search') || name).toLowerCase();
                 const itemCategory = String(item.getAttribute('data-category') || '').trim();
-                const matchCategory = isAll || (!isPackages && itemCategory === activeCategory);
-                const shouldShow = matchCategory && name.includes(filter);
+                let matchCategory = false;
+
+                if (itemCategory === 'packages') {
+                    const packageCategoriesRaw = String(item.getAttribute('data-package-categories') || '').trim();
+                    const packageCategories = packageCategoriesRaw === ''
+                        ? []
+                        : packageCategoriesRaw.split(',').map(v => v.trim()).filter(Boolean);
+                    matchCategory = isAll || isPackages || (!isPackages && packageCategories.includes(activeCategory));
+                } else {
+                    matchCategory = isAll || (!isPackages && itemCategory === activeCategory);
+                }
+
+                const shouldShow = matchCategory && searchableText.includes(filter);
 
                 item.classList.toggle('d-none', !shouldShow);
             });
-
-            if (packagesSection) {
-                let hasVisiblePackage = false;
-
-                packageItems.forEach(item => {
-                    const name = item.getAttribute('data-name') || '';
-                    const shouldShow = (isAll || isPackages) && name.includes(filter);
-                    item.classList.toggle('d-none', !shouldShow);
-                    if (shouldShow) {
-                        hasVisiblePackage = true;
-                    }
-                });
-
-                packagesSection.classList.toggle('d-none', !hasVisiblePackage);
-            }
         }
 
         function showProductDetails(name, description, imageUrl, price, stock, size) {

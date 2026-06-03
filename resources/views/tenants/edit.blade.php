@@ -179,6 +179,10 @@
                     <input type="email" name="email" class="form-control border border-1 p-2" value="{{ old('email', $tenant->email) }}">
                   </div>
                   <div class="col-md-6">
+                    <label class="form-label">URL propia (opcional)</label>
+                    <input type="text" name="external_url" class="form-control border border-1 p-2" value="{{ old('external_url', $tenant->external_url) }}" placeholder="https://mitienda.com">
+                  </div>
+                  <div class="col-md-6">
                     <label class="form-label">Logo</label>
                     <input type="text" name="logo" class="form-control border border-1 p-2" value="{{ old('logo', $tenant->logo) }}" placeholder="Ruta o identificador del logo">
                   </div>
