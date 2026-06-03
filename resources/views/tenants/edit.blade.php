@@ -195,7 +195,7 @@
                   </div>
                   <div class="col-md-8">
                     <label class="form-label">Rubro económico</label>
-                    <select id="tenantEconomicActivity" name="economic_activity" class="form-select border border-1 p-2" data-selected="{{ old('economic_activity', $tenant->economic_activity) }}" required>
+                    <select id="tenantEconomicActivity" name="economic_activity" class="form-select border border-1 p-2" data-selected="{{ old('economic_activity', $tenant->economic_activity) }}">
                       <option value="">Selecciona un rubro</option>
                     </select>
                     <small id="tenantEconomicActivityHelp" class="text-muted d-block mt-1"></small>
@@ -348,16 +348,20 @@
                 </div>
                 <div class="mb-0">
                   <label class="form-label">Plan</label>
+                  @php
+                    $currentPlanId = (int) ($latestPlanPayment?->plan_id ?? 0);
+                  @endphp
                   <select name="plan_id" class="form-select border border-1 p-2">
-                    <option value="" {{ old('plan_id') === null || old('plan_id') === '' ? 'selected' : '' }}>Mantener plan actual</option>
+                    <option value="" {{ old('plan_id') === null || old('plan_id') === '' ? 'selected' : '' }}>Mantener plan actual (sin renovar)</option>
                     @foreach($upgradePlans as $plan)
                       <option value="{{ $plan->id }}" {{ (string) old('plan_id') === (string) $plan->id ? 'selected' : '' }}>
-                        {{ $plan->name }} - ${{ number_format((float) ($plan->price ?? 0), 2) }}
+                        {{ $plan->name }}{{ (int) $plan->id === $currentPlanId ? ' (actual)' : '' }} - ${{ number_format((float) ($plan->price ?? 0), 2) }}
                       </option>
                     @endforeach
                   </select>
+                  <small class="text-muted d-block mt-1">Selecciona cualquier plan para cambiarlo. Si eliges el plan actual, se renovará la vigencia.</small>
                   @if($upgradePlans->isEmpty())
-                    <small class="text-muted d-block mt-1">No hay planes superiores disponibles para esta tienda.</small>
+                    <small class="text-muted d-block mt-1">No hay planes disponibles para esta tienda.</small>
                   @endif
                 </div>
               </div>
