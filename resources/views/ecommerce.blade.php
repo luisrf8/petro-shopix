@@ -139,6 +139,91 @@
       box-shadow: 0 22px 48px rgba(15, 23, 42, 0.14);
     }
 
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(220px, 1fr));
+      gap: 1.25rem;
+      align-items: stretch;
+    }
+
+    .plan-card {
+      position: relative;
+    }
+
+    .plan-card.is-popular {
+      background: linear-gradient(180deg, #062a5c 0%, #07214a 100%);
+      border-color: #0a3d83;
+      color: #f8fbff;
+      box-shadow: 0 18px 44px rgba(7, 33, 74, 0.45);
+    }
+
+    .plan-popular-badge {
+      position: absolute;
+      top: 0.7rem;
+      right: 0.7rem;
+      background: #b2e549;
+      color: #325200;
+      border-radius: 999px;
+      padding: 0.24rem 0.68rem;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .plan-card.is-popular .plan-title,
+    .plan-card.is-popular .plan-label,
+    .plan-card.is-popular .plan-price,
+    .plan-card.is-popular .plan-feature-item {
+      color: #f8fbff;
+    }
+
+    .plan-price {
+      font-size: clamp(2rem, 2.4vw, 2.4rem);
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 1rem;
+      color: #0f172a;
+    }
+
+    .plan-price small {
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: #5b6576;
+    }
+
+    .plan-card.is-popular .plan-price small {
+      color: #dbeafe;
+    }
+
+    .plan-feature-item {
+      font-size: 1.01rem;
+      color: #0f172a;
+    }
+
+    .plan-feature-item .bi-check2 {
+      color: #b2e549 !important;
+    }
+
+    .plan-btn-available {
+      border-radius: 0.65rem;
+      font-weight: 700;
+      border-width: 1px;
+    }
+
+    .plan-card.is-popular .plan-btn-available {
+      background: #b2e549;
+      border-color: #b2e549;
+      color: #325200;
+    }
+
+    .plan-card.is-popular .plan-btn-available:hover {
+      background: #a6db39;
+      border-color: #a6db39;
+      color: #2e4d00;
+    }
+
+
     .icon-box {
       text-align: center;
     }
@@ -379,6 +464,10 @@
     }
     /* Agrega esta nueva clase a tu bloque <style> */
     @media (max-width: 991.98px) {
+      .plans-grid {
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+      }
+
       .landing-header {
         background: transparent;
       }
@@ -411,6 +500,10 @@
     }
 
     @media (max-width: 575.98px) {
+      .plans-grid {
+        grid-template-columns: 1fr;
+      }
+
       .hero .container {
         padding-top: 6rem;
       }
@@ -538,25 +631,31 @@
 <section id="planes" class="p-5">
     <div class="text-center">
       <h2 class="section-title mb-5">Planes Disponibles</h2>
-      <div class="d-flex flex-wrap justify-content-center gap-4">
+      <div class="plans-grid">
         @foreach($plans as $plan)
-        <div class="mb-4 d-flex justify-content-center">
-          <div class="card p-4 card-product h-100 d-flex flex-column justify-content-between" style="width: 25rem;">
+        @php
+          $isPopularPlan = str_contains(strtolower((string) $plan->name), 'pro');
+        @endphp
+        <div class="mb-2 d-flex justify-content-center">
+          <div class="card p-4 card-product plan-card {{ $isPopularPlan ? 'is-popular' : '' }} h-100 d-flex flex-column justify-content-between w-100">
+            @if($isPopularPlan)
+              <span class="plan-popular-badge">Más popular</span>
+            @endif
             <div class="card-body d-flex flex-column align-items-center">
-              <h6 class="text-uppercase fw-semibold mb-3">{{ $plan->name }}</h6>
+              <h6 class="text-uppercase fw-semibold mb-3 plan-title">{{ $plan->name }}</h6>
                 <img src="{{ $plan->image }}" 
                     alt="{{ $plan->name }}" 
                     class="img-fluid mb-3 rounded shadow-soft" 
                     style="max-width: 220px;">
 
               
-              <p class="fw-semibold mb-1">Monto a pagar</p>
-              <h4 class="fw-bold mb-4">${{ number_format($plan->price, 2) }} / Mes</h4>
+              <p class="fw-semibold mb-1 plan-label">Monto a pagar</p>
+              <h4 class="plan-price">${{ number_format($plan->price, 2) }} <small>/ Mes</small></h4>
 
-              <h6 class="fw-bold mb-2">Beneficios</h6>
+              <h6 class="fw-bold mb-2 plan-label">Beneficios</h6>
               <ul class="list-unstyled text-start w-100">
                 @foreach($plan->features as $feature)
-                <li class="mb-1 d-flex align-items-center gap-2">
+                <li class="mb-1 d-flex align-items-center gap-2 plan-feature-item">
                   <i class="bi bi-check2 me-1" style="color: #0d6efd; font-size: 1.5rem; font-weight: 800"></i>{{ $feature }}
                 </li>
                 @endforeach
@@ -564,21 +663,11 @@
             </div>
             
             <div class="card-footer bg-transparent border-0 text-center pt-3">
-              @if ($plan->status == 1)
-                <a href="/create-tenant-user"
-                  target="_blank"
-                  class="btn btn-primary w-75 fw-semibold rounded-pill">
-                  Seleccionar Plan
-                </a>
-              @else
-                <button
-                  class="btn btn-secondary w-75 fw-semibold rounded-pill"
-                  disabled
-                  style="cursor: default;"
-                >
-                  Próximamente...
-                </button>
-              @endif
+              <a href="/create-tenant-user"
+                target="_blank"
+                class="btn btn-primary w-75 plan-btn-available">
+                Suscribirse
+              </a>
             </div>
             </div>
         </div>

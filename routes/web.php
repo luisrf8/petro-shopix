@@ -179,6 +179,7 @@ Route::get('/get-states/{country}', [LocationController::class, 'getStates']);
 Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
 Route::post('/tenant-ai-image', [TenantController::class, 'generateTenantImage'])->name('tenant.ai-image');
 Route::post('/tenant-ai-copy', [TenantController::class, 'generateTenantCopy'])->name('tenant.ai-copy');
+Route::post('/tenant-ai-setup', [TenantController::class, 'generateTenantSetup'])->name('tenant.ai-setup');
 
 // RUTAS CON AUTENTICACIÓN
 Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.access', 'inactive.tenant.restrict'])->group(function () {

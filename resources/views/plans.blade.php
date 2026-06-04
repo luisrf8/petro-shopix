@@ -102,8 +102,8 @@
         <div class="mb-3">
           <label for="createPlanStatus" class="form-label">Estado</label>
           <select class="form-select border border-1 p-2" id="createPlanStatus" name="status">
-            <option value="0">Disponible</option>
-            <option value="1">Inactivo</option>
+            <option value="1">Disponible</option>
+            <option value="0">Inactivo</option>
           </select>
         </div>
         <div class="mb-3">
@@ -156,8 +156,8 @@
         <div class="mb-3">
           <label for="editPlanStatus" class="form-label">Estado</label>
           <select class="form-select border border-1 p-2" id="editPlanStatus" name="status">
-            <option value="0">Disponible</option>
-            <option value="1">Inactivo</option>
+            <option value="1">Disponible</option>
+            <option value="0">Inactivo</option>
           </select>
         </div>
         <div class="mb-3">

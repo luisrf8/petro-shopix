@@ -41,19 +41,19 @@
 
   .product-card-clean {
     border: 1px solid var(--bs-border-color);
-    border-radius: 1rem;
+    border-radius: 0.9rem;
     background: var(--bs-body-bg);
-    padding: 0.8rem 0.9rem;
+    padding: 0.62rem 0.7rem;
     height: 100%;
     display: flex;
-    gap: 0.75rem;
+    gap: 0.6rem;
     align-items: flex-start;
   }
 
   .product-thumb-clean {
-    width: 78px;
-    height: 78px;
-    border-radius: 0.85rem;
+    width: 62px;
+    height: 62px;
+    border-radius: 0.72rem;
     overflow: hidden;
     border: 1px solid var(--bs-border-color);
     display: inline-flex;
@@ -74,8 +74,15 @@
     flex: 1;
   }
 
+  .product-head-clean {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
+  }
+
   .product-title-clean {
-    font-size: 0.94rem;
+    font-size: 0.9rem;
     font-weight: 600;
     margin: 0;
     line-height: 1.2;
@@ -83,33 +90,42 @@
 
   .product-desc-clean {
     color: var(--bs-secondary-color);
-    font-size: 0.78rem;
-    margin: 0.1rem 0 0.35rem;
+    font-size: 0.74rem;
+    margin: 0.08rem 0 0.25rem;
     line-height: 1.25;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+
+  .variants-list-clean {
+    display: grid;
+    gap: 0.26rem;
   }
 
   .variant-row-clean {
     display: flex;
     justify-content: space-between;
     gap: 0.5rem;
-    border-top: 1px solid var(--bs-border-color-translucent);
-    padding-top: 0.32rem;
-    margin-top: 0.32rem;
-    font-size: 0.78rem;
-    line-height: 1.15;
+    align-items: center;
+    padding: 0.2rem 0.35rem;
+    border-radius: 0.5rem;
+    background: rgba(17, 24, 39, 0.04);
+    font-size: 0.75rem;
+    line-height: 1.1;
   }
 
   .variant-price-clean {
     font-weight: 600;
   }
 
-  .product-actions-clean {
-    align-self: flex-start;
-    margin-left: auto;
+  .variant-more-clean {
+    background: transparent;
+    padding: 0.05rem 0.15rem;
+    color: var(--bs-secondary-color);
+    font-size: 0.72rem;
+    justify-content: flex-start;
   }
 
   .edit-link-clean {
@@ -117,7 +133,7 @@
     align-items: center;
     gap: 0.25rem;
     white-space: nowrap;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     font-weight: 500;
     color: inherit;
     text-decoration: none;
@@ -196,21 +212,21 @@
     }
 
     .product-card-clean {
-      padding: 0.75rem;
-      gap: 0.55rem;
+      padding: 0.68rem;
+      gap: 0.52rem;
     }
 
     .product-thumb-clean {
-      width: 70px;
-      height: 70px;
+      width: 60px;
+      height: 60px;
     }
 
     .product-title-clean {
-      font-size: 0.88rem;
+      font-size: 0.85rem;
     }
 
     .variant-row-clean {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
     }
   }
 </style>
@@ -384,7 +400,7 @@
             ? $product->images[0]
             : $variantImage;
         @endphp
-        <div class="product-item col-12 col-md-6 col-xl-4 mb-2" data-name="{{ strtolower($product->name) }}">
+        <div class="product-item col-12 col-md-6 col-xl-3 mb-2" data-name="{{ strtolower($product->name) }}">
           <div class="product-card-clean">
               <a href="{{ route('productItem', $product->id) }}" class="product-thumb-clean" aria-label="Abrir producto {{ $product->name }}">
                 @if($productCoverImage)
@@ -395,35 +411,34 @@
               </a>
 
               <div class="product-main-clean">
-                <h6 class="product-title-clean text-truncate">{{ $product->name }}</h6>
+                <div class="product-head-clean">
+                  <h6 class="product-title-clean text-truncate mb-0">{{ $product->name }}</h6>
+                  <a href="{{ route('productItem', $product->id) }}" class="edit-link-clean">
+                    <i class="material-symbols-rounded text-sm">edit</i>Editar
+                  </a>
+                </div>
                 <p class="product-desc-clean">{{ $product->description ?: 'Sin descripción' }}</p>
 
-                @foreach ($product->variants->take(4) as $variant)
-                  <div class="variant-row-clean">
-                    <span>
-                      <strong>{{ $variant->size }}</strong>
-                    </span>
-                    <span class="variant-price-clean">
-                      {{ number_format((float) $variant->price, 2) }} {{ $baseCurrencySymbol ?? '$' }}
-                    </span>
-                    <span class="{{ $variant->stock < 1 ? 'text-danger' : ($variant->stock < 5 ? 'text-warning' : 'text-success') }}">
-                      {{ $variant->stock }} unidades
-                    </span>
-                  </div>
-                @endforeach
-                @if($product->variants->count() > 4)
-                  <div class="variant-row-clean text-muted">
-                    <span><strong>+{{ $product->variants->count() - 4 }}</strong> variantes más</span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                @endif
-              </div>
-
-              <div class="product-actions-clean">
-                <a href="{{ route('productItem', $product->id) }}" class="edit-link-clean">
-                  <i class="material-symbols-rounded text-sm">edit</i>Editar
-                </a>
+                <div class="variants-list-clean">
+                  @foreach ($product->variants->take(4) as $variant)
+                    <div class="variant-row-clean">
+                      <span>
+                        <strong>{{ $variant->size }}</strong>
+                      </span>
+                      <span class="variant-price-clean">
+                        {{ number_format((float) $variant->price, 2) }} {{ $baseCurrencySymbol ?? '$' }}
+                      </span>
+                      <span class="{{ $variant->stock < 1 ? 'text-danger' : ($variant->stock < 5 ? 'text-warning' : 'text-success') }}">
+                        {{ $variant->stock }} unidades
+                      </span>
+                    </div>
+                  @endforeach
+                  @if($product->variants->count() > 4)
+                    <div class="variant-row-clean variant-more-clean">
+                      <span><strong>+{{ $product->variants->count() - 4 }}</strong> variantes más</span>
+                    </div>
+                  @endif
+                </div>
               </div>
           </div>
         </div>

@@ -35,6 +35,10 @@
     $baseCurrencyCode = strtoupper((string) ($baseCurrencyCode ?? ($tenant->base_currency ?? 'USD')));
     $baseCurrencyCode = in_array($baseCurrencyCode, ['USD', 'EUR'], true) ? $baseCurrencyCode : 'USD';
     $baseCurrencySymbol = (string) ($baseCurrencySymbol ?? ($baseCurrencyCode === 'EUR' ? '€' : '$'));
+    $tenantExternalUrl = trim((string) ($tenant->external_url ?? ''));
+    if ($tenantExternalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($tenantExternalUrl), ['http://', 'https://'])) {
+      $tenantExternalUrl = 'https://' . $tenantExternalUrl;
+    }
 
     $mapsUrl = null;
     if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
@@ -1097,6 +1101,11 @@
             <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}#contacto"><i class="bi bi-chat-dots"></i> Contacto</a>
             </li>
+            @if(!empty($tenantExternalUrl))
+              <li class="nav-item">
+                <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ $tenantExternalUrl }}" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right"></i> Sitio oficial</a>
+              </li>
+            @endif
             <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="#" data-shopix-open-auth><i class="bi bi-person-circle"></i> Entrar</a>
             </li>

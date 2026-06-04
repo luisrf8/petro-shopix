@@ -79,10 +79,14 @@ class TenantController extends Controller
         $textModel = config('services.gemini.text_model', 'gemini-2.5-flash');
 
         if (empty($apiKey)) {
+            $fallback = $this->buildFallbackTenantCopy($validated['name'], $validated['business_type'], $validated['economic_activity']);
+
             return response()->json([
-                'success' => false,
-                'message' => 'Gemini no está configurado en el servidor.',
-            ], 422);
+                'success' => true,
+                'data' => $fallback,
+                'fallback' => true,
+                'message' => 'Gemini no esta configurado. Se genero una propuesta base.',
+            ]);
         }
 
         $storeName = trim((string) $validated['name']);
@@ -106,18 +110,26 @@ class TenantController extends Controller
         );
 
         if (!$response->successful()) {
+            $fallback = $this->buildFallbackTenantCopy($storeName, $businessType, $economicActivity);
+
             return response()->json([
-                'success' => false,
-                'message' => 'No se pudo generar el copy con Gemini.',
-            ], 422);
+                'success' => true,
+                'data' => $fallback,
+                'fallback' => true,
+                'message' => 'No se pudo generar el copy con Gemini. Se uso una propuesta base.',
+            ]);
         }
 
         $text = data_get($response->json(), 'candidates.0.content.parts.0.text', '');
         if (!is_string($text) || trim($text) === '') {
+            $fallback = $this->buildFallbackTenantCopy($storeName, $businessType, $economicActivity);
+
             return response()->json([
-                'success' => false,
-                'message' => 'Gemini no devolvió contenido útil.',
-            ], 422);
+                'success' => true,
+                'data' => $fallback,
+                'fallback' => true,
+                'message' => 'Gemini no devolvio contenido util. Se uso una propuesta base.',
+            ]);
         }
 
         $clean = trim($text);
@@ -127,20 +139,28 @@ class TenantController extends Controller
 
         $decoded = json_decode((string) $clean, true);
         if (!is_array($decoded)) {
+            $fallback = $this->buildFallbackTenantCopy($storeName, $businessType, $economicActivity);
+
             return response()->json([
-                'success' => false,
-                'message' => 'Gemini devolvió un formato inválido para slogan y descripción.',
-            ], 422);
+                'success' => true,
+                'data' => $fallback,
+                'fallback' => true,
+                'message' => 'Gemini devolvio un formato invalido. Se uso una propuesta base.',
+            ]);
         }
 
         $slogan = Str::limit(trim((string) ($decoded['slogan'] ?? '')), 255, '');
         $description = trim((string) ($decoded['description'] ?? ''));
 
         if ($slogan === '' && $description === '') {
+            $fallback = $this->buildFallbackTenantCopy($storeName, $businessType, $economicActivity);
+
             return response()->json([
-                'success' => false,
-                'message' => 'No se pudo construir una propuesta de copy.',
-            ], 422);
+                'success' => true,
+                'data' => $fallback,
+                'fallback' => true,
+                'message' => 'No se pudo construir una propuesta con Gemini. Se uso una propuesta base.',
+            ]);
         }
 
         return response()->json([
@@ -150,6 +170,446 @@ class TenantController extends Controller
                 'description' => $description,
             ],
         ]);
+    }
+
+    public function generateTenantSetup(Request $request)
+    {
+        $validated = $request->validate([
+            'query' => 'required|string|max:2000',
+            'context' => 'nullable|array',
+            'context.name' => 'nullable|string|max:255',
+            'context.business_type' => 'nullable|string|max:50',
+            'context.economic_activity' => 'nullable|string|max:150',
+            'context.country_name' => 'nullable|string|max:120',
+            'context.state_name' => 'nullable|string|max:120',
+            'context.city_name' => 'nullable|string|max:120',
+            'context.social_profiles' => 'nullable|array',
+            'context.social_profiles.*.platform' => 'nullable|string|max:50',
+            'context.social_profiles.*.url' => 'nullable|string|max:255',
+            'context.social_profiles.*.handle' => 'nullable|string|max:120',
+            'context.social_profiles.*.notes' => 'nullable|string|max:255',
+        ]);
+
+        $apiKey = config('services.gemini.api_key');
+        $textModel = config('services.gemini.text_model', 'gemini-2.5-flash');
+
+        $seed = [
+            'name' => trim((string) data_get($validated, 'context.name', '')),
+            'business_type' => $this->normalizeBusinessType((string) data_get($validated, 'context.business_type', 'tienda')),
+            'economic_activity' => trim((string) data_get($validated, 'context.economic_activity', '')),
+            'country_name' => trim((string) data_get($validated, 'context.country_name', '')),
+            'state_name' => trim((string) data_get($validated, 'context.state_name', '')),
+            'city_name' => trim((string) data_get($validated, 'context.city_name', '')),
+            'social_profiles' => $this->normalizeSocialProfiles(data_get($validated, 'context.social_profiles', [])),
+        ];
+
+        if ($seed['economic_activity'] === '') {
+            $seed['economic_activity'] = $seed['business_type'] === 'servicio' ? 'Servicios profesionales' : 'Comercio general';
+        }
+
+        if (empty($apiKey)) {
+            $fallback = $this->buildFallbackTenantSetupPayload((string) $validated['query'], $seed);
+
+            return response()->json([
+                'success' => true,
+                'payload' => $fallback,
+                'summary' => $this->summarizeSetupPayload($fallback),
+                'fallback' => true,
+                'message' => 'Gemini no esta configurado. Se genero una estructura base.',
+            ]);
+        }
+
+        $query = trim((string) $validated['query']);
+        $socialContext = '';
+        if (!empty($seed['social_profiles'])) {
+            $socialContext = "Redes sociales y fuentes de investigacion:\n" . collect($seed['social_profiles'])->map(function (array $profile) {
+                $platform = trim((string) ($profile['platform'] ?? ''));
+                $handle = trim((string) ($profile['handle'] ?? ''));
+                $url = trim((string) ($profile['url'] ?? ''));
+                $notes = trim((string) ($profile['notes'] ?? ''));
+
+                $details = collect([
+                    $platform !== '' ? "plataforma: {$platform}" : null,
+                    $handle !== '' ? "handle: {$handle}" : null,
+                    $url !== '' ? "url: {$url}" : null,
+                    $notes !== '' ? "nota: {$notes}" : null,
+                ])->filter()->implode(' | ');
+
+                return '- ' . $details;
+            })->implode("\n") . "\n";
+        }
+
+        $prompt = "Actua como analista de onboarding para SHOPIX. "
+            . "Con la consulta del usuario y el contexto, devuelve SOLO JSON valido, sin markdown, sin texto adicional. "
+            . "Debes responder exactamente con este objeto raiz: "
+            . "{"
+            . "\"tenant\":{...},"
+            . "\"users\":[...],"
+            . "\"payment_methods\":[...],"
+            . "\"store_catalog\":[...],"
+            . "\"service_catalog\":[...],"
+            . "\"schedule_rules\":[...]"
+            . "}. "
+            . "Reglas: "
+            . "1) Si falta informacion, infiere valores realistas y consistentes para una tienda inicial. "
+            . "2) Usa maximo 12 items en store_catalog y maximo 8 items en service_catalog. "
+            . "3) Usa montos numericos simples y horarios HH:MM. "
+            . "4) business_type solo puede ser tienda o servicio. "
+            . "5) working_days debe ser array con monday..sunday en ingles. "
+            . "6) Extrae un nombre comercial limpio para tenant.name. Nunca uses frases meta como 'mi empresa se llama', 'en instagram' o texto de la consulta literal. "
+            . "7) tenant.economic_activity debe salir de la investigacion e inferencia del negocio, no de un valor generico por defecto salvo falta total de senales. "
+            . "8) Si recibes redes sociales, analizalas como fuentes principales y usa Instagram, TikTok, Facebook, LinkedIn y X para inferir tono, productos, servicios, publico y frecuencia. "
+            . "9) Incluye tenant.social_profiles con un array limpio de fuentes analizadas; cada elemento debe conservar platform, url, handle y notes breves. "
+            . "Contexto semilla: " . json_encode($seed, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ". "
+            . $socialContext
+            . "Consulta del usuario: {$query}";
+
+        $response = Http::timeout(45)->post(
+            "https://generativelanguage.googleapis.com/v1beta/models/{$textModel}:generateContent?key={$apiKey}",
+            [
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json',
+                    'temperature' => 0.2,
+                ],
+                'contents' => [
+                    ['parts' => [['text' => $prompt]]],
+                ],
+            ]
+        );
+
+        if (!$response->successful()) {
+            $fallback = $this->buildFallbackTenantSetupPayload($query, $seed);
+
+            return response()->json([
+                'success' => true,
+                'payload' => $fallback,
+                'summary' => $this->summarizeSetupPayload($fallback),
+                'fallback' => true,
+                'message' => 'No se pudo generar la estructura con Gemini. Se uso una base sugerida.',
+            ]);
+        }
+
+        $text = data_get($response->json(), 'candidates.0.content.parts.0.text', '');
+        if (!is_string($text) || trim($text) === '') {
+            $fallback = $this->buildFallbackTenantSetupPayload($query, $seed);
+
+            return response()->json([
+                'success' => true,
+                'payload' => $fallback,
+                'summary' => $this->summarizeSetupPayload($fallback),
+                'fallback' => true,
+                'message' => 'Gemini no devolvio contenido util. Se uso una base sugerida.',
+            ]);
+        }
+
+        $clean = trim($text);
+        $clean = preg_replace('/^```json\s*/', '', $clean);
+        $clean = preg_replace('/^```\s*/', '', (string) $clean);
+        $clean = preg_replace('/\s*```$/', '', (string) $clean);
+
+        $decoded = json_decode((string) $clean, true);
+        if (!is_array($decoded)) {
+            $decoded = $this->extractFirstJsonObject($clean);
+        }
+        if (!is_array($decoded)) {
+            $fallback = $this->buildFallbackTenantSetupPayload($query, $seed);
+
+            return response()->json([
+                'success' => true,
+                'payload' => $fallback,
+                'summary' => $this->summarizeSetupPayload($fallback),
+                'fallback' => true,
+                'message' => 'Gemini devolvio un formato invalido. Se uso una base sugerida.',
+            ]);
+        }
+
+        $payload = $this->normalizeTenantSetupPayload($decoded, $seed);
+
+        return response()->json([
+            'success' => true,
+            'payload' => $payload,
+            'summary' => $this->summarizeSetupPayload($payload),
+            'message' => 'Estructura generada. Revisa los datos y guarda para aplicar importacion completa.',
+        ]);
+    }
+
+    private function extractFirstJsonObject(string $text): ?array
+    {
+        $start = strpos($text, '{');
+        $end = strrpos($text, '}');
+
+        if ($start === false || $end === false || $end <= $start) {
+            return null;
+        }
+
+        $candidate = substr($text, $start, $end - $start + 1);
+        $decoded = json_decode($candidate, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    private function buildFallbackTenantCopy(string $name, string $businessType, string $economicActivity): array
+    {
+        $storeName = trim($name) !== '' ? trim($name) : 'Tu negocio';
+        $normalizedType = Str::lower(trim($businessType));
+        $activity = trim($economicActivity) !== '' ? trim($economicActivity) : 'servicios y productos';
+        $typeLabel = $normalizedType === 'servicio' ? 'servicio' : 'tienda';
+
+        return [
+            'slogan' => Str::limit($storeName . ': calidad y confianza para tu dia a dia', 255, ''),
+            'description' => "{$storeName} es una {$typeLabel} especializada en {$activity}. Ofrecemos una atencion cercana, procesos claros y una experiencia de compra simple y confiable. Nuestro enfoque combina calidad, rapidez y acompanamiento para que cada cliente encuentre exactamente lo que necesita, con soporte continuo y un compromiso real con resultados.",
+        ];
+    }
+
+    private function buildFallbackTenantSetupPayload(string $query, array $seed = []): array
+    {
+        $seedName = trim((string) ($seed['name'] ?? ''));
+        $name = $seedName;
+
+        $businessType = $this->normalizeBusinessType((string) ($seed['business_type'] ?? 'tienda'));
+        $economicActivity = trim((string) ($seed['economic_activity'] ?? ''));
+        if ($economicActivity === '') {
+            $economicActivity = $businessType === 'servicio' ? 'Servicios profesionales' : 'Comercio general';
+        }
+
+        $payload = [
+            'tenant' => [
+                'name' => $name,
+                'slug' => $name !== '' ? Str::slug($name) : null,
+                'business_type' => $businessType,
+                'economic_activity' => $economicActivity,
+                'slogan' => Str::limit(($name !== '' ? $name : 'Tu negocio') . ' te atiende con rapidez y confianza', 255, ''),
+                'description' => Str::limit(($name !== '' ? $name : 'Tu negocio') . " ofrece {$economicActivity} con enfoque en calidad, disponibilidad y buena atencion.", 700, ''),
+                'country_name' => trim((string) ($seed['country_name'] ?? '')),
+                'state_name' => trim((string) ($seed['state_name'] ?? '')),
+                'city_name' => trim((string) ($seed['city_name'] ?? '')),
+                'social_profiles' => $seed['social_profiles'] ?? [],
+                'working_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
+                'opening_time' => '08:00',
+                'closing_time' => '18:00',
+                'delivery_enabled' => $businessType === 'tienda',
+                'delivery_fee_mode' => 'fixed',
+                'delivery_fixed_fee' => 2.50,
+            ],
+            'users' => [
+                [
+                    'name' => $name !== '' ? 'Owner ' . $name : 'Owner Principal',
+                    'role' => 'owner',
+                ],
+            ],
+            'payment_methods' => [
+                [
+                    'name' => 'Pago movil',
+                    'has_reference' => true,
+                ],
+                [
+                    'name' => 'Transferencia',
+                    'has_reference' => true,
+                ],
+            ],
+            'store_catalog' => $businessType === 'tienda'
+                ? [
+                    ['category' => 'General', 'product_name' => 'Producto base A', 'variant_name' => 'Unica', 'price' => 5.00, 'stock' => 20, 'is_active' => true],
+                    ['category' => 'General', 'product_name' => 'Producto base B', 'variant_name' => 'Unica', 'price' => 7.50, 'stock' => 15, 'is_active' => true],
+                ]
+                : [],
+            'service_catalog' => $businessType === 'servicio'
+                ? [
+                    ['category' => 'Servicios', 'name' => 'Servicio inicial', 'duration_minutes' => 60, 'price' => 15.00, 'is_active' => true],
+                ]
+                : [],
+            'schedule_rules' => [
+                ['professional' => $name !== '' ? 'Owner ' . $name : 'Owner Principal', 'day' => 'monday', 'start_time' => '08:00', 'end_time' => '17:00', 'slot_interval_minutes' => 30, 'is_active' => true],
+            ],
+        ];
+
+        return $this->normalizeTenantSetupPayload($payload, $seed);
+    }
+
+    private function summarizeSetupPayload(array $payload): array
+    {
+        return [
+            'users' => is_array($payload['users'] ?? null) ? count($payload['users']) : 0,
+            'payment_methods' => is_array($payload['payment_methods'] ?? null) ? count($payload['payment_methods']) : 0,
+            'store_catalog' => is_array($payload['store_catalog'] ?? null) ? count($payload['store_catalog']) : 0,
+            'service_catalog' => is_array($payload['service_catalog'] ?? null) ? count($payload['service_catalog']) : 0,
+            'schedule_rules' => is_array($payload['schedule_rules'] ?? null) ? count($payload['schedule_rules']) : 0,
+            'social_profiles' => is_array(data_get($payload, 'tenant.social_profiles')) ? count(data_get($payload, 'tenant.social_profiles')) : 0,
+        ];
+    }
+
+    private function normalizeTenantSetupPayload(array $payload, array $seed = []): array
+    {
+        $tenantInput = is_array($payload['tenant'] ?? null) ? $payload['tenant'] : [];
+        $seedName = trim((string) ($seed['name'] ?? ''));
+        $tenantName = trim((string) ($tenantInput['name'] ?? $seedName));
+
+        $businessType = $this->normalizeBusinessType((string) ($tenantInput['business_type'] ?? ($seed['business_type'] ?? 'tienda')));
+        $economicActivity = $this->normalizeEconomicActivity(
+            (string) ($tenantInput['economic_activity'] ?? ($seed['economic_activity'] ?? '')),
+            $businessType
+        );
+
+        $normalizedTenant = [
+            'name' => Str::limit($tenantName, 255, ''),
+            'slug' => Str::slug((string) ($tenantInput['slug'] ?? ($tenantName !== '' ? $tenantName : ''))),
+            'email' => filter_var((string) ($tenantInput['email'] ?? ''), FILTER_VALIDATE_EMAIL) ?: null,
+            'business_type' => $businessType,
+            'economic_activity' => $economicActivity,
+            'slogan' => Str::limit(trim((string) ($tenantInput['slogan'] ?? '')), 255, ''),
+            'description' => Str::limit(trim((string) ($tenantInput['description'] ?? '')), 2000, ''),
+            'phone_code' => Str::limit(trim((string) ($tenantInput['phone_code'] ?? '')), 5, ''),
+            'phone_number' => Str::limit(trim((string) ($tenantInput['phone_number'] ?? '')), 20, ''),
+            'country_name' => Str::limit(trim((string) ($tenantInput['country_name'] ?? ($seed['country_name'] ?? ''))), 120, ''),
+            'state_name' => Str::limit(trim((string) ($tenantInput['state_name'] ?? ($seed['state_name'] ?? ''))), 120, ''),
+            'city_name' => Str::limit(trim((string) ($tenantInput['city_name'] ?? ($seed['city_name'] ?? ''))), 120, ''),
+            'address' => Str::limit(trim((string) ($tenantInput['address'] ?? '')), 255, ''),
+            'working_days' => collect(is_array($tenantInput['working_days'] ?? null) ? $tenantInput['working_days'] : [])
+                ->map(fn ($day) => strtolower(trim((string) $day)))
+                ->filter(fn ($day) => in_array($day, ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], true))
+                ->unique()
+                ->values()
+                ->all(),
+            'opening_time' => preg_match('/^\d{2}:\d{2}/', (string) ($tenantInput['opening_time'] ?? '')) ? substr((string) $tenantInput['opening_time'], 0, 5) : null,
+            'closing_time' => preg_match('/^\d{2}:\d{2}/', (string) ($tenantInput['closing_time'] ?? '')) ? substr((string) $tenantInput['closing_time'], 0, 5) : null,
+            'appointments_first_come_enabled' => filter_var($tenantInput['appointments_first_come_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'special_taxpayer' => filter_var($tenantInput['special_taxpayer'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'delivery_enabled' => filter_var($tenantInput['delivery_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'delivery_fee_mode' => in_array((string) ($tenantInput['delivery_fee_mode'] ?? ''), ['free', 'fixed', 'distance'], true)
+                ? (string) $tenantInput['delivery_fee_mode']
+                : null,
+            'delivery_fixed_fee' => is_numeric($tenantInput['delivery_fixed_fee'] ?? null) ? (float) $tenantInput['delivery_fixed_fee'] : null,
+            'delivery_fee_per_km' => is_numeric($tenantInput['delivery_fee_per_km'] ?? null) ? (float) $tenantInput['delivery_fee_per_km'] : null,
+            'restrict_delivery_city_to_tenant' => filter_var($tenantInput['restrict_delivery_city_to_tenant'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'delivery_notifications_enabled' => filter_var($tenantInput['delivery_notifications_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'social_profiles' => $this->normalizeSocialProfiles($tenantInput['social_profiles'] ?? ($seed['social_profiles'] ?? [])),
+            'color_primary' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($tenantInput['color_primary'] ?? '')) ? strtoupper((string) $tenantInput['color_primary']) : null,
+            'color_secondary' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($tenantInput['color_secondary'] ?? '')) ? strtoupper((string) $tenantInput['color_secondary']) : null,
+            'color_accent' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($tenantInput['color_accent'] ?? '')) ? strtoupper((string) $tenantInput['color_accent']) : null,
+        ];
+
+        $socialProfiles = is_array($normalizedTenant['social_profiles'] ?? null) ? $normalizedTenant['social_profiles'] : [];
+        $normalizedTenant['tiktok'] = Str::limit(trim((string) ($tenantInput['tiktok'] ?? $this->resolveSocialProfileValue($socialProfiles, 'tiktok') ?? '')), 255, '');
+        $normalizedTenant['instagram'] = Str::limit(trim((string) ($tenantInput['instagram'] ?? $this->resolveSocialProfileValue($socialProfiles, 'instagram') ?? '')), 255, '');
+        $normalizedTenant['facebook'] = Str::limit(trim((string) ($tenantInput['facebook'] ?? $this->resolveSocialProfileValue($socialProfiles, 'facebook') ?? '')), 255, '');
+        $normalizedTenant['linkedin'] = Str::limit(trim((string) ($tenantInput['linkedin'] ?? $this->resolveSocialProfileValue($socialProfiles, 'linkedin') ?? '')), 255, '');
+        $normalizedTenant['x'] = Str::limit(trim((string) ($tenantInput['x'] ?? $this->resolveSocialProfileValue($socialProfiles, 'x') ?? '')), 255, '');
+
+        if (empty($normalizedTenant['working_days'])) {
+            $normalizedTenant['working_days'] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+        }
+
+        $normalizedUsers = collect(is_array($payload['users'] ?? null) ? $payload['users'] : [])
+            ->filter(fn ($row) => is_array($row))
+            ->map(function (array $row) {
+                $role = strtolower(trim((string) ($row['role'] ?? 'seller')));
+                if (!in_array($role, ['owner', 'admin', 'seller', 'vendedor', 'vendor'], true)) {
+                    $role = 'seller';
+                }
+
+                return array_filter([
+                    'name' => Str::limit(trim((string) ($row['name'] ?? '')), 255, ''),
+                    'email' => filter_var((string) ($row['email'] ?? ''), FILTER_VALIDATE_EMAIL) ?: null,
+                    'role' => $role,
+                    'phone_number' => Str::limit(trim((string) ($row['phone_number'] ?? '')), 20, ''),
+                    'dni' => Str::limit(trim((string) ($row['dni'] ?? '')), 50, ''),
+                    'password' => Str::limit(trim((string) ($row['password'] ?? '')), 255, ''),
+                ], fn ($value) => !is_null($value) && $value !== '');
+            })
+            ->filter(fn ($row) => !empty($row['name']) || !empty($row['email']))
+            ->take(20)
+            ->values()
+            ->all();
+
+        $normalizedPaymentMethods = collect(is_array($payload['payment_methods'] ?? null) ? $payload['payment_methods'] : [])
+            ->filter(fn ($row) => is_array($row))
+            ->map(function (array $row) {
+                return array_filter([
+                    'name' => Str::limit(trim((string) ($row['name'] ?? '')), 120, ''),
+                    'bank' => Str::limit(trim((string) ($row['bank'] ?? '')), 120, ''),
+                    'admin_name' => Str::limit(trim((string) ($row['admin_name'] ?? '')), 120, ''),
+                    'dni' => Str::limit(trim((string) ($row['dni'] ?? '')), 50, ''),
+                    'description' => Str::limit(trim((string) ($row['description'] ?? '')), 255, ''),
+                    'has_reference' => filter_var($row['has_reference'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                ], fn ($value) => !is_null($value) && $value !== '');
+            })
+            ->filter(fn ($row) => !empty($row['name']))
+            ->take(20)
+            ->values()
+            ->all();
+
+        $normalizedStoreCatalog = collect(is_array($payload['store_catalog'] ?? null) ? $payload['store_catalog'] : [])
+            ->filter(fn ($row) => is_array($row))
+            ->map(function (array $row) {
+                return array_filter([
+                    'category' => Str::limit(trim((string) ($row['category'] ?? 'General')), 120, ''),
+                    'product_name' => Str::limit(trim((string) ($row['product_name'] ?? '')), 255, ''),
+                    'description' => Str::limit(trim((string) ($row['description'] ?? '')), 255, ''),
+                    'variant_name' => Str::limit(trim((string) ($row['variant_name'] ?? 'Unica')), 120, ''),
+                    'price' => is_numeric($row['price'] ?? null) ? (float) $row['price'] : null,
+                    'stock' => is_numeric($row['stock'] ?? null) ? (int) $row['stock'] : 0,
+                    'is_consumable' => filter_var($row['is_consumable'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                    'is_active' => filter_var($row['is_active'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                ], fn ($value) => !is_null($value) && $value !== '');
+            })
+            ->filter(fn ($row) => !empty($row['product_name']))
+            ->take(120)
+            ->values()
+            ->all();
+
+        $normalizedServiceCatalog = collect(is_array($payload['service_catalog'] ?? null) ? $payload['service_catalog'] : [])
+            ->filter(fn ($row) => is_array($row))
+            ->map(function (array $row) {
+                return array_filter([
+                    'category' => Str::limit(trim((string) ($row['category'] ?? 'Servicios')), 120, ''),
+                    'name' => Str::limit(trim((string) ($row['name'] ?? '')), 255, ''),
+                    'description' => Str::limit(trim((string) ($row['description'] ?? '')), 255, ''),
+                    'professional' => Str::limit(trim((string) ($row['professional'] ?? '')), 255, ''),
+                    'duration_minutes' => max(15, (int) ($row['duration_minutes'] ?? 60)),
+                    'buffer_minutes' => max(0, (int) ($row['buffer_minutes'] ?? 0)),
+                    'price' => is_numeric($row['price'] ?? null) ? (float) $row['price'] : 0,
+                    'color_hex' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($row['color_hex'] ?? '')) ? strtoupper((string) $row['color_hex']) : '#0F172A',
+                    'is_active' => filter_var($row['is_active'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                ], fn ($value) => !is_null($value) && $value !== '');
+            })
+            ->filter(fn ($row) => !empty($row['name']))
+            ->take(80)
+            ->values()
+            ->all();
+
+        $normalizedScheduleRules = collect(is_array($payload['schedule_rules'] ?? null) ? $payload['schedule_rules'] : [])
+            ->filter(fn ($row) => is_array($row))
+            ->map(function (array $row) {
+                $day = strtolower(trim((string) ($row['day'] ?? '')));
+                if (!in_array($day, ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'], true)) {
+                    $day = null;
+                }
+
+                $start = preg_match('/^\d{2}:\d{2}/', (string) ($row['start_time'] ?? '')) ? substr((string) $row['start_time'], 0, 5) : null;
+                $end = preg_match('/^\d{2}:\d{2}/', (string) ($row['end_time'] ?? '')) ? substr((string) $row['end_time'], 0, 5) : null;
+
+                return array_filter([
+                    'professional' => Str::limit(trim((string) ($row['professional'] ?? '')), 255, ''),
+                    'day' => $day,
+                    'start_time' => $start,
+                    'end_time' => $end,
+                    'slot_interval_minutes' => max(15, (int) ($row['slot_interval_minutes'] ?? 30)),
+                    'is_active' => filter_var($row['is_active'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                ], fn ($value) => !is_null($value) && $value !== '');
+            })
+            ->filter(fn ($row) => !empty($row['professional']) && !empty($row['day']) && !empty($row['start_time']) && !empty($row['end_time']))
+            ->take(100)
+            ->values()
+            ->all();
+
+        return [
+            'tenant' => array_filter($normalizedTenant, fn ($value) => !is_null($value) && $value !== ''),
+            'users' => $normalizedUsers,
+            'payment_methods' => $normalizedPaymentMethods,
+            'store_catalog' => $normalizedStoreCatalog,
+            'service_catalog' => $normalizedServiceCatalog,
+            'schedule_rules' => $normalizedScheduleRules,
+        ];
     }
 
     public function generateTenantImage(Request $request, GeminiImageService $imageService)
@@ -482,7 +942,7 @@ class TenantController extends Controller
                 return $adminCount < 1;
             })->values();
         }
-        $plans = Plan::query()->where('status', 0)->orderBy('price')->get();
+        $plans = Plan::query()->where('status', 1)->orderBy('price')->get();
         $currentPlanCutoffDate = $this->resolvePaymentCutoffDate($currentPlanPayment);
         $currentPlanDaysRemaining = $this->calculatePlanDaysRemaining($currentPlanPayment);
         $pendingPlanPayment = $tenant->tenantPlanPayments()
@@ -800,7 +1260,7 @@ class TenantController extends Controller
     {
         
         $tenants = Tenant::all();
-        $plans = Plan::all();
+        $plans = Plan::query()->where('status', 1)->orderBy('price')->get();
         return view('createTenant', compact('tenants', 'plans'));
 
     }
@@ -808,7 +1268,7 @@ class TenantController extends Controller
     public function createIndexUser()
     {
         $tenants = Tenant::all();
-        $plans = Plan::all();
+        $plans = Plan::query()->where('status', 1)->orderBy('price')->get();
         $countries = Country::all();
         $states = State::all();
         $cities = City::all();
@@ -3121,6 +3581,60 @@ class TenantController extends Controller
         }
 
         return $normalized === 'servicio' ? 'Servicio' : 'Tienda';
+    }
+
+    private function normalizeSocialProfiles($value): array
+    {
+        $profiles = is_array($value) ? $value : [];
+
+        return collect($profiles)
+            ->filter(fn ($row) => is_array($row))
+            ->map(function (array $row) {
+                $platform = Str::lower(trim((string) ($row['platform'] ?? '')));
+                if ($platform === 'twitter') {
+                    $platform = 'x';
+                }
+
+                $normalized = [
+                    'platform' => in_array($platform, ['instagram', 'tiktok', 'facebook', 'linkedin', 'x'], true) ? $platform : '',
+                    'url' => Str::limit(trim((string) ($row['url'] ?? '')), 255, ''),
+                    'handle' => Str::limit(trim((string) ($row['handle'] ?? '')), 120, ''),
+                    'notes' => Str::limit(trim((string) ($row['notes'] ?? '')), 255, ''),
+                ];
+
+                return array_filter($normalized, fn ($value) => !is_null($value) && $value !== '');
+            })
+            ->filter(fn ($row) => !empty($row['platform']) || !empty($row['url']) || !empty($row['handle']) || !empty($row['notes']))
+            ->take(10)
+            ->values()
+            ->all();
+    }
+
+    private function resolveSocialProfileValue(array $profiles, string $platform): ?string
+    {
+        $targetPlatform = Str::lower(trim($platform));
+        if ($targetPlatform === 'twitter') {
+            $targetPlatform = 'x';
+        }
+
+        foreach ($profiles as $profile) {
+            if (!is_array($profile)) {
+                continue;
+            }
+
+            if (Str::lower(trim((string) ($profile['platform'] ?? ''))) !== $targetPlatform) {
+                continue;
+            }
+
+            foreach (['url', 'handle'] as $field) {
+                $candidate = trim((string) ($profile[$field] ?? ''));
+                if ($candidate !== '') {
+                    return $candidate;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function normalizeExternalUrl(?string $value): ?string

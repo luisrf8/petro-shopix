@@ -72,6 +72,10 @@
       : ($serviceLabel === 'Servicio' ? 'Atención por agenda' : 'Horario no publicado');
     $mapsUrl = null;
     $defaultWhatsappMessage = 'Hola, vengo de tu tienda virtual de Shopix';
+    $tenantExternalUrl = trim((string) ($tenant->external_url ?? ''));
+    if ($tenantExternalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($tenantExternalUrl), ['http://', 'https://'])) {
+      $tenantExternalUrl = 'https://' . $tenantExternalUrl;
+    }
     if (!empty($tenant->latitude) && !empty($tenant->longitude)) {
       $mapsUrl = 'https://www.google.com/maps?q=' . $tenant->latitude . ',' . $tenant->longitude;
     } else {
@@ -1254,6 +1258,9 @@
         </div>
         <div class="hero-actions">
           <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-light px-4">Explorar</a>
+          @if(!empty($tenantExternalUrl))
+            <a href="{{ $tenantExternalUrl }}" target="_blank" rel="noopener noreferrer" class="btn hero-action-secondary px-4">Sitio oficial</a>
+          @endif
           @if(!empty($whatsappUrl))
             <a href="{{ $whatsappUrl }}" target="_blank" rel="noopener noreferrer" class="btn hero-action-secondary px-4">WhatsApp</a>
           @endif

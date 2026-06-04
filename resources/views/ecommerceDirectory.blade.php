@@ -1070,18 +1070,29 @@
                     if ($externalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($externalUrl), ['http://', 'https://'])) {
                         $externalUrl = 'https://' . $externalUrl;
                     }
-                    $directoryTargetUrl = $externalUrl !== '' ? $externalUrl : url('/' . $tenant->slug);
-                    $isExternalDirectoryLink = $externalUrl !== '';
+                    $shopixUrl = url('/' . $tenant->slug);
                   @endphp
-                  <a
-                    href="{{ $directoryTargetUrl }}"
-                    class="btn btn-dark w-100 rounded-3"
-                    data-directory-tenant-link
-                    @if($isExternalDirectoryLink)
-                      target="_blank"
-                      rel="noopener"
-                    @endif
-                  >{{ $directoryActionLabel }}</a>
+                  @if($externalUrl !== '')
+                    <div class="d-flex gap-2 flex-wrap">
+                      <a
+                        href="{{ $shopixUrl }}"
+                        class="btn btn-dark flex-fill rounded-3"
+                        data-directory-tenant-link
+                      >{{ $directoryActionLabel }} en Shopix</a>
+                      <a
+                        href="{{ $externalUrl }}"
+                        class="btn btn-outline-dark flex-fill rounded-3"
+                        target="_blank"
+                        rel="noopener"
+                      >Sitio oficial</a>
+                    </div>
+                  @else
+                    <a
+                      href="{{ $shopixUrl }}"
+                      class="btn btn-dark w-100 rounded-3"
+                      data-directory-tenant-link
+                    >{{ $directoryActionLabel }}</a>
+                  @endif
                 </div>
               </div>
             </div>

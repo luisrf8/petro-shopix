@@ -153,6 +153,45 @@
 .tenant-store-url-box {
     width: min(100%, 460px);
 }
+
+.tenant-store-url-stack {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+}
+
+.tenant-store-url-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tenant-store-url-label {
+    min-width: 64px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #374151;
+    margin: 0;
+}
+
+.tenant-store-url-controls {
+    flex: 1;
+}
+
+@media (max-width: 768px) {
+    .tenant-store-url-stack {
+        grid-template-columns: 1fr;
+    }
+
+    .tenant-store-url-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .tenant-store-url-label {
+        min-width: 0;
+    }
+}
 </style>
 
 @php
@@ -165,7 +204,8 @@
     if ($tenantExternalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($tenantExternalUrl), ['http://', 'https://'])) {
         $tenantExternalUrl = 'https://' . $tenantExternalUrl;
     }
-    $tenantStoreUrl = $tenantExternalUrl !== '' ? $tenantExternalUrl : (url('/').'/'.$tenant->slug);
+    $tenantShopixUrl = url('/').'/'.$tenant->slug;
+    $tenantStoreUrl = $tenantExternalUrl !== '' ? $tenantExternalUrl : $tenantShopixUrl;
     $freePlanOperationalLock = !$tenantPlanCapabilities->allowsOperationalDeliverySettings();
     $tenantBusinessType = \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'tienda'));
     $currentPlanName = $currentPlanPayment?->plan?->name ?? 'Sin plan activo';
@@ -188,33 +228,70 @@
             <p class="text-sm text-muted mb-0">Administra la configuración comercial, operativa y visual de tu tienda.</p>
         </div>
         <div class="tenant-store-url-box">
-            <label class="form-label fw-bold mb-1">URL de la Tienda</label>
-            <div class="input-group">
-                <input
-                    type="text"
-                    class="form-control p-2 border border-radius-lg"
-                    id="storePublicUrlInput"
-                    value="{{ $tenantStoreUrl }}"
-                    readonly>
-                <a
-                    href="{{ $tenantStoreUrl }}"
-                    target="_blank"
-                    rel="noopener"
-                    class="btn btn-outline-dark url-icon-action-btn"
-                    id="openStoreUrlBtn"
-                    aria-label="Abrir tienda"
-                    title="Abrir tienda">
-                    <i class="material-symbols-rounded">open_in_new</i>
-                </a>
-                <button
-                    type="button"
-                    class="btn btn-outline-secondary url-icon-action-btn"
-                    id="copyStoreUrlBtn"
-                    aria-label="Copiar enlace"
-                    title="Copiar enlace"
-                    data-icon-default="content_copy">
-                    <i class="material-symbols-rounded">content_copy</i>
-                </button>
+            <label class="form-label fw-bold mb-1">URLs de la Tienda</label>
+            <div class="tenant-store-url-stack">
+                <div class="tenant-store-url-row">
+                    <p class="tenant-store-url-label">Shopix</p>
+                    <div class="input-group tenant-store-url-controls">
+                        <input
+                            type="text"
+                            class="form-control p-2 border border-radius-lg"
+                            id="storeShopixUrlInput"
+                            value="{{ $tenantShopixUrl }}"
+                            readonly>
+                        <a
+                            href="{{ $tenantShopixUrl }}"
+                            target="_blank"
+                            rel="noopener"
+                            class="btn btn-outline-dark url-icon-action-btn"
+                            id="openStoreShopixUrlBtn"
+                            aria-label="Abrir URL Shopix"
+                            title="Abrir URL Shopix">
+                            <i class="material-symbols-rounded">open_in_new</i>
+                        </a>
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary url-icon-action-btn"
+                            id="copyStoreShopixUrlBtn"
+                            aria-label="Copiar URL Shopix"
+                            title="Copiar URL Shopix"
+                            data-icon-default="content_copy">
+                            <i class="material-symbols-rounded">content_copy</i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="tenant-store-url-row">
+                    <p class="tenant-store-url-label">Propia</p>
+                    <div class="input-group tenant-store-url-controls">
+                        <input
+                            type="text"
+                            class="form-control p-2 border border-radius-lg"
+                            id="storePublicUrlInput"
+                            value="{{ $tenantExternalUrl !== '' ? $tenantExternalUrl : 'Sin URL propia' }}"
+                            readonly>
+                        <a
+                            href="{{ $tenantExternalUrl !== '' ? $tenantExternalUrl : '#' }}"
+                            target="_blank"
+                            rel="noopener"
+                            class="btn btn-outline-dark url-icon-action-btn {{ $tenantExternalUrl === '' ? 'disabled' : '' }}"
+                            id="openStoreUrlBtn"
+                            aria-label="Abrir URL propia"
+                            title="Abrir URL propia">
+                            <i class="material-symbols-rounded">open_in_new</i>
+                        </a>
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary url-icon-action-btn"
+                            id="copyStoreUrlBtn"
+                            aria-label="Copiar URL propia"
+                            title="Copiar URL propia"
+                            data-icon-default="content_copy"
+                            {{ $tenantExternalUrl === '' ? 'disabled' : '' }}>
+                            <i class="material-symbols-rounded">content_copy</i>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -251,12 +328,6 @@
                     Subir de plan
                 </button>
             </div>
-        </div>
-    @endif
-
-    @if($freePlanOperationalLock)
-        <div class="alert alert-secondary border" role="alert">
-            <strong>Plan Free:</strong> puedes seguir usando el módulo de notificaciones del panel, pero las opciones de contribuyente especial, restricción de envíos, delivery y notificaciones operativas permanecen bloqueadas en este plan.
         </div>
     @endif
 
@@ -315,6 +386,11 @@
                                     </div>
                                     <div class="col-12 col-lg-5">
                                         <button type="button" class="btn btn-outline-dark w-100" id="tenantImportBtn">Importar documento</button>
+                                    </div>
+                                </div>
+                                <div class="row g-3 align-items-end mt-1">
+                                    <div class="col-12">
+                                        <button type="button" class="btn btn-outline-secondary w-100" id="tenantSocialResearchOpenBtn"><span class="ai-spark">📲 Redes</span> abrir modal social</button>
                                     </div>
                                 </div>
                                 <div id="tenantSetupImportStatus" class="small text-muted mt-3"></div>
@@ -1113,6 +1189,50 @@
     </div>
 </div>
 
+<div class="modal fade" id="tenantSocialResearchModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-1">Investigación social con Gemini</h5>
+                    <small class="text-muted">Cruza Instagram, TikTok, Facebook, LinkedIn y X para generar el JSON de alta.</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <small class="text-muted d-block mb-3">Agrega las redes y luego pulsa Sí para que Gemini genere el JSON basado en esas señales.</small>
+                <div class="row g-3 mb-3">
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <label for="tenantSocialResearchInstagram" class="form-label fw-bold">Instagram</label>
+                        <input type="text" id="tenantSocialResearchInstagram" class="form-control border border-radius-lg p-2" maxlength="255" placeholder="@empresa o URL">
+                    </div>
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <label for="tenantSocialResearchTikTok" class="form-label fw-bold">TikTok</label>
+                        <input type="text" id="tenantSocialResearchTikTok" class="form-control border border-radius-lg p-2" maxlength="255" placeholder="@empresa o URL">
+                    </div>
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <label for="tenantSocialResearchFacebook" class="form-label fw-bold">Facebook</label>
+                        <input type="text" id="tenantSocialResearchFacebook" class="form-control border border-radius-lg p-2" maxlength="255" placeholder="Página o URL">
+                    </div>
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <label for="tenantSocialResearchLinkedIn" class="form-label fw-bold">LinkedIn</label>
+                        <input type="text" id="tenantSocialResearchLinkedIn" class="form-control border border-radius-lg p-2" maxlength="255" placeholder="Perfil o URL">
+                    </div>
+                    <div class="col-12 col-md-6 col-lg-4">
+                        <label for="tenantSocialResearchX" class="form-label fw-bold">X</label>
+                        <input type="text" id="tenantSocialResearchX" class="form-control border border-radius-lg p-2" maxlength="255" placeholder="@empresa o URL">
+                    </div>
+                </div>
+                <div id="tenantSocialResearchStatus" class="small text-muted"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-dark" id="tenantSocialResearchGenerateBtn">Sí, obtener JSON</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 </div>
 
 @endsection
@@ -1125,6 +1245,7 @@
 <script>
   let map, marker;
         const tenantAiImageEndpoint = "{{ route('tenant.ai-image', [], false) }}";
+        const tenantAiSetupEndpoint = "{{ route('tenant.ai-setup', [], false) }}";
         const tenantUpdateEndpoint = "{{ route('tenant.update', [], false) }}";
     const tenantImportSetupEndpoint = "{{ route('tenant.importSetupDocx', [], false) }}";
     const tenantCsrfRefreshEndpoint = "{{ route('csrf.token', [], false) }}";
@@ -1135,6 +1256,7 @@
     const TENANT_SAFE_IMAGE_BYTES = 1200 * 1024;
     const TENANT_IMAGE_MAX_DIMENSION = 2200;
     let aiModalInstance = null;
+    let tenantSocialResearchModalInstance = null;
     let currentAiTarget = null;
         let aiChatHistory = [];
         let aiLatestResult = null;
@@ -1220,6 +1342,7 @@
             ['store_catalog', 'items de tienda'],
             ['service_catalog', 'servicios'],
             ['schedule_rules', 'horarios'],
+            ['social_profiles', 'perfiles sociales'],
         ]
             .map(([key, label]) => {
                 const count = Number(summary?.[key] || 0);
@@ -1362,6 +1485,77 @@
 
         await applyTenantLocationImport(tenant);
     }
+
+    const getTenantSocialResearchValue = (input) => String(input?.value || '').trim();
+
+    const buildTenantSocialProfilesPayload = () => {
+        const sources = [
+            { platform: 'instagram', value: getTenantSocialResearchValue(tenantSocialResearchInstagramInput) },
+            { platform: 'tiktok', value: getTenantSocialResearchValue(tenantSocialResearchTikTokInput) },
+            { platform: 'facebook', value: getTenantSocialResearchValue(tenantSocialResearchFacebookInput) },
+            { platform: 'linkedin', value: getTenantSocialResearchValue(tenantSocialResearchLinkedInInput) },
+            { platform: 'x', value: getTenantSocialResearchValue(tenantSocialResearchXInput) },
+        ];
+
+        return sources
+            .filter((item) => item.value !== '')
+            .map((item) => ({
+                platform: item.platform,
+                url: /^https?:\/\//i.test(item.value) ? item.value : '',
+                handle: /^https?:\/\//i.test(item.value) ? '' : item.value,
+            }));
+    };
+
+    const buildTenantSocialResearchQuery = () => {
+        const socialProfiles = buildTenantSocialProfilesPayload();
+
+        return [
+            'Investiga la presencia digital y comercial de esta empresa usando solo estas redes sociales y devuelve un JSON estructurado para autocompletar la tienda, incluyendo tenant, usuarios, medios de pago, catalogo, servicios, horarios y social_profiles.',
+            socialProfiles.length
+                ? `Perfiles sociales: ${socialProfiles.map((profile) => `${profile.platform}: ${profile.handle || profile.url || ''}`.trim()).join(' | ')}.`
+                : 'No se proporcionaron perfiles sociales y debes inferir la estructura base con las senales disponibles.',
+        ].filter(Boolean).join(' ').trim();
+    };
+
+    const buildTenantSocialResearchContext = () => ({
+        social_profiles: buildTenantSocialProfilesPayload(),
+    });
+
+    const setTenantSocialResearchLoading = (isLoading) => {
+        if (!tenantSocialResearchGenerateBtn) {
+            return;
+        }
+
+        if (isLoading) {
+            if (tenantSocialResearchGenerateBtn.dataset.loading === '1') {
+                return;
+            }
+
+            tenantSocialResearchGenerateBtn.dataset.loading = '1';
+            tenantSocialResearchGenerateBtn.dataset.originalHtml = tenantSocialResearchGenerateBtn.innerHTML;
+            tenantSocialResearchGenerateBtn.disabled = true;
+            tenantSocialResearchGenerateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Analizando...';
+            return;
+        }
+
+        tenantSocialResearchGenerateBtn.disabled = false;
+        tenantSocialResearchGenerateBtn.dataset.loading = '0';
+        if (tenantSocialResearchGenerateBtn.dataset.originalHtml) {
+            tenantSocialResearchGenerateBtn.innerHTML = tenantSocialResearchGenerateBtn.dataset.originalHtml;
+        }
+    };
+
+    const openTenantSocialResearchModal = () => {
+        if (!tenantSocialResearchModalInstance) {
+            return;
+        }
+
+        if (tenantSocialResearchStatus) {
+            tenantSocialResearchStatus.textContent = 'Agrega las redes disponibles y pulsa Sí para que Gemini devuelva el JSON.';
+        }
+
+        tenantSocialResearchModalInstance.show();
+    };
 
     function getTenantCookie(name) {
         const cookieValue = document.cookie
@@ -1832,7 +2026,10 @@ function initMap() {
     const openBackgroundAiModalBtn = document.getElementById('openBackgroundAiModalBtn');
     const storeSlugInput = document.getElementById('storeSlugInput');
     const storeExternalUrlInput = document.getElementById('storeExternalUrlInput');
+    const storeShopixUrlInput = document.getElementById('storeShopixUrlInput');
     const storePublicUrlInput = document.getElementById('storePublicUrlInput');
+    const openStoreShopixUrlBtn = document.getElementById('openStoreShopixUrlBtn');
+    const copyStoreShopixUrlBtn = document.getElementById('copyStoreShopixUrlBtn');
     const openStoreUrlBtn = document.getElementById('openStoreUrlBtn');
     const copyStoreUrlBtn = document.getElementById('copyStoreUrlBtn');
     const aiGenerateBtn = document.getElementById('aiGenerateBtn');
@@ -1942,8 +2139,19 @@ function initMap() {
         .replace(/^-+|-+$/g, '');
 
     const updateStorePublicUrl = () => {
-        if (!storePublicUrlInput || !openStoreUrlBtn) {
+        if (!storeShopixUrlInput || !storePublicUrlInput || !openStoreUrlBtn || !openStoreShopixUrlBtn) {
             return;
+        }
+
+        if (storeSlugInput) {
+            const normalizedSlug = normalizeSlug(storeSlugInput.value);
+            if (storeSlugInput.value !== normalizedSlug) {
+                storeSlugInput.value = normalizedSlug;
+            }
+
+            const shopixUrl = normalizedSlug ? `${baseStoreUrl}/${normalizedSlug}` : baseStoreUrl;
+            storeShopixUrlInput.value = shopixUrl;
+            openStoreShopixUrlBtn.href = shopixUrl;
         }
 
         const externalRaw = String(storeExternalUrlInput?.value || '').trim();
@@ -1951,21 +2159,15 @@ function initMap() {
             const externalUrl = /^https?:\/\//i.test(externalRaw) ? externalRaw : `https://${externalRaw}`;
             storePublicUrlInput.value = externalUrl;
             openStoreUrlBtn.href = externalUrl;
+            openStoreUrlBtn.classList.remove('disabled');
+            copyStoreUrlBtn?.removeAttribute('disabled');
             return;
         }
 
-        if (!storeSlugInput) {
-            return;
-        }
-
-        const normalizedSlug = normalizeSlug(storeSlugInput.value);
-        if (storeSlugInput.value !== normalizedSlug) {
-            storeSlugInput.value = normalizedSlug;
-        }
-
-        const fullUrl = normalizedSlug ? `${baseStoreUrl}/${normalizedSlug}` : baseStoreUrl;
-        storePublicUrlInput.value = fullUrl;
-        openStoreUrlBtn.href = fullUrl;
+        storePublicUrlInput.value = 'Sin URL propia';
+        openStoreUrlBtn.href = '#';
+        openStoreUrlBtn.classList.add('disabled');
+        copyStoreUrlBtn?.setAttribute('disabled', 'disabled');
     };
 
     const copyText = async (text) => {
@@ -1988,6 +2190,7 @@ function initMap() {
     };
 
     aiModalInstance = new bootstrap.Modal(document.getElementById('aiGenerateModal'));
+    tenantSocialResearchModalInstance = tenantSocialResearchModalEl ? new bootstrap.Modal(tenantSocialResearchModalEl) : null;
 
     if (storeSlugInput) {
         storeSlugInput.addEventListener('input', updateStorePublicUrl);
@@ -2053,6 +2256,22 @@ function initMap() {
     }
 
     syncPhysicalStoreScheduleVisibility();
+
+    if (copyStoreShopixUrlBtn && storeShopixUrlInput) {
+        copyStoreShopixUrlBtn.addEventListener('click', async () => {
+            const icon = copyStoreShopixUrlBtn.querySelector('.material-symbols-rounded');
+            const defaultIcon = copyStoreShopixUrlBtn.dataset.iconDefault || 'content_copy';
+            const copied = await copyText(storeShopixUrlInput.value || '');
+            if (icon) {
+                icon.textContent = copied ? 'check' : 'error';
+            }
+            setTimeout(() => {
+                if (icon) {
+                    icon.textContent = defaultIcon;
+                }
+            }, 1400);
+        });
+    }
 
     if (copyStoreUrlBtn && storePublicUrlInput) {
         copyStoreUrlBtn.addEventListener('click', async () => {
@@ -2350,7 +2569,16 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
     const form = document.getElementById('tenantForm');
     const tenantImportInput = document.getElementById('tenantSetupDocx');
     const tenantImportButton = document.getElementById('tenantImportBtn');
+    const tenantSocialResearchOpenBtn = document.getElementById('tenantSocialResearchOpenBtn');
     const tenantImportPayloadInput = document.getElementById('tenantImportPayload');
+    const tenantSocialResearchModalEl = document.getElementById('tenantSocialResearchModal');
+    const tenantSocialResearchGenerateBtn = document.getElementById('tenantSocialResearchGenerateBtn');
+    const tenantSocialResearchStatus = document.getElementById('tenantSocialResearchStatus');
+    const tenantSocialResearchInstagramInput = document.getElementById('tenantSocialResearchInstagram');
+    const tenantSocialResearchTikTokInput = document.getElementById('tenantSocialResearchTikTok');
+    const tenantSocialResearchFacebookInput = document.getElementById('tenantSocialResearchFacebook');
+    const tenantSocialResearchLinkedInInput = document.getElementById('tenantSocialResearchLinkedIn');
+    const tenantSocialResearchXInput = document.getElementById('tenantSocialResearchX');
 
     if (tenantImportButton && tenantImportInput && tenantImportPayloadInput) {
         tenantImportButton.addEventListener('click', async () => {
@@ -2402,6 +2630,71 @@ document.querySelectorAll('.editUserBtn').forEach(btn => {
             }
         });
     }
+
+    tenantSocialResearchOpenBtn?.addEventListener('click', openTenantSocialResearchModal);
+
+    tenantSocialResearchGenerateBtn?.addEventListener('click', async () => {
+        const query = buildTenantSocialResearchQuery();
+
+        if (!query) {
+            setTenantImportStatus('Completa al menos una red social o una consulta base antes de analizar.', 'warning');
+            return;
+        }
+
+        setTenantSocialResearchLoading(true);
+        if (tenantSocialResearchStatus) {
+            tenantSocialResearchStatus.textContent = 'Gemini está cruzando las redes sociales y estructurando el JSON...';
+        }
+
+        try {
+            const response = await fetch(tenantAiSetupEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': getTenantCsrfToken(),
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    query,
+                    context: buildTenantSocialResearchContext(),
+                })
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success || !data.payload) {
+                const errorMessage = data?.errors
+                    ? Object.values(data.errors).flat()[0]
+                    : (data.message || 'No se pudo analizar la presencia social del negocio.');
+                setTenantImportStatus(errorMessage, 'danger');
+                if (tenantSocialResearchStatus) {
+                    tenantSocialResearchStatus.textContent = errorMessage;
+                }
+                showTenantToast(errorMessage, 'warning');
+                return;
+            }
+
+            tenantImportPayloadInput.value = JSON.stringify(data.payload || {});
+            await applyTenantImportPayload(data.payload || {});
+            renderTenantImportSummary(data.summary || {});
+            setTenantImportStatus(data.message || 'Estructura generada correctamente desde redes.', 'success');
+
+            if (tenantSocialResearchStatus) {
+                tenantSocialResearchStatus.textContent = `JSON generado correctamente. Gemini analizo ${Number(data.summary?.social_profiles || 0)} perfiles sociales.`;
+            }
+
+            showTenantToast('Estructura aplicada desde redes sociales. Guarda para persistir los cambios.', 'success');
+        } catch (error) {
+            setTenantImportStatus('No se pudo conectar con el servidor para analizar redes sociales.', 'danger');
+            if (tenantSocialResearchStatus) {
+                tenantSocialResearchStatus.textContent = 'No se pudo generar la estructura desde redes en este momento.';
+            }
+            showTenantToast('No se pudo analizar las redes sociales.', 'error');
+        } finally {
+            setTenantSocialResearchLoading(false);
+        }
+    });
 
     form.addEventListener('submit', async (e) => {
         if (form.dataset.submitMode === 'native') {

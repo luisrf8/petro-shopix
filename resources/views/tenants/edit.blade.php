@@ -92,7 +92,7 @@
               <div>
                 <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
                   <span class="tenant-status-pill {{ (int) ($tenant->is_active ?? 1) === 1 ? 'is-active' : 'is-inactive' }}">
-                    {{ (int) ($tenant->is_active ?? 1) === 1 ? 'Tienda activa' : 'Tienda inactiva' }}
+                    {{ (int) ($tenant->is_active ?? 1) === 1 ? 'Activa' : 'Inactiva' }}
                   </span>
                   <span class="badge bg-dark">{{ $tenant->business_type ?? 'Sin tipo' }}</span>
                 </div>
@@ -133,10 +133,6 @@
         </div>
       </div>
     </div>
-
-    @if(session('success'))
-      <div class="alert alert-success text-white mb-0">{{ session('success') }}</div>
-    @endif
 
     @if(session('warning'))
       <div class="alert alert-warning text-white mb-0">{{ session('warning') }}</div>

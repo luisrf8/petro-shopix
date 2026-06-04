@@ -235,11 +235,25 @@
 
             <form id="tenantForm" action="{{ route('tenants.storePublic') }}" method="POST" enctype="multipart/form-data">
               @csrf
+              <input type="hidden" name="import_payload" id="tenantImportPayload" value="">
 
               <!-- PASO 1 -->
               <div class="step active" id="step1">
                 <h5 class="fw-bold mb-4 text-center">Información básica</h5>
 
+                <!--<div class="assistant-copy-card mb-4">
+                  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div class="flex-grow-1">
+                      <h6 class="fw-bold mb-1">Asistente IA para investigación y estructura completa</h6>
+                      <small class="text-muted d-block">Agrega las redes sociales y Gemini investigará el negocio para devolverte un JSON listo para el formulario.</small>
+                    </div>
+                    <button type="button" class="btn btn-outline-dark" id="openSocialResearchModalBtn">
+                      <span class="ai-spark">📲 Redes</span> investigar social media
+                    </button>
+                  </div>
+                  <small class="text-muted d-block mt-2">Luego de ingresar las redes, pulsa el botón y Gemini investigará el negocio en base a esas señales.</small>
+                </div> -->
+                
                 <div class="mb-3">
                   <label for="name" class="form-label fw-bold">Nombre de la Empresa</label>
                   <input type="text" name="name" id="name" class="form-control form-control-lg" placeholder="Ej: Mi Empresa SRL" required>
@@ -261,6 +275,7 @@
                   <label for="email" class="form-label fw-bold">Correo de contacto</label>
                   <input type="email" name="email" id="email" class="form-control form-control-lg" placeholder="correo@empresa.com" required>
                 </div>
+
 
                 <div class="row mb-3">
                   <div class="col-md-4">
@@ -524,7 +539,7 @@
 
                 <div class="d-flex justify-content-between mt-3">
                   <button type="button" class="btn btn-secondary btn-lg" id="prevBtn">⬅ Volver</button>
-                  <button type="submit" class="btn btn-success btn-lg">🚀 Crear mi tienda</button>
+                  <button type="submit" class="btn btn-success btn-lg" id="createTenantBtn" disabled>🚀 Crear mi tienda</button>
                 </div>
 
                 <div class="terms-consent-card mt-4">
@@ -549,6 +564,7 @@
                       He leído y acepto los términos y condiciones del servicio de SHOPIX.
                     </label>
                   </div>
+                  <small id="acceptTermsHint" class="text-muted d-block mt-2">Debes aceptar los términos para habilitar la creación de la tienda.</small>
                 </div>
               </div>
             </form>
@@ -600,6 +616,51 @@
     </div>
   </div>
 
+  <div class="modal fade" id="socialResearchModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title mb-1">Investigación social con Gemini</h5>
+            <small class="text-muted">Cruza Instagram, TikTok, Facebook, LinkedIn y X para generar el JSON de alta.</small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <small class="text-muted d-block mb-3">Agrega las redes y luego pulsa Sí para que Gemini genere el JSON basado en esas señales.</small>
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-md-6 col-lg-4">
+              <label for="socialResearchInstagram" class="form-label fw-bold">Instagram</label>
+              <input type="text" id="socialResearchInstagram" class="form-control" maxlength="255" placeholder="@empresa o URL">
+            </div>
+            <div class="col-12 col-md-6 col-lg-4">
+              <label for="socialResearchTikTok" class="form-label fw-bold">TikTok</label>
+              <input type="text" id="socialResearchTikTok" class="form-control" maxlength="255" placeholder="@empresa o URL">
+            </div>
+            <div class="col-12 col-md-6 col-lg-4">
+              <label for="socialResearchFacebook" class="form-label fw-bold">Facebook</label>
+              <input type="text" id="socialResearchFacebook" class="form-control" maxlength="255" placeholder="Página o URL">
+            </div>
+            <div class="col-12 col-md-6 col-lg-4">
+              <label for="socialResearchLinkedIn" class="form-label fw-bold">LinkedIn</label>
+              <input type="text" id="socialResearchLinkedIn" class="form-control" maxlength="255" placeholder="Perfil o URL">
+            </div>
+            <div class="col-12 col-md-6 col-lg-4">
+              <label for="socialResearchX" class="form-label fw-bold">X</label>
+              <input type="text" id="socialResearchX" class="form-control" maxlength="255" placeholder="@empresa o URL">
+            </div>
+          </div>
+
+          <div id="socialResearchStatus" class="small text-muted"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          <button type="button" class="btn btn-dark" id="socialResearchGenerateBtn">Sí, obtener JSON</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal fade" id="termsPdfModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
@@ -627,11 +688,13 @@
     let googleScriptLoading = false;
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
     const tenantAiCopyEndpoint = @json(route('tenant.ai-copy'));
+    const tenantAiSetupEndpoint = @json(route('tenant.ai-setup'));
     const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
     const TENANT_SAFE_IMAGE_BYTES = 1200 * 1024;
     const TENANT_IMAGE_MAX_DIMENSION = 2200;
     let aiModalInstance = null;
     let termsModalInstance = null;
+    let socialResearchModalInstance = null;
     let currentAiTarget = null;
     let aiChatHistory = [];
     let aiLatestResult = null;
@@ -1222,6 +1285,7 @@
       const openLogoAiModalBtn = document.getElementById('openLogoAiModalBtn');
       const aiGenerateBtn = document.getElementById('aiGenerateBtn');
       const generateStoreCopyBtn = document.getElementById('generateStoreCopyBtn');
+      const openSocialResearchModalBtn = document.getElementById('openSocialResearchModalBtn');
       const storeCopyAiStatus = document.getElementById('storeCopyAiStatus');
       const aiDownloadBtn = document.getElementById('aiDownloadBtn');
       const aiUseImageBtn = document.getElementById('aiUseImageBtn');
@@ -1239,6 +1303,14 @@
       const contactEmailInput = document.getElementById('email');
       const reusePreviousEmailBtn = document.getElementById('reusePreviousEmailBtn');
       const openTermsModalBtn = document.getElementById('openTermsModalBtn');
+      const socialResearchModalEl = document.getElementById('socialResearchModal');
+      const socialResearchGenerateBtn = document.getElementById('socialResearchGenerateBtn');
+      const socialResearchStatus = document.getElementById('socialResearchStatus');
+      const socialResearchInstagramInput = document.getElementById('socialResearchInstagram');
+      const socialResearchTikTokInput = document.getElementById('socialResearchTikTok');
+      const socialResearchFacebookInput = document.getElementById('socialResearchFacebook');
+      const socialResearchLinkedInInput = document.getElementById('socialResearchLinkedIn');
+      const socialResearchXInput = document.getElementById('socialResearchX');
       const countrySelect = document.getElementById('country');
       const stateSelect = document.getElementById('state');
       const citySelect = document.getElementById('city');
@@ -1247,8 +1319,11 @@
       const businessTypeSelect = document.getElementById('business_type');
       const economicActivitySelect = document.getElementById('economic_activity');
       const tenantForm = document.getElementById('tenantForm');
+      const tenantImportPayloadInput = document.getElementById('tenantImportPayload');
       const hexInputs = Array.from(document.querySelectorAll('.hex-input'));
       const termsCheckbox = document.getElementById('accept_terms');
+      const createTenantBtn = document.getElementById('createTenantBtn');
+      const acceptTermsHint = document.getElementById('acceptTermsHint');
 
       const colorBindings = [
         { hexId: 'color_primary', pickerId: 'color_primary_picker', swatchId: 'color_primary_swatch' },
@@ -1339,6 +1414,172 @@
         }
       };
 
+      const findOptionByText = (select, text) => {
+        if (!select || !text) return '';
+        const target = String(text).trim().toLowerCase();
+        const match = Array.from(select.options || []).find((option) => String(option.textContent || '').trim().toLowerCase() === target);
+        return match?.value || '';
+      };
+
+      const applyAiSetupPayload = async (payload = {}) => {
+        const tenant = payload?.tenant || {};
+
+        const setValue = (selector, value) => {
+          const input = document.querySelector(selector);
+          if (!input || value === undefined || value === null || value === '') {
+            return;
+          }
+          input.value = value;
+        };
+
+        setValue('#name', tenant.name);
+        setValue('#slug', tenant.slug);
+        setValue('#email', tenant.email);
+        setValue('#external_url', tenant.external_url);
+        setValue('#slogan', tenant.slogan);
+        setValue('#description', tenant.description);
+        setValue('#address', tenant.address);
+        setValue('#phone_code', tenant.phone_code);
+        setValue('#phone_number', tenant.phone_number);
+        setValue('#opening_time', String(tenant.opening_time || '').slice(0, 5));
+        setValue('#closing_time', String(tenant.closing_time || '').slice(0, 5));
+        setValue('#color_primary', tenant.color_primary);
+        setValue('#color_secondary', tenant.color_secondary);
+        setValue('#color_accent', tenant.color_accent);
+
+        if (tenant.business_type && businessTypeSelect) {
+          businessTypeSelect.value = String(tenant.business_type).toLowerCase() === 'servicio' ? 'servicio' : 'tienda';
+          refreshEconomicActivities(tenant.economic_activity || '');
+          businessTypeSelect.dispatchEvent(new Event('change'));
+        }
+
+        if (tenant.economic_activity && economicActivitySelect) {
+          refreshEconomicActivities(tenant.economic_activity);
+          economicActivitySelect.value = tenant.economic_activity;
+          economicActivitySelect.dispatchEvent(new Event('change'));
+        }
+
+        if (Array.isArray(tenant.working_days)) {
+          document.querySelectorAll('input[name="working_days[]"]').forEach((checkbox) => {
+            checkbox.checked = tenant.working_days.includes(String(checkbox.value || '').toLowerCase());
+          });
+        }
+
+        if (typeof tenant.special_taxpayer !== 'undefined') {
+          const specialTaxpayer = document.getElementById('special_taxpayer');
+          if (specialTaxpayer) {
+            specialTaxpayer.checked = Boolean(tenant.special_taxpayer);
+          }
+        }
+
+        if (countrySelect && tenant.country_name) {
+          const countryId = findOptionByText(countrySelect, tenant.country_name);
+          if (countryId) {
+            countrySelect.value = countryId;
+            countrySelect.dispatchEvent(new Event('change'));
+
+            try {
+              const statesResponse = await fetch(`/get-states/${countryId}`);
+              const states = await statesResponse.json();
+              const stateId = states.find((item) => String(item.name || '').trim().toLowerCase() === String(tenant.state_name || '').trim().toLowerCase())?.id;
+              if (stateId) {
+                stateSelect.value = stateId;
+                stateSelect.dispatchEvent(new Event('change'));
+
+                const citiesResponse = await fetch(`/get-cities/${stateId}`);
+                const cities = await citiesResponse.json();
+                const cityId = cities.find((item) => String(item.name || '').trim().toLowerCase() === String(tenant.city_name || '').trim().toLowerCase())?.id;
+                if (cityId) {
+                  citySelect.value = cityId;
+                }
+              }
+            } catch (error) {
+              console.error('No se pudo aplicar ubicación sugerida por IA', error);
+            }
+          }
+        }
+
+        const owner = Array.isArray(payload.users) ? payload.users.find((user) => String(user.role || '').toLowerCase() === 'owner') : null;
+        if (owner) {
+          setValue('#owner_name', owner.name);
+          setValue('#owner_dni', owner.dni);
+          setValue('#owner_email', owner.email);
+        }
+
+        slugPreview.textContent = normalizeSlug(document.getElementById('slug')?.value || '') || 'mi-empresa';
+      };
+
+      const getSocialResearchValue = (input) => String(input?.value || '').trim();
+
+      const buildSocialProfilesPayload = () => {
+        const sources = [
+          { platform: 'instagram', value: getSocialResearchValue(socialResearchInstagramInput) },
+          { platform: 'tiktok', value: getSocialResearchValue(socialResearchTikTokInput) },
+          { platform: 'facebook', value: getSocialResearchValue(socialResearchFacebookInput) },
+          { platform: 'linkedin', value: getSocialResearchValue(socialResearchLinkedInInput) },
+          { platform: 'x', value: getSocialResearchValue(socialResearchXInput) },
+        ];
+
+        return sources
+          .filter((item) => item.value !== '')
+          .map((item) => ({
+            platform: item.platform,
+            url: /^https?:\/\//i.test(item.value) ? item.value : '',
+            handle: /^https?:\/\//i.test(item.value) ? '' : item.value,
+          }));
+      };
+
+      const composeSocialResearchQuery = () => {
+        const socialProfiles = buildSocialProfilesPayload();
+
+        return [
+          'Investiga la presencia digital y comercial de esta empresa usando solo estas redes sociales y devuelve un JSON estructurado para autocompletar la tienda, incluyendo tenant, usuarios, medios de pago, catalogo, servicios, horarios y social_profiles.',
+          socialProfiles.length
+            ? `Perfiles sociales: ${socialProfiles.map((profile) => `${profile.platform}: ${profile.handle || profile.url || ''}`.trim()).join(' | ')}.`
+            : 'No se proporcionaron perfiles sociales y debes inferir la estructura base con las senales disponibles.',
+        ].filter(Boolean).join(' ').trim();
+      };
+
+      const buildSocialResearchContext = () => ({
+        social_profiles: buildSocialProfilesPayload(),
+      });
+
+      const setSocialResearchLoading = (isLoading) => {
+        if (!socialResearchGenerateBtn) {
+          return;
+        }
+
+        if (isLoading) {
+          if (socialResearchGenerateBtn.dataset.loading === '1') {
+            return;
+          }
+
+          socialResearchGenerateBtn.dataset.loading = '1';
+          socialResearchGenerateBtn.dataset.originalHtml = socialResearchGenerateBtn.innerHTML;
+          socialResearchGenerateBtn.disabled = true;
+          socialResearchGenerateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Analizando...';
+          return;
+        }
+
+        socialResearchGenerateBtn.disabled = false;
+        socialResearchGenerateBtn.dataset.loading = '0';
+        if (socialResearchGenerateBtn.dataset.originalHtml) {
+          socialResearchGenerateBtn.innerHTML = socialResearchGenerateBtn.dataset.originalHtml;
+        }
+      };
+
+      const openSocialResearchModal = () => {
+        if (!socialResearchModalInstance) {
+          return;
+        }
+
+        if (socialResearchStatus) {
+          socialResearchStatus.textContent = 'Agrega las redes disponibles y Gemini devolverá un JSON listo para aplicar al formulario.';
+        }
+
+        socialResearchModalInstance.show();
+      };
+
       const syncColorBinding = ({ hexId, pickerId, swatchId }) => {
         const hexInput = document.getElementById(hexId);
         const pickerInput = document.getElementById(pickerId);
@@ -1383,6 +1624,7 @@
 
       aiModalInstance = new bootstrap.Modal(document.getElementById('aiGenerateModal'));
       termsModalInstance = new bootstrap.Modal(document.getElementById('termsPdfModal'));
+      socialResearchModalInstance = socialResearchModalEl ? new bootstrap.Modal(socialResearchModalEl) : null;
 
       const normalizeSlug = (value) => String(value ?? '')
         .toLowerCase()
@@ -1474,6 +1716,28 @@
         termsModalInstance?.show();
       });
 
+      const syncTermsGate = () => {
+        const accepted = Boolean(termsCheckbox?.checked);
+
+        if (createTenantBtn) {
+          createTenantBtn.disabled = !accepted;
+          createTenantBtn.classList.toggle('btn-success', accepted);
+          createTenantBtn.classList.toggle('btn-secondary', !accepted);
+        }
+
+        if (acceptTermsHint) {
+          acceptTermsHint.textContent = accepted
+            ? 'Términos aceptados. Ya puedes crear tu tienda.'
+            : 'Debes aceptar los términos para habilitar la creación de la tienda.';
+          acceptTermsHint.className = accepted
+            ? 'text-success d-block mt-2'
+            : 'text-muted d-block mt-2';
+        }
+      };
+
+      termsCheckbox?.addEventListener('change', syncTermsGate);
+      syncTermsGate();
+
       generateStoreCopyBtn?.addEventListener('click', async () => {
         const storeName = String(document.getElementById('name')?.value || '').trim();
         const businessType = String(businessTypeSelect?.value || '').trim();
@@ -1530,6 +1794,65 @@
           showTenantToast(error.message || 'Error al generar slogan y descripción con Gemini.', 'error');
         } finally {
           setStoreCopyButtonLoading(false);
+        }
+      });
+
+      openSocialResearchModalBtn?.addEventListener('click', openSocialResearchModal);
+
+      socialResearchGenerateBtn?.addEventListener('click', async () => {
+        const query = composeSocialResearchQuery();
+
+        if (!query) {
+          showTenantToast('Completa al menos una red social o una consulta base antes de analizar.', 'warning');
+          return;
+        }
+
+        setSocialResearchLoading(true);
+        if (socialResearchStatus) {
+          socialResearchStatus.textContent = 'Gemini está cruzando las redes sociales y estructurando el JSON...';
+        }
+
+        try {
+          const response = await fetch(tenantAiSetupEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              query,
+              context: buildSocialResearchContext(),
+            }),
+          });
+
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok || !payload.success || !payload.payload) {
+            throw new Error(payload.message || 'No se pudo analizar la presencia social del negocio.');
+          }
+
+          await applyAiSetupPayload(payload.payload);
+          if (tenantImportPayloadInput) {
+            tenantImportPayloadInput.value = JSON.stringify(payload.payload || {});
+          }
+
+          const summary = payload.summary || {};
+          if (socialResearchStatus) {
+            socialResearchStatus.textContent = `Estructura aplicada desde redes. Detectado: ${Number(summary.store_catalog || 0)} productos, ${Number(summary.service_catalog || 0)} servicios, ${Number(summary.payment_methods || 0)} metodos de pago y ${Number(summary.social_profiles || 0)} perfiles sociales.`;
+          }
+
+          if (socialResearchStatus) {
+            socialResearchStatus.textContent = `JSON generado correctamente. Gemini analizo ${Number(summary.social_profiles || 0)} perfiles sociales.`;
+          }
+
+          showTenantToast(payload.message || 'Gemini generó la estructura desde redes sociales.', 'success');
+        } catch (error) {
+          if (socialResearchStatus) {
+            socialResearchStatus.textContent = 'No se pudo generar la estructura desde redes en este momento.';
+          }
+          showTenantToast(error.message || 'Error al analizar redes sociales.', 'error');
+        } finally {
+          setSocialResearchLoading(false);
         }
       });
 

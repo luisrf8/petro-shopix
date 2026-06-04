@@ -56,7 +56,7 @@ class PlanController extends Controller
             $validated['image'] = $path;
         }
 
-        $validated['status'] = $request->input('status', 0);
+        $validated['status'] = $request->input('status', 1);
 
         $plan = Plan::create($validated);
 
@@ -90,7 +90,7 @@ class PlanController extends Controller
             $validated['image'] = $path;
         }
 
-        $validated['status'] = $request->input('status', $plan->status ?? 0);
+        $validated['status'] = $request->input('status', $plan->status ?? 1);
 
         $plan->update($validated);
 
