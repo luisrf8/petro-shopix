@@ -383,10 +383,12 @@
         padding: 0.56rem 0.7rem;
         background: #fff;
         margin-top: 0.45rem;
+        cursor: pointer;
     }
 
     .variant-row .variant-label {
         margin: 0 !important;
+        width: 100%;
     }
 
     .variant-row .variant-copy {
@@ -396,6 +398,10 @@
 
     .variant-qty-input {
         max-width: 78px;
+    }
+
+    .payment-method-row {
+        cursor: pointer;
     }
 
     #cart.offcanvas-admin-desktop {
@@ -493,7 +499,26 @@
         }
 
         .sale-flow-stepper {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.35rem;
+        }
+
+        .sale-flow-step {
+            padding: 0.45rem 0.35rem;
+            border-radius: 14px;
+        }
+
+        .sale-flow-step-number {
+            width: 24px;
+            height: 24px;
+            font-size: 0.68rem;
+            margin-bottom: 0.22rem;
+        }
+
+        .sale-flow-step-title {
+            font-size: 0.72rem;
+            line-height: 1.05;
+            text-align: center;
         }
 
         .sale-step-panel-step1,
@@ -503,6 +528,28 @@
 
         .sale-products-grid {
             grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        #itemSelector.sale-products-grid,
+        #itemSelector.sale-products-grid-compact,
+        .sale-products-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.6rem;
+            overflow-x: visible;
+            overflow-y: visible;
+        }
+
+        .sale-products-grid .product-item,
+        .sale-products-grid .package-item,
+        #itemSelector.sale-products-grid-compact .product-item,
+        #itemSelector.sale-products-grid-compact .package-item {
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            margin-inline: 0;
         }
     }
   </style>
@@ -865,7 +912,7 @@
                                                     <div><small>DNI/Correo: {{ $method->dni }}</small></div>
                                                 @endif
                                                 @php $noReference = !$method->usesReference(); @endphp
-                                                <div id="paymentFields_{{ $method->id }}" class="d-none mt-2" data-currency="{{ $currencyCode }}" data-no-reference="{{ $noReference ? '1' : '0' }}">
+                                                <div id="paymentFields_{{ $method->id }}" class="d-none mt-2 payment-method-fields" data-currency="{{ $currencyCode }}" data-no-reference="{{ $noReference ? '1' : '0' }}">
                                                     <div id="paymentRows_{{ $method->id }}" class="d-flex flex-column gap-2"></div>
                                                     <button type="button" class="btn btn-outline-dark btn-sm mt-2" onclick="addPaymentEntry('{{ $method->id }}', '{{ $currencyCode }}', {{ $noReference ? 'true' : 'false' }})">
                                                         + Agregar otro pago
@@ -1750,6 +1797,40 @@
             initializeExistingCustomerSelect();
             checkboxes.forEach(checkbox => {
                 checkbox.addEventListener('change', handleCheckboxChange);
+            });
+
+            const variantRows = document.querySelectorAll('.variant-row');
+            variantRows.forEach(row => {
+                row.addEventListener('click', function (event) {
+                    if (event.target.closest('.material-symbols-rounded') || event.target.closest('a') || event.target.closest('button')) {
+                        return;
+                    }
+
+                    const checkbox = row.querySelector('.variant-checkbox');
+                    if (!checkbox) {
+                        return;
+                    }
+
+                    if (event.target !== checkbox) {
+                        checkbox.click();
+                    }
+                });
+            });
+
+            const paymentMethodRows = document.querySelectorAll('.payment-method-row');
+            paymentMethodRows.forEach(row => {
+                row.addEventListener('click', function (event) {
+                    if (event.target.closest('.payment-method-fields, img, a, button, input, select, textarea, label')) {
+                        return;
+                    }
+
+                    const checkbox = row.querySelector('.payment-method-checkbox');
+                    if (!checkbox || event.target === checkbox || event.target.closest('.payment-method-checkbox')) {
+                        return;
+                    }
+
+                    checkbox.click();
+                });
             });
 
             const cartElement = document.getElementById('cart');

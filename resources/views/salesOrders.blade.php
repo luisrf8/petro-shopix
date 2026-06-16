@@ -10,6 +10,54 @@
   $salesOrdersFreePlan = !$salesOrdersCapabilities->canGenerateSalesReport();
 @endphp
 
+@push('styles')
+<style>
+  .sales-orders-filters {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.85rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    margin-bottom: 0.85rem;
+  }
+
+  .sales-orders-table-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    max-width: 100%;
+  }
+
+  #salesOrdersTable {
+    min-width: 1080px;
+  }
+
+  #salesOrdersTable tbody tr:nth-child(odd) {
+    background-color: #f3f4f6;
+  }
+
+  #salesOrdersTable tbody tr:nth-child(even) {
+    background-color: #ffffff;
+  }
+
+  @media (max-width: 991.98px) {
+    .sales-orders-table-wrap {
+      overflow-x: scroll !important;
+      scrollbar-width: thin;
+    }
+
+    .sales-orders-table-wrap::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .sales-orders-table-wrap::-webkit-scrollbar-thumb {
+      background: #9ca3af;
+      border-radius: 999px;
+    }
+  }
+</style>
+@endpush
+
 @section('content')
     <div class="container-fluid py-2">
       <div class="row mt-4">
@@ -33,8 +81,41 @@
                 </div>
               </div> 
               <div class="card-body">
-                <div class="table-responsive">
-                  <table class="table align-items-center mb-0">
+                <div class="sales-orders-filters">
+                  <div class="row g-2">
+                    <div class="col-12 col-md-4">
+                      <input type="text" id="salesOrdersSearchInput" class="form-control border border-1 p-2" placeholder="Buscar por orden, factura, usuario o fecha...">
+                    </div>
+                    <div class="col-6 col-md-2">
+                      <select id="salesOrdersStatusFilter" class="form-control border border-1 p-2">
+                        <option value="">Estado (todos)</option>
+                        <option value="En Proceso">En Proceso</option>
+                        <option value="Aprobado">Aprobado</option>
+                        <option value="Negado">Negado</option>
+                      </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                      <select id="salesOrdersDeliveryFilter" class="form-control border border-1 p-2">
+                        <option value="">Entrega (todas)</option>
+                        <option value="Tienda">Tienda</option>
+                        <option value="delivery">delivery</option>
+                      </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                      <select id="salesOrdersDocumentFilter" class="form-control border border-1 p-2">
+                        <option value="">Documento (todos)</option>
+                        <option value="Factura digital">Factura digital</option>
+                        <option value="Orden de entrega">Orden de entrega</option>
+                      </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                      <button type="button" id="salesOrdersClearFilters" class="btn btn-outline-dark w-100 mb-0">Limpiar</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="table-responsive sales-orders-table-wrap">
+                  <table class="table align-items-center mb-0" id="salesOrdersTable">
                     <thead class="text-center">
                       <tr>
                         <th># Orden</th>
@@ -50,8 +131,17 @@
                         <th>Acciones</th>
                       </tr>
                     </thead>
-                    <tbody class="text-center">
+                    <tbody class="text-center" id="salesOrdersTableBody">
                       @foreach($salesOrders as $order)
+                        @php
+                          $edoc = $order->latest_electronic_document;
+                          $invoiceNumber = $edoc ? (string) ($edoc->numero_documento ?: '-') : '-';
+                          $documentMode = (string) ($order->document_issue_mode ?? 'delivery_note');
+                          $documentLabel = $documentMode === 'electronic_invoice' ? 'Factura digital' : 'Orden de entrega';
+                          $statusLabel = $order->status == 0 ? 'En Proceso' : ($order->status == 1 ? 'Aprobado' : ($order->status == 2 ? 'Negado' : ''));
+                          $userLabel = $order->user ? $order->user->name : 'Usuario no asignado';
+                          $deliveryLabel = (string) ($order->preference ?? '');
+                        @endphp
                         <tr>
                           <td>
                             <div class="fw-semibold">#{{ $order->id }}</div>
@@ -60,9 +150,6 @@
                             @endif
                           </td>
                           <td>
-                            @php
-                              $edoc = $order->latest_electronic_document;
-                            @endphp
                             @if($edoc)
                               <div class="fw-semibold">{{ $edoc->numero_documento ?: '-' }}</div>
                               @if($edoc->is_annulled)
@@ -171,6 +258,62 @@
 
 <!-- Control Center for Material Dashboard: parallax effects, scripts for the example pages etc -->
   <script>
+    function setupSalesOrdersFilters() {
+      const tableBody = document.getElementById('salesOrdersTableBody');
+      const searchInput = document.getElementById('salesOrdersSearchInput');
+      const statusFilter = document.getElementById('salesOrdersStatusFilter');
+      const deliveryFilter = document.getElementById('salesOrdersDeliveryFilter');
+      const documentFilter = document.getElementById('salesOrdersDocumentFilter');
+      const clearBtn = document.getElementById('salesOrdersClearFilters');
+
+      if (!tableBody || !searchInput || !statusFilter || !deliveryFilter || !documentFilter || !clearBtn) {
+        return;
+      }
+
+      const rows = Array.from(tableBody.querySelectorAll('tr'));
+
+      const normalize = (value) => String(value || '').toLowerCase().trim();
+
+      const applyFilters = () => {
+        const query = normalize(searchInput.value);
+        const statusValue = normalize(statusFilter.value);
+        const deliveryValue = normalize(deliveryFilter.value);
+        const documentValue = normalize(documentFilter.value);
+
+        rows.forEach((row) => {
+          const rowText = normalize(row.textContent);
+          const cells = row.querySelectorAll('td');
+
+          const statusText = normalize(cells[8]?.textContent || '');
+          const deliveryText = normalize(cells[4]?.textContent || '');
+          const documentText = normalize(cells[6]?.textContent || '');
+
+          const matchesQuery = !query || rowText.includes(query);
+          const matchesStatus = !statusValue || statusText.includes(statusValue);
+          const matchesDelivery = !deliveryValue || deliveryText.includes(deliveryValue);
+          const matchesDocument = !documentValue || documentText.includes(documentValue);
+
+          row.style.display = matchesQuery && matchesStatus && matchesDelivery && matchesDocument ? '' : 'none';
+        });
+      };
+
+      const clearFilters = () => {
+        searchInput.value = '';
+        statusFilter.value = '';
+        deliveryFilter.value = '';
+        documentFilter.value = '';
+        applyFilters();
+      };
+
+      searchInput.addEventListener('input', applyFilters);
+      statusFilter.addEventListener('change', applyFilters);
+      deliveryFilter.addEventListener('change', applyFilters);
+      documentFilter.addEventListener('change', applyFilters);
+      clearBtn.addEventListener('click', clearFilters);
+    }
+
+    document.addEventListener('DOMContentLoaded', setupSalesOrdersFilters);
+
     document.getElementById('createProductForm')?.addEventListener('submit', function(event) {
       event.preventDefault(); // Evita el envío normal del formulario
 

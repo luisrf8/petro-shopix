@@ -16,12 +16,17 @@ use App\Http\Controllers\TenantController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\AppointmentController;
+use App\Http\Controllers\BfcWebhookController;
 
 // ------------------------ RUTAS PÚBLICAS ------------------------
 
 Route::post('logout', [AuthenticatedSessionController::class, 'destroy']);
 Route::post('loginEcomm', [AuthenticatedSessionController::class, 'store']);
 Route::post('/registerEcomm', [AuthenticatedSessionController::class, 'registerEcomm']);
+
+// ---------------------- WEBHOOKS BANCARIOS ------------------------
+
+Route::post('/v1/bfc/p2r/registro', [BfcWebhookController::class, 'store'])->name('webhooks.bfc.p2r.registro');
 
 // Endpoint para obtener el token CSRF
 Route::post('/create-user', [UserController::class, 'store']);
