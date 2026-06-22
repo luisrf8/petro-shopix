@@ -9,8 +9,21 @@ class SalesReturn extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['sales_order_id',
-    'reason'];
+    protected $fillable = [
+        'sales_order_id',
+        'reason',
+        'subtotal_returned',
+        'tax_returned',
+        'igtf_returned',
+        'total_returned',
+    ];
+
+    protected $casts = [
+        'subtotal_returned' => 'float',
+        'tax_returned' => 'float',
+        'igtf_returned' => 'float',
+        'total_returned' => 'float',
+    ];
 
     public function items()
     {

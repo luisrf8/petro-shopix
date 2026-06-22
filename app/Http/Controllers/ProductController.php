@@ -49,7 +49,7 @@ class ProductController extends Controller
             ->where('is_active', true)
             ->where('tenant_id', $user->tenant_id) // 👈 aquí filtras las categorías
             ->get();
-        $taxes = Tax::all();
+        $taxes = $this->allowedProductTaxes();
 
         $productItems = Product::with(['category', 'images', 'variants.images'])
             ->where('tenant_id', $user->tenant_id)
@@ -68,7 +68,7 @@ class ProductController extends Controller
                 ->with('warning', 'Primero debes crear al menos una categoría para registrar productos.');
         }
 
-        $taxes = Tax::all();
+        $taxes = $this->allowedProductTaxes();
         return view('createProductItem', compact('categories', 'taxes'));
     }
 
@@ -124,7 +124,7 @@ class ProductController extends Controller
         $productItems = Product::where('category_id', $category->id)
         ->orderBy('created_at', 'desc')
         ->get();
-        $taxes = Tax::all();
+        $taxes = $this->allowedProductTaxes();
     
         return view('products', compact('productItems', 'category', 'categories', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol'));
     }
@@ -182,7 +182,7 @@ class ProductController extends Controller
             ->keyBy(function ($item) {
                 return $item->warehouse_id . '_' . $item->product_variant_id;
             });
-        $taxes = Tax::all();
+        $taxes = $this->allowedProductTaxes();
         $canEditProductTaxes = (bool) ($tenant->printer_tax_change_enabled ?? false);
         $productTaxChangeReference = (string) ($tenant->printer_tax_change_reference ?? '');
 
@@ -213,6 +213,8 @@ class ProductController extends Controller
                 'category_id' => ['La categoría seleccionada no pertenece a tu tenant.'],
             ]);
         }
+
+        $this->assertValidProductTaxSelection($validated['tax_ids'] ?? []);
 
         $validatedData['slug'] = $this->generateUniqueProductSlug((string) $validatedData['name'], $tenantId);
         $validatedData['is_consumable'] = (bool) ($validatedData['is_consumable'] ?? false);
@@ -250,7 +252,7 @@ class ProductController extends Controller
             'productDescription' => 'nullable|string',
             'productDiscount' => 'nullable|numeric|min:0|max:100',
             'is_consumable' => 'nullable|boolean',
-            'tax_ids' => 'nullable|array',
+            'tax_ids' => 'nullable|array|max:1',
             'tax_ids.*' => 'exists:taxes,id',
             'images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
             'variant_images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
@@ -686,7 +688,7 @@ class ProductController extends Controller
                     if (!empty($row['variant_size']) || isset($row['variant_price']) || isset($row['variant_stock'])) {
                         $variants = [[
                             'size' => $row['variant_size'] ?? 'Única',
-                            'price' => $row['variant_price'] ?? 0,
+                            'price' => $row['variant_price'] ?? null,
                             'stock' => $row['variant_stock'] ?? 0,
                             'unit_type' => $row['variant_unit_type'] ?? 'unidad',
                         ]];
@@ -707,6 +709,11 @@ class ProductController extends Controller
                     $unitType = $this->clampStringToLength($unitType, $variantUnitTypeMaxLength);
 
                     $price = $this->parseLocalizedNumber($variant['price'] ?? null, 0.0);
+                    if ($price <= 0) {
+                        $skippedRows++;
+                        continue;
+                    }
+
                     $stock = (int) round($this->parseLocalizedNumber($variant['stock'] ?? null, 0.0));
 
                     $variantLookup = [
@@ -1368,7 +1375,7 @@ class ProductController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'required|string',
-            'price' => 'required|numeric',
+            'price' => 'required|numeric|gt:0',
             'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
         ]);
 
@@ -1620,6 +1627,49 @@ class ProductController extends Controller
         }
 
         return array_values(array_unique($reasons));
+    }
+
+    private function allowedProductTaxes()
+    {
+        return Tax::query()
+            ->orderBy('rate')
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (Tax $tax) => $this->isAllowedIntrinsicProductTax($tax))
+            ->values();
+    }
+
+    private function assertValidProductTaxSelection(array $taxIds): void
+    {
+        if (empty($taxIds)) {
+            return;
+        }
+
+        $selectedTaxes = Tax::query()
+            ->whereIn('id', collect($taxIds)->map(fn ($id) => (int) $id)->unique()->values()->all())
+            ->get();
+
+        $invalid = $selectedTaxes
+            ->reject(fn (Tax $tax) => $this->isAllowedIntrinsicProductTax($tax))
+            ->pluck('name')
+            ->all();
+
+        if (!empty($invalid)) {
+            throw ValidationException::withMessages([
+                'tax_ids' => ['Solo puedes asignar IVA intrínseco de producto (0%, 8%, 16% o 31%). Impuestos no válidos: ' . implode(', ', $invalid)],
+            ]);
+        }
+    }
+
+    private function isAllowedIntrinsicProductTax(Tax $tax): bool
+    {
+        $haystack = Str::lower(Str::ascii(trim((string) ($tax->name ?? '') . ' ' . (string) ($tax->code ?? ''))));
+
+        if (str_contains($haystack, 'igtf') || str_contains($haystack, 'islr') || str_contains($haystack, 'retencion')) {
+            return false;
+        }
+
+        return true;
     }
 
     public function generateReport(Request $request)

@@ -47,6 +47,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
+use App\Mail\PendingDispatchGuidesReportMail;
 use App\Support\WorkflowNotifier;
 use App\Support\ImageStorage;
 use App\Support\TenantCurrency;
@@ -88,7 +90,6 @@ class SaleController extends Controller
             $tenant->delivery_enabled = false;
             $tenant->delivery_notifications_enabled = false;
             $tenant->restrict_delivery_city_to_tenant = true;
-            $tenant->special_taxpayer = false;
         }
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
@@ -124,6 +125,8 @@ class SaleController extends Controller
             'delivery_address' => 'nullable|string|max:500',
             'delivery_city_id' => 'nullable|integer|exists:cities,id',
             'delivery_distance_km' => 'nullable|numeric|min:0',
+            'global_discount_percentage' => 'nullable|numeric|min:0|max:100',
+            'global_discount_amount' => 'nullable|numeric|min:0',
             'sale_document_mode' => 'nullable|in:delivery_note,electronic_invoice',
             'create_new_customer' => 'nullable|boolean',
             'customer_existing_id' => 'nullable|integer|required_unless:create_new_customer,true',
@@ -136,12 +139,19 @@ class SaleController extends Controller
             'payments' => 'nullable|array',
             'payments.*.methodId' => 'required_with:payments|integer',
             'payments.*.amount' => 'required_with:payments|numeric|min:0.01',
+            'payments.*.amount_base' => 'nullable|numeric|min:0.01',
+            'payments.*.amount_original' => 'nullable|numeric|min:0.01',
+            'payments.*.exchange_rate_to_base' => 'nullable|numeric|min:0',
+            'payments.*.applies_igtf' => 'nullable|boolean',
             'payments.*.currency' => 'nullable|string|max:10',
             'payments.*.reference' => 'nullable|string|max:255',
             'payments.*.proof_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
             'mark_delivered' => 'nullable|boolean',
             'mark_payments_paid' => 'nullable|boolean',
             'mark_sale_completed' => 'nullable|boolean',
+            'change_paid_in_bs' => 'nullable|boolean',
+            'change_rate_to_bs' => 'nullable|numeric|min:0',
+            'dollarRate' => 'nullable|numeric|min:0',
         ]);
 
         $tenantId = (int) (optional(auth()->user())->tenant_id ?? $request->tenant_id);
@@ -196,6 +206,7 @@ class SaleController extends Controller
         $markDelivered = (bool) ($validated['mark_delivered'] ?? false);
         $markPaymentsPaid = (bool) ($validated['mark_payments_paid'] ?? false);
         $markSaleCompleted = (bool) ($validated['mark_sale_completed'] ?? false);
+        $changePaidInBs = (bool) ($validated['change_paid_in_bs'] ?? false);
         $requestedDocumentMode = (string) ($validated['sale_document_mode'] ?? 'delivery_note');
         $deliveryDistanceKm = isset($validated['delivery_distance_km']) ? (float) $validated['delivery_distance_km'] : null;
 
@@ -243,23 +254,14 @@ class SaleController extends Controller
 
         $documentIssueMode = $requestedDocumentMode === 'electronic_invoice' ? 'electronic_invoice' : 'delivery_note';
 
-        $itemsSubtotal = 0.0;
+        $globalDiscountPercentage = max(0, min(100, (float) ($validated['global_discount_percentage'] ?? 0)));
+        $globalDiscountAmountRequested = max(0, (float) ($validated['global_discount_amount'] ?? 0));
 
-        // Crear orden de venta
-        $salesOrder = SalesOrder::create([
-            'user_id' => $customerId,
-            'sales_rep_user_id' => $this->resolveSalesRepresentativeId(),
-            'date' => now()->toDateString(),
-            'status' => $markSaleCompleted ? 1 : 0,
-            'address' => $address,
-            'preference' => $preference,
-            'deliver_status' => $markDelivered ? 1 : 0,
-            'tenant_id' => $tenantId,
-            'document_issue_mode' => $documentIssueMode,
-            'sale_currency_code' => $saleCurrencyCode,
-        ]);
+        $preparedLines = [];
+        $lineSubtotalBeforeDiscountTotal = 0.0;
+        $lineSubtotalAfterLineDiscountTotal = 0.0;
 
-        // Crear detalles y actualizar stock
+        // Preparar renglones y validar descuentos/stock antes de persistir
         foreach ($itemsSelected as $item) {
             if (in_array($deliveryType, ['delivery', 'shipping'], true) && (int) ($item['quantity'] ?? 0) > 1) {
                 return response()->json(['error' => 'Las ventas con delivery/envío solo permiten cantidades al detal (1 unidad por ítem).'], 422);
@@ -278,38 +280,127 @@ class SaleController extends Controller
                 return response()->json(['error' => 'Stock insuficiente para el producto: ' . $item['id']], 400);
             }
 
-            $baseUnitPrice = $this->getVariantDiscountedUnitPrice($productVariant);
+            $quantity = (int) ($item['quantity'] ?? 0);
+            if ($quantity <= 0) {
+                return response()->json(['error' => 'Cantidad inválida para el producto: ' . $item['id']], 422);
+            }
+
+            $originalUnitPrice = (float) ($productVariant->price ?? 0);
+            $discountedUnitPrice = $this->getVariantDiscountedUnitPrice($productVariant);
             $lineDiscountPercentage = max(0, min(100, (float) ($item['line_discount_percentage'] ?? 0)));
-            $unitPrice = round($baseUnitPrice * ((100 - $lineDiscountPercentage) / 100), 2);
+            $lineDiscountAmountRequested = max(0, (float) ($item['line_discount_amount'] ?? 0));
+
+            if (($lineDiscountPercentage > 0 || $lineDiscountAmountRequested > 0 || $globalDiscountPercentage > 0 || $globalDiscountAmountRequested > 0)
+                && !((bool) (auth()->user()?->isAdmin() ?? false))) {
+                return response()->json(['error' => 'Solo los administradores pueden aplicar descuentos.'], 403);
+            }
+
+            $lineSubtotalBeforeDiscount = round($originalUnitPrice * $quantity, 2);
+            $lineSubtotalAfterCatalogDiscount = round($discountedUnitPrice * $quantity, 2);
+            $lineSubtotalAfterPercentageDiscount = round($lineSubtotalAfterCatalogDiscount * ((100 - $lineDiscountPercentage) / 100), 2);
+            $lineDiscountAmountApplied = min($lineDiscountAmountRequested, $lineSubtotalAfterPercentageDiscount);
+            $lineSubtotalAfterLineDiscount = round(max(0, $lineSubtotalAfterPercentageDiscount - $lineDiscountAmountApplied), 2);
+
+            $preparedLines[] = [
+                'item' => $item,
+                'product_variant' => $productVariant,
+                'quantity' => $quantity,
+                'taxes' => is_array($item['taxes'] ?? null) ? $item['taxes'] : [],
+                'line_subtotal_before_discount' => $lineSubtotalBeforeDiscount,
+                'line_subtotal_after_line_discount' => $lineSubtotalAfterLineDiscount,
+                'line_discount_amount' => round(max(0, $lineSubtotalBeforeDiscount - $lineSubtotalAfterLineDiscount), 2),
+                'global_discount_allocated' => 0.0,
+            ];
+
+            $lineSubtotalBeforeDiscountTotal += $lineSubtotalBeforeDiscount;
+            $lineSubtotalAfterLineDiscountTotal += $lineSubtotalAfterLineDiscount;
+        }
+
+        $globalDiscountAmountApplied = 0.0;
+        if ($lineSubtotalAfterLineDiscountTotal > 0) {
+            $calculatedByPercentage = round($lineSubtotalAfterLineDiscountTotal * ($globalDiscountPercentage / 100), 2);
+            $globalDiscountAmountApplied = $calculatedByPercentage > 0 ? $calculatedByPercentage : round($globalDiscountAmountRequested, 2);
+            $globalDiscountAmountApplied = min($globalDiscountAmountApplied, round($lineSubtotalAfterLineDiscountTotal, 2));
+        }
+
+        if ($globalDiscountAmountApplied > 0 && !empty($preparedLines)) {
+            $remaining = $globalDiscountAmountApplied;
+            $totalBaseForProration = round($lineSubtotalAfterLineDiscountTotal, 2);
+            $lastIndex = count($preparedLines) - 1;
+
+            foreach ($preparedLines as $index => &$line) {
+                if ($index === $lastIndex) {
+                    $line['global_discount_allocated'] = round(max(0, $remaining), 2);
+                    break;
+                }
+
+                $weight = $totalBaseForProration > 0
+                    ? ((float) $line['line_subtotal_after_line_discount'] / $totalBaseForProration)
+                    : 0;
+                $allocated = round($globalDiscountAmountApplied * $weight, 2);
+                $allocated = min($allocated, (float) $line['line_subtotal_after_line_discount']);
+
+                $line['global_discount_allocated'] = $allocated;
+                $remaining = round($remaining - $allocated, 2);
+            }
+            unset($line);
+        }
+
+        $itemsSubtotal = 0.0;
+
+        // Crear orden de venta
+        $salesOrder = SalesOrder::create([
+            'user_id' => $customerId,
+            'sales_rep_user_id' => $this->resolveSalesRepresentativeId(),
+            'date' => now()->toDateString(),
+            'status' => $markSaleCompleted ? 1 : 0,
+            'address' => $address,
+            'preference' => $preference,
+            'deliver_status' => $markDelivered ? 1 : 0,
+            'tenant_id' => $tenantId,
+            'document_issue_mode' => $documentIssueMode,
+            'sale_currency_code' => $saleCurrencyCode,
+            'subtotal_before_discount' => round($lineSubtotalBeforeDiscountTotal, 2),
+            'total_discount' => round(max(0, $lineSubtotalBeforeDiscountTotal - ($lineSubtotalAfterLineDiscountTotal - $globalDiscountAmountApplied)), 2),
+        ]);
+
+        // Crear detalles y actualizar stock
+        foreach ($preparedLines as $line) {
+            $quantity = (int) $line['quantity'];
+            $lineSubtotalBeforeDiscount = (float) $line['line_subtotal_before_discount'];
+            $lineSubtotalAfterLineDiscount = (float) $line['line_subtotal_after_line_discount'];
+            $lineSubtotalFinal = round(max(0, $lineSubtotalAfterLineDiscount - (float) $line['global_discount_allocated']), 2);
+            $unitPrice = $quantity > 0 ? round($lineSubtotalFinal / $quantity, 2) : 0.0;
+            $lineDiscountAmount = round(max(0, $lineSubtotalBeforeDiscount - $lineSubtotalFinal), 2);
 
             $salesDetail = SalesOrderDetail::create([
                 'sales_order_id' => $salesOrder->id,
-                'product_variant_id' => $item['id'],
-                'quantity' => $item['quantity'],
+                'product_variant_id' => $line['item']['id'],
+                'quantity' => $quantity,
                 'price' => $unitPrice,
-                'amount' => $unitPrice * $item['quantity'],
+                'amount' => $lineSubtotalFinal,
+                'line_subtotal_before_discount' => $lineSubtotalBeforeDiscount,
+                'line_discount_amount' => $lineDiscountAmount,
             ]);
-            $itemsSubtotal += (float) $salesDetail->amount;
-            // ===========================
-            //   GUARDAR TAXES POR ITEM
-            // ===========================
-            if (!empty($item['taxes'])) {
-                foreach ($item['taxes'] as $tax) {
 
-                    $rate = floatval($tax['rate']); 
-                    $base = $unitPrice * $item['quantity'];
-                    $amount = $base * ($rate / 100);
+            $itemsSubtotal += (float) $salesDetail->amount;
+
+            if (!empty($line['taxes'])) {
+                foreach ($line['taxes'] as $tax) {
+                    $rate = (float) ($tax['rate'] ?? 0);
+                    $base = $lineSubtotalFinal;
+                    $amount = round($base * ($rate / 100), 2);
 
                     $salesDetail->taxes()->create([
-                        'tax_name'  => $tax['name'],
-                        'tax_rate'  => $rate,
-                        'tax_amount'=> $amount,
+                        'tax_name' => $tax['name'] ?? 'IVA',
+                        'tax_rate' => $rate,
+                        'tax_amount' => $amount,
                     ]);
-
                 }
             }
-            // Actualizar stock
-            $productVariant->stock -= $item['quantity'];
+
+            $productVariant = $line['product_variant'];
+            $productVariant->stock -= $quantity;
             $productVariant->save();
         }
 
@@ -323,8 +414,17 @@ class SaleController extends Controller
         $salesOrder->delivery_distance_km = $deliveryPricing['distance_km'];
         $salesOrder->save();
 
+        $totalTaxes = (float) $salesOrder->details()->with('taxes')->get()->flatMap->taxes->sum('tax_amount');
+        $totalWithoutIgtf = round((float) $salesOrder->gross_total + $totalTaxes, 2);
+        $igtfRate = $this->resolveIgtfRate();
+        $tenantEligibleForIgtf = (bool) ($tienda->electronic_invoicing_enabled ?? false)
+            && (bool) ($tienda->special_taxpayer ?? false)
+            && $igtfRate > 0;
+
         // Crear pagos
         $approvedPayments = collect();
+        $approvedPaymentsTotalBase = 0.0;
+        $approvedPaymentsIgtfEligibleBase = 0.0;
         if (!empty($paymentDetails) && is_array($paymentDetails)) {
             foreach ($paymentDetails as $index => $paymentDetail) {
                 $paymentMethod = PaymentMethod::with('currency')
@@ -347,10 +447,25 @@ class SaleController extends Controller
                     return response()->json(['error' => 'El método de pago ' . $paymentMethod->name . ' requiere comprobante.'], 422);
                 }
 
+                $amountOriginal = round(max(0, (float) ($paymentDetail['amount_original'] ?? $paymentDetail['amount'] ?? 0)), 2);
+                $amountBase = round(max(0, (float) ($paymentDetail['amount_base'] ?? $paymentDetail['amount'] ?? 0)), 2);
+                $exchangeRateToBase = (float) ($paymentDetail['exchange_rate_to_base'] ?? 0);
+                if ($exchangeRateToBase <= 0 && $amountOriginal > 0) {
+                    $exchangeRateToBase = round($amountBase / $amountOriginal, 6);
+                }
+
+                $paymentCurrencyCode = (string) ($paymentMethod->currency->code ?? $paymentDetail['currency'] ?? $saleCurrencyCode);
+                $appliesIgtf = $tenantEligibleForIgtf
+                    && $this->isForeignCurrencyForIgtf($paymentCurrencyCode);
+
                 $payment = Payment::create([
                     'sales_order_id' => $salesOrder->id,
                     'payment_method' => $paymentMethod->id,
-                    'amount' => $paymentDetail['amount'],
+                    'amount' => $amountBase,
+                    'amount_original' => $amountOriginal,
+                    'amount_base' => $amountBase,
+                    'exchange_rate_to_base' => $exchangeRateToBase > 0 ? $exchangeRateToBase : null,
+                    'applies_igtf' => (bool) $appliesIgtf,
                     'currency' => $paymentMethod->currency->code ?? $paymentDetail['currency'],
                     'reference' => $requiresReference ? $reference : null,
                     'status' => $markPaymentsPaid ? 1 : 0,
@@ -358,6 +473,10 @@ class SaleController extends Controller
 
                 if ($payment->status == 1) {
                     $approvedPayments->push($payment);
+                    $approvedPaymentsTotalBase += $amountBase;
+                    if ((bool) $appliesIgtf) {
+                        $approvedPaymentsIgtfEligibleBase += $amountBase;
+                    }
                 }
 
                 if ($request->hasFile("payments.$index.proof_image")) {
@@ -374,6 +493,37 @@ class SaleController extends Controller
             }
         }
 
+        $shouldApplyIgtf = $tenantEligibleForIgtf;
+
+        $igtfBaseAmount = $shouldApplyIgtf
+            ? round(min(max(0, $approvedPaymentsIgtfEligibleBase), max(0, $totalWithoutIgtf)), 2)
+            : 0.0;
+        $igtfAmount = $shouldApplyIgtf ? round($igtfBaseAmount * ($igtfRate / 100), 2) : 0.0;
+        $totalWithIgtf = round($totalWithoutIgtf + $igtfAmount, 2);
+        $changeDueBase = round(max(0, $approvedPaymentsTotalBase - $totalWithIgtf), 2);
+
+        if ($markPaymentsPaid && $approvedPaymentsTotalBase + 0.0001 < $totalWithIgtf) {
+            return response()->json([
+                'error' => 'Los pagos aprobados no cubren el total de la venta incluyendo IGTF.',
+                'required_total' => $totalWithIgtf,
+                'approved_total' => round($approvedPaymentsTotalBase, 2),
+            ], 422);
+        }
+
+        $changeRateToBs = max(0, (float) ($validated['change_rate_to_bs'] ?? $dollarRate));
+        $changeDueBs = ($changePaidInBs && $changeDueBase > 0 && $changeRateToBs > 0)
+            ? round($changeDueBase * $changeRateToBs, 2)
+            : 0.0;
+
+        $salesOrder->total_paid_base = round(max(0, $approvedPaymentsTotalBase), 2);
+        $salesOrder->igtf_base_amount = $igtfBaseAmount;
+        $salesOrder->igtf_amount = $igtfAmount;
+        $salesOrder->change_due_base = $changeDueBase;
+        $salesOrder->change_paid_in_bs = $changePaidInBs;
+        $salesOrder->change_rate_to_bs = $changePaidInBs && $changeRateToBs > 0 ? $changeRateToBs : null;
+        $salesOrder->change_due_bs = $changePaidInBs ? $changeDueBs : 0;
+        $salesOrder->save();
+
         // Recuperar la orden con relaciones + taxes
         $order = SalesOrder::with([
             'user',
@@ -386,6 +536,10 @@ class SaleController extends Controller
         ])->findOrFail($salesOrder->id);
 
         $this->syncSellerCommissionForOrder($order);
+
+        if ($markSaleCompleted) {
+            $this->attemptElectronicEmission($order);
+        }
 
     // =====================================
     //   GENERAR PDF SI HAY PAGOS APROBADOS
@@ -463,7 +617,7 @@ class SaleController extends Controller
             $dompdfNota->render();
 
             // $fileName = 'orden-' . $order->id . '.pdf';
-            $fileNameNota = 'NotaEntrega-' . $order->id . '.pdf';
+            $fileNameNota = $this->resolveInternalDispatchFilename((int) $order->id);
             Storage::disk('public')->put('orders/' . $fileNameNota, $dompdfNota->output());
             $pdfUrlNota = asset('storage/orders/' . $fileNameNota);
         } else {
@@ -475,14 +629,80 @@ class SaleController extends Controller
             $this->notifyDeliveryTeamIfEnabled($tienda, $salesOrder, 'Pedido listo para despacho desde venta interna.');
         }
 
+        $order->loadMissing('electronicDocuments');
+        $hkaDispatchGuide = $this->resolveLatestDispatchGuideDocument($order);
+
         return response()->json([
             'message' => $approvedPayments->isNotEmpty()
                 ? 'Venta registrada exitosamente con pagos aprobados.'
                 : 'Venta registrada sin pagos aprobados (PDF no generado).',
                 'pdf_url' => $pdfUrl,
                 'nota_entrega_pdf_url' => $pdfUrlNota,
+                'hka_dispatch_guide_download_url' => (optional($hkaDispatchGuide)->issued_at)
+                    ? route('sales.dispatchGuide.download', [
+                        'order' => $order->id,
+                        'tipo_archivo' => 'pdf',
+                        'disposition' => 'attachment',
+                    ])
+                    : null,
+                'igtf_base_amount' => $salesOrder->igtf_base_amount,
+                'igtf_amount' => $salesOrder->igtf_amount,
+                'total_paid_base' => $salesOrder->total_paid_base,
+                'change_due_base' => $salesOrder->change_due_base,
+                'change_due_bs' => $salesOrder->change_due_bs,
+                'hka_dispatch_guide_issued' => (bool) optional($hkaDispatchGuide)->issued_at,
+                'hka_dispatch_guide_number' => $hkaDispatchGuide?->numero_documento,
+                'hka_dispatch_guide_control' => $hkaDispatchGuide?->numero_control,
                 'created_customer_temporary_password' => $createdCustomerTemporaryPassword,
         ], 200);
+    }
+
+    private function resolveIgtfRate(): float
+    {
+        $rate = (float) (Tax::query()
+            ->whereRaw('(LOWER(name) = ? OR LOWER(name) LIKE ?)', ['igtf', '%igtf%'])
+            ->where(function ($query) {
+                $query->whereNull('is_active')->orWhere('is_active', 1);
+            })
+            ->value('rate') ?? 0);
+
+        return $rate > 0 ? $rate : 3.0;
+    }
+
+    private function paymentMethodAppliesIgtf(PaymentMethod $paymentMethod, string $tenantBaseCurrency): bool
+    {
+        if (!is_null($paymentMethod->applies_igtf_base)) {
+            return (bool) $paymentMethod->applies_igtf_base;
+        }
+
+        $methodCurrency = strtoupper(trim((string) ($paymentMethod->currency->code ?? $tenantBaseCurrency)));
+        if (!$this->isForeignCurrencyForIgtf($methodCurrency)) {
+            return false;
+        }
+
+        $name = Str::lower(trim((string) ($paymentMethod->name ?? '')));
+        if ($name === '') {
+            return true;
+        }
+
+        $nonEligibleKeywords = [
+            'pago movil', 'pago móvil', 'punto de venta', 'tarjeta', 'credito', 'crédito',
+            'debito', 'débito', 'transferencia nacional', 'nacional', 'bs', 'bolivar', 'bolívar',
+        ];
+
+        if (Str::contains($name, $nonEligibleKeywords)) {
+            return false;
+        }
+
+        // In foreign currency, apply IGTF by default unless a non-eligible method is explicitly detected.
+        return true;
+    }
+
+    private function isForeignCurrencyForIgtf(?string $currencyCode): bool
+    {
+        $normalized = strtoupper(trim((string) $currencyCode));
+
+        return !in_array($normalized, ['BS', 'BSD', 'VES', 'VED', 'VEF', 'BOLIVAR', 'BOLIVARES'], true);
     }
 
     private function resolveCustomerRoleIds(): array
@@ -786,6 +1006,7 @@ class SaleController extends Controller
     public function viewOrders()
     {
         $user = auth()->user();
+        $tenant = Tenant::find($user->tenant_id);
         $salesOrders = SalesOrder::with([
             'user', 
             'details', 
@@ -798,7 +1019,7 @@ class SaleController extends Controller
         foreach ($salesOrders as $order) {
             $order->total_items = $order->details->sum('quantity');
             $order->has_returns = $order->returns->isNotEmpty();
-            $order->latest_electronic_document = $order->electronicDocuments->sortByDesc('id')->first();
+            $order->latest_electronic_document = $this->resolvePrimaryInvoiceDocument($order);
             $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
         }
 
@@ -809,8 +1030,47 @@ class SaleController extends Controller
         $canDeliverOrders = $isSeller || $isWarehouse || $isDelivery || ($user?->isAdmin() ?? false) || ($user?->isOwner() ?? false);
         $pageTitle = 'VENTAS REALIZADAS';
         $isPendingDeliveryView = false;
+        $pendingDispatchGuideAlert = $this->buildPendingDispatchGuideAlertData($salesOrders, $tenant);
     
-        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView'));
+        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView', 'pendingDispatchGuideAlert'));
+    }
+
+    public function sendPendingDispatchGuidesReport(Request $request)
+    {
+        $user = auth()->user();
+        $tenant = Tenant::find((int) $user->tenant_id);
+
+        $validated = $request->validate([
+            'period' => 'required|in:fortnight,monthly',
+            'email' => 'required|string|max:500',
+        ]);
+
+        $emails = collect(explode(',', (string) $validated['email']))
+            ->map(fn ($email) => trim($email))
+            ->filter(fn ($email) => $email !== '')
+            ->unique()
+            ->values();
+
+        if ($emails->isEmpty()) {
+            return back()->with('error', 'Debes indicar al menos un correo de destino para el reporte al SENIAT.');
+        }
+
+        $report = $this->buildPendingDispatchGuidesPeriodReport((int) $user->tenant_id, (string) $validated['period']);
+
+        try {
+            Mail::to($emails->all())->send(new PendingDispatchGuidesReportMail($tenant, $report));
+        } catch (\Throwable $exception) {
+            Log::warning('No se pudo enviar el reporte de guías pendientes por facturar', [
+                'tenant_id' => $user->tenant_id,
+                'period' => $validated['period'],
+                'emails' => $emails->all(),
+                'error' => $exception->getMessage(),
+            ]);
+
+            return back()->with('error', 'No se pudo enviar el reporte al correo indicado. ' . $exception->getMessage());
+        }
+
+        return back()->with('success', 'Reporte de guías pendientes enviado correctamente (' . ($validated['period'] === 'fortnight' ? 'quincenal' : 'mensual') . ').');
     }
 
     public function viewPendingDeliveryOrders()
@@ -839,7 +1099,7 @@ class SaleController extends Controller
         foreach ($salesOrders as $order) {
             $order->total_items = $order->details->sum('quantity');
             $order->has_returns = $order->returns->isNotEmpty();
-            $order->latest_electronic_document = $order->electronicDocuments->sortByDesc('id')->first();
+            $order->latest_electronic_document = $this->resolvePrimaryInvoiceDocument($order);
             $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
         }
 
@@ -858,7 +1118,7 @@ class SaleController extends Controller
     {
         $user = auth()->user();
 
-        $salesOrders = SalesOrder::with(['user', 'details', 'payments'])
+        $salesOrders = SalesOrder::with(['user', 'details', 'payments', 'retentions'])
             ->where('tenant_id', $user->tenant_id)
             ->where('status', '!=', 2)
             ->orderByDesc('id')
@@ -867,7 +1127,8 @@ class SaleController extends Controller
                 $order->total_items = (int) $order->details->sum('quantity');
                 $order->order_total_amount = (float) $order->gross_total;
                 $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
-                $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount, 2));
+                $order->retentions_amount = (float) $order->retentions->sum('retained_amount');
+                $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount - $order->retentions_amount, 2));
 
                 return $order;
             })
@@ -891,7 +1152,7 @@ class SaleController extends Controller
                 ->with('warning', 'El plan actual no permite usar la bandeja de entregas pendientes.');
         }
 
-        $salesOrders = SalesOrder::with(['user', 'details', 'payments', 'assignedDeliveryUser'])
+        $salesOrders = SalesOrder::with(['user', 'details', 'payments', 'assignedDeliveryUser', 'retentions'])
             ->where('tenant_id', $user->tenant_id)
             ->where('deliver_status', 0)
             ->where('status', '!=', 2)
@@ -903,7 +1164,8 @@ class SaleController extends Controller
                 $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
                 $order->registered_paid_amount = (float) $order->payments->where('status', '!=', 3)->sum('amount');
                 $order->effective_paid_amount = max($order->approved_paid_amount, $order->registered_paid_amount);
-                $order->pending_amount = max(0, round($order->order_total_amount - $order->effective_paid_amount, 2));
+                $order->retentions_amount = (float) $order->retentions->sum('retained_amount');
+                $order->pending_amount = max(0, round($order->order_total_amount - $order->effective_paid_amount - $order->retentions_amount, 2));
 
                 $deliveryMeta = $this->extractDeliveryOrderMeta($order);
                 $order->delivery_receiver_name = $deliveryMeta['receiver_name'];
@@ -1175,7 +1437,8 @@ class SaleController extends Controller
         $order->total_pagado = $totalPagado; // Agregar total pagado al objeto de la orden
         $order->total_orden = $totalOrden; // Agregar total de la orden al objeto de la orden
         $order->has_returns = $order->returns->isNotEmpty(); // Verificar si tiene devoluciones
-        $order->latest_electronic_document = $order->electronicDocuments->sortByDesc('id')->first();
+        $order->latest_electronic_document = $this->resolvePrimaryInvoiceDocument($order);
+        $order->latest_dispatch_guide_document = $this->resolveLatestDispatchGuideDocument($order);
         $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
         $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
         $orderCurrencySymbol = TenantCurrency::resolveCurrencySymbol($orderCurrencyCode);
@@ -1373,7 +1636,7 @@ class SaleController extends Controller
 
         $order->total_devuelto = $totalDevuelto;
         $order->has_returns = $order->returns->isNotEmpty();
-        $order->latest_electronic_document = $order->electronicDocuments->sortByDesc('id')->first();
+        $order->latest_electronic_document = $this->resolvePrimaryInvoiceDocument($order);
         $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
 
         $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
@@ -1449,10 +1712,18 @@ class SaleController extends Controller
     private function ensureAssociatedPdfAssets(SalesOrder $order): array
     {
         $invoiceRelative = 'orders/factura-' . $order->id . '.pdf';
-        $deliveryRelative = 'orders/NotaEntrega-' . $order->id . '.pdf';
+        $deliveryRelative = 'orders/' . $this->resolveInternalDispatchFilename((int) $order->id);
+        $legacyDeliveryRelative = 'orders/NotaEntrega-' . $order->id . '.pdf';
+
+        if (!Storage::disk('public')->exists($deliveryRelative) && Storage::disk('public')->exists($legacyDeliveryRelative)) {
+            $deliveryRelative = $legacyDeliveryRelative;
+        }
 
         if (!Storage::disk('public')->exists($invoiceRelative) || !Storage::disk('public')->exists($deliveryRelative)) {
             $this->generateAssociatedPdfAssets($order);
+            if (!Storage::disk('public')->exists($deliveryRelative) && Storage::disk('public')->exists($legacyDeliveryRelative)) {
+                $deliveryRelative = $legacyDeliveryRelative;
+            }
         }
 
         return [
@@ -1508,7 +1779,7 @@ class SaleController extends Controller
         $deliveryOutput = $this->renderPdfOutput($deliveryHtml);
 
         $invoiceRelative = 'orders/factura-' . $order->id . '.pdf';
-        $deliveryRelative = 'orders/NotaEntrega-' . $order->id . '.pdf';
+        $deliveryRelative = 'orders/' . $this->resolveInternalDispatchFilename((int) $order->id);
 
         if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
             $invoiceHtml = view('fiscalOrderPdf', compact(
@@ -1625,10 +1896,6 @@ class SaleController extends Controller
         $document = $order->electronicDocuments->sortByDesc('id')->first();
         if (!$document) {
             abort(404, 'No existe factura fiscal emitida por la imprenta autorizada para esta venta.');
-        }
-
-        if ((bool) $document->is_annulled) {
-            abort(410, 'La factura fiscal de esta venta fue anulada y ya no puede visualizarse ni descargarse.');
         }
 
         $service = app(TheFactoryHkaService::class);
@@ -2053,6 +2320,112 @@ class SaleController extends Controller
         return back()->with('success', 'Tipo de documento de la venta actualizado.');
     }
 
+    public function downloadHkaDispatchGuide(Request $request, SalesOrder $order)
+    {
+        $authUser = auth()->user();
+        if ((int) ($order->tenant_id ?? 0) !== (int) ($authUser->tenant_id ?? 0)) {
+            abort(404);
+        }
+
+        if (!$authUser?->hasStoreRole('owner', 'admin', 'seller', 'warehouse')) {
+            abort(403, 'No autorizado para descargar la guía de despacho fiscal.');
+        }
+
+        $validated = $request->validate([
+            'tipo_archivo' => 'nullable|in:pdf,PDF,xml,XML,json,JSON',
+            'disposition' => 'nullable|in:inline,attachment',
+        ]);
+
+        $service = app(TheFactoryHkaService::class);
+        if (!$service->isConfigured()) {
+            return back()->with('error', 'La integración de facturación digital no está configurada en el servidor.');
+        }
+
+        $order->loadMissing('electronicDocuments');
+        $guideDocument = $this->resolveLatestDispatchGuideDocument($order);
+        if (!$guideDocument) {
+            return back()->with('error', 'No existe una guía de despacho fiscal emitida para esta venta.');
+        }
+
+        if (!$guideDocument->issued_at) {
+            $guideReason = trim((string) ($guideDocument->mensaje ?? ''));
+            return back()->with('error', 'La guía de despacho fiscal aún no está emitida en HKA.' . ($guideReason !== '' ? ' Detalle: ' . $guideReason : ''));
+        }
+
+        if ((bool) $guideDocument->is_annulled) {
+            return back()->with('error', 'La guía de despacho fiscal fue anulada y ya no puede descargarse.');
+        }
+
+        $response = $service->downloadDocumentFile([
+            'serie' => $guideDocument->serie,
+            'tipoDocumento' => $guideDocument->tipo_documento ?: '04',
+            'numeroDocumento' => $guideDocument->numero_documento,
+            'tipoArchivo' => $validated['tipo_archivo'] ?? 'pdf',
+        ]);
+
+        if (!($response['ok'] ?? false) || empty($response['content'])) {
+            return back()->with('error', 'No fue posible descargar la guía de despacho fiscal desde HKA: ' . ($response['message'] ?? 'Error desconocido.'));
+        }
+
+        $guideDocument->update([
+            'mensaje' => (string) ($response['message'] ?? $guideDocument->mensaje),
+            'response_payload' => Arr::except((array) ($response['data'] ?? []), ['archivo']) ?: $guideDocument->response_payload,
+        ]);
+
+        $extension = (string) ($response['extension'] ?? strtolower((string) ($validated['tipo_archivo'] ?? 'pdf')));
+        $fileName = implode('-', array_filter([
+            'guia-despacho-fiscal',
+            trim((string) ($guideDocument->serie ?? '')) !== '' ? trim((string) $guideDocument->serie) : null,
+            trim((string) ($guideDocument->numero_documento ?? '')),
+        ])) . '.' . strtolower($extension);
+
+        return response((string) $response['content'], 200, [
+            'Content-Type' => (string) ($response['mime_type'] ?? 'application/pdf'),
+            'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $fileName, (string) ($validated['disposition'] ?? 'attachment')),
+        ]);
+    }
+
+    public function emitHkaDispatchGuide(SalesOrder $order)
+    {
+        $authUser = auth()->user();
+        if ((int) ($order->tenant_id ?? 0) !== (int) ($authUser->tenant_id ?? 0)) {
+            abort(404);
+        }
+
+        if (!$authUser?->hasStoreRole('owner', 'admin', 'seller')) {
+            abort(403, 'No autorizado para emitir la guía de despacho fiscal.');
+        }
+
+        $order->loadMissing(['tenant', 'user', 'details.variant.product', 'details.taxes', 'payments.payment']);
+
+        if (!(bool) ($order->tenant?->electronic_invoicing_enabled ?? false)) {
+            return back()->with('error', 'La facturación digital está desactivada para esta tienda.');
+        }
+
+        $service = app(TheFactoryHkaService::class);
+        if (!$service->isConfigured()) {
+            return back()->with('error', 'La integración de facturación digital no está configurada en el servidor.');
+        }
+
+        $hasApprovedPayments = $order->payments->contains(fn (Payment $payment) => (int) $payment->status === 1);
+        if (!$hasApprovedPayments && (int) $order->status !== 1) {
+            return back()->with('error', 'Para emitir la guía fiscal la venta debe estar finalizada o tener pagos aprobados.');
+        }
+
+        try {
+            $this->emitDispatchGuideIfNeeded($order, $service);
+            $latestGuide = $this->resolveLatestDispatchGuideDocument($order->fresh('electronicDocuments'));
+
+            if (!$latestGuide || !$latestGuide->issued_at) {
+                return back()->with('error', 'No fue posible emitir la guía de despacho fiscal en HKA.' . (!empty($latestGuide?->mensaje) ? ' Detalle: ' . $latestGuide->mensaje : ''));
+            }
+
+            return back()->with('success', 'Guía de despacho fiscal emitida correctamente en HKA.');
+        } catch (\Throwable $exception) {
+            return back()->with('error', 'No fue posible emitir la guía de despacho fiscal en HKA: ' . $exception->getMessage());
+        }
+    }
+
     public function orderDeliverToggleStatus($id, Request $request)
     {
         DB::raw("SET @user_id = " . auth()->id());
@@ -2236,21 +2609,7 @@ class SaleController extends Controller
         try {
             $order->loadMissing(['payments', 'details', 'details.variant.product', 'details.taxes', 'tenant', 'user']);
 
-            if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
-                return;
-            }
-
             if (!(bool) ($order->tenant?->electronic_invoicing_enabled ?? false)) {
-                return;
-            }
-
-            $alreadyIssued = ElectronicDocument::query()
-                ->where('sales_order_id', $order->id)
-                ->whereNotNull('issued_at')
-                ->where('is_annulled', false)
-                ->exists();
-
-            if ($alreadyIssued) {
                 return;
             }
 
@@ -2264,11 +2623,28 @@ class SaleController extends Controller
                 return;
             }
 
+            $this->emitDispatchGuideIfNeeded($order, $service);
+
+            if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
+                return;
+            }
+
+            $alreadyIssuedInvoice = ElectronicDocument::query()
+                ->where('sales_order_id', $order->id)
+                ->where('tipo_documento', '01')
+                ->whereNotNull('issued_at')
+                ->where('is_annulled', false)
+                ->exists();
+
+            if ($alreadyIssuedInvoice) {
+                return;
+            }
+
             $payload = $service->buildInvoicePayloadFromOrder($order);
             $response = $service->emitDocument($payload);
             $internalNumber = app(FiscalCorrelativeService::class)->next((int) $order->tenant_id, 'invoice', 'FAC');
 
-            ElectronicDocument::create([
+            $document = ElectronicDocument::create([
                 'tenant_id' => $order->tenant_id,
                 'sales_order_id' => $order->id,
                 'created_by' => auth()->id(),
@@ -2287,12 +2663,261 @@ class SaleController extends Controller
                 'response_payload' => $response['data'] ?? null,
                 'issued_at' => ($response['ok'] ?? false) ? now() : null,
             ]);
+
+            if ($response['ok'] ?? false) {
+                ActionReason::log('electronic_invoices', 'INVOICE_CREATED', 'Factura electrónica emitida automáticamente', [
+                    'sales_order_id' => $order->id,
+                    'tenant_id' => $order->tenant_id,
+                    'electronic_document_id' => $document->id,
+                    'numero_documento' => $document->numero_documento,
+                    'numero_control' => $document->numero_control,
+                ]);
+
+                Log::info('Factura electrónica creada', [
+                    'sales_order_id' => $order->id,
+                    'tenant_id' => $order->tenant_id,
+                    'electronic_document_id' => $document->id,
+                    'numero_documento' => $document->numero_documento,
+                    'numero_control' => $document->numero_control,
+                    'transaccion_id' => $document->transaccion_id,
+                    'created_by' => auth()->id(),
+                    'source' => 'automatic_emit',
+                ]);
+            }
         } catch (\Throwable $e) {
             Log::warning('No se pudo emitir factura electrónica automáticamente', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function emitDispatchGuideIfNeeded(SalesOrder $order, TheFactoryHkaService $service): void
+    {
+        $alreadyIssuedGuide = ElectronicDocument::query()
+            ->where('sales_order_id', $order->id)
+            ->whereIn('tipo_documento', ['04', '06'])
+            ->whereNotNull('issued_at')
+            ->where('is_annulled', false)
+            ->exists();
+
+        if ($alreadyIssuedGuide) {
+            return;
+        }
+
+        $payload = $service->buildInvoicePayloadFromOrder($order, [
+            'tipo_documento' => '04',
+            'tipo_de_venta' => 'Interna',
+        ]);
+
+        $response = $service->emitDocument($payload);
+        $responseData = is_array($response['data'] ?? null) ? $response['data'] : [];
+        $diagnosticMessage = $this->extractIntegrationDiagnosticMessage($response);
+        $internalNumber = app(FiscalCorrelativeService::class)->next((int) $order->tenant_id, 'dispatch_guide', 'GDE');
+
+        ElectronicDocument::create([
+            'tenant_id' => $order->tenant_id,
+            'sales_order_id' => $order->id,
+            'created_by' => auth()->id(),
+            'provider' => 'thefactoryhka',
+            'tipo_documento' => (string) Arr::get($payload, 'encabezado.identificacionDocumento.tipoDocumento', '04'),
+            'serie' => (string) Arr::get($payload, 'encabezado.identificacionDocumento.serie', ''),
+            'numero_documento' => (string) Arr::get($responseData, 'resultado.numeroDocumento', Arr::get($payload, 'encabezado.identificacionDocumento.numeroDocumento')),
+            'internal_number' => $internalNumber,
+            'numero_control' => (string) Arr::get($responseData, 'resultado.numeroControl', ''),
+            'transaccion_id' => (string) Arr::get($responseData, 'resultado.transaccionId', Arr::get($payload, 'encabezado.identificacionDocumento.transaccionId')),
+            'estado_documento' => (string) Arr::get($responseData, 'resultado.autorizado', Arr::get($responseData, 'resultado.imprentaDigital', '')),
+            'codigo' => (string) Arr::get($responseData, 'codigo', ''),
+            'mensaje' => $diagnosticMessage,
+            'url_consulta' => (string) Arr::get($responseData, 'resultado.urlConsulta', ''),
+            'request_payload' => $payload,
+            'response_payload' => !empty($responseData) ? $responseData : [
+                'status' => $response['status'] ?? null,
+                'message' => $diagnosticMessage,
+                'raw' => $response['raw'] ?? null,
+            ],
+            'issued_at' => ($response['ok'] ?? false) ? now() : null,
+        ]);
+    }
+
+    private function extractIntegrationDiagnosticMessage(array $response): string
+    {
+        $data = is_array($response['data'] ?? null) ? $response['data'] : [];
+        $parts = [];
+
+        $mainMessage = trim((string) ($response['message'] ?? ''));
+        if ($mainMessage !== '') {
+            $parts[] = $mainMessage;
+        }
+
+        $providerMessage = trim((string) Arr::get($data, 'mensaje', Arr::get($data, 'Mensaje', '')));
+        if ($providerMessage !== '' && !in_array($providerMessage, $parts, true)) {
+            $parts[] = $providerMessage;
+        }
+
+        $validations = collect(Arr::get($data, 'validaciones', []))
+            ->filter(fn ($validation) => is_scalar($validation) && trim((string) $validation) !== '')
+            ->map(fn ($validation) => trim((string) $validation))
+            ->values()
+            ->all();
+
+        if (!empty($validations)) {
+            $parts[] = implode(' | ', $validations);
+        }
+
+        $code = trim((string) Arr::get($data, 'codigo', Arr::get($data, 'Codigo', '')));
+        if ($code !== '') {
+            $parts[] = 'Código HKA: ' . $code . '.';
+        }
+
+        if (empty($parts)) {
+            $raw = trim((string) ($response['raw'] ?? ''));
+            if ($raw !== '') {
+                return Str::limit($raw, 300);
+            }
+
+            return 'Error de integración';
+        }
+
+        return implode(' ', $parts);
+    }
+
+    private function resolvePrimaryInvoiceDocument(SalesOrder $order): ?ElectronicDocument
+    {
+        $documents = $order->relationLoaded('electronicDocuments')
+            ? $order->electronicDocuments
+            : $order->electronicDocuments()->get();
+
+        $invoice = $documents
+            ->where('tipo_documento', '01')
+            ->sortByDesc('id')
+            ->first();
+
+        return $invoice instanceof ElectronicDocument ? $invoice : null;
+    }
+
+    private function resolveLatestDispatchGuideDocument(SalesOrder $order): ?ElectronicDocument
+    {
+        $documents = $order->relationLoaded('electronicDocuments')
+            ? $order->electronicDocuments
+            : $order->electronicDocuments()->get();
+
+        $guides = $documents
+            ->filter(fn (ElectronicDocument $document) => in_array((string) $document->tipo_documento, ['04', '06'], true))
+            ->sortByDesc('id');
+
+        $guide = $guides
+            ->filter(fn (ElectronicDocument $document) => !is_null($document->issued_at) && !(bool) $document->is_annulled)
+            ->first();
+
+        if (!$guide) {
+            $guide = $guides->first();
+        }
+
+        return $guide instanceof ElectronicDocument ? $guide : null;
+    }
+
+    private function buildPendingDispatchGuideAlertData($salesOrders, ?Tenant $tenant): array
+    {
+        $pendingOrders = collect($salesOrders)
+            ->map(function (SalesOrder $order) {
+                $guide = $this->resolveLatestDispatchGuideDocument($order);
+                $invoice = $this->resolvePrimaryInvoiceDocument($order);
+                $hasActiveGuide = $guide && !is_null($guide->issued_at) && !(bool) $guide->is_annulled;
+                $hasActiveInvoice = $invoice && !is_null($invoice->issued_at) && !(bool) $invoice->is_annulled;
+
+                if (!$hasActiveGuide || $hasActiveInvoice) {
+                    return null;
+                }
+
+                $order->latest_dispatch_guide_document = $guide;
+
+                return $order;
+            })
+            ->filter()
+            ->values();
+
+        $now = now();
+        $fortnightStart = $now->day <= 15 ? $now->copy()->startOfMonth() : $now->copy()->day(16)->startOfDay();
+        $fortnightEnd = $now->day <= 15 ? $now->copy()->day(15)->endOfDay() : $now->copy()->endOfMonth();
+        $monthStart = $now->copy()->startOfMonth();
+        $monthEnd = $now->copy()->endOfMonth();
+
+        $fortnightCount = $pendingOrders->filter(function (SalesOrder $order) use ($fortnightStart, $fortnightEnd) {
+            $issuedAt = optional($order->latest_dispatch_guide_document)->issued_at;
+            return $issuedAt && $issuedAt->between($fortnightStart, $fortnightEnd);
+        })->count();
+
+        $monthCount = $pendingOrders->filter(function (SalesOrder $order) use ($monthStart, $monthEnd) {
+            $issuedAt = optional($order->latest_dispatch_guide_document)->issued_at;
+            return $issuedAt && $issuedAt->between($monthStart, $monthEnd);
+        })->count();
+
+        return [
+            'total_count' => (int) $pendingOrders->count(),
+            'fortnight_count' => (int) $fortnightCount,
+            'monthly_count' => (int) $monthCount,
+            'default_email' => trim((string) ($tenant?->email ?? auth()->user()?->email ?? '')),
+        ];
+    }
+
+    private function buildPendingDispatchGuidesPeriodReport(int $tenantId, string $period): array
+    {
+        $now = now();
+        $start = $period === 'fortnight'
+            ? ($now->day <= 15 ? $now->copy()->startOfMonth() : $now->copy()->day(16)->startOfDay())
+            : $now->copy()->startOfMonth();
+        $end = $period === 'fortnight'
+            ? ($now->day <= 15 ? $now->copy()->day(15)->endOfDay() : $now->copy()->endOfMonth())
+            : $now->copy()->endOfMonth();
+
+        $orders = SalesOrder::with(['user', 'electronicDocuments'])
+            ->where('tenant_id', $tenantId)
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (SalesOrder $order) {
+                $guide = $this->resolveLatestDispatchGuideDocument($order);
+                $invoice = $this->resolvePrimaryInvoiceDocument($order);
+                $hasActiveGuide = $guide && !is_null($guide->issued_at) && !(bool) $guide->is_annulled;
+                $hasActiveInvoice = $invoice && !is_null($invoice->issued_at) && !(bool) $invoice->is_annulled;
+
+                if (!$hasActiveGuide || $hasActiveInvoice) {
+                    return null;
+                }
+
+                return [
+                    'order_id' => (int) $order->id,
+                    'customer_name' => (string) ($order->user->name ?? 'N/A'),
+                    'sale_date' => (string) ($order->date ?? ''),
+                    'delivery_type' => (string) ($order->preference ?? ''),
+                    'guide_number' => (string) ($guide->numero_documento ?? ''),
+                    'guide_control' => (string) ($guide->numero_control ?? ''),
+                    'guide_issued_at' => optional($guide->issued_at),
+                ];
+            })
+            ->filter(function (?array $row) use ($start, $end) {
+                return $row && $row['guide_issued_at'] && $row['guide_issued_at']->between($start, $end);
+            })
+            ->values()
+            ->map(function (array $row) {
+                $row['guide_issued_at_display'] = optional($row['guide_issued_at'])->format('d/m/Y H:i');
+                unset($row['guide_issued_at']);
+                return $row;
+            });
+
+        return [
+            'period' => $period,
+            'label' => $period === 'fortnight' ? 'quincenal' : 'mensual',
+            'start_date' => $start->format('d/m/Y'),
+            'end_date' => $end->format('d/m/Y'),
+            'count' => (int) $orders->count(),
+            'orders' => $orders->all(),
+        ];
+    }
+
+    private function resolveInternalDispatchFilename(int $orderId): string
+    {
+        return 'depachointernoshpx' . $orderId . '.pdf';
     }
 
     private function validateShippingCityAgainstTenant(Tenant $tenant, int $deliveryCityId): array
@@ -2505,7 +3130,7 @@ class SaleController extends Controller
             return response()->json(['message' => 'No autorizado para registrar devoluciones.'], 403);
         }
 
-        $order = SalesOrder::with('details')->findOrFail($orderId);
+        $order = SalesOrder::with(['details.taxes'])->findOrFail($orderId);
         $itemsToReturn = $request->input('items'); // array de items con id y cantidad
         $reason = ActionReason::require($request, 'reason', 'Debes indicar el motivo de la devolucion.');
 
@@ -2518,26 +3143,87 @@ class SaleController extends Controller
             'reason' => $reason,
         ]);
 
+        $returnSubtotal = 0.0;
+        $returnTaxTotal = 0.0;
+
         foreach ($itemsToReturn as $item) {
+            $quantityToReturn = (float) ($item['quantity'] ?? 0);
+            $disposition = strtolower(trim((string) ($item['disposition'] ?? 'resalable')));
+            if (!in_array($disposition, ['resalable', 'damaged', 'no_physical_return'], true)) {
+                return response()->json(['error' => 'Disposición de inventario inválida.'], 422);
+            }
+
             $detail = $order->details->where('product_variant_id', $item['id'])->first();
 
-            if (!$detail || $item['quantity'] > $detail->quantity) {
+            if (!$detail || $quantityToReturn <= 0 || $quantityToReturn > (float) $detail->quantity) {
                 return response()->json(['error' => 'Cantidad inválida para devolver.'], 400);
             }
+
+            $detailQuantity = max(1, (float) $detail->quantity);
+            $lineSubtotal = round((float) $detail->price * $quantityToReturn, 2);
+            $lineTaxTotal = (float) $detail->taxes->sum('tax_amount');
+            $lineTaxReturned = round($lineTaxTotal * ($quantityToReturn / $detailQuantity), 2);
+            $returnSubtotal += $lineSubtotal;
+            $returnTaxTotal += $lineTaxReturned;
 
             // Registrar item devuelto
             SalesReturnItem::create([
                 'sales_return_id' => $return->id,
                 'product_variant_id' => $item['id'],
-                'quantity' => $item['quantity'],
+                'quantity' => $quantityToReturn,
                 'price' => $detail->price,
+                'disposition' => $disposition,
+                'returned_subtotal' => $lineSubtotal,
+                'returned_tax_amount' => $lineTaxReturned,
+                'returned_igtf_amount' => 0,
             ]);
 
-            // Actualizar inventario
-            $variant = ProductVariant::find($item['id']);
-            $variant->stock += $item['quantity'];
-            $variant->save();
+            // Actualizar inventario solo si la mercancía vuelve apta para venta
+            if ($disposition === 'resalable') {
+                $variant = ProductVariant::find($item['id']);
+                if ($variant) {
+                    $variant->stock += $quantityToReturn;
+                    $variant->save();
+                }
+            }
         }
+
+        $orderTaxTotal = (float) $order->details->flatMap->taxes->sum('tax_amount');
+        $orderTotalWithoutIgtf = round((float) $order->gross_total + $orderTaxTotal, 2);
+        $orderIgtfAmount = round((float) ($order->igtf_amount ?? 0), 2);
+        $returnGrossBeforeIgtf = round($returnSubtotal + $returnTaxTotal, 2);
+        $returnIgtf = $orderTotalWithoutIgtf > 0
+            ? round($orderIgtfAmount * ($returnGrossBeforeIgtf / $orderTotalWithoutIgtf), 2)
+            : 0.0;
+
+        if ($returnIgtf > 0) {
+            $remainingIgtf = $returnIgtf;
+            $returnItems = $return->items()->get();
+            $lastIndex = max(0, $returnItems->count() - 1);
+
+            foreach ($returnItems as $index => $returnItem) {
+                $lineSubtotal = (float) ($returnItem->returned_subtotal ?? 0);
+                $lineTax = (float) ($returnItem->returned_tax_amount ?? 0);
+                $lineGross = round($lineSubtotal + $lineTax, 2);
+
+                if ($index === $lastIndex) {
+                    $allocatedIgtf = round(max(0, $remainingIgtf), 2);
+                } else {
+                    $weight = $returnGrossBeforeIgtf > 0 ? ($lineGross / $returnGrossBeforeIgtf) : 0;
+                    $allocatedIgtf = round($returnIgtf * $weight, 2);
+                    $remainingIgtf = round($remainingIgtf - $allocatedIgtf, 2);
+                }
+
+                $returnItem->returned_igtf_amount = $allocatedIgtf;
+                $returnItem->save();
+            }
+        }
+
+        $return->subtotal_returned = round($returnSubtotal, 2);
+        $return->tax_returned = round($returnTaxTotal, 2);
+        $return->igtf_returned = round(max(0, $returnIgtf), 2);
+        $return->total_returned = round($returnSubtotal + $returnTaxTotal + max(0, $returnIgtf), 2);
+        $return->save();
 
         // Marcar la orden como que tiene devolución
         $order->has_returns = true;

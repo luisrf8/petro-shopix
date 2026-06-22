@@ -856,7 +856,7 @@ class ReportController extends Controller
         $minPendingBalance = max(0, (float) $request->query('min_pending_balance', 0));
         $minPendingBalanceBase = TenantCurrency::convertAmount($minPendingBalance, $currency['code'], $currency['base_code'], (int) $user->tenant_id);
 
-        $rows = SalesOrder::with(['user', 'details', 'payments'])
+        $rows = SalesOrder::with(['user', 'details', 'payments', 'retentions'])
             ->where('tenant_id', $user->tenant_id)
             ->whereDate('date', '>=', $startDate->toDateString())
             ->whereDate('date', '<=', $endDate->toDateString())
@@ -867,10 +867,12 @@ class ReportController extends Controller
             ->map(function (SalesOrder $order) use ($currency, $user) {
                 $order->order_total_amount = (float) $order->gross_total;
                 $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
-                $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount, 2));
+                $order->retentions_amount = (float) $order->retentions->sum('retained_amount');
+                $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount - $order->retentions_amount, 2));
 
                 $order->order_total_amount = TenantCurrency::convertAmount($order->order_total_amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
                 $order->approved_paid_amount = TenantCurrency::convertAmount($order->approved_paid_amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+                $order->retentions_amount = TenantCurrency::convertAmount($order->retentions_amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
                 $order->pending_amount = TenantCurrency::convertAmount($order->pending_amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
 
                 return $order;

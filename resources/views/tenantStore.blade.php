@@ -538,7 +538,7 @@
                                             La tienda es contribuyente especial
                                         </label>
                                     </div>
-                                    <small class="text-muted">Si está activo, el sistema no aplicará IGTF en los cobros.</small>
+                                    <small class="text-muted">Si está activo, el sistema podrá aplicar IGTF en cobros elegibles en divisas/moneda extranjera.</small>
                                 </div>
                                 @endunless
 

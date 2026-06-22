@@ -42,6 +42,16 @@
     $deliveryFee = (float) ($deliveryFee ?? $order->delivery_fee_amount);
     $taxTotalAmount = (float) ($totalTaxes ?? $order->details->flatMap->taxes->sum('tax_amount'));
     $invoiceGrandTotal = (float) ($totalGeneral ?? ($itemsSubtotal + $deliveryFee + $taxTotalAmount));
+    $totalDiscount = (float) ($order->total_discount ?? $order->details->sum(function ($detail) {
+        $lineSubtotal = (float) ($detail->amount ?? 0);
+        $lineBase = (float) ($detail->line_subtotal_before_discount ?? 0);
+
+        if ($lineBase <= 0) {
+            $lineBase = $lineSubtotal + (float) ($detail->line_discount_amount ?? 0);
+        }
+
+        return max(0, $lineBase - $lineSubtotal);
+    }));
     $displayAmount = function ($value) use ($emissionConversionFactor) {
         return (float) $value * $emissionConversionFactor;
     };
@@ -69,33 +79,50 @@
                 <th>Producto</th>
                 <th>Cantidad</th>
                 <th>Variante</th>
+                <th>Precio antes desc.</th>
                 <th>Precio Unitario</th>
-                <th>Subtotal</th>
+                <th>Descuento</th>
+                <th>Subtotal neto</th>
             </tr>
         </thead>
         <tbody>
             @foreach($order->details as $detalle)
+            @php
+                $lineSubtotal = (float) ($detalle->amount ?? 0);
+                $lineBase = (float) ($detalle->line_subtotal_before_discount ?? 0);
+                if ($lineBase <= 0) {
+                    $lineBase = $lineSubtotal + (float) ($detalle->line_discount_amount ?? 0);
+                }
+
+                if ($lineBase <= 0) {
+                    $lineBase = $lineSubtotal;
+                }
+
+                $lineDiscount = max(0, $lineBase - $lineSubtotal);
+            @endphp
             <tr>
                 <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }} | {{ $detalle->taxes->count() > 0 ? '(G)' : '(E)' }}</td>
                 <td>{{ $detalle->quantity }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
+                <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($lineBase), 2) }}</td>
                 <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($detalle->price), 2) }}</td>
-                <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($detalle->amount), 2) }}</td>
+                <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($lineDiscount), 2) }}</td>
+                <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($lineSubtotal), 2) }}</td>
             </tr>
             @endforeach
+            @if($totalDiscount > 0)
+                <tr>
+                    <td colspan="6"><strong>Total descuentos</strong></td>
+                    <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($totalDiscount), 2) }}</td>
+                </tr>
+            @endif
             <tr>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td><strong>Sub Total</strong></td>
+                    <td colspan="6"><strong>Sub Total</strong></td>
                     <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($itemsSubtotal), 2) }}</td>
                 </tr>
             @if($deliveryFee > 0)
                 <tr>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td><strong>Delivery</strong></td>
+                    <td colspan="6"><strong>Delivery</strong></td>
                     <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($deliveryFee), 2) }}</td>
                 </tr>
             @endif
@@ -106,16 +133,15 @@
                     <td></td>
                     <td>{{ $tax->tax_name }}</td>
                     <td>{{ number_format($tax->tax_rate, 2) }}%</td>
+                    <td></td>
+                    <td></td>
                     <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($tax->tax_amount), 2) }}</td>
                 </tr>
             @endforeach
 
             @endforeach
                 <tr>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td><strong>Total</strong></td>
+                    <td colspan="6"><strong>Total</strong></td>
                     <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($invoiceGrandTotal), 2) }}</td>
                 </tr>
         </tbody>

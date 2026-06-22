@@ -216,6 +216,41 @@
       </div>
     </div>
 
+  @if(!($isPendingDeliveryView ?? false) && isset($pendingDispatchGuideAlert))
+  <div class="modal fade" id="pendingDispatchGuideAlertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Guías de despacho pendientes por facturar</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2">Actualmente tienes <strong>{{ $pendingDispatchGuideAlert['total_count'] ?? 0 }}</strong> guías de despacho pendientes por facturar.</p>
+          <p class="mb-3 text-sm text-muted">Quincena actual: {{ $pendingDispatchGuideAlert['fortnight_count'] ?? 0 }} | Mes actual: {{ $pendingDispatchGuideAlert['monthly_count'] ?? 0 }}</p>
+          <div class="mb-3">
+            <label for="pendingDispatchGuideEmail" class="form-label">Correo destino SENIAT</label>
+            <input type="text" id="pendingDispatchGuideEmail" class="form-control border border-1 p-2" value="{{ $pendingDispatchGuideAlert['default_email'] ?? '' }}" placeholder="correo@seniat.gob.ve o varios separados por coma">
+          </div>
+          <div class="d-flex gap-2 flex-wrap justify-content-end">
+            <form method="POST" action="{{ route('sales.orders.pendingDispatchGuides.email') }}" class="pending-dispatch-report-form">
+              @csrf
+              <input type="hidden" name="period" value="fortnight">
+              <input type="hidden" name="email" value="{{ $pendingDispatchGuideAlert['default_email'] ?? '' }}" class="pending-dispatch-email-target">
+              <button type="submit" class="btn btn-outline-dark mb-0">Enviar quincenal</button>
+            </form>
+            <form method="POST" action="{{ route('sales.orders.pendingDispatchGuides.email') }}" class="pending-dispatch-report-form">
+              @csrf
+              <input type="hidden" name="period" value="monthly">
+              <input type="hidden" name="email" value="{{ $pendingDispatchGuideAlert['default_email'] ?? '' }}" class="pending-dispatch-email-target">
+              <button type="submit" class="btn btn-dark mb-0">Enviar mensual</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  @endif
+
 @if(!($isPendingDeliveryView ?? false) && ($canApprovePayments ?? true) && !$salesOrdersFreePlan)
 <!-- Modal para generar reporte -->
 <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
@@ -258,6 +293,52 @@
 
 <!-- Control Center for Material Dashboard: parallax effects, scripts for the example pages etc -->
   <script>
+    function setupPendingDispatchGuideAlert() {
+      const alertModalElement = document.getElementById('pendingDispatchGuideAlertModal');
+      const emailInput = document.getElementById('pendingDispatchGuideEmail');
+      const forms = document.querySelectorAll('.pending-dispatch-report-form');
+
+      forms.forEach((form) => {
+        form.addEventListener('submit', () => {
+          const hiddenEmail = form.querySelector('.pending-dispatch-email-target');
+          if (hiddenEmail && emailInput) {
+            hiddenEmail.value = emailInput.value;
+          }
+        });
+      });
+
+      if (!alertModalElement) {
+        return;
+      }
+
+      if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+        const alertModal = new bootstrap.Modal(alertModalElement);
+        alertModal.show();
+        return;
+      }
+
+      alertModalElement.style.display = 'block';
+      alertModalElement.classList.add('show');
+      alertModalElement.removeAttribute('aria-hidden');
+      alertModalElement.setAttribute('aria-modal', 'true');
+      document.body.classList.add('modal-open');
+
+      const backdrop = document.createElement('div');
+      backdrop.className = 'modal-backdrop fade show pending-dispatch-guide-backdrop';
+      document.body.appendChild(backdrop);
+
+      const closeButtons = alertModalElement.querySelectorAll('[data-bs-dismiss="modal"], .btn-close');
+      closeButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          alertModalElement.style.display = 'none';
+          alertModalElement.classList.remove('show');
+          alertModalElement.setAttribute('aria-hidden', 'true');
+          document.body.classList.remove('modal-open');
+          document.querySelector('.pending-dispatch-guide-backdrop')?.remove();
+        });
+      });
+    }
+
     function setupSalesOrdersFilters() {
       const tableBody = document.getElementById('salesOrdersTableBody');
       const searchInput = document.getElementById('salesOrdersSearchInput');
@@ -312,7 +393,10 @@
       clearBtn.addEventListener('click', clearFilters);
     }
 
-    document.addEventListener('DOMContentLoaded', setupSalesOrdersFilters);
+    document.addEventListener('DOMContentLoaded', function () {
+      setupPendingDispatchGuideAlert();
+      setupSalesOrdersFilters();
+    });
 
     document.getElementById('createProductForm')?.addEventListener('submit', function(event) {
       event.preventDefault(); // Evita el envío normal del formulario

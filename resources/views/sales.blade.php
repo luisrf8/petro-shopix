@@ -861,17 +861,17 @@
                             }
                         @endphp
 
-                        @if($igtfTax && (bool) ($tenant->electronic_invoicing_enabled ?? false) && !$salesSpecialTaxpayer)
+                        @if($igtfTax && (bool) ($tenant->electronic_invoicing_enabled ?? false) && $salesSpecialTaxpayer)
                             <strong>
                                 Si el método de pago seleccionado es en {{ $baseCurrencyCode ?? 'USD' }} se aplicará el impuesto del IGTF del {{ $igtfTax->rate }}%
                             </strong>
-                        @elseif($igtfTax && $salesSpecialTaxpayer)
+                        @elseif($igtfTax && !(bool) ($tenant->electronic_invoicing_enabled ?? false))
                             <strong>
-                                La tienda está marcada como contribuyente especial, por lo tanto no se aplica IGTF.
+                                La facturación digital está desactivada en la tienda, por lo tanto no se aplica IGTF.
                             </strong>
                         @elseif($igtfTax)
                             <strong>
-                                La facturación digital está desactivada en la tienda, por lo tanto no se aplica IGTF.
+                                La tienda no está marcada como contribuyente especial, por lo tanto no se aplica IGTF.
                             </strong>
                         @endif
                     </div>
@@ -911,10 +911,20 @@
                                                 @if ($method->dni)
                                                     <div><small>DNI/Correo: {{ $method->dni }}</small></div>
                                                 @endif
-                                                @php $noReference = !$method->usesReference(); @endphp
+                                                @php
+                                                    $noReference = !$method->usesReference();
+                                                    $methodCurrencyCode = strtoupper(trim((string) ($currencyCode ?? '')));
+                                                    $normalizedBaseCurrency = strtoupper(trim((string) ($baseCurrencyCode ?? 'USD')));
+                                                    $methodNameForIgtf = \Illuminate\Support\Str::lower(trim((string) ($method->name ?? '')));
+                                                    $blockedByName = \Illuminate\Support\Str::contains($methodNameForIgtf, ['pago movil', 'pago móvil', 'punto de venta', 'tarjeta', 'debito', 'débito', 'credito', 'crédito', 'transferencia nacional', 'bolivar', 'bolívar', 'bs']);
+                                                    $fallbackAppliesIgtf = $methodCurrencyCode === $normalizedBaseCurrency && !$blockedByName;
+                                                    $methodAppliesIgtf = is_null($method->applies_igtf_base ?? null)
+                                                        ? $fallbackAppliesIgtf
+                                                        : (bool) $method->applies_igtf_base;
+                                                @endphp
                                                 <div id="paymentFields_{{ $method->id }}" class="d-none mt-2 payment-method-fields" data-currency="{{ $currencyCode }}" data-no-reference="{{ $noReference ? '1' : '0' }}">
                                                     <div id="paymentRows_{{ $method->id }}" class="d-flex flex-column gap-2"></div>
-                                                    <button type="button" class="btn btn-outline-dark btn-sm mt-2" onclick="addPaymentEntry('{{ $method->id }}', '{{ $currencyCode }}', {{ $noReference ? 'true' : 'false' }})">
+                                                    <button type="button" class="btn btn-outline-dark btn-sm mt-2" onclick="addPaymentEntry('{{ $method->id }}', '{{ $currencyCode }}', {{ $noReference ? 'true' : 'false' }}, '{{ $method->name }}', {{ $methodAppliesIgtf ? 'true' : 'false' }})">
                                                         + Agregar otro pago
                                                     </button>
                                                 </div>
@@ -923,6 +933,7 @@
                                         <div class="mt-2">
                                             <input type="checkbox" class="form-check-input payment-method-checkbox" id="method_{{ $method->id }}" 
                                                 data-method-id="{{ $method->id }}" data-method-name="{{ $method->name }}" data-currency="{{ $currencyCode }}" 
+                                                data-applies-igtf="{{ $methodAppliesIgtf ? '1' : '0' }}"
                                                 onchange="togglePaymentFields(this)">
                                         </div>
                                     </div>
@@ -935,6 +946,13 @@
 
                     <div id="paymentSummary" class="mt-3 sale-section-card">
                         <strong>Total ingresado: </strong> {{ $baseCurrencySymbol ?? '$' }} <span id="totalPaid">0.00</span><br>
+                        <div id="changeSettlementControls" class="mt-2 d-none">
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" id="changePaidInBs" checked>
+                                <label class="form-check-label" for="changePaidInBs">Entregar vuelto en Bs</label>
+                            </div>
+                            <small class="text-muted">Vuelto estimado en Bs: <span id="changeAmountBsPreview">0.00</span> Bs (tasa BCV actual)</small>
+                        </div>
                         <span class="text-danger paymentMessage"></span>
                     </div>
                     <div id="paymentsContainer" class="mt-3">
@@ -1476,6 +1494,28 @@
             }
 
             return roundMoney(value);
+        }
+
+        function resolvePaymentRateToBase(currencyCode) {
+            const sourceCurrency = String(currencyCode || '').toUpperCase().trim();
+
+            if (sourceCurrency === normalizedBaseCurrencyCode) {
+                return 1;
+            }
+
+            if (isBolivarCurrencyCode(sourceCurrency)) {
+                return baseRateToBs > 0 ? (1 / baseRateToBs) : 0;
+            }
+
+            if (sourceCurrency === 'USD' && normalizedBaseCurrencyCode === 'EUR') {
+                return (dollarRateToBs > 0 && euroRateToBs > 0) ? (dollarRateToBs / euroRateToBs) : 0;
+            }
+
+            if (sourceCurrency === 'EUR' && normalizedBaseCurrencyCode === 'USD') {
+                return (euroRateToBs > 0 && dollarRateToBs > 0) ? (euroRateToBs / dollarRateToBs) : 0;
+            }
+
+            return 1;
         }
 
         function getSelectableVariantsForComponent(component) {
@@ -2103,29 +2143,29 @@ function updateQuantity(id, newQty) {
             }
             const taxesContainer = document.getElementById('taxesContainer');
 
-            const { totalBaseCurrency, tax } = calculateIgtfTax();
+            let totalItemsWithTaxes = selectedItems.reduce((acc, item) => {
+                return acc + (item.totalPrice * item.quantity);
+            }, 0);
+
+            const deliveryContext = getAdminDeliveryChargeContext(false);
+            currentDeliveryFee = Number(deliveryContext.fee || 0);
+            const totalWithoutIgtf = roundMoney(totalItemsWithTaxes + currentDeliveryFee);
+            const { totalBaseCurrency, cappedBase, tax } = calculateIgtfTax(totalWithoutIgtf);
 
             taxesContainer.innerHTML = `
                 <div class="mt-3 igtf-class" style="display: none;">
-                    <strong>Total Pagado en ${baseCurrencyCode}:</strong> ${baseCurrencySymbol}${totalBaseCurrency.toFixed(2)}
+                    <strong>Base IGTF (${baseCurrencyCode}):</strong> ${baseCurrencySymbol}${cappedBase.toFixed(2)}
                 </div>
                 <div class="mt-1 text-danger igtf-class" style="display: none;">
                     <strong>Impuesto IGTF:</strong> ${baseCurrencySymbol}${tax.toFixed(2)}
                 </div>
             `;
-            
-            let totalItemsWithTaxes = selectedItems.reduce((acc, item) => {
-                return acc + (item.totalPrice * item.quantity);
-            }, 0);
 
             if(isIgtfEnabledForSale() && totalBaseCurrency > 0) {
                 document.querySelectorAll('.igtf-class').forEach(el => el.style.display = 'block');
             } else {
                 document.querySelectorAll('.igtf-class').forEach(el => el.style.display = 'none');
             }
-
-            const deliveryContext = getAdminDeliveryChargeContext(false);
-            currentDeliveryFee = Number(deliveryContext.fee || 0);
 
             totalAmount = totalItemsWithTaxes + currentDeliveryFee + tax;
             totalSinIGTF = totalItemsWithTaxes + currentDeliveryFee;
@@ -2728,7 +2768,7 @@ function updateQuantity(id, newQty) {
             `;
         }
 
-        function addPaymentEntry(methodId, currency, noReference = false, methodName = '') {
+        function addPaymentEntry(methodId, currency, noReference = false, methodName = '', appliesIgtf = false) {
             const rowsContainer = document.getElementById(`paymentRows_${methodId}`);
             if (!rowsContainer) return;
 
@@ -2741,6 +2781,10 @@ function updateQuantity(id, newQty) {
                 methodName: methodName || `Método ${methodId}`,
                 currency,
                 amount: 0,
+                amountBase: 0,
+                amountOriginal: 0,
+                exchangeRateToBase: 0,
+                appliesIgtf: Boolean(appliesIgtf),
                 reference: '',
                 hasProofImage: false,
                 requiresReference: !noReference,
@@ -2897,12 +2941,13 @@ function updateQuantity(id, newQty) {
             const paymentFields = document.getElementById(`paymentFields_${methodId}`);
             const currency = paymentFields?.dataset.currency || checkbox.dataset.currency;
             const noReference = paymentFields?.dataset.noReference === '1';
+            const appliesIgtf = checkbox.dataset.appliesIgtf === '1';
 
             if (checkbox.checked) {
                 paymentFields.classList.remove('d-none');
                 const hasEntriesForMethod = payments.some(payment => payment.methodId === String(methodId));
                 if (!hasEntriesForMethod) {
-                    addPaymentEntry(methodId, currency, noReference, methodName);
+                    addPaymentEntry(methodId, currency, noReference, methodName, appliesIgtf);
                 }
             } else {
                 const rowsContainer = document.getElementById(`paymentRows_${methodId}`);
@@ -2923,8 +2968,12 @@ function updateQuantity(id, newQty) {
 
             if (payment) {
                 if (input.classList.contains('payment-input')) {
-                    const enteredAmount = sanitizeLiveAdminMoneyInput(input);
-                    payment.amount = convertAmountToBaseCurrency(enteredAmount, currency);
+                    const enteredAmountOriginal = sanitizeLiveAdminMoneyInput(input);
+                    const amountBase = convertAmountToBaseCurrency(enteredAmountOriginal, currency);
+                    payment.amountOriginal = roundMoney(enteredAmountOriginal);
+                    payment.amountBase = roundMoney(amountBase);
+                    payment.exchangeRateToBase = roundMoney(resolvePaymentRateToBase(currency));
+                    payment.amount = payment.amountBase;
                 } else if (input.classList.contains('payment-reference-input')) {
                     payment.reference = input.value;
                 }
@@ -2948,8 +2997,8 @@ function updateQuantity(id, newQty) {
             let totalBaseCurrency = 0;
 
             payments.forEach(p => {
-                if (String(p.currency || '').toUpperCase().trim() === normalizedBaseCurrencyCode) {
-                    totalBaseCurrency += Number(p.amount) || 0;
+                if (Boolean(p.appliesIgtf)) {
+                    totalBaseCurrency += Number(p.amountBase ?? p.amount) || 0;
                 }
             });
 
@@ -2957,21 +3006,24 @@ function updateQuantity(id, newQty) {
         }
 
         function isIgtfEnabledForSale() {
-            return tenantElectronicInvoicingEnabled && !tenantSpecialTaxpayer && Number(igtfTax?.rate || 0) > 0;
+            return tenantElectronicInvoicingEnabled && tenantSpecialTaxpayer && Number(igtfTax?.rate || 0) > 0;
         }
 
-        function calculateIgtfTax() {
+        function calculateIgtfTax(totalWithoutIgtf = 0) {
             const totalBaseCurrency = getBaseCurrencyPaymentsTotal();
             if (!isIgtfEnabledForSale()) {
                 return {
                     totalBaseCurrency,
+                    cappedBase: 0,
                     tax: 0,
                 };
             }
+            const cappedBase = roundMoney(Math.min(totalBaseCurrency, Math.max(Number(totalWithoutIgtf || 0), 0)));
             const igtfRate = Number(igtfTax?.rate || 0) / 100;
-            const tax = roundMoney(totalBaseCurrency * igtfRate);
+            const tax = roundMoney(cappedBase * igtfRate);
             return {
                 totalBaseCurrency,
+                cappedBase,
                 tax
             };
         }
@@ -3215,11 +3267,13 @@ function updateQuantity(id, newQty) {
         }
 
         function validatePaymentDetails() {
-            totalPaid = roundMoney(payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0));
+            totalPaid = roundMoney(payments.reduce((sum, payment) => sum + (Number(payment.amountBase ?? payment.amount) || 0), 0));
             console.log("Total pagado:", payments);
             const totalPaidSpan = document.getElementById('totalPaid');
             const paymentMessages = document.querySelectorAll('.paymentMessage');
             const toStep3Button = document.getElementById('toStep3');
+            const changeControls = document.getElementById('changeSettlementControls');
+            const changeBsPreview = document.getElementById('changeAmountBsPreview');
 
             // Mostrar el total ingresado
             totalPaidSpan.textContent = totalPaid.toFixed(2);
@@ -3230,7 +3284,7 @@ function updateQuantity(id, newQty) {
 
             // Verificar si hay referencias vacías (solo si el método requiere referencia y monto > 0)
             const hasEmptyReference = payments.some(payment => {
-                const amount = Number(payment.amount) || 0;
+                const amount = Number(payment.amountBase ?? payment.amount) || 0;
                 if (amount <= 0) return false;
 
                 const inputReference = document.querySelector(`.payment-reference-input[data-entry-id="${payment.entryId}"]`);
@@ -3244,20 +3298,40 @@ function updateQuantity(id, newQty) {
                 messageText = `Todos los métodos de pago deben tener una referencia válida.`;
                 messageClass = 'text-danger';
                 disableStep3 = true;
+                if (changeControls) {
+                    changeControls.classList.add('d-none');
+                }
             } else if (totalPaid + 0.0001 < roundMoney(totalAmount)) {
                 const remaining = roundMoney(totalAmount - totalPaid).toFixed(2);
                 messageText = `Falta por pagar: ${baseCurrencySymbol}${remaining} / BS${(remaining * baseRateToBs).toFixed(2)}`;
                 messageClass = 'text-danger';
                 disableStep3 = true;
+                if (changeControls) {
+                    changeControls.classList.add('d-none');
+                }
             } else if (totalPaid - 0.0001 > roundMoney(totalAmount)) {
                 const change = roundMoney(totalPaid - totalAmount).toFixed(2);
                 messageText = `Debe entregar vuelto: ${baseCurrencySymbol}${change} / BS${(change * baseRateToBs).toFixed(2)}`;
                 messageClass = 'text-warning';
                 disableStep3 = false;
+
+                if (changeControls) {
+                    changeControls.classList.remove('d-none');
+                }
+                if (changeBsPreview) {
+                    changeBsPreview.textContent = (roundMoney(totalPaid - totalAmount) * baseRateToBs).toFixed(2);
+                }
             } else {
                 messageText = `Pago exacto.`;
                 messageClass = 'text-success';
                 disableStep3 = false;
+
+                if (changeControls) {
+                    changeControls.classList.add('d-none');
+                }
+                if (changeBsPreview) {
+                    changeBsPreview.textContent = '0.00';
+                }
             }
 
             // Actualizar todos los mensajes en pantalla
@@ -3525,7 +3599,7 @@ function updateQuantity(id, newQty) {
         return;
     }
 
-    const validPayments = payments.filter(payment => Number(payment.amount || 0) > 0);
+    const validPayments = payments.filter(payment => Number((payment.amountBase ?? payment.amount) || 0) > 0);
 
     const summary = {
         customerId: shouldCreateNewCustomer ? null : { id: selectedExistingCustomerId },
@@ -3569,10 +3643,18 @@ function updateQuantity(id, newQty) {
     appendFormDataValue(formData, 'mark_payments_paid', summary.mark_payments_paid);
     appendFormDataValue(formData, 'mark_sale_completed', summary.mark_sale_completed);
     appendFormDataValue(formData, 'sale_document_mode', summary.sale_document_mode);
+    appendFormDataValue(formData, 'change_paid_in_bs', (totalPaid - roundMoney(totalAmount) > 0.0001)
+        ? (document.getElementById('changePaidInBs')?.checked || false)
+        : false);
+    appendFormDataValue(formData, 'change_rate_to_bs', baseRateToBs);
 
     validPayments.forEach((payment, index) => {
         appendFormDataValue(formData, `payments[${index}][methodId]`, payment.methodId);
-        appendFormDataValue(formData, `payments[${index}][amount]`, payment.amount);
+        appendFormDataValue(formData, `payments[${index}][amount]`, payment.amountBase ?? payment.amount);
+        appendFormDataValue(formData, `payments[${index}][amount_base]`, payment.amountBase ?? payment.amount);
+        appendFormDataValue(formData, `payments[${index}][amount_original]`, payment.amountOriginal ?? payment.amountBase ?? payment.amount);
+        appendFormDataValue(formData, `payments[${index}][exchange_rate_to_base]`, payment.exchangeRateToBase ?? 1);
+        appendFormDataValue(formData, `payments[${index}][applies_igtf]`, Boolean(payment.appliesIgtf));
         appendFormDataValue(formData, `payments[${index}][currency]`, payment.currency);
         appendFormDataValue(formData, `payments[${index}][reference]`, payment.reference);
 
@@ -3625,7 +3707,28 @@ function updateQuantity(id, newQty) {
                 document.body.removeChild(linkNota);
             }
 
-            window.location.href = '/sales-orders';
+            if (data.hka_dispatch_guide_download_url) {
+                setTimeout(() => {
+                    const linkGuiaHka = document.createElement('a');
+                    linkGuiaHka.href = data.hka_dispatch_guide_download_url;
+                    linkGuiaHka.download = '';
+                    document.body.appendChild(linkGuiaHka);
+                    linkGuiaHka.click();
+                    document.body.removeChild(linkGuiaHka);
+                }, 700);
+            }
+
+            const redirectDelayMs = data.hka_dispatch_guide_download_url
+                ? 1800
+                : (data.nota_entrega_pdf_url ? 900 : 0);
+
+            if (redirectDelayMs > 0) {
+                setTimeout(() => {
+                    window.location.href = '/sales-orders';
+                }, redirectDelayMs);
+            } else {
+                window.location.href = '/sales-orders';
+            }
         })
         .catch(error => {
             console.error('Error:', error);

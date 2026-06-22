@@ -10,11 +10,12 @@ class PaymentMethod extends Model
 {
     use HasFactory;
     
-    protected $fillable = ['name', 'currency_id', 'admin_name', 'dni', 'description', 'bank', 'status', 'tenant_id', 'qr_image', 'has_reference'];
+    protected $fillable = ['name', 'currency_id', 'admin_name', 'dni', 'description', 'bank', 'status', 'tenant_id', 'qr_image', 'has_reference', 'applies_igtf_base'];
 
     protected $casts = [
         'status' => 'boolean',
         'has_reference' => 'boolean',
+        'applies_igtf_base' => 'boolean',
     ];
 
     public function scopeActive($query)

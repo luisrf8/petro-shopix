@@ -84,6 +84,8 @@ return [
         'default_foreign_currency' => env('TFHKA_FOREIGN_CURRENCY', 'USD'),
         'default_exchange_rate' => (float) env('TFHKA_EXCHANGE_RATE', 1),
         'auto_next_number' => env('TFHKA_AUTO_NEXT_NUMBER', true),
+        'signature_secret' => env('TFHKA_SIGNATURE_SECRET', env('APP_KEY', '')),
+        'enforce_signature_validation' => env('TFHKA_ENFORCE_SIGNATURE_VALIDATION', true),
         'timeout' => (int) env('TFHKA_TIMEOUT', 25),
         'verify_ssl' => env('TFHKA_VERIFY_SSL', true),
     ],

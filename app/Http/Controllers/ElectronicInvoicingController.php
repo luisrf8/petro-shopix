@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\ElectronicDocument;
+use App\Models\DollarRate;
+use App\Models\EuroRate;
+use App\Models\SalesAdjustmentNote;
 use App\Models\SalesOrder;
 use App\Models\Tenant;
 use App\Services\FiscalCorrelativeService;
@@ -13,6 +16,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 
 class ElectronicInvoicingController extends Controller
 {
@@ -54,7 +58,12 @@ class ElectronicInvoicingController extends Controller
         $toDate = trim((string) $request->query('to_date', ''));
 
         $query = ElectronicDocument::query()
-            ->with(['tenant:id,name', 'salesOrder:id,date', 'creator:id,name'])
+            ->with([
+                'tenant:id,name',
+                'salesOrder:id,date,sale_currency_code,change_rate_to_bs,tenant_id',
+                'salesOrder.payments:id,sales_order_id,exchange_rate_to_base,status,currency,created_at',
+                'creator:id,name',
+            ])
             ->when($tenantId > 0, fn ($q) => $q->where('tenant_id', $tenantId))
             ->when(!$isSuperAdmin, fn ($q) => $q->where('tenant_id', $authTenantId))
             ->when($serie !== '', fn ($q) => $q->where('serie', 'like', '%' . $serie . '%'))
@@ -84,13 +93,31 @@ class ElectronicInvoicingController extends Controller
         $rows->setCollection(
             $rows->getCollection()->map(fn (ElectronicDocument $row) => $this->decorateElectronicDocumentRow($row))
         );
+
+        $adjustmentRows = SalesAdjustmentNote::query()
+            ->with([
+                'tenant:id,name',
+                'salesOrder:id,date,sale_currency_code,change_rate_to_bs,tenant_id',
+                'salesOrder.payments:id,sales_order_id,exchange_rate_to_base,status,currency,created_at',
+                'creator:id,name',
+                'electronicDocument:id,serie,numero_documento,numero_control',
+            ])
+            ->when($tenantId > 0, fn ($q) => $q->where('tenant_id', $tenantId))
+            ->when(!$isSuperAdmin, fn ($q) => $q->where('tenant_id', $authTenantId))
+            ->when($fromDate !== '', fn ($q) => $q->whereDate('created_at', '>=', $fromDate))
+            ->when($toDate !== '', fn ($q) => $q->whereDate('created_at', '<=', $toDate))
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get()
+            ->map(fn (SalesAdjustmentNote $note) => $this->decorateAdjustmentNoteRow($note));
+
         $tenants = $isSuperAdmin
             ? Tenant::query()->orderBy('name')->get(['id', 'name'])
             : Tenant::query()->where('id', $authTenantId)->orderBy('name')->get(['id', 'name']);
 
         $canRetry = $isSuperAdmin;
 
-        return view('electronicDocuments.index', compact('rows', 'tenants', 'tenantId', 'status', 'serie', 'code', 'errorOnly', 'fromDate', 'toDate', 'isSuperAdmin', 'canRetry'));
+        return view('electronicDocuments.index', compact('rows', 'adjustmentRows', 'tenants', 'tenantId', 'status', 'serie', 'code', 'errorOnly', 'fromDate', 'toDate', 'isSuperAdmin', 'canRetry'));
     }
 
     public function retry(ElectronicDocument $electronicDocument): RedirectResponse
@@ -117,7 +144,13 @@ class ElectronicInvoicingController extends Controller
             'transaccion_id' => $electronicDocument->transaccion_id,
         ]);
 
+        $compliance = $this->service->validateDocumentPayloadCompliance($payload);
+        if (!($compliance['ok'] ?? false)) {
+            return back()->with('error', 'Reintento bloqueado por validación fiscal: ' . implode(' | ', $compliance['errors'] ?? ['Error de cumplimiento.']));
+        }
+
         $response = $this->service->emitDocument($payload);
+        $fiscalIds = $this->extractFiscalIdentifiers((array) ($response['data'] ?? []));
 
         $electronicDocument->update([
             'codigo' => (string) Arr::get($response, 'data.codigo', $electronicDocument->codigo),
@@ -127,6 +160,8 @@ class ElectronicInvoicingController extends Controller
             'transaccion_id' => (string) Arr::get($response, 'data.resultado.transaccionId', $electronicDocument->transaccion_id),
             'estado_documento' => (string) Arr::get($response, 'data.resultado.autorizado', Arr::get($response, 'data.resultado.imprentaDigital', $electronicDocument->estado_documento)),
             'url_consulta' => (string) Arr::get($response, 'data.resultado.urlConsulta', $electronicDocument->url_consulta),
+            'cufe' => $fiscalIds['cufe'] ?? $electronicDocument->cufe,
+            'qr_string' => $fiscalIds['qr_string'] ?? $electronicDocument->qr_string,
             'request_payload' => $payload,
             'response_payload' => $response['data'] ?? $electronicDocument->response_payload,
             'issued_at' => ($response['ok'] ?? false) ? Carbon::now() : $electronicDocument->issued_at,
@@ -155,7 +190,13 @@ class ElectronicInvoicingController extends Controller
             'numero_documento' => trim((string) ($validated['numero_documento'] ?? '')),
         ]);
 
+        $compliance = $this->service->validateDocumentPayloadCompliance($payload);
+        if (!($compliance['ok'] ?? false)) {
+            return back()->with('error', 'Emisión bloqueada por validación fiscal: ' . implode(' | ', $compliance['errors'] ?? ['Error de cumplimiento.']));
+        }
+
         $response = $this->service->emitDocument($payload);
+        $fiscalIds = $this->extractFiscalIdentifiers((array) ($response['data'] ?? []));
         $internalNumber = $this->fiscalCorrelativeService->next((int) $order->tenant_id, 'invoice', 'FAC');
 
         $document = ElectronicDocument::create([
@@ -173,6 +214,8 @@ class ElectronicInvoicingController extends Controller
             'codigo' => (string) Arr::get($response, 'data.codigo', ''),
             'mensaje' => (string) ($response['message'] ?? ''),
             'url_consulta' => (string) Arr::get($response, 'data.resultado.urlConsulta', ''),
+            'cufe' => $fiscalIds['cufe'] ?? null,
+            'qr_string' => $fiscalIds['qr_string'] ?? null,
             'request_payload' => $payload,
             'response_payload' => $response['data'] ?? null,
             'issued_at' => ($response['ok'] ?? false) ? now() : null,
@@ -181,6 +224,25 @@ class ElectronicInvoicingController extends Controller
         if (!($response['ok'] ?? false)) {
             return back()->with('error', 'No fue posible emitir el documento electrónico: ' . ($response['message'] ?? 'Error desconocido.'));
         }
+
+        ActionReason::log('electronic_invoices', 'INVOICE_CREATED', 'Factura electrónica emitida correctamente', [
+            'sales_order_id' => $order->id,
+            'tenant_id' => $order->tenant_id,
+            'electronic_document_id' => $document->id,
+            'numero_documento' => $document->numero_documento,
+            'numero_control' => $document->numero_control,
+        ]);
+
+        Log::info('Factura electrónica creada', [
+            'sales_order_id' => $order->id,
+            'tenant_id' => $order->tenant_id,
+            'electronic_document_id' => $document->id,
+            'numero_documento' => $document->numero_documento,
+            'numero_control' => $document->numero_control,
+            'transaccion_id' => $document->transaccion_id,
+            'created_by' => auth()->id(),
+            'source' => 'manual_emit',
+        ]);
 
         return back()->with('success', 'Documento electrónico emitido. Transacción: ' . ($document->transaccion_id ?: 'N/A'));
     }
@@ -200,6 +262,7 @@ class ElectronicInvoicingController extends Controller
             'numeroDocumento' => $document->numero_documento,
             'transaccionId' => $document->transaccion_id,
         ]);
+        $fiscalIds = $this->extractFiscalIdentifiers((array) ($response['data'] ?? []));
 
         $document->update([
             'codigo' => (string) Arr::get($response, 'data.codigo', $document->codigo),
@@ -207,6 +270,8 @@ class ElectronicInvoicingController extends Controller
             'estado_documento' => (string) Arr::get($response, 'data.estado.estadoDocumento', $document->estado_documento),
             'numero_control' => (string) Arr::get($response, 'data.estado.numeroControl', $document->numero_control),
             'url_consulta' => (string) Arr::get($response, 'data.estado.urlConsulta', $document->url_consulta),
+            'cufe' => $fiscalIds['cufe'] ?? $document->cufe,
+            'qr_string' => $fiscalIds['qr_string'] ?? $document->qr_string,
             'response_payload' => $response['data'] ?? $document->response_payload,
         ]);
 
@@ -400,6 +465,7 @@ class ElectronicInvoicingController extends Controller
         }
     }
 
+
     private function exportCsv($rows)
     {
         $fileName = 'monitor_facturacion_digital_' . now()->format('Ymd_His') . '.csv';
@@ -462,11 +528,70 @@ class ElectronicInvoicingController extends Controller
         $row->setAttribute('display_document_type', $this->mapDocumentTypeLabel((string) ($row->tipo_documento ?? '')));
         $row->setAttribute('display_control_number', $this->formatControlNumber((string) ($row->numero_control ?? '')));
         $row->setAttribute('affected_document', $this->extractAffectedDocument($requestPayload));
-        $row->setAttribute('display_tax_rate', $this->extractTaxRate($requestPayload));
+        $row->setAttribute('display_tax_rate', $this->extractExchangeRate($requestPayload, $row->salesOrder));
         $row->setAttribute('display_total_amount', $this->extractTotalAmount($requestPayload));
         $row->setAttribute('display_user', (string) ($row->creator->name ?? 'N/A'));
 
         return $row;
+    }
+
+    private function decorateAdjustmentNoteRow(SalesAdjustmentNote $note): object
+    {
+        $issuedAt = $note->issued_at ?? $note->related_at ?? $note->created_at;
+        $referenceDocument = $note->electronicDocument;
+        $hkaDocumentType = (string) (
+            data_get($note->response_payload, 'resultado.tipoDocumento')
+            ?: data_get($note->response_payload, 'tipoDocumento')
+            ?: data_get($note->request_payload, 'encabezado.identificacionDocumento.tipoDocumento')
+            ?: $note->document_code
+            ?: ''
+        );
+        $displayDocumentType = match ($hkaDocumentType) {
+            '02' => 'Nota de crédito',
+            '03' => 'Nota de débito',
+            default => ($note->note_type === 'credit' ? 'Nota de crédito' : 'Nota de débito'),
+        };
+        $exchangeRate = $this->extractExchangeRate(is_array($referenceDocument?->request_payload) ? $referenceDocument->request_payload : [], $note->salesOrder);
+        $noteDocumentNumber = (string) (
+            data_get($note->response_payload, 'resultado.numeroDocumento')
+            ?: data_get($note->response_payload, 'numeroDocumento')
+            ?: data_get($note->request_payload, 'encabezado.identificacionDocumento.numeroDocumento')
+            ?: preg_replace('/\D+/', '', (string) ($note->internal_number ?? $note->id))
+        );
+        $noteControlNumber = (string) (
+            data_get($note->response_payload, 'resultado.numeroControl')
+            ?: data_get($note->response_payload, 'estado.numeroControl')
+            ?: data_get($note->response_payload, 'numeroControl')
+            ?: '-'
+        );
+
+        return (object) [
+            'id' => (int) $note->id,
+            'sales_order_id' => (int) $note->sales_order_id,
+            'tenant' => $note->tenant,
+            'creator' => $note->creator,
+            'is_annulled' => false,
+            'serie' => $referenceDocument?->serie ?? '-',
+            'numero_documento' => $noteDocumentNumber !== '' ? $noteDocumentNumber : '-',
+            'numero_control' => $noteControlNumber !== '' ? $noteControlNumber : '-',
+            'display_date' => optional($issuedAt)->format('d/m/Y') ?? '',
+            'display_time' => optional($issuedAt)->format('H:i:s') ?? '',
+            'display_document_type' => $displayDocumentType,
+            'display_control_number' => $noteControlNumber !== '' ? $this->formatControlNumber($noteControlNumber) : '-',
+            'affected_document' => $note->reference_document_number ?: '-',
+            'display_tax_rate' => $exchangeRate,
+            'display_user' => (string) ($note->creator->name ?? 'N/A'),
+            'display_total_amount' => (float) ($note->amount ?? 0),
+            'estado_documento' => match ((string) ($note->status ?? 'registered')) {
+                'issued' => 'Emitida',
+                'failed' => 'Fallida',
+                'registered' => 'Registrada',
+                default => ucfirst(str_replace('_', ' ', (string) ($note->status ?? 'registered'))),
+            },
+            'mensaje' => $note->reason ?: ($note->notes ?? ''),
+            'note_type' => $note->note_type,
+            'download_url' => route('sales.adjustmentNotes.download', ['note' => $note->id, 'tipo_archivo' => 'pdf']),
+        ];
     }
 
     private function buildDownloadedFileResponse(ElectronicDocument $document, string $content, string $mimeType, string $extension, string $disposition)
@@ -487,8 +612,8 @@ class ElectronicInvoicingController extends Controller
     {
         return match ($documentType) {
             '01' => 'Factura',
-            '02' => 'Nota de débito',
-            '03' => 'Nota de crédito',
+            '02' => 'Nota de crédito',
+            '03' => 'Nota de débito',
             '04' => 'Orden de entrega',
             '05' => 'Comprobante de retención',
             '06' => 'Guía de despacho',
@@ -528,21 +653,115 @@ class ElectronicInvoicingController extends Controller
         return $serie !== '' ? $serie . '-' . $number : $number;
     }
 
-    private function extractTaxRate(array $requestPayload): string
+    private function extractFiscalIdentifiers(array $responseData): array
     {
-        $taxes = Arr::get($requestPayload, 'encabezado.totales.impuestosSubtotal', []);
-        if (!is_array($taxes)) {
+        $cufePaths = [
+            'resultado.cufe',
+            'resultado.CUFE',
+            'resultado.codigoUnicoFacturaElectronica',
+            'estado.cufe',
+            'estado.CUFE',
+            'cufe',
+            'CUFE',
+        ];
+
+        $qrPaths = [
+            'resultado.qrString',
+            'resultado.cadenaQR',
+            'resultado.qr',
+            'estado.qrString',
+            'estado.cadenaQR',
+            'estado.qr',
+            'qrString',
+            'cadenaQR',
+            'qr',
+        ];
+
+        return [
+            'cufe' => $this->firstNonEmptyByPaths($responseData, $cufePaths),
+            'qr_string' => $this->firstNonEmptyByPaths($responseData, $qrPaths),
+        ];
+    }
+
+    private function firstNonEmptyByPaths(array $source, array $paths): ?string
+    {
+        foreach ($paths as $path) {
+            $value = Arr::get($source, $path);
+            $text = trim((string) $value);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        return null;
+    }
+
+    private function extractExchangeRate(array $requestPayload, ?SalesOrder $order = null): string
+    {
+        $payloadRate = (float) Arr::get($requestPayload, 'encabezado.totalesOtraMoneda.tipoCambio', 0);
+        if ($payloadRate > 0) {
+            return number_format($payloadRate, 4, '.', '');
+        }
+
+        if (!$order) {
             return '-';
         }
 
-        $rates = collect($taxes)
-            ->pluck('alicuotaImp')
-            ->filter(fn ($rate) => trim((string) $rate) !== '')
-            ->map(fn ($rate) => rtrim(rtrim((string) $rate, '0'), '.'))
-            ->unique()
-            ->values();
+        $paymentRate = (float) collect($order->payments ?? [])
+            ->pluck('exchange_rate_to_base')
+            ->filter(fn ($rate) => (float) $rate > 0)
+            ->first();
 
-        return $rates->isEmpty() ? '-' : $rates->implode(', ') . '%';
+        if ($paymentRate > 0) {
+            return number_format($paymentRate, 4, '.', '');
+        }
+
+        $changeRate = (float) ($order->change_rate_to_bs ?? 0);
+        if ($changeRate > 0) {
+            return number_format($changeRate, 4, '.', '');
+        }
+
+        $currencyCode = strtoupper(trim((string) ($order->sale_currency_code ?? '')));
+        $orderDate = trim((string) ($order->date ?? ''));
+        $tenantId = (int) ($order->tenant_id ?? 0);
+
+        if ($tenantId > 0 && $orderDate !== '' && in_array($currencyCode, ['USD', 'EUR'], true)) {
+            $rate = $currencyCode === 'EUR'
+                ? $this->resolveHistoricalEuroRate($tenantId, $orderDate)
+                : $this->resolveHistoricalDollarRate($tenantId, $orderDate);
+
+            if ($rate > 0) {
+                return number_format($rate, 4, '.', '');
+            }
+        }
+
+        return '-';
+    }
+
+    private function resolveHistoricalDollarRate(int $tenantId, string $orderDate): float
+    {
+        $targetDate = Carbon::parse($orderDate)->endOfDay();
+
+        return (float) (DollarRate::query()
+            ->where('tenant_id', $tenantId)
+            ->where('created_at', '<=', $targetDate)
+            ->latest('created_at')
+            ->value('rate')
+            ?? DollarRate::query()->where('tenant_id', $tenantId)->latest('created_at')->value('rate')
+            ?? 0);
+    }
+
+    private function resolveHistoricalEuroRate(int $tenantId, string $orderDate): float
+    {
+        $targetDate = Carbon::parse($orderDate)->endOfDay();
+
+        return (float) (EuroRate::query()
+            ->where('tenant_id', $tenantId)
+            ->where('created_at', '<=', $targetDate)
+            ->latest('created_at')
+            ->value('rate')
+            ?? EuroRate::query()->where('tenant_id', $tenantId)->latest('created_at')->value('rate')
+            ?? 0);
     }
 
     private function extractTotalAmount(array $requestPayload): float

@@ -288,7 +288,7 @@
                   </div>
                   <div class="col-md-8">
                     <label for="economic_activity" class="form-label fw-bold">Rubro económico</label>
-                    <select name="economic_activity" id="economic_activity" class="form-select form-select-lg" data-selected="{{ old('economic_activity') }}" required>
+                    <select name="economic_activity" id="economic_activity" class="form-select form-select-lg" data-selected="{{ old('economic_activity') }}">
                       <option value="">Selecciona un rubro</option>
                     </select>
                     <small id="economic_activity_help" class="text-muted d-block mt-1"></small>

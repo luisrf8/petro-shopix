@@ -24,6 +24,8 @@ class ElectronicDocument extends Model
         'codigo',
         'mensaje',
         'url_consulta',
+        'cufe',
+        'qr_string',
         'request_payload',
         'response_payload',
         'issued_at',

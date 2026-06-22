@@ -72,7 +72,7 @@ class TenantController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'business_type' => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
-            'economic_activity' => 'required|string|max:150',
+            'economic_activity' => 'nullable|string|max:150',
         ]);
 
         $apiKey = config('services.gemini.api_key');
@@ -1327,7 +1327,7 @@ class TenantController extends Controller
             'color_secondary' => 'required|string|max:7',
             'color_accent'    => 'required|string|max:7',
             'business_type'   => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
-            'economic_activity' => 'required|string|max:150|regex:/.*\S.*/',
+            'economic_activity' => 'nullable|string|max:150|regex:/.*\S.*/',
             'country'         => 'nullable|string|max:255',
             'state'           => 'nullable|string|max:255',
             'city'            => 'nullable|string|max:255',
@@ -1527,7 +1527,7 @@ class TenantController extends Controller
             'color_secondary'       => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
             'color_accent'          => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
             'business_type'         => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
-            'economic_activity'     => 'required|string|max:150|regex:/.*\S.*/',
+            'economic_activity'     => 'nullable|string|max:150|regex:/.*\S.*/',
             'country'               => 'required|exists:countries,id',
             'state'                 => 'required|exists:states,id',
             'city'                  => 'required|exists:cities,id',
@@ -2005,7 +2005,7 @@ class TenantController extends Controller
                 'slogan'          => 'nullable|string|max:255',
                 'description'     => 'nullable|string',
                 'business_type'   => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
-                'economic_activity' => 'required|string|max:150|regex:/.*\S.*/',
+                'economic_activity' => 'nullable|string|max:150|regex:/.*\S.*/',
                 'logo'            => 'nullable|image|mimes:png,svg,webp|max:2048',
                 'color_primary'   => 'nullable|string|max:7',
                 'color_secondary' => 'nullable|string|max:7',

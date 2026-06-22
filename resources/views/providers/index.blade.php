@@ -50,7 +50,7 @@
                 <td>{{ $provider->name }}</td>
                 <td>
                   <div class="d-flex flex-column">
-                    <span>{{ $provider->contact_name ?: '-' }}</span>
+                    <span>{{ $provider->contact_name ?: '-' }} | RIF: {{ $provider->rif ?: '-' }}</span>
                     <span class="text-xs text-secondary">{{ $provider->email ?: '-' }} | {{ $provider->phone_number ?: '-' }}</span>
                   </div>
                 </td>
@@ -65,6 +65,10 @@
                       data-provider-contact="{{ $provider->contact_name }}"
                       data-provider-email="{{ $provider->email }}"
                       data-provider-phone="{{ $provider->phone_number }}"
+                      data-provider-rif="{{ $provider->rif }}"
+                      data-provider-fiscal-person-type="{{ $provider->fiscal_person_type ?: 'pj' }}"
+                      data-provider-fiscal-residency-type="{{ $provider->fiscal_residency_type ?: 'domiciliado' }}"
+                      data-provider-special-taxpayer="{{ (int) ($provider->is_special_taxpayer ?? false) }}"
                       data-provider-payment-currency="{{ strtoupper((string) ($provider->payment_currency_code ?: ($baseCurrencyCode ?? 'USD'))) }}"
                       data-provider-notes="{{ $provider->notes }}"
                       data-provider-active="{{ (int) $provider->is_active }}">Editar</button>
@@ -95,6 +99,24 @@
       <div class="mb-3"><label class="form-label">Contacto</label><input type="text" name="contact_name" class="form-control border border-1 p-2"></div>
       <div class="mb-3"><label class="form-label">Correo</label><input type="email" name="email" class="form-control border border-1 p-2"></div>
       <div class="mb-3"><label class="form-label">Teléfono</label><input type="text" name="phone_number" class="form-control border border-1 p-2"></div>
+      <div class="mb-3"><label class="form-label">RIF</label><input type="text" name="rif" class="form-control border border-1 p-2" maxlength="20"></div>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Tipo de persona</label>
+          <select name="fiscal_person_type" class="form-control border border-1 p-2">
+            <option value="pj">Persona juridica</option>
+            <option value="pn">Persona natural</option>
+          </select>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Residencia fiscal</label>
+          <select name="fiscal_residency_type" class="form-control border border-1 p-2">
+            <option value="domiciliado">Domiciliado</option>
+            <option value="no_domiciliado">No domiciliado</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="providerSpecialTaxpayer" name="is_special_taxpayer" value="1"><label class="form-check-label" for="providerSpecialTaxpayer">Es contribuyente especial</label></div>
       <div class="mb-3">
         <label class="form-label">Moneda de pago preferida</label>
         <select name="payment_currency_code" class="form-control border border-1 p-2">
@@ -117,6 +139,24 @@
       <div class="mb-3"><label class="form-label">Contacto</label><input type="text" name="contact_name" id="editProviderContact" class="form-control border border-1 p-2"></div>
       <div class="mb-3"><label class="form-label">Correo</label><input type="email" name="email" id="editProviderEmail" class="form-control border border-1 p-2"></div>
       <div class="mb-3"><label class="form-label">Teléfono</label><input type="text" name="phone_number" id="editProviderPhone" class="form-control border border-1 p-2"></div>
+      <div class="mb-3"><label class="form-label">RIF</label><input type="text" name="rif" id="editProviderRif" class="form-control border border-1 p-2" maxlength="20"></div>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Tipo de persona</label>
+          <select name="fiscal_person_type" id="editProviderFiscalPersonType" class="form-control border border-1 p-2">
+            <option value="pj">Persona juridica</option>
+            <option value="pn">Persona natural</option>
+          </select>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Residencia fiscal</label>
+          <select name="fiscal_residency_type" id="editProviderFiscalResidencyType" class="form-control border border-1 p-2">
+            <option value="domiciliado">Domiciliado</option>
+            <option value="no_domiciliado">No domiciliado</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="editProviderSpecialTaxpayer" name="is_special_taxpayer" value="1"><label class="form-check-label" for="editProviderSpecialTaxpayer">Es contribuyente especial</label></div>
       <div class="mb-3">
         <label class="form-label">Moneda de pago preferida</label>
         <select name="payment_currency_code" id="editProviderPaymentCurrency" class="form-control border border-1 p-2">
@@ -150,6 +190,10 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('editProviderContact').value = button.getAttribute('data-provider-contact') || '';
     document.getElementById('editProviderEmail').value = button.getAttribute('data-provider-email') || '';
     document.getElementById('editProviderPhone').value = button.getAttribute('data-provider-phone') || '';
+    document.getElementById('editProviderRif').value = button.getAttribute('data-provider-rif') || '';
+    document.getElementById('editProviderFiscalPersonType').value = button.getAttribute('data-provider-fiscal-person-type') || 'pj';
+    document.getElementById('editProviderFiscalResidencyType').value = button.getAttribute('data-provider-fiscal-residency-type') || 'domiciliado';
+    document.getElementById('editProviderSpecialTaxpayer').checked = button.getAttribute('data-provider-special-taxpayer') === '1';
     document.getElementById('editProviderPaymentCurrency').value = button.getAttribute('data-provider-payment-currency') || 'USD';
     document.getElementById('editProviderNotes').value = button.getAttribute('data-provider-notes') || '';
     document.getElementById('editProviderActive').checked = button.getAttribute('data-provider-active') === '1';

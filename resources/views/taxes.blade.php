@@ -44,9 +44,6 @@
             <tr>
               <th>Nombre</th>
               <th>Porcentaje</th>
-              <th>Estado</th>
-              <th>Editar</th>
-              <th>Activar / Inactivar</th>
             </tr>
           </thead>
           <tbody>
@@ -54,27 +51,6 @@
               <tr>
                 <td>{{ $tax->name }}</td>
                 <td>{{ $tax->rate }} %</td>
-                <td>
-                  <span class="badge {{ (bool) $tax->is_active ? 'bg-success':'bg-secondary' }}">
-                    {{ (bool) $tax->is_active ? 'Activo':'Inactivo' }}
-                  </span>
-                </td>
-                <td>
-                  <a href="javascript:;" class="btn-edit-tax" 
-                    data-bs-toggle="modal" data-bs-target="#editTaxModal"
-                    data-tax-id="{{ $tax->id }}"
-                    data-name="{{ $tax->name }}"
-                    data-rate="{{ $tax->rate }}">
-                    Editar
-                  </a>
-                </td>
-                <td>
-                  <a href="javascript:;" class="toggle-status-tax"
-                    data-id="{{ $tax->id }}"
-                    data-status="{{ (bool) $tax->is_active ? '1':'0' }}">
-                    {{ (bool) $tax->is_active ? 'Inactivar':'Activar' }}
-                  </a>
-                </td>
               </tr>
             @endforeach
           </tbody>
@@ -116,6 +92,29 @@
 <script>
   const authUser = @json($authUser);
   const tenantId = Number(authUser.tenant_id);
+
+  function setToggleLoadingState(button, isLoading) {
+    if (!button) {
+      return;
+    }
+
+    if (isLoading) {
+      if (!button.dataset.originalText) {
+        button.dataset.originalText = button.textContent.trim();
+      }
+
+      button.dataset.loading = '1';
+      button.style.pointerEvents = 'none';
+      button.style.opacity = '0.6';
+      button.textContent = 'Procesando...';
+      return;
+    }
+
+    button.dataset.loading = '0';
+    button.style.pointerEvents = '';
+    button.style.opacity = '';
+    button.textContent = button.dataset.originalText || button.textContent;
+  }
 
   function resolveTaxError(payload, fallback) {
     if (payload?.errors) {
@@ -179,6 +178,10 @@
   // TOGGLE STATE
   document.querySelectorAll('.toggle-status-tax').forEach(btn => {
     btn.addEventListener('click', async () => {
+      if (btn.dataset.loading === '1') {
+        return;
+      }
+
       let id = btn.dataset.id;
       let newStatus = btn.dataset.status === '1' ? 0 : 1;
       const reason = newStatus === 0 ? window.shopixRequestActionReason('Indica el motivo para inactivar este impuesto.') : '';
@@ -186,22 +189,28 @@
         return;
       }
 
-      const response = await fetch(`/taxes/toggle/${id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
-        },
-        body: JSON.stringify({is_active: newStatus, action_reason: reason})
-      });
+      setToggleLoadingState(btn, true);
 
-      const payload = await response.json().catch(() => ({}));
-      if (response.status === 200 && payload.success) {
-        location.reload();
-        return;
+      try {
+        const response = await fetch(`/taxes/toggle/${id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+          },
+          body: JSON.stringify({is_active: newStatus, action_reason: reason})
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (response.status === 200 && payload.success) {
+          location.reload();
+          return;
+        }
+
+        alert(resolveTaxError(payload, 'No se pudo actualizar el estado del impuesto.'));
+      } finally {
+        setToggleLoadingState(btn, false);
       }
-
-      alert(resolveTaxError(payload, 'No se pudo actualizar el estado del impuesto.'));
     });
   });
 </script>

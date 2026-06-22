@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Tax;
 use Illuminate\Support\Facades\DB;
 use App\Support\ActionReason;
+use Illuminate\Support\Str;
 
 class TaxController extends Controller
 {
@@ -22,16 +23,23 @@ class TaxController extends Controller
         $request->validate([
             'code' => 'nullable|string|max:20|unique:taxes,code',
             'name' => 'required',
-            'rate' => 'required|numeric|gt:0',
+            'rate' => 'required|numeric|gte:0',
             'description' => 'nullable'
         ]);
+
+        $rate = round((float) $request->input('rate', 0), 2);
+        if (!$this->isValidFiscalTaxRate((string) $request->input('name', ''), (string) $request->input('code', ''), $rate)) {
+            return response()->json([
+                'message' => 'Tasa fiscal inválida. IVA solo permite 0%, 8%, 16% o 31%; IGTF solo permite 3%.',
+            ], 422);
+        }
 
         $code = $this->resolveTaxCode((string) $request->input('code', ''), (string) $request->input('name', ''));
 
         $tax = Tax::create([
             'code' => $code,
             'name' => $request->name,
-            'rate' => $request->rate,
+            'rate' => $rate,
             'description' => $request->description,
         ]);
 
@@ -47,9 +55,16 @@ class TaxController extends Controller
     {
         $request->validate([
             'name' => 'required',
-            'rate' => 'required|numeric|gt:0',
+            'rate' => 'required|numeric|gte:0',
             'description' => 'nullable'
         ]);
+
+        $rate = round((float) $request->input('rate', 0), 2);
+        if (!$this->isValidFiscalTaxRate((string) $request->input('name', $tax->name), (string) $request->input('code', $tax->code), $rate)) {
+            return response()->json([
+                'message' => 'Tasa fiscal inválida. IVA solo permite 0%, 8%, 16% o 31%; IGTF solo permite 3%.',
+            ], 422);
+        }
 
         $oldData = $tax->toArray(); // Guardar datos antiguos para el log
         $code = $this->resolveTaxCode((string) $request->input('code', $tax->code), (string) $request->input('name', $tax->name), (int) $tax->id);
@@ -57,7 +72,7 @@ class TaxController extends Controller
         $tax->update([
             'code' => $code,
             'name' => $request->name,
-            'rate' => $request->rate,
+            'rate' => $rate,
             'description' => $request->description,
         ]);
 
@@ -130,5 +145,32 @@ class TaxController extends Controller
         }
 
         return $candidate;
+    }
+
+    private function isValidFiscalTaxRate(string $name, string $code, float $rate): bool
+    {
+        if ($this->looksLikeIgtfTax($name, $code)) {
+            return abs($rate - 3.0) < 0.0001;
+        }
+
+        if ($this->looksLikeIvaTax($name, $code)) {
+            return in_array(round($rate, 2), [0.0, 8.0, 16.0, 31.0], true);
+        }
+
+        return true;
+    }
+
+    private function looksLikeIvaTax(string $name, string $code): bool
+    {
+        $haystack = Str::lower(Str::ascii(trim($name . ' ' . $code)));
+
+        return str_contains($haystack, 'iva') || str_contains($haystack, 'exent');
+    }
+
+    private function looksLikeIgtfTax(string $name, string $code): bool
+    {
+        $haystack = Str::lower(Str::ascii(trim($name . ' ' . $code)));
+
+        return str_contains($haystack, 'igtf');
     }
 }

@@ -48,6 +48,10 @@ class ProviderController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'rif' => 'nullable|string|max:20',
+            'fiscal_person_type' => 'nullable|in:pn,pj',
+            'fiscal_residency_type' => 'nullable|in:domiciliado,no_domiciliado',
+            'is_special_taxpayer' => 'nullable|boolean',
             'contact_name' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone_number' => 'nullable|string|max:30',
@@ -62,6 +66,10 @@ class ProviderController extends Controller
                 'name' => trim((string) $validated['name']),
             ],
             [
+                'rif' => strtoupper(trim((string) ($validated['rif'] ?? ''))) ?: null,
+                'fiscal_person_type' => (string) ($validated['fiscal_person_type'] ?? 'pj'),
+                'fiscal_residency_type' => (string) ($validated['fiscal_residency_type'] ?? 'domiciliado'),
+                'is_special_taxpayer' => (bool) ($validated['is_special_taxpayer'] ?? false),
                 'contact_name' => $validated['contact_name'] ?? null,
                 'email' => $validated['email'] ?? null,
                 'phone_number' => $validated['phone_number'] ?? null,
@@ -81,6 +89,10 @@ class ProviderController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'rif' => 'nullable|string|max:20',
+            'fiscal_person_type' => 'nullable|in:pn,pj',
+            'fiscal_residency_type' => 'nullable|in:domiciliado,no_domiciliado',
+            'is_special_taxpayer' => 'nullable|boolean',
             'contact_name' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone_number' => 'nullable|string|max:30',
@@ -91,6 +103,10 @@ class ProviderController extends Controller
 
         $provider->update([
             'name' => trim((string) $validated['name']),
+            'rif' => strtoupper(trim((string) ($validated['rif'] ?? ''))) ?: null,
+            'fiscal_person_type' => (string) ($validated['fiscal_person_type'] ?? $provider->fiscal_person_type ?? 'pj'),
+            'fiscal_residency_type' => (string) ($validated['fiscal_residency_type'] ?? $provider->fiscal_residency_type ?? 'domiciliado'),
+            'is_special_taxpayer' => (bool) ($validated['is_special_taxpayer'] ?? false),
             'contact_name' => $validated['contact_name'] ?? null,
             'email' => $validated['email'] ?? null,
             'phone_number' => $validated['phone_number'] ?? null,

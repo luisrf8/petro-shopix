@@ -240,12 +240,28 @@
                             <small>Selecciona los impuestos que aplican a este producto.</small>
                         </div>
                     </div>
+                    @php
+                        $productIntrinsicTaxes = collect($taxes ?? [])->filter(function ($tax) {
+                            $raw = trim((string) (($tax->name ?? '') . ' ' . ($tax->code ?? '')));
+                            $normalized = function_exists('iconv')
+                                ? strtolower((string) iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $raw))
+                                : strtolower($raw);
+
+                            if (str_contains($normalized, 'igtf') || str_contains($normalized, 'islr') || str_contains($normalized, 'retencion')) {
+                                return false;
+                            }
+
+                            return true;
+                        })->values();
+                    @endphp
                     <div id="taxCardsContainer" class="d-flex flex-wrap gap-2 mb-2">
-                        @foreach($taxes as $tax)
+                        @forelse($productIntrinsicTaxes as $tax)
                             <button type="button" class="tax-chip selectable-tax" data-id="{{ $tax->id }}">
                                 {{ $tax->name }} ({{ $tax->rate }}%)
                             </button>
-                        @endforeach
+                        @empty
+                            <span class="text-muted">No hay alícuotas IVA disponibles para productos.</span>
+                        @endforelse
                     </div>
                     <div id="taxInputs"></div>
                 </div>
@@ -828,11 +844,19 @@
         chip.addEventListener('click', () => {
             const id = chip.getAttribute('data-id');
             const taxInputs = document.getElementById('taxInputs');
+
             if (chip.classList.contains('selected')) {
                 chip.classList.remove('selected');
                 document.getElementById(`tax_input_${id}`)?.remove();
                 return;
             }
+
+            // Selection is exclusive: keep only one tax active at a time.
+            document.querySelectorAll('.selectable-tax.selected').forEach((selectedChip) => {
+                selectedChip.classList.remove('selected');
+            });
+            taxInputs.innerHTML = '';
+
             chip.classList.add('selected');
             const input = document.createElement('input');
             input.type = 'hidden';

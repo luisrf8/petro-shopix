@@ -25,6 +25,11 @@
     </div>
     <div class="card-body px-0 pb-2">
       <div class="px-3 pt-3">
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <a href="{{ route('withholdings.iva.export.txt') }}" class="btn btn-outline-dark btn-sm mb-0">Exportar TXT IVA (quincena)</a>
+          <a href="{{ route('withholdings.islr.export.xml') }}" class="btn btn-outline-dark btn-sm mb-0">Exportar XML ISLR (mes)</a>
+          <a href="{{ route('withholdings.islr.concepts.index') }}" class="btn btn-outline-dark btn-sm mb-0">Matriz conceptos ISLR</a>
+        </div>
         <form method="GET" class="row g-2 align-items-end">
           <div class="col-md-3"><label class="form-label">Buscar</label><input type="text" name="search" value="{{ $search }}" class="form-control border border-1 p-2" placeholder="Documento, proveedor, nota"></div>
           <div class="col-md-2"><label class="form-label">Estado</label><select name="status" class="form-control border border-1 p-2"><option value="">Todos</option><option value="pending" {{ $status === 'pending' ? 'selected' : '' }}>Pendiente</option><option value="partial" {{ $status === 'partial' ? 'selected' : '' }}>Parcial</option><option value="overdue" {{ $status === 'overdue' ? 'selected' : '' }}>Vencida</option><option value="paid" {{ $status === 'paid' ? 'selected' : '' }}>Pagada</option></select></div>
@@ -75,6 +80,44 @@
                   @else
                     <span class="text-success text-xs fw-bold">Saldada</span>
                   @endif
+                  @php
+                    $latestVatRetention = $payable->purchaseVatRetentions->sortByDesc('id')->first();
+                    $latestIslrRetention = $payable->islrWithholdings->sortByDesc('id')->first();
+                    $vatHasHkaReference = $latestVatRetention && trim((string) ($latestVatRetention->invoice_number ?: $payable->invoice_number ?: $payable->document_number)) !== '' && trim((string) ($latestVatRetention->control_number ?: $payable->control_number)) !== '';
+                    $islrHasHkaReference = $latestIslrRetention && trim((string) ($latestIslrRetention->invoice_number ?: $payable->invoice_number ?: $payable->document_number)) !== '' && trim((string) ($latestIslrRetention->control_number ?: $payable->control_number)) !== '';
+                    $vatHkaCode = (string) (data_get($latestVatRetention?->response_payload, 'status.codigo') ?: data_get($latestVatRetention?->response_payload, 'emit.codigo') ?: '');
+                    $vatHkaValidations = data_get($latestVatRetention?->response_payload, 'status.validaciones', data_get($latestVatRetention?->response_payload, 'emit.validaciones', []));
+                    $vatHkaReady = $latestVatRetention && ($latestVatRetention->status === 'applied_hka') && empty($vatHkaValidations) && !in_array($vatHkaCode, ['203', '400', '401', '404', '422', '500'], true);
+                    $islrHkaCode = (string) (data_get($latestIslrRetention?->response_payload, 'status.codigo') ?: data_get($latestIslrRetention?->response_payload, 'emit.codigo') ?: '');
+                    $islrHkaValidations = data_get($latestIslrRetention?->response_payload, 'status.validaciones', data_get($latestIslrRetention?->response_payload, 'emit.validaciones', []));
+                    $islrHkaReady = $latestIslrRetention && ($latestIslrRetention->status === 'applied_hka') && empty($islrHkaValidations) && !in_array($islrHkaCode, ['203', '400', '401', '404', '422', '500'], true);
+                  @endphp
+                  @if($latestVatRetention)
+                    <a href="{{ route('withholdings.iva.certificate.pdf', $latestVatRetention->id) }}" class="btn btn-link btn-sm mb-0 ps-0" target="_blank">PDF IVA</a>
+                    @if($vatHasHkaReference)
+                      <form method="POST" action="{{ route('withholdings.iva.syncHka', $latestVatRetention->id) }}" class="d-inline">@csrf<button type="submit" class="btn btn-link btn-sm mb-0 ps-0">Sync IVA HKA</button></form>
+                      <form method="POST" action="{{ route('withholdings.iva.statusHka', $latestVatRetention->id) }}" class="d-inline">@csrf<button type="submit" class="btn btn-link btn-sm mb-0 ps-0">Estado IVA HKA</button></form>
+                      <a href="{{ route('withholdings.iva.downloadHka', $latestVatRetention->id) }}" class="btn btn-link btn-sm mb-0 ps-0">JSON IVA HKA</a>
+                      @if($vatHkaReady)
+                        <a href="{{ route('withholdings.iva.downloadHkaPdf', $latestVatRetention->id) }}" class="btn btn-link btn-sm mb-0 ps-0">PDF IVA HKA</a>
+                      @endif
+                    @else
+                      <span class="text-muted text-xs d-inline-block">Falta factura/control proveedor</span>
+                    @endif
+                  @endif
+                  @if($latestIslrRetention)
+                    <a href="{{ route('withholdings.islr.certificate.pdf', $latestIslrRetention->id) }}" class="btn btn-link btn-sm mb-0 ps-0" target="_blank">PDF ISLR</a>
+                    @if($islrHasHkaReference)
+                      <form method="POST" action="{{ route('withholdings.islr.syncHka', $latestIslrRetention->id) }}" class="d-inline">@csrf<button type="submit" class="btn btn-link btn-sm mb-0 ps-0">Sync ISLR HKA</button></form>
+                      <form method="POST" action="{{ route('withholdings.islr.statusHka', $latestIslrRetention->id) }}" class="d-inline">@csrf<button type="submit" class="btn btn-link btn-sm mb-0 ps-0">Estado ISLR HKA</button></form>
+                      <a href="{{ route('withholdings.islr.downloadHka', $latestIslrRetention->id) }}" class="btn btn-link btn-sm mb-0 ps-0">JSON ISLR HKA</a>
+                      @if($islrHkaReady)
+                        <a href="{{ route('withholdings.islr.downloadHkaPdf', $latestIslrRetention->id) }}" class="btn btn-link btn-sm mb-0 ps-0">PDF ISLR HKA</a>
+                      @endif
+                    @else
+                      <span class="text-muted text-xs d-inline-block">Falta factura/control proveedor</span>
+                    @endif
+                  @endif
                 </td>
               </tr>
             @empty
@@ -93,8 +136,35 @@
     <div class="mb-3"><label class="form-label">Proveedor</label><select name="provider_id" class="form-control border border-1 p-2"><option value="">Sin proveedor</option>@foreach($providers as $provider)<option value="{{ $provider->id }}">{{ $provider->name }}</option>@endforeach</select></div>
     <div class="mb-3"><label class="form-label">Orden de compra (opcional)</label><select name="purchase_order_id" class="form-control border border-1 p-2"><option value="">Ninguna</option>@foreach($purchaseOrders as $order)<option value="{{ $order->id }}">#{{ $order->id }} - {{ $order->provider_display_name }} - {{ $order->date }}</option>@endforeach</select></div>
     <div class="mb-3"><label class="form-label">N° Documento</label><input type="text" name="document_number" class="form-control border border-1 p-2" placeholder="Factura o referencia"></div>
+    <div class="row">
+      <div class="col-md-4 mb-3"><label class="form-label">N° Factura proveedor</label><input type="text" name="invoice_number" class="form-control border border-1 p-2" placeholder="20260200000011"></div>
+      <div class="col-md-4 mb-3"><label class="form-label">N° Control proveedor</label><input type="text" name="control_number" class="form-control border border-1 p-2" placeholder="00-00000011"></div>
+      <div class="col-md-4 mb-3"><label class="form-label">Fecha factura proveedor</label><input type="date" name="invoice_date" class="form-control border border-1 p-2"></div>
+    </div>
     <div class="row"><div class="col-md-6 mb-3"><label class="form-label">Fecha emisión</label><input type="date" name="issued_at" value="{{ now()->toDateString() }}" class="form-control border border-1 p-2" required></div><div class="col-md-6 mb-3"><label class="form-label">Fecha vencimiento</label><input type="date" name="due_at" class="form-control border border-1 p-2"></div></div>
     <div class="row"><div class="col-md-6 mb-3"><label class="form-label">Monto total</label><input type="number" step="0.01" min="0.01" name="amount_total" class="form-control border border-1 p-2" required data-decimal-friendly="true"></div><div class="col-md-6 mb-3"><label class="form-label">Moneda</label><select name="currency_code" class="form-control border border-1 p-2"><option value="USD">USD</option><option value="EUR">EUR</option><option value="VES">VES</option></select></div></div>
+    <div class="row">
+      <div class="col-md-4 mb-3"><label class="form-label">Base imponible</label><input type="number" step="0.0001" min="0" name="taxable_base" class="form-control border border-1 p-2" data-decimal-friendly="true"></div>
+      <div class="col-md-4 mb-3"><label class="form-label">Alicuota IVA (%)</label><input type="number" step="0.0001" min="0" max="100" name="tax_rate" class="form-control border border-1 p-2" data-decimal-friendly="true"></div>
+      <div class="col-md-4 mb-3"><label class="form-label">IVA causado</label><input type="number" step="0.0001" min="0" name="tax_amount" class="form-control border border-1 p-2" data-decimal-friendly="true"></div>
+    </div>
+    <div class="row">
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Concepto ISLR (servicios)</label>
+        <select name="islr_concept_code" class="form-control border border-1 p-2">
+          <option value="">Automatico por proveedor</option>
+          @foreach(($islrConcepts ?? collect()) as $concept)
+            <option value="{{ $concept->code }}">{{ $concept->code }} - {{ $concept->name }}</option>
+          @endforeach
+        </select>
+      </div>
+      <div class="col-md-4 mb-3 d-flex align-items-end">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="is_service" value="1" id="isServicePayable" checked>
+          <label class="form-check-label" for="isServicePayable">Aplicar retencion ISLR automatica (servicios)</label>
+        </div>
+      </div>
+    </div>
     <div class="mb-3"><label class="form-label">Notas</label><textarea name="notes" class="form-control border border-1 p-2" rows="3"></textarea></div>
   </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancelar</button><button type="submit" class="btn btn-dark mb-0">Guardar</button></div></form>
 </div></div></div>

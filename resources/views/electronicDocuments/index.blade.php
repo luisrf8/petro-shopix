@@ -33,7 +33,22 @@
   }
 
   .electronic-documents-table {
-    min-width: 1440px;
+    min-width: 1760px;
+  }
+
+  .code-cell {
+    max-width: 280px;
+  }
+
+  .code-preview {
+    display: inline-block;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    font-family: monospace;
+    font-size: 0.8rem;
   }
 
   @media (max-width: 991.98px) {
@@ -123,6 +138,8 @@
               <th>Usuario</th>
               <th>Total</th>
               <th>Estado</th>
+              <th>CUFE</th>
+              <th>QR</th>
               <th>Orden</th>
               <th>Acciones</th>
             </tr>
@@ -149,6 +166,22 @@
                     <div><small class="text-muted">{{ $row->mensaje }}</small></div>
                   @endif
                 </td>
+                <td class="code-cell">
+                  @if($row->cufe)
+                    <span class="code-preview" title="{{ $row->cufe }}">{{ $row->cufe }}</span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mb-0 ms-1 js-copy-value" data-copy-value="{{ $row->cufe }}">Copiar</button>
+                  @else
+                    <span class="text-muted">-</span>
+                  @endif
+                </td>
+                <td class="code-cell">
+                  @if($row->qr_string)
+                    <span class="code-preview" title="{{ $row->qr_string }}">{{ $row->qr_string }}</span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mb-0 ms-1 js-copy-value" data-copy-value="{{ $row->qr_string }}">Copiar</button>
+                  @else
+                    <span class="text-muted">-</span>
+                  @endif
+                </td>
                 <td>#{{ $row->sales_order_id }}</td>
                 <td>
                   <div class="d-flex gap-2 flex-wrap">
@@ -170,7 +203,178 @@
               </tr>
             @empty
               <tr>
-                <td colspan="14" class="text-center text-muted py-4">No hay documentos electrónicos para los filtros aplicados.</td>
+                <td colspan="16" class="text-center text-muted py-4">No hay documentos electrónicos para los filtros aplicados.</td>
+              </tr>
+            @endforelse
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-4">
+        <h6 class="mb-3">Notas fiscales relacionadas</h6>
+        <div class="electronic-documents-table-wrap">
+          <table class="table align-items-center mb-0 electronic-documents-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Hora</th>
+                <th>Tienda</th>
+                <th>Tipo de Doc</th>
+                <th>Serie</th>
+                <th>Nro. Documento</th>
+                <th>Control</th>
+                <th>Doc. Afectado</th>
+                <th>Tasa</th>
+                <th>Usuario</th>
+                <th>Total</th>
+                <th>Estado</th>
+                <th>Orden</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              @forelse($adjustmentRows as $row)
+                <tr>
+                  <td>{{ $row->display_date }}</td>
+                  <td>{{ $row->display_time }}</td>
+                  <td>{{ $row->tenant->name ?? 'N/A' }}</td>
+                  <td>{{ $row->display_document_type }}</td>
+                  <td>{{ $row->serie ?: '-' }}</td>
+                  <td>{{ $row->numero_documento ?: '-' }}</td>
+                  <td>{{ $row->display_control_number }}</td>
+                  <td>{{ $row->affected_document }}</td>
+                  <td>{{ $row->display_tax_rate }}</td>
+                  <td>{{ $row->display_user }}</td>
+                  <td>{{ number_format((float) ($row->display_total_amount ?? 0), 2) }}</td>
+                  <td>
+                    <span class="badge badge-sm bg-gradient-info">{{ $row->estado_documento ?: 'Registrada' }}</span>
+                    @if($row->mensaje)
+                      <div><small class="text-muted">{{ $row->mensaje }}</small></div>
+                    @endif
+                  </td>
+                  <td>#{{ $row->sales_order_id }}</td>
+                  <td>
+                    <a href="{{ $row->download_url }}" class="btn btn-outline-dark btn-sm mb-0">Descargar PDF</a>
+                  </td>
+                </tr>
+              @empty
+                <tr>
+                  <td colspan="14" class="text-center text-muted py-4">No hay notas fiscales relacionadas para los filtros aplicados.</td>
+                </tr>
+              @endforelse
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-center mt-3">
+        {{ $rows->links() }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.js-copy-value');
+    if (!button) {
+      return;
+    }
+
+    var value = button.getAttribute('data-copy-value') || '';
+    if (value === '') {
+      return;
+    }
+
+    navigator.clipboard.writeText(value).then(function () {
+      var original = button.textContent;
+      button.textContent = 'Copiado';
+      setTimeout(function () {
+        button.textContent = original;
+      }, 1200);
+    }).catch(function () {
+      button.textContent = 'Error';
+    });
+  });
+</script>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Tienda</th>
+              <th>Tipo de Doc</th>
+              <th>Serie</th>
+              <th>Nro. Documento</th>
+              <th>Control</th>
+              <th>Doc. Afectado</th>
+              <th>Tasa</th>
+              <th>Usuario</th>
+              <th>Total</th>
+              <th>Estado</th>
+              <th>CUFE</th>
+              <th>QR</th>
+              <th>Orden</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @forelse($rows as $row)
+              <tr class="{{ $row->is_annulled ? 'table-danger' : '' }}">
+                <td>{{ $row->display_date }}</td>
+                <td>{{ $row->display_time }}</td>
+                <td>{{ $row->tenant->name ?? 'N/A' }}</td>
+                <td>{{ $row->display_document_type }}</td>
+                <td>{{ $row->serie ?: '-' }}</td>
+                <td>{{ $row->numero_documento ?: '-' }}</td>
+                <td>{{ $row->display_control_number }}</td>
+                <td>{{ $row->affected_document }}</td>
+                <td>{{ $row->display_tax_rate }}</td>
+                <td>{{ $row->display_user }}</td>
+                <td>{{ number_format((float) ($row->display_total_amount ?? 0), 2) }}</td>
+                <td>
+                  <span class="badge badge-sm {{ $row->is_annulled ? 'bg-gradient-danger' : 'bg-gradient-success' }}">
+                    {{ $row->is_annulled ? 'Anulada' : ($row->estado_documento ?: 'Activa') }}
+                  </span>
+                  @if($row->mensaje)
+                    <div><small class="text-muted">{{ $row->mensaje }}</small></div>
+                  @endif
+                </td>
+                <td class="code-cell">
+                  @if($row->cufe)
+                    <span class="code-preview" title="{{ $row->cufe }}">{{ $row->cufe }}</span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mb-0 ms-1 js-copy-value" data-copy-value="{{ $row->cufe }}">Copiar</button>
+                  @else
+                    <span class="text-muted">-</span>
+                  @endif
+                </td>
+                <td class="code-cell">
+                  @if($row->qr_string)
+                    <span class="code-preview" title="{{ $row->qr_string }}">{{ $row->qr_string }}</span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mb-0 ms-1 js-copy-value" data-copy-value="{{ $row->qr_string }}">Copiar</button>
+                  @else
+                    <span class="text-muted">-</span>
+                  @endif
+                </td>
+                <td>#{{ $row->sales_order_id }}</td>
+                <td>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{ route('sales.showByOrder', $row->sales_order_id) }}" class="btn btn-outline-dark btn-sm mb-0">Ver orden</a>
+                    @if(!$row->is_annulled)
+                      <a href="{{ route('sales.orders.pdfs', ['id' => $row->sales_order_id, 'type' => 'invoice']) }}" class="btn btn-outline-secondary btn-sm mb-0">PDF</a>
+                      <a href="{{ route('sales.orders.pdfs', ['id' => $row->sales_order_id, 'type' => 'invoice']) }}?disposition=inline" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm mb-0">Imprimir</a>
+                    @else
+                      <span class="btn btn-outline-danger btn-sm mb-0 disabled" aria-disabled="true">Factura anulada</span>
+                    @endif
+                    @if($canRetry)
+                      <form method="POST" action="{{ route('electronic.documents.retry', $row->id) }}">
+                        @csrf
+                        <button type="submit" class="btn btn-outline-primary btn-sm mb-0">Reintentar</button>
+                      </form>
+                    @endif
+                  </div>
+                </td>
+              </tr>
+            @empty
+              <tr>
+                <td colspan="16" class="text-center text-muted py-4">No hay documentos electrónicos para los filtros aplicados.</td>
               </tr>
             @endforelse
           </tbody>
@@ -183,4 +387,27 @@
     </div>
   </div>
 </div>
+<script>
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.js-copy-value');
+    if (!button) {
+      return;
+    }
+
+    var value = button.getAttribute('data-copy-value') || '';
+    if (value === '') {
+      return;
+    }
+
+    navigator.clipboard.writeText(value).then(function () {
+      var original = button.textContent;
+      button.textContent = 'Copiado';
+      setTimeout(function () {
+        button.textContent = original;
+      }, 1200);
+    }).catch(function () {
+      button.textContent = 'Error';
+    });
+  });
+</script>
 @endsection

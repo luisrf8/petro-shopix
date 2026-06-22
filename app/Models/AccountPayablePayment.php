@@ -37,4 +37,9 @@ class AccountPayablePayment extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function islrWithholding()
+    {
+        return $this->hasOne(IslrWithholding::class, 'account_payable_payment_id');
+    }
 }

@@ -322,7 +322,7 @@
                 <div class="col-lg-5">
                     <div class="quick-actions justify-content-lg-end">
                         <button type="button" id="public-order-back" class="btn btn-outline-secondary mb-0">Volver</button>
-                        <a id="publicDownloadInvoiceBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-dark mb-0 {{ $order->has_annulled_invoice ? 'disabled' : '' }}" @if($order->has_annulled_invoice) aria-disabled="true" @endif>Factura PDF</a>
+                        <a id="publicDownloadInvoiceBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-dark mb-0">Factura PDF</a>
                         <a id="publicDownloadDeliveryBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Orden de entrega</a>
                         @if($storeWhatsappUrl)
                             <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>

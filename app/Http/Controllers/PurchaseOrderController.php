@@ -10,14 +10,18 @@ use App\Models\ProductVariantWarehouseStock;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderDetail;
 use App\Models\PurchaseOrderConsumption;
+use App\Models\PurchaseVatRetention;
 use App\Models\AccountPayable;
+use App\Models\Tax;
 use App\Models\Warehouse;
 use App\Models\Tenant;
+use App\Services\FiscalCorrelativeService;
 use App\Support\ImageStorage;
 use App\Support\TenantCurrency;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 
 
@@ -161,136 +165,135 @@ class PurchaseOrderController extends Controller
             return $this->storeProductionEntry($itemsSelected, $user, $warehouse, $purchaseDate, $baseCurrencyCode);
         }
 
-        $groupedData = [];
+        $providerName = trim((string) $request->input('provider_name', ''));
+        $providerRif = trim((string) $request->input('provider_rif', ''));
+        $supplierInvoiceNumber = trim((string) $request->input('supplier_invoice_number', ''));
+        $supplierInvoiceControlNumber = trim((string) $request->input('supplier_invoice_control_number', ''));
+        $supplierInvoiceDate = trim((string) $request->input('supplier_invoice_date', ''));
+        $supplierInvoiceFilePath = null;
+
+        if ($providerName === '' || $providerRif === '' || $supplierInvoiceNumber === '' || $supplierInvoiceControlNumber === '' || $supplierInvoiceDate === '') {
+            return response()->json(['error' => 'Debes indicar proveedor, RIF, número de factura, número de control y fecha de la factura para registrar la retención.'], 422);
+        }
+
+        if ($request->hasFile('supplier_invoice_file')) {
+            $supplierInvoiceFilePath = $request->file('supplier_invoice_file')->store(
+                'purchase_invoices/' . $user->tenant_id,
+                'public'
+            );
+        }
+
+        $provider = Schema::hasTable('providers')
+            ? Provider::updateOrCreate(
+                [
+                    'tenant_id' => $user->tenant_id,
+                    'name' => $providerName,
+                ],
+                [
+                    'rif' => $providerRif,
+                    'is_active' => true,
+                ]
+            )
+            : null;
+
+        $groupedData = [[
+            'provider_id' => $provider?->id,
+            'provider_name' => $providerName,
+            'provider_rif' => $providerRif,
+            'details' => [],
+        ]];
 
         foreach ($itemsSelected as $item) {
             $variantId = (int) data_get($item, 'variant.id', 0);
             $quantity = (int) data_get($item, 'quantity', 0);
             $price = (float) data_get($item, 'price', 0);
             $inputCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) data_get($item, 'currency', $baseCurrencyCode));
-            $providers = data_get($item, 'providers', []);
 
             $normalizedPriceInBase = (float) TenantCurrency::convertAmount($price, $inputCurrencyCode, $baseCurrencyCode, (int) $user->tenant_id);
             $inputRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $inputCurrencyCode);
 
-            if ($variantId <= 0 || $quantity <= 0 || $normalizedPriceInBase <= 0 || !is_array($providers) || empty($providers)) {
-                return response()->json(['error' => 'Hay productos con datos incompletos (variante, cantidad, precio o proveedor).'], 422);
+            if ($variantId <= 0 || $quantity <= 0 || $normalizedPriceInBase <= 0) {
+                return response()->json(['error' => 'Hay productos con datos incompletos (variante, cantidad o precio).'], 422);
             }
 
-            foreach ($providers as $providerNameRaw) {
-                $providerName = trim((string) $providerNameRaw);
-                if ($providerName === '') {
-                    continue;
-                }
-
-                if (Schema::hasTable('providers')) {
-                    Provider::firstOrCreate(
-                        [
-                            'tenant_id' => $user->tenant_id,
-                            'name' => $providerName,
-                        ],
-                        [
-                            'is_active' => true,
-                        ]
-                    );
-                }
-
-                $provider = Schema::hasTable('providers')
-                    ? Provider::firstOrCreate(
-                        [
-                            'tenant_id' => $user->tenant_id,
-                            'name' => $providerName,
-                        ],
-                        [
-                            'is_active' => true,
-                        ]
-                    )
-                    : null;
-
-                if (!isset($groupedData[$providerName])) {
-                    $groupedData[$providerName] = [
-                        'provider_id' => $provider?->id,
-                        'provider_name' => $providerName,
-                        'details' => [],
-                    ];
-                }
-
-                $groupedData[$providerName]['details'][] = [
-                    'product_variant_id' => $variantId,
-                    'quantity' => $quantity,
-                    'price' => $normalizedPriceInBase,
-                    'input_currency_code' => $inputCurrencyCode,
-                    'input_exchange_rate' => $inputRateToBs > 0 ? $inputRateToBs : null,
-                ];
-            }
+            $groupedData[0]['details'][] = [
+                'product_variant_id' => $variantId,
+                'quantity' => $quantity,
+                'price' => $normalizedPriceInBase,
+                'input_currency_code' => $inputCurrencyCode,
+                'input_exchange_rate' => $inputRateToBs > 0 ? $inputRateToBs : null,
+            ];
         }
 
-        if (empty($groupedData)) {
-            return response()->json(['error' => 'Debes indicar al menos un proveedor válido.'], 422);
+        if (empty($groupedData[0]['details'])) {
+            return response()->json(['error' => 'Debes indicar al menos una variante válida.'], 422);
         }
 
         DB::beginTransaction();
 
         try {
-            foreach ($groupedData as $orderData) {
-                $orderPayload = [
-                    'provider_id' => $orderData['provider_id'],
-                    'provider_name' => $orderData['provider_name'] ?? null,
-                    'warehouse_id' => $warehouse->id,
-                    'date' => $purchaseDate,
-                    'entry_mode' => 'purchase',
+            $orderPayload = [
+                'provider_id' => $groupedData[0]['provider_id'],
+                'provider_name' => $groupedData[0]['provider_name'],
+                'provider_rif' => $groupedData[0]['provider_rif'],
+                'warehouse_id' => $warehouse->id,
+                'date' => $purchaseDate,
+                'entry_mode' => 'purchase',
+                'supplier_invoice_number' => $supplierInvoiceNumber,
+                'supplier_invoice_control_number' => $supplierInvoiceControlNumber,
+                'supplier_invoice_date' => $supplierInvoiceDate,
+                'supplier_invoice_file_path' => $supplierInvoiceFilePath,
+            ];
+
+            if (Schema::hasColumn('purchase_orders', 'tenant_id')) {
+                $orderPayload['tenant_id'] = $user->tenant_id;
+            }
+
+            $purchaseOrder = PurchaseOrder::create($orderPayload);
+
+            foreach ($groupedData[0]['details'] as $detail) {
+                $productVariant = ProductVariant::with('product')->find($detail['product_variant_id']);
+
+                if (!$productVariant || !$productVariant->product || (int) $productVariant->product->tenant_id !== (int) $user->tenant_id) {
+                    throw new \RuntimeException('Se intentó registrar una variante inválida para esta tienda.');
+                }
+
+                $detailPayload = [
+                    'purchase_order_id' => $purchaseOrder->id,
+                    'product_variant_id' => $detail['product_variant_id'],
+                    'quantity' => $detail['quantity'],
+                    'price' => $detail['price'],
+                    'amount' => $detail['price'] * $detail['quantity'],
+                    'input_currency_code' => $detail['input_currency_code'] ?? null,
+                    'input_exchange_rate' => $detail['input_exchange_rate'] ?? null,
                 ];
 
-                if (Schema::hasColumn('purchase_orders', 'tenant_id')) {
-                    $orderPayload['tenant_id'] = $user->tenant_id;
+                if (Schema::hasColumn('purchase_order_detail', 'tenant_id')) {
+                    $detailPayload['tenant_id'] = $user->tenant_id;
                 }
 
-                $purchaseOrder = PurchaseOrder::create($orderPayload);
+                PurchaseOrderDetail::create($detailPayload);
 
-                foreach ($orderData['details'] as $detail) {
-                    $productVariant = ProductVariant::with('product')->find($detail['product_variant_id']);
+                $productVariant->stock += $detail['quantity'];
+                $productVariant->save();
 
-                    if (!$productVariant || !$productVariant->product || (int) $productVariant->product->tenant_id !== (int) $user->tenant_id) {
-                        throw new \RuntimeException('Se intentó registrar una variante inválida para esta tienda.');
-                    }
+                $warehouseStock = ProductVariantWarehouseStock::firstOrNew([
+                    'tenant_id' => $user->tenant_id,
+                    'warehouse_id' => $warehouse->id,
+                    'product_variant_id' => $detail['product_variant_id'],
+                ]);
 
-                    $detailPayload = [
-                        'purchase_order_id' => $purchaseOrder->id,
-                        'product_variant_id' => $detail['product_variant_id'],
-                        'quantity' => $detail['quantity'],
-                        'price' => $detail['price'],
-                        'amount' => $detail['price'] * $detail['quantity'],
-                        'input_currency_code' => $detail['input_currency_code'] ?? null,
-                        'input_exchange_rate' => $detail['input_exchange_rate'] ?? null,
-                    ];
-
-                    if (Schema::hasColumn('purchase_order_detail', 'tenant_id')) {
-                        $detailPayload['tenant_id'] = $user->tenant_id;
-                    }
-
-                    PurchaseOrderDetail::create($detailPayload);
-
-                    $productVariant->stock += $detail['quantity'];
-                    $productVariant->save();
-
-                    $warehouseStock = ProductVariantWarehouseStock::firstOrNew([
-                        'tenant_id' => $user->tenant_id,
-                        'warehouse_id' => $warehouse->id,
-                        'product_variant_id' => $detail['product_variant_id'],
-                    ]);
-
-                    $warehouseStock->quantity = (float) ($warehouseStock->quantity ?? 0) + (float) $detail['quantity'];
-                    $warehouseStock->save();
-                }
-
-                $this->syncPurchaseAccountPayable(
-                    $purchaseOrder,
-                    (int) $user->tenant_id,
-                    (int) ($user->id ?? 0),
-                    (string) $purchaseDate,
-                    (string) $baseCurrencyCode
-                );
+                $warehouseStock->quantity = (float) ($warehouseStock->quantity ?? 0) + (float) $detail['quantity'];
+                $warehouseStock->save();
             }
+
+            $this->syncPurchaseAccountPayable(
+                $purchaseOrder,
+                (int) $user->tenant_id,
+                (int) ($user->id ?? 0),
+                (string) $purchaseDate,
+                (string) $baseCurrencyCode
+            );
 
             DB::commit();
             return response()->json(['message' => 'Entrada de inventario registrada y stock actualizado correctamente.'], 200);
@@ -323,24 +326,124 @@ class PurchaseOrderController extends Controller
 
         $dueAt = Carbon::parse($issuedAt)->addDays(30)->toDateString();
 
-        AccountPayable::updateOrCreate(
+        $vatRate = $this->resolveVatRate();
+        $taxableBase = $vatRate > 0
+            ? round($amountTotal / (1 + ($vatRate / 100)), 4)
+            : round($amountTotal, 4);
+        $taxAmount = round(max(0, $amountTotal - $taxableBase), 4);
+
+        $accountPayable = AccountPayable::updateOrCreate(
             [
                 'tenant_id' => $tenantId,
                 'purchase_order_id' => (int) $purchaseOrder->id,
             ],
-            [
+            array_filter([
                 'provider_id' => $purchaseOrder->provider_id,
+                'document_number' => (string) ($purchaseOrder->supplier_invoice_number ?? $purchaseOrder->id),
+                'invoice_number' => Schema::hasColumn('accounts_payables', 'invoice_number')
+                    ? (string) ($purchaseOrder->supplier_invoice_number ?? $purchaseOrder->id)
+                    : null,
+                'control_number' => Schema::hasColumn('accounts_payables', 'control_number')
+                    ? (string) ($purchaseOrder->supplier_invoice_control_number ?? '')
+                    : null,
+                'invoice_date' => Schema::hasColumn('accounts_payables', 'invoice_date')
+                    ? ($purchaseOrder->supplier_invoice_date ?? $issuedAt)
+                    : null,
                 'issued_at' => $issuedAt,
                 'due_at' => $dueAt,
                 'amount_total' => $amountTotal,
                 'amount_paid' => 0,
                 'amount_pending' => $amountTotal,
                 'currency_code' => $currencyCode,
+                'is_service' => true,
+                'taxable_base' => $taxableBase,
+                'tax_rate' => $vatRate,
+                'tax_amount' => $taxAmount,
                 'status' => Carbon::parse($dueAt)->isPast() ? 'overdue' : 'pending',
                 'notes' => 'Cuenta por pagar generada automáticamente desde la orden de compra #' . $purchaseOrder->id . '.',
                 'created_by' => $actorUserId > 0 ? $actorUserId : null,
-            ]
+            ], static fn ($value) => !is_null($value))
         );
+
+        $this->generatePurchaseVatRetentionIfApplies($purchaseOrder, $accountPayable, $issuedAt, $actorUserId, $currencyCode);
+    }
+
+    private function resolveVatRate(): float
+    {
+        return (float) (Tax::query()
+            ->where(function ($query) {
+                $query->whereRaw('LOWER(name) = ?', ['iva'])
+                    ->orWhereRaw('LOWER(name) like ?', ['%iva%']);
+            })
+            ->where(function ($query) {
+                $query->whereNull('is_active')->orWhere('is_active', 1);
+            })
+            ->orderByDesc('rate')
+            ->value('rate') ?? 0);
+    }
+
+    private function generatePurchaseVatRetentionIfApplies(
+        PurchaseOrder $purchaseOrder,
+        AccountPayable $accountPayable,
+        string $issuedAt,
+        int $actorUserId,
+        string $currencyCode
+    ): void {
+        $tenant = Tenant::query()->find((int) $purchaseOrder->tenant_id);
+        if (!$tenant || !((bool) ($tenant->special_taxpayer ?? false))) {
+            return;
+        }
+
+        $provider = $purchaseOrder->provider;
+        if ($provider && (bool) ($provider->is_special_taxpayer ?? false)) {
+            return;
+        }
+
+        $exists = PurchaseVatRetention::query()
+            ->where('tenant_id', (int) $purchaseOrder->tenant_id)
+            ->where('purchase_order_id', (int) $purchaseOrder->id)
+            ->exists();
+
+        if ($exists) {
+            return;
+        }
+
+        $taxAmount = round((float) ($accountPayable->tax_amount ?? 0), 4);
+        $taxableBase = round((float) ($accountPayable->taxable_base ?? 0), 4);
+        if ($taxAmount <= 0 || $taxableBase <= 0) {
+            return;
+        }
+
+        $retentionRate = 75.0;
+        $retainedAmount = round($taxAmount * ($retentionRate / 100), 4);
+        $retentionDate = Carbon::parse($issuedAt)->toDateString();
+        $deadline = Carbon::parse($retentionDate)->addDays(2);
+        $correlative = app(FiscalCorrelativeService::class)->next(
+            (int) $purchaseOrder->tenant_id,
+            'purchase_vat_retention',
+            'RET-IVA'
+        );
+
+        PurchaseVatRetention::create([
+            'tenant_id' => (int) $purchaseOrder->tenant_id,
+            'purchase_order_id' => (int) $purchaseOrder->id,
+            'account_payable_id' => (int) $accountPayable->id,
+            'provider_id' => (int) ($purchaseOrder->provider_id ?? 0) ?: null,
+            'created_by' => $actorUserId > 0 ? $actorUserId : null,
+            'retention_date' => $retentionDate,
+            'legal_deadline_at' => $deadline->toDateString(),
+            'issued_within_deadline' => now()->lte($deadline->endOfDay()),
+            'certificate_number' => $correlative,
+            'retention_rate' => $retentionRate,
+            'taxable_base' => $taxableBase,
+            'tax_amount' => $taxAmount,
+            'retained_amount' => $retainedAmount,
+            'currency_code' => $currencyCode,
+            'invoice_number' => (string) ($purchaseOrder->supplier_invoice_number ?? $accountPayable->document_number ?? ''),
+            'control_number' => (string) ($purchaseOrder->supplier_invoice_control_number ?? ''),
+            'status' => 'issued',
+            'notes' => 'Comprobante generado automáticamente por compra a proveedor ordinario.',
+        ]);
     }
 
     public function viewOrders()

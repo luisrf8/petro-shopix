@@ -30,7 +30,8 @@ use App\Http\Controllers\{
     ReportController,
     ElectronicInvoicingController,
     SalesFiscalController,
-    SellerCommissionController
+    SellerCommissionController,
+    WithholdingController
 };
 
 // RUTAS DE INVITADOS
@@ -225,18 +226,26 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/accounts-receivable', [SaleController::class, 'viewReceivables'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('accounts.receivable.index');
     Route::get('/paid-pending-deliveries', [SaleController::class, 'viewPaidPendingDelivery'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,delivery,repartidor')->name('sales.paidPendingDeliveries.index');
     Route::get('/sales-orders', [SaleController::class, 'viewOrders'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.orders');
+    Route::post('/sales-orders/pending-dispatch-guides/email', [SaleController::class, 'sendPendingDispatchGuidesReport'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.orders.pendingDispatchGuides.email');
     Route::get('/sales-orders/pending-delivery', [SaleController::class, 'viewPendingDeliveryOrders'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,delivery,repartidor')->name('sales.orders.pendingDelivery');
     Route::get('/sales/{id}', [SaleController::class, 'showByOrder'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,delivery,repartidor')->name('sales.showByOrder');
     Route::post('/sales-orders/{order}/assign-delivery-user', [SaleController::class, 'assignDeliveryUser'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,delivery,repartidor')->name('sales.assignDeliveryUser');
     Route::post('/sales-orders/{order}/electronic/emit', [ElectronicInvoicingController::class, 'emit'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.emit');
     Route::post('/sales-orders/{order}/electronic/status', [ElectronicInvoicingController::class, 'status'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.status');
     Route::post('/sales-orders/{order}/electronic/download', [ElectronicInvoicingController::class, 'download'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.download');
+    Route::post('/sales-orders/{order}/dispatch-guide/emit', [SaleController::class, 'emitHkaDispatchGuide'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.dispatchGuide.emit');
+    Route::match(['get', 'post'], '/sales-orders/{order}/dispatch-guide/download', [SaleController::class, 'downloadHkaDispatchGuide'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.dispatchGuide.download');
     Route::post('/sales-orders/{order}/electronic/send-email', [ElectronicInvoicingController::class, 'sendEmail'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.sendEmail');
     Route::post('/sales-orders/{order}/electronic/annul', [ElectronicInvoicingController::class, 'annul'])->middleware('role.name:owner,admin,administrador')->name('sales.electronic.annul');
     Route::post('/sales-orders/{order}/electronic/metadata', [ElectronicInvoicingController::class, 'metadata'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.metadata');
     Route::post('/sales-orders/{order}/document-mode', [SaleController::class, 'updateDocumentMode'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.documentMode.update');
     Route::post('/sales-orders/{order}/adjustment-notes', [SalesFiscalController::class, 'storeAdjustmentNote'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.adjustmentNotes.store');
+    Route::get('/sales-adjustment-notes/{note}/download', [SalesFiscalController::class, 'downloadAdjustmentNote'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.adjustmentNotes.download');
     Route::post('/sales-orders/{order}/retentions', [SalesFiscalController::class, 'storeRetention'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.retentions.store');
+    Route::get('/sales-retentions/{retention}/certificate', [SalesFiscalController::class, 'downloadRetentionCertificate'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.retentions.certificate');
+    Route::get('/sales-retentions/{retention}/download', [SalesFiscalController::class, 'downloadRetentionHkaSnapshot'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.retentions.download');
+    Route::post('/sales-retentions/{retention}/sync-hka', [SalesFiscalController::class, 'syncRetentionHka'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.retentions.syncHka');
+    Route::post('/sales-retentions/{retention}/status-hka', [SalesFiscalController::class, 'refreshRetentionHkaStatus'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.retentions.statusHka');
     Route::get('/my-electronic-documents', [ElectronicInvoicingController::class, 'tenantIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.electronic.documents.tenant');
     Route::get('/electronic-documents', [ElectronicInvoicingController::class, 'index'])->middleware('role.name:4')->name('electronic.documents.index');
     Route::post('/electronic-documents/{electronicDocument}/retry', [ElectronicInvoicingController::class, 'retry'])->middleware('role.name:4')->name('electronic.documents.retry');
@@ -293,6 +302,21 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/accounts-payable', [AccountsPayableController::class, 'index'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('accounts.payable.index');
     Route::post('/accounts-payable', [AccountsPayableController::class, 'store'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('accounts.payable.store');
     Route::post('/accounts-payable/{accountPayable}/payments', [AccountsPayableController::class, 'registerPayment'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('accounts.payable.payments.store');
+    Route::get('/withholdings/islr/concepts', [WithholdingController::class, 'islrConceptsIndex'])->middleware('role.name:owner,admin,administrador')->name('withholdings.islr.concepts.index');
+    Route::post('/withholdings/islr/concepts', [WithholdingController::class, 'islrConceptsStore'])->middleware('role.name:owner,admin,administrador')->name('withholdings.islr.concepts.store');
+    Route::put('/withholdings/islr/concepts/{concept}', [WithholdingController::class, 'islrConceptsUpdate'])->middleware('role.name:owner,admin,administrador')->name('withholdings.islr.concepts.update');
+    Route::get('/withholdings/iva/export/txt', [WithholdingController::class, 'exportVatTxt'])->middleware('role.name:owner,admin,administrador')->name('withholdings.iva.export.txt');
+    Route::get('/withholdings/islr/export/xml', [WithholdingController::class, 'exportIslrXml'])->middleware('role.name:owner,admin,administrador')->name('withholdings.islr.export.xml');
+    Route::get('/withholdings/iva/{retention}/certificate', [WithholdingController::class, 'purchaseVatCertificatePdf'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('withholdings.iva.certificate.pdf');
+    Route::get('/withholdings/iva/{retention}/download-hka-pdf', [WithholdingController::class, 'purchaseVatDownloadHkaPdf'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('withholdings.iva.downloadHkaPdf');
+    Route::post('/withholdings/iva/{retention}/sync-hka', [WithholdingController::class, 'purchaseVatSyncHka'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('withholdings.iva.syncHka');
+    Route::post('/withholdings/iva/{retention}/status-hka', [WithholdingController::class, 'purchaseVatStatusHka'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('withholdings.iva.statusHka');
+    Route::get('/withholdings/iva/{retention}/download-hka', [WithholdingController::class, 'purchaseVatDownloadHkaSnapshot'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('withholdings.iva.downloadHka');
+    Route::get('/withholdings/islr/{withholding}/certificate', [WithholdingController::class, 'islrCertificatePdf'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('withholdings.islr.certificate.pdf');
+    Route::get('/withholdings/islr/{withholding}/download-hka-pdf', [WithholdingController::class, 'islrDownloadHkaPdf'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('withholdings.islr.downloadHkaPdf');
+    Route::post('/withholdings/islr/{withholding}/sync-hka', [WithholdingController::class, 'islrSyncHka'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('withholdings.islr.syncHka');
+    Route::post('/withholdings/islr/{withholding}/status-hka', [WithholdingController::class, 'islrStatusHka'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('withholdings.islr.statusHka');
+    Route::get('/withholdings/islr/{withholding}/download-hka', [WithholdingController::class, 'islrDownloadHkaSnapshot'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('withholdings.islr.downloadHka');
     Route::get('/purchase-orders', [PurchaseOrderController::class, 'viewOrders'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('purchase.orders');
     Route::get('/order/{id}', [PurchaseOrderController::class, 'showByOrder'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('showByOrder');
 

@@ -12,12 +12,17 @@ class PurchaseOrder extends Model
     protected $fillable = [
         'provider_id',
         'provider_name',
+        'provider_rif',
         'warehouse_id',
         'date',
         'tenant_id',
         'entry_mode',
         'production_cost_total',
         'production_notes',
+        'supplier_invoice_number',
+        'supplier_invoice_control_number',
+        'supplier_invoice_date',
+        'supplier_invoice_file_path',
     ];
 
     public function detalles()

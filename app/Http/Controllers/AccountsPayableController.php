@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\AccountPayable;
 use App\Models\AccountPayablePayment;
+use App\Models\IslrWithholding;
+use App\Models\IslrWithholdingConcept;
+use App\Models\Tenant;
 use App\Models\Provider;
 use App\Models\PurchaseOrder;
 use Carbon\Carbon;
+use App\Services\FiscalCorrelativeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -17,6 +21,7 @@ class AccountsPayableController extends Controller
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if($tenantId <= 0, 403);
 
+        $this->ensureDefaultIslrConcepts($tenantId);
         $this->syncOverdueStatuses($tenantId);
 
         $search = trim((string) $request->query('search', ''));
@@ -26,7 +31,7 @@ class AccountsPayableController extends Controller
         $dateTo = trim((string) $request->query('date_to', ''));
 
         $baseQuery = AccountPayable::query()
-            ->with(['provider', 'purchaseOrder', 'payments'])
+            ->with(['provider', 'purchaseOrder', 'payments', 'purchaseVatRetentions', 'islrWithholdings'])
             ->where('tenant_id', $tenantId)
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($innerQuery) use ($search) {
@@ -85,6 +90,14 @@ class AccountsPayableController extends Controller
             ->limit(150)
             ->get();
 
+        $islrConcepts = IslrWithholdingConcept::query()
+            ->where(function ($query) use ($tenantId) {
+                $query->whereNull('tenant_id')->orWhere('tenant_id', $tenantId);
+            })
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get();
+
         return view('accountsPayable.index', compact(
             'accountsPayable',
             'search',
@@ -96,7 +109,8 @@ class AccountsPayableController extends Controller
             'overdueTotal',
             'monthPaid',
             'providers',
-            'purchaseOrders'
+            'purchaseOrders',
+            'islrConcepts'
         ));
     }
 
@@ -109,15 +123,24 @@ class AccountsPayableController extends Controller
             'provider_id' => 'nullable|integer|exists:providers,id',
             'purchase_order_id' => 'nullable|integer|exists:purchase_orders,id',
             'document_number' => 'nullable|string|max:120',
+            'invoice_number' => 'nullable|string|max:120',
+            'control_number' => 'nullable|string|max:120',
+            'invoice_date' => 'nullable|date',
             'issued_at' => 'required|date',
             'due_at' => 'nullable|date|after_or_equal:issued_at',
             'amount_total' => 'required|numeric|min:0.01',
             'currency_code' => 'required|string|size:3',
+            'is_service' => 'nullable|boolean',
+            'taxable_base' => 'nullable|numeric|min:0',
+            'tax_rate' => 'nullable|numeric|min:0|max:100',
+            'tax_amount' => 'nullable|numeric|min:0',
+            'islr_concept_code' => 'nullable|string|max:40',
             'notes' => 'nullable|string|max:2000',
         ]);
 
         $providerId = (int) ($validated['provider_id'] ?? 0);
         $purchaseOrderId = (int) ($validated['purchase_order_id'] ?? 0);
+        $provider = null;
 
         if ($providerId > 0) {
             $provider = Provider::query()
@@ -150,7 +173,31 @@ class AccountsPayableController extends Controller
             }
         }
 
+        $isService = (bool) ($validated['is_service'] ?? true);
+        $forcedIslrConceptCode = trim((string) ($validated['islr_concept_code'] ?? ''));
+        $tenant = Tenant::query()->find($tenantId);
+        $canApplyIslr = $this->canApplyIslrWithholding($tenant, $provider);
+
+        if (!$isService && $forcedIslrConceptCode !== '') {
+            return back()->withErrors([
+                'islr_concept_code' => 'El concepto ISLR solo puede configurarse cuando la cuenta por pagar corresponde a servicios.',
+            ])->withInput();
+        }
+
+        if ($isService && $forcedIslrConceptCode !== '' && !$canApplyIslr) {
+            return back()->withErrors([
+                'islr_concept_code' => 'No puedes aplicar ISLR porque ni la empresa ni el proveedor están marcados como agente/sujeto fiscal para retención.',
+            ])->withInput();
+        }
+
         $amountTotal = round((float) $validated['amount_total'], 4);
+        $taxableBase = isset($validated['taxable_base'])
+            ? round((float) $validated['taxable_base'], 4)
+            : $amountTotal;
+        $taxRate = isset($validated['tax_rate']) ? round((float) $validated['tax_rate'], 4) : 0.0;
+        $taxAmount = isset($validated['tax_amount'])
+            ? round((float) $validated['tax_amount'], 4)
+            : round(max(0, $amountTotal - $taxableBase), 4);
         $status = $this->resolveStatus($amountTotal, 0, $validated['due_at'] ?? null);
 
         AccountPayable::create([
@@ -158,12 +205,20 @@ class AccountsPayableController extends Controller
             'provider_id' => $providerId > 0 ? $providerId : null,
             'purchase_order_id' => $purchaseOrderId > 0 ? $purchaseOrderId : null,
             'document_number' => trim((string) ($validated['document_number'] ?? '')) ?: null,
+            'invoice_number' => trim((string) ($validated['invoice_number'] ?? '')) ?: null,
+            'control_number' => trim((string) ($validated['control_number'] ?? '')) ?: null,
+            'invoice_date' => $validated['invoice_date'] ?? null,
             'issued_at' => $validated['issued_at'],
             'due_at' => $validated['due_at'] ?? null,
             'amount_total' => $amountTotal,
             'amount_paid' => 0,
             'amount_pending' => $amountTotal,
             'currency_code' => strtoupper((string) $validated['currency_code']),
+            'is_service' => $isService,
+            'taxable_base' => $taxableBase,
+            'tax_rate' => $taxRate,
+            'tax_amount' => $taxAmount,
+            'islr_concept_code' => $forcedIslrConceptCode !== '' ? $forcedIslrConceptCode : null,
             'status' => $status,
             'notes' => $validated['notes'] ?? null,
             'created_by' => auth()->id(),
@@ -204,7 +259,7 @@ class AccountsPayableController extends Controller
                 throw new \RuntimeException('El abono no puede ser mayor al saldo pendiente.');
             }
 
-            AccountPayablePayment::create([
+            $createdPayment = AccountPayablePayment::create([
                 'account_payable_id' => $locked->id,
                 'tenant_id' => $tenantId,
                 'paid_at' => $validated['paid_at'],
@@ -215,6 +270,8 @@ class AccountsPayableController extends Controller
                 'notes' => $validated['notes'] ?? null,
                 'created_by' => auth()->id(),
             ]);
+
+            $this->createAutomaticIslrWithholding($locked, $createdPayment, $paymentAmount);
 
             $newPaid = round(((float) $locked->amount_paid) + $paymentAmount, 4);
             $newPending = round(max(0, ((float) $locked->amount_total) - $newPaid), 4);
@@ -262,5 +319,132 @@ class AccountsPayableController extends Controller
         }
 
         return 'pending';
+    }
+
+    private function createAutomaticIslrWithholding(AccountPayable $accountPayable, AccountPayablePayment $payment, float $paymentAmount): void
+    {
+        if (!(bool) ($accountPayable->is_service ?? true)) {
+            return;
+        }
+
+        $provider = $accountPayable->provider;
+        if (!$provider) {
+            return;
+        }
+
+        $tenantId = (int) $accountPayable->tenant_id;
+        $tenant = Tenant::query()->find($tenantId);
+
+        if (!$this->canApplyIslrWithholding($tenant, $provider)) {
+            return;
+        }
+
+        $this->ensureDefaultIslrConcepts($tenantId);
+
+        $concept = $this->resolveApplicableIslrConcept($accountPayable);
+        if (!$concept) {
+            return;
+        }
+
+        $exists = IslrWithholding::query()
+            ->where('tenant_id', $tenantId)
+            ->where('account_payable_payment_id', (int) $payment->id)
+            ->exists();
+        if ($exists) {
+            return;
+        }
+
+        $amountTotal = (float) ($accountPayable->amount_total ?? 0);
+        if ($amountTotal <= 0) {
+            return;
+        }
+
+        $taxableBaseTotal = (float) ($accountPayable->taxable_base ?? $amountTotal);
+        $proportion = max(0, min(1, $paymentAmount / $amountTotal));
+        $baseAmount = round($taxableBaseTotal * $proportion, 4);
+
+        $taxUnitValue = (float) ($tenant->tax_unit_value ?? 0);
+        $sustraendoAmount = round(max(0, (float) ($concept->sustraendo_ut ?? 0) * $taxUnitValue), 4);
+        $grossRetention = round($baseAmount * (((float) $concept->rate_percent) / 100), 4);
+        $retainedAmount = round(max(0, $grossRetention - $sustraendoAmount), 4);
+
+        if ($retainedAmount <= 0) {
+            return;
+        }
+
+        $correlative = app(FiscalCorrelativeService::class)->next($tenantId, 'islr_retention', 'RET-ISLR');
+
+        IslrWithholding::create([
+            'tenant_id' => $tenantId,
+            'account_payable_id' => (int) $accountPayable->id,
+            'account_payable_payment_id' => (int) $payment->id,
+            'provider_id' => (int) ($accountPayable->provider_id ?? 0) ?: null,
+            'concept_id' => (int) $concept->id,
+            'created_by' => auth()->id(),
+            'retention_date' => now()->toDateString(),
+            'payment_date' => $payment->paid_at?->toDateString() ?? now()->toDateString(),
+            'certificate_number' => $correlative,
+            'invoice_number' => (string) ($accountPayable->invoice_number ?? $accountPayable->document_number ?? ''),
+            'control_number' => (string) ($accountPayable->control_number ?? ''),
+            'base_amount' => $baseAmount,
+            'rate_percent' => (float) $concept->rate_percent,
+            'sustraendo_ut' => (float) ($concept->sustraendo_ut ?? 0),
+            'sustraendo_amount' => $sustraendoAmount,
+            'retained_amount' => $retainedAmount,
+            'currency_code' => (string) ($accountPayable->currency_code ?? 'USD'),
+            'status' => 'issued',
+            'notes' => 'Retención ISLR generada automáticamente al registrar pago de servicio.',
+        ]);
+    }
+
+    private function resolveApplicableIslrConcept(AccountPayable $accountPayable): ?IslrWithholdingConcept
+    {
+        $tenantId = (int) $accountPayable->tenant_id;
+        $provider = $accountPayable->provider;
+        $personType = strtolower(trim((string) ($provider->fiscal_person_type ?? 'pj')));
+        $residencyType = strtolower(trim((string) ($provider->fiscal_residency_type ?? 'domiciliado')));
+        $forcedCode = strtoupper(trim((string) ($accountPayable->islr_concept_code ?? '')));
+
+        $query = IslrWithholdingConcept::query()
+            ->where(function ($scope) use ($tenantId) {
+                $scope->whereNull('tenant_id')->orWhere('tenant_id', $tenantId);
+            })
+            ->where('is_active', true);
+
+        if ($forcedCode !== '') {
+            return (clone $query)->whereRaw('UPPER(code) = ?', [$forcedCode])->first();
+        }
+
+        return (clone $query)
+            ->whereIn('applicable_person_type', ['any', $personType])
+            ->whereIn('applicable_residency_type', ['any', $residencyType])
+            ->orderByDesc('tenant_id')
+            ->orderBy('code')
+            ->first();
+    }
+
+    private function canApplyIslrWithholding(?Tenant $tenant, ?Provider $provider): bool
+    {
+        return (bool) ($tenant?->special_taxpayer ?? false) || (bool) ($provider?->is_special_taxpayer ?? false);
+    }
+
+    private function ensureDefaultIslrConcepts(int $tenantId): void
+    {
+        $defaults = [
+            ['code' => '053', 'name' => 'Contratistas/Subcontratistas PN domiciliado', 'rate_percent' => 3.0, 'sustraendo_ut' => 0, 'applicable_person_type' => 'pn', 'applicable_residency_type' => 'domiciliado'],
+            ['code' => '054', 'name' => 'Contratistas/Subcontratistas PN no domiciliado', 'rate_percent' => 34.0, 'sustraendo_ut' => 0, 'applicable_person_type' => 'pn', 'applicable_residency_type' => 'no_domiciliado'],
+            ['code' => '055', 'name' => 'Contratistas/Subcontratistas PJ domiciliado', 'rate_percent' => 2.0, 'sustraendo_ut' => 0, 'applicable_person_type' => 'pj', 'applicable_residency_type' => 'domiciliado'],
+            ['code' => '056', 'name' => 'Contratistas/Subcontratistas PJ no domiciliado', 'rate_percent' => 34.0, 'sustraendo_ut' => 0, 'applicable_person_type' => 'pj', 'applicable_residency_type' => 'no_domiciliado'],
+        ];
+
+        foreach ($defaults as $default) {
+            IslrWithholdingConcept::query()->updateOrCreate(
+                [
+                    'tenant_id' => null,
+                    'code' => $default['code'],
+                ],
+                $default + ['is_active' => true]
+            );
+        }
     }
 }

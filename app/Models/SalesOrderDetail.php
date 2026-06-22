@@ -9,7 +9,7 @@ class SalesOrderDetail extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['sales_order_id', 'product_variant_id', 'quantity', 'price', 'amount', 
+    protected $fillable = ['sales_order_id', 'product_variant_id', 'quantity', 'price', 'amount', 'line_subtotal_before_discount', 'line_discount_amount',
         'tax_name',
         'tax_rate', 'tax_amount'
     ];

@@ -10,6 +10,8 @@
       $isDeliveryOnlyView = ($currentUser?->hasStoreRole('delivery') ?? false)
         && !($currentUser?->hasStoreRole('owner', 'admin', 'seller', 'warehouse') ?? false);
       $edoc = $order->latest_electronic_document;
+      $dispatchGuideEdoc = $order->latest_dispatch_guide_document ?? null;
+      $dispatchGuideIssued = (bool) optional($dispatchGuideEdoc)->issued_at;
       $hasAnnulledInvoice = (bool) ($order->has_annulled_invoice ?? false);
       $canApproveSale = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canApproveDelivery = $currentUser?->hasStoreRole('owner', 'admin', 'warehouse', 'delivery') ?? false;
@@ -213,7 +215,7 @@
                   @if(!$hasAnnulledInvoice)
                   <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-dark mb-0">Factura PDF</a>
                   @else
-                  <span class="btn btn-outline-danger mb-0 disabled" aria-disabled="true">Factura anulada</span>
+                  <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-danger mb-0">Factura anulada</a>
                   @endif
                 @endif
                 <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-dark mb-0">Orden de entrega</a>
@@ -243,7 +245,6 @@
         <div class="row g-3 mb-4">
           <div class="col-md-3">
             <div class="card order-metric-card h-100">
-              <div class="order-metric-label">Total orden</div>
               <div class="order-metric-value">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalOrden, 2) }}</div>
             </div>
           </div>
@@ -556,6 +557,58 @@
         </div>
       </div>
 
+      @if((bool) ($order->tenant->electronic_invoicing_enabled ?? false))
+      <div class="card mt-3">
+        <div class="card-body py-3">
+          <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
+            <div>
+              <strong>Guía de despacho fiscal (HKA):</strong>
+              @php
+                $dispatchGuideStatus = $dispatchGuideEdoc
+                  ? ((bool) $dispatchGuideEdoc->is_annulled
+                    ? 'Anulada'
+                    : ((string) ($dispatchGuideEdoc->issued_at
+                      ? 'Emitida'
+                      : ((trim((string) ($dispatchGuideEdoc->mensaje ?? '')) !== '' && str_contains(strtolower((string) ($dispatchGuideEdoc->mensaje ?? '')), 'error')) ? 'Fallida' : 'Pendiente'))))
+                  : 'Pendiente';
+                $dispatchGuideBadgeClass = $dispatchGuideEdoc
+                  ? ((bool) $dispatchGuideEdoc->is_annulled
+                    ? 'bg-danger'
+                    : ($dispatchGuideEdoc->issued_at
+                      ? 'bg-success'
+                      : ((trim((string) ($dispatchGuideEdoc->mensaje ?? '')) !== '' && str_contains(strtolower((string) ($dispatchGuideEdoc->mensaje ?? '')), 'error')) ? 'bg-danger' : 'bg-warning')))
+                  : 'bg-secondary';
+              @endphp
+              <span class="badge {{ $dispatchGuideBadgeClass }} ms-2">{{ $dispatchGuideStatus }}</span>
+              @if($dispatchGuideEdoc)
+                <small class="d-block text-muted mt-1">
+                  Doc: {{ $dispatchGuideEdoc->numero_documento ?: 'N/A' }} | Ctrl: {{ $dispatchGuideEdoc->numero_control ?: 'N/A' }}
+                </small>
+                @if(!$dispatchGuideIssued && !empty($dispatchGuideEdoc->mensaje))
+                  <small class="d-block text-danger mt-1">{{ $dispatchGuideEdoc->mensaje }}</small>
+                @endif
+              @endif
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+              <form method="POST" action="{{ route('sales.dispatchGuide.emit', $order->id) }}">
+                @csrf
+                <button type="submit" class="btn btn-outline-secondary btn-sm mb-0" {{ (bool) optional($dispatchGuideEdoc)->is_annulled ? 'disabled' : '' }}>
+                  Emitir guía HKA
+                </button>
+              </form>
+              <form method="POST" action="{{ route('sales.dispatchGuide.download', $order->id) }}">
+                @csrf
+                <input type="hidden" name="tipo_archivo" value="pdf">
+                <button type="submit" class="btn btn-outline-dark btn-sm mb-0" {{ !$dispatchGuideIssued || (bool) optional($dispatchGuideEdoc)->is_annulled ? 'disabled' : '' }}>
+                  Descargar guía HKA
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      @endif
+
       @if((bool) ($order->tenant->electronic_invoicing_enabled ?? false) && $documentIssueMode === 'electronic_invoice')
       <div class="card mt-4">
         <div class="card-header pb-0">
@@ -579,11 +632,11 @@
               <form method="POST" action="{{ route('sales.electronic.download', $order->id) }}">
                 @csrf
                 <input type="hidden" name="tipo_archivo" value="pdf">
-                <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mb-0" {{ $hasAnnulledInvoice ? 'disabled' : '' }}>Descargar PDF</button>
+                  <button type="submit" class="btn btn-outline-secondary btn-sm w-100 mb-0">Descargar PDF</button>
               </form>
             </div>
             <div class="col-md-2">
-              <a href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?disposition=inline" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm w-100 mb-0 {{ $hasAnnulledInvoice ? 'disabled' : '' }}" {{ $hasAnnulledInvoice ? 'aria-disabled=true tabindex=-1' : '' }}>Imprimir factura</a>
+                <a href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?disposition=inline" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm w-100 mb-0">Imprimir factura</a>
             </div>
             <div class="col-md-2">
               <form method="POST" action="{{ route('sales.electronic.sendEmail', $order->id) }}">
@@ -641,6 +694,18 @@
         $orderTaxBase = (float) $order->details->sum('amount');
         $orderTaxTotal = (float) $order->details->flatMap->taxes->sum('tax_amount');
         $orderGrossTotal = $orderTaxBase + $orderTaxTotal;
+        $orderIgtfTotal = round((float) ($order->igtf_amount ?? 0), 2);
+        $suggestedVatRate = $orderTaxBase > 0 && $orderTaxTotal > 0
+          ? round(($orderTaxTotal / $orderTaxBase) * 100, 2)
+          : 16.00;
+        $fiscalDocumentAvailable = $edoc && !$hasAnnulledInvoice && !empty($edoc->numero_documento) && !empty($edoc->numero_control);
+        $creditNoteDeadline = $edoc?->issued_at
+          ? $edoc->issued_at->copy()->addDays((int) ($order->tenant?->credit_note_max_age_days ?? 30))->format('d/m/Y')
+          : null;
+        $suggestedRetentionIvaBase = round(max(0, $orderTaxTotal), 2);
+        $suggestedRetentionIva75 = round($suggestedRetentionIvaBase * 0.75, 2);
+        $suggestedRetentionIva100 = round($suggestedRetentionIvaBase, 2);
+        $suggestedRetentionIncomeBase = round(max(0, $orderTaxBase), 2);
       @endphp
 
       <div class="row mt-4 g-4">
@@ -648,38 +713,161 @@
           <div class="card h-100">
             <div class="card-header pb-0">
               <h6 class="mb-0">Notas de Crédito y Débito</h6>
-              <p class="text-sm text-muted mb-0">Registra ajustes fiscales vinculados a esta venta.</p>
+              <p class="text-sm text-muted mb-0">Usa esta sección solo cuando ya exista una factura fiscal válida y necesites corregirla ante el SENIAT/HKA.</p>
             </div>
             <div class="card-body">
+              @if(!$fiscalDocumentAvailable)
+                <div class="alert alert-warning text-white bg-warning" role="alert">
+                  <strong>Antes de registrar una nota:</strong> esta orden todavía no tiene una factura fiscal activa reutilizable. Primero debes emitir la factura; si fue anulada, no se puede usar como referencia.
+                </div>
+              @else
+                <div class="alert alert-light border" role="alert">
+                  <div class="row g-2">
+                    <div class="col-md-6">
+                      <strong>Factura que se va a afectar</strong><br>
+                      Nro: {{ $edoc->numero_documento }}<br>
+                      Control: {{ $edoc->numero_control }}<br>
+                      Fecha: {{ optional($edoc->issued_at ?? $edoc->created_at)->format('d/m/Y') ?? 'N/A' }}
+                    </div>
+                    <div class="col-md-6">
+                      <strong>Referencia útil para llenar la nota</strong><br>
+                      Base imponible sugerida: {{ $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD') }} {{ number_format($orderTaxBase, 2) }}<br>
+                      IVA facturado sugerido: {{ number_format($suggestedVatRate, 2) }}% ({{ $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD') }} {{ number_format($orderTaxTotal, 2) }})<br>
+                      @if($creditNoteDeadline)
+                        Último día recomendado para NC: {{ $creditNoteDeadline }}
+                      @endif
+                    </div>
+                  </div>
+                </div>
+              @endif
+
+              <div class="alert alert-info text-white bg-info" role="alert">
+                <strong>Mapa rapido del flujo fiscal:</strong> en Shopix, la factura, las notas y las retenciones se intentan enviar por API a HKA. El portal de HKA se usa luego para consultar, validar rastreo y confirmar lo que ya fue procesado.
+              </div>
+
+              <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Se emite por API</strong>
+                    <p class="text-sm text-muted mb-0 mt-2">Factura fiscal, nota de crédito, nota de débito y retención. Si HKA responde con aceptación, Shopix guarda el payload y la respuesta para auditoría.</p>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Se consulta luego</strong>
+                    <p class="text-sm text-muted mb-0 mt-2">El portal HKA y los botones de estado sirven para verificar cómo quedó el documento, confirmar su trazabilidad y revisar códigos o mensajes de negocio.</p>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Cómo leer el estatus</strong>
+                    <p class="text-sm text-muted mb-0 mt-2"><strong>Registered:</strong> creado internamente. <strong>Issued:</strong> aceptado por HKA y sí afecta fiscalmente. <strong>Failed:</strong> HKA lo rechazó o falló la integración; no debe considerarse aplicado.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Paso 1</strong>
+                    <p class="text-sm text-muted mb-0">Elige <strong>crédito</strong> si vas a rebajar o revertir monto. Elige <strong>débito</strong> si vas a aumentar el monto facturado.</p>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Paso 2</strong>
+                    <p class="text-sm text-muted mb-0">Si el ajuste es por diferencial cambiario o error de precio, llena Base, IVA e IGTF. El sistema calculará el monto final.</p>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Paso 3</strong>
+                    <p class="text-sm text-muted mb-0">Describe el motivo como aparecería en soporte fiscal. La nota se emitirá en HKA al guardar.</p>
+                  </div>
+                </div>
+              </div>
+
+              @if($errors->has('note_type') || $errors->has('note_date') || $errors->has('amount') || $errors->has('taxable_base') || $errors->has('tax_rate') || $errors->has('affected_igtf_amount') || $errors->has('reason'))
+                <div class="alert alert-danger" role="alert">
+                  <strong>No se pudo registrar la nota.</strong>
+                  <ul class="mb-0 mt-2 ps-3">
+                    @foreach (['note_type', 'note_date', 'amount', 'taxable_base', 'tax_rate', 'affected_igtf_amount', 'reason'] as $noteErrorField)
+                      @error($noteErrorField)
+                        <li>{{ $message }}</li>
+                      @enderror
+                    @endforeach
+                  </ul>
+                </div>
+              @endif
+
               <form method="POST" action="{{ route('sales.adjustmentNotes.store', $order->id) }}" class="row g-3">
                 @csrf
                 <div class="col-md-4">
                   <label class="form-label">Tipo de nota</label>
-                  <select name="note_type" class="form-select border border-1 p-2" required>
-                    <option value="credit">Nota de crédito</option>
-                    <option value="debit">Nota de débito</option>
+                  <select name="note_type" id="adjustmentNoteType" class="form-select border border-1 p-2" required>
+                    <option value="credit" {{ old('note_type') === 'credit' || !old('note_type') ? 'selected' : '' }}>Nota de crédito</option>
+                    <option value="debit" {{ old('note_type') === 'debit' ? 'selected' : '' }}>Nota de débito</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Modo de ajuste</label>
+                  <select name="adjustment_mode" id="adjustmentMode" class="form-select border border-1 p-2">
+                    <option value="manual" {{ old('adjustment_mode') === 'manual' || !old('adjustment_mode') ? 'selected' : '' }}>Manual</option>
+                    <option value="exchange_rate_diff" {{ old('adjustment_mode') === 'exchange_rate_diff' ? 'selected' : '' }}>Diferencial cambiario</option>
+                    <option value="price_error" {{ old('adjustment_mode') === 'price_error' ? 'selected' : '' }}>Error de precio</option>
                   </select>
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Fecha</label>
-                  <input type="date" name="note_date" class="form-control border border-1 p-2" value="{{ now()->toDateString() }}" required>
+                  <input type="date" name="note_date" class="form-control border border-1 p-2" value="{{ old('note_date', now()->toDateString()) }}" required>
                 </div>
-                <div class="col-md-4">
-                  <label class="form-label">Monto</label>
-                  <input type="number" name="amount" min="0.01" step="0.01" class="form-control border border-1 p-2" required data-decimal-friendly="true">
+                <div class="col-md-3">
+                  <label class="form-label">Monto final de la nota</label>
+                  <input type="number" id="adjustmentAmount" name="amount" min="0.01" step="0.01" class="form-control border border-1 p-2" value="{{ old('amount') }}" required data-decimal-friendly="true" placeholder="Ej. 25.00">
+                  <small class="text-muted">En modo manual este es el valor que manda. Base e IVA solo se usan para distribuir fiscalmente ese monto.</small>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Base imponible</label>
+                  <input type="number" id="adjustmentTaxableBase" name="taxable_base" min="0.01" step="0.01" class="form-control border border-1 p-2" value="{{ old('taxable_base', number_format($orderTaxBase, 2, '.', '')) }}" data-decimal-friendly="true">
+                  <small class="text-muted">Sugerido según la factura: {{ number_format($orderTaxBase, 2) }}.</small>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">IVA (%)</label>
+                  <input type="number" id="adjustmentTaxRate" name="tax_rate" min="0" max="100" step="0.01" class="form-control border border-1 p-2" value="{{ old('tax_rate', number_format($suggestedVatRate, 2, '.', '')) }}" data-decimal-friendly="true">
+                  <small class="text-muted">IVA sugerido según esta venta: {{ number_format($suggestedVatRate, 2) }}%.</small>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">IGTF ajuste</label>
+                  <input type="number" id="adjustmentIgtfAmount" name="affected_igtf_amount" min="0" step="0.01" class="form-control border border-1 p-2" value="{{ old('affected_igtf_amount', $orderIgtfTotal > 0 ? number_format($orderIgtfTotal, 2, '.', '') : '') }}" data-decimal-friendly="true">
+                  <small class="text-muted">Solo úsalo si la corrección también afecta el IGTF.</small>
+                </div>
+                <div class="col-12">
+                  <div id="adjustmentNoteHelper" class="alert alert-secondary mb-0 py-2 px-3">
+                    En manual, HKA recibirá el monto final que escribes arriba. Para débito por diferencial cambiario o error de precio, el sistema calcula automáticamente el monto como Base + IVA + IGTF.
+                  </div>
+                </div>
+                <div class="col-12">
+                  <div class="border rounded p-3 bg-light">
+                    <strong>Vista previa de cálculo</strong>
+                    <div class="text-sm text-muted mt-1" id="adjustmentNotePreview">Completa los campos para ver el cálculo estimado antes de emitir la nota.</div>
+                  </div>
                 </div>
                 <div class="col-12">
                   <label class="form-label">Motivo</label>
-                  <input type="text" name="reason" class="form-control border border-1 p-2" maxlength="255" required>
+                  <input type="text" id="adjustmentReason" name="reason" class="form-control border border-1 p-2" maxlength="255" value="{{ old('reason') }}" required placeholder="Ej. Devolución parcial, error de precio, diferencial cambiario">
                 </div>
                 <div class="col-12">
                   <label class="form-label">Observaciones</label>
-                  <textarea name="notes" class="form-control border border-1 p-2" rows="2"></textarea>
+                  <textarea name="notes" class="form-control border border-1 p-2" rows="2" placeholder="Aquí puedes dejar el soporte interno del ajuste.">{{ old('notes') }}</textarea>
                 </div>
                 <div class="col-12 d-flex justify-content-end">
-                  <button type="submit" class="btn btn-dark mb-0">Registrar nota</button>
+                  <button type="submit" class="btn btn-dark mb-0" {{ !$fiscalDocumentAvailable ? 'disabled' : '' }}>Emitir nota en HKA</button>
                 </div>
               </form>
+
+              <div class="alert alert-light border mt-4 mb-3" role="alert">
+                <strong>Como leer el impacto:</strong> la factura original no se reescribe. Cada nota aprobada en HKA queda asociada a esa factura y aqui ves el monto original, el ajuste aplicado y el neto fiscal estimado despues del cambio.
+              </div>
 
               <div class="table-responsive mt-4">
                 <table class="table align-items-center mb-0">
@@ -687,23 +875,194 @@
                     <tr>
                       <th>Correlativo</th>
                       <th>Tipo</th>
+                      <th>Factura afectada</th>
+                      <th>Moneda</th>
                       <th>Fecha</th>
-                      <th>Monto</th>
+                      <th>Monto original</th>
+                      <th>Ajuste aplicado</th>
+                      <th>Neto estimado</th>
                       <th>Estatus</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     @forelse($order->adjustmentNotes as $note)
+                      @php
+                        $noteCurrency = strtoupper((string) ($note->currency_code ?: ($orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD'))));
+                        $noteHkaCurrency = strtoupper((string) (data_get($note->request_payload, 'encabezado.identificacionDocumento.moneda') ?: data_get(optional($note->electronicDocument)->request_payload, 'encabezado.identificacionDocumento.moneda') ?: $noteCurrency));
+                        $displayCurrency = $noteHkaCurrency !== '' ? $noteHkaCurrency : $noteCurrency;
+                        $referenceNumber = $note->reference_document_number ?: optional($note->electronicDocument)->numero_documento;
+                        $referenceControl = $note->reference_control_number ?: optional($note->electronicDocument)->numero_control;
+                        $hkaDocumentType = (string) (
+                          data_get($note->response_payload, 'resultado.tipoDocumento')
+                          ?: data_get($note->response_payload, 'tipoDocumento')
+                          ?: data_get($note->request_payload, 'encabezado.identificacionDocumento.tipoDocumento')
+                          ?: $note->document_code
+                          ?: ''
+                        );
+                        $effectiveNoteType = match ($hkaDocumentType) {
+                          '02' => 'credit',
+                          '03' => 'debit',
+                          default => (string) $note->note_type,
+                        };
+                        $noteDocumentNumber = (string) (
+                          data_get($note->response_payload, 'resultado.numeroDocumento')
+                          ?: data_get($note->response_payload, 'numeroDocumento')
+                          ?: data_get($note->request_payload, 'encabezado.identificacionDocumento.numeroDocumento')
+                          ?: preg_replace('/\D+/', '', (string) ($note->internal_number ?? $note->id))
+                        );
+                        $noteControlNumber = (string) (
+                          data_get($note->response_payload, 'resultado.numeroControl')
+                          ?: data_get($note->response_payload, 'estado.numeroControl')
+                          ?: data_get($note->response_payload, 'numeroControl')
+                          ?: ''
+                        );
+                        $originalAmountRaw = data_get($note->request_payload, 'encabezado.identificacionDocumento.montoFacturaAfectada', data_get(optional($note->electronicDocument)->request_payload, 'encabezado.totales.totalAPagar'));
+                        $originalAmountSanitized = preg_replace('/[^0-9,.-]/', '', (string) $originalAmountRaw);
+                        $originalAmountNormalized = str_contains($originalAmountSanitized, ',') && !str_contains($originalAmountSanitized, '.')
+                          ? str_replace(',', '.', $originalAmountSanitized)
+                          : str_replace(',', '', $originalAmountSanitized);
+                        $originalAmount = is_numeric($originalAmountNormalized) ? (float) $originalAmountNormalized : null;
+                        $noteAmount = round((float) ($note->amount ?? 0), 2);
+                        $adjustmentAmountRaw = data_get($note->request_payload, 'encabezado.totales.totalAPagar', $noteAmount);
+                        $adjustmentAmountSanitized = preg_replace('/[^0-9,.-]/', '', (string) $adjustmentAmountRaw);
+                        $adjustmentAmountNormalized = str_contains($adjustmentAmountSanitized, ',') && !str_contains($adjustmentAmountSanitized, '.')
+                          ? str_replace(',', '.', $adjustmentAmountSanitized)
+                          : str_replace(',', '', $adjustmentAmountSanitized);
+                        $adjustmentAmountDisplay = is_numeric($adjustmentAmountNormalized) ? (float) $adjustmentAmountNormalized : $noteAmount;
+                        $impactApplied = ($note->status ?? '') === 'issued';
+                        $estimatedNetAmount = null;
+                        if (!is_null($originalAmount) && $impactApplied) {
+                          $estimatedNetAmount = $effectiveNoteType === 'credit'
+                            ? max(0, round($originalAmount - $adjustmentAmountDisplay, 2))
+                            : round($originalAmount + $adjustmentAmountDisplay, 2);
+                        }
+                        $hkaCode = data_get($note->response_payload, 'codigo', data_get($note->response_payload, 'Codigo'));
+                        $hkaMessage = data_get($note->response_payload, 'mensaje', data_get($note->response_payload, 'Mensaje'));
+                        $noteConsultUrl = data_get($note->response_payload, 'resultado.urlConsulta', data_get($note->response_payload, 'estado.urlConsulta'));
+                        $detailId = 'adjustmentNoteDetail' . $note->id;
+                        $statusClass = $impactApplied
+                          ? 'bg-gradient-success'
+                          : (($note->status ?? '') === 'failed' ? 'bg-gradient-danger' : 'bg-gradient-secondary');
+                        $statusLabel = match ((string) ($note->status ?? 'registered')) {
+                          'issued' => 'Emitida',
+                          'failed' => 'Fallida',
+                          'registered' => 'Registrada',
+                          default => ucfirst(str_replace('_', ' ', (string) ($note->status ?? 'registered'))),
+                        };
+                      @endphp
                       <tr>
-                        <td>{{ $note->internal_number ?? 'N/A' }}</td>
-                        <td>{{ $note->note_type === 'credit' ? 'Crédito' : 'Débito' }}</td>
+                        <td>
+                          <div>{{ $note->internal_number ?? 'N/A' }}</div>
+                          @if($noteControlNumber !== '')
+                            <small class="text-muted">Ctrl. HKA: {{ $noteControlNumber }}</small>
+                          @endif
+                        </td>
+                        <td>{{ $effectiveNoteType === 'credit' ? 'Crédito' : 'Débito' }}</td>
+                        <td>
+                          <div>{{ $referenceNumber ?: 'N/A' }}</div>
+                          <small class="text-muted">Ctrl: {{ $referenceControl ?: 'N/A' }}</small>
+                        </td>
+                        <td>
+                          <div>{{ $displayCurrency ?: 'N/D' }}</div>
+                          @if($noteCurrency !== '' && $noteCurrency !== $displayCurrency)
+                            <small class="text-muted">Registro: {{ $noteCurrency }}</small>
+                          @endif
+                        </td>
                         <td>{{ optional($note->note_date)->format('d/m/Y') ?? 'N/A' }}</td>
-                        <td>{{ $note->currency_code }} {{ number_format((float) $note->amount, 2) }}</td>
-                        <td><span class="badge bg-gradient-secondary">{{ ucfirst(str_replace('_', ' ', $note->status ?? 'registered')) }}</span></td>
+                        <td>
+                          @if(!is_null($originalAmount))
+                            {{ $displayCurrency }} {{ number_format($originalAmount, 2) }}
+                          @else
+                            <span class="text-muted">N/D</span>
+                          @endif
+                        </td>
+                        <td>{{ $displayCurrency }} {{ number_format($adjustmentAmountDisplay, 2) }}</td>
+                        <td>
+                          @if($impactApplied && !is_null($estimatedNetAmount))
+                            <span class="fw-semibold">{{ $displayCurrency }} {{ number_format($estimatedNetAmount, 2) }}</span>
+                          @elseif($impactApplied)
+                            <span class="text-muted">Aplicada sin base visible</span>
+                          @else
+                            <span class="text-muted">No aplicado</span>
+                          @endif
+                        </td>
+                        <td><span class="badge {{ $statusClass }}">{{ $statusLabel }}</span></td>
+                        <td class="text-end">
+                          <button
+                            class="btn btn-sm btn-outline-dark mb-0"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#{{ $detailId }}"
+                            aria-expanded="false"
+                            aria-controls="{{ $detailId }}"
+                          >
+                            Ver detalle fiscal
+                          </button>
+                        </td>
+                      </tr>
+                      <tr class="collapse" id="{{ $detailId }}">
+                        <td colspan="10" class="bg-light">
+                          <div class="p-3">
+                            <div class="row g-3">
+                              <div class="col-md-4">
+                                <strong>Resultado esperado</strong>
+                                <div class="text-sm text-muted mt-1">
+                                  @if($impactApplied && !is_null($estimatedNetAmount) && !is_null($originalAmount))
+                                    Factura {{ $referenceNumber ?: 'N/A' }}: {{ $displayCurrency }} {{ number_format($originalAmount, 2) }}
+                                    {{ $effectiveNoteType === 'credit' ? '-' : '+' }}
+                                    {{ $displayCurrency }} {{ number_format($adjustmentAmountDisplay, 2) }}
+                                    = {{ $displayCurrency }} {{ number_format($estimatedNetAmount, 2) }}.
+                                  @elseif($impactApplied)
+                                    La nota fue emitida, pero no hay monto original suficiente en el payload para calcular el neto aqui.
+                                  @else
+                                    Esta nota no altero la factura porque no quedo emitida en HKA.
+                                  @endif
+                                </div>
+                                <div class="text-sm text-muted mt-2">Relación fiscal: factura {{ $referenceNumber ?: 'N/A' }} / control {{ $referenceControl ?: 'N/A' }}.</div>
+                              </div>
+                              <div class="col-md-4">
+                                <strong>Datos del ajuste</strong>
+                                <div class="text-sm text-muted mt-1">Moneda HKA: {{ $displayCurrency ?: 'N/D' }}</div>
+                                <div class="text-sm text-muted">Moneda de registro: {{ $noteCurrency ?: 'N/D' }}</div>
+                                <div class="text-sm text-muted mt-1">Motivo: {{ $note->reason ?: 'N/A' }}</div>
+                                <div class="text-sm text-muted">Base: {{ $noteCurrency }} {{ number_format((float) ($note->taxable_base ?? 0), 2) }}</div>
+                                <div class="text-sm text-muted">IVA: {{ $noteCurrency }} {{ number_format((float) ($note->tax_amount ?? 0), 2) }} @if(!is_null($note->tax_rate))({{ number_format((float) $note->tax_rate, 2) }}%)@endif</div>
+                                <div class="text-sm text-muted">IGTF: {{ $noteCurrency }} {{ number_format((float) ($note->affected_igtf_amount ?? 0), 2) }}</div>
+                              </div>
+                              <div class="col-md-4">
+                                <strong>Traza HKA</strong>
+                                <div class="text-sm text-muted mt-1">Documento HKA: {{ $noteDocumentNumber !== '' ? $noteDocumentNumber : 'N/A' }}</div>
+                                <div class="text-sm text-muted">Control HKA: {{ $noteControlNumber !== '' ? $noteControlNumber : 'N/A' }}</div>
+                                <div class="text-sm text-muted mt-1">Codigo: {{ $hkaCode ?: 'N/A' }}</div>
+                                <div class="text-sm text-muted">Mensaje: {{ $hkaMessage ?: 'Sin mensaje almacenado.' }}</div>
+                                <div class="text-sm text-muted">Relacionada el: {{ optional($note->related_at)->format('d/m/Y H:i') ?? 'N/A' }}</div>
+                                @if($noteConsultUrl)
+                                  <div class="text-sm mt-2"><a href="{{ $noteConsultUrl }}" target="_blank" rel="noopener">Abrir consulta HKA</a></div>
+                                @endif
+                              </div>
+                              <div class="col-12 d-flex flex-wrap gap-2">
+                                @if($impactApplied)
+                                  <a href="{{ route('sales.adjustmentNotes.download', ['note' => $note->id, 'tipo_archivo' => 'pdf', 'disposition' => 'attachment']) }}" class="btn btn-sm btn-outline-dark mb-0">Descargar PDF HKA</a>
+                                  <a href="{{ route('sales.adjustmentNotes.download', ['note' => $note->id, 'tipo_archivo' => 'xml', 'disposition' => 'attachment']) }}" class="btn btn-sm btn-outline-secondary mb-0">Descargar XML HKA</a>
+                                  <a href="{{ route('sales.adjustmentNotes.download', ['note' => $note->id, 'tipo_archivo' => 'json', 'disposition' => 'attachment']) }}" class="btn btn-sm btn-outline-secondary mb-0">Descargar JSON HKA</a>
+                                @else
+                                  <span class="text-sm text-muted">La descarga HKA se habilita cuando la nota queda emitida.</span>
+                                @endif
+                              </div>
+                              @if(!empty($note->notes))
+                                <div class="col-12">
+                                  <strong>Observaciones internas</strong>
+                                  <div class="text-sm text-muted mt-1">{{ $note->notes }}</div>
+                                </div>
+                              @endif
+                            </div>
+                          </div>
+                        </td>
                       </tr>
                     @empty
                       <tr>
-                        <td colspan="5" class="text-center text-muted">No hay notas registradas.</td>
+                        <td colspan="10" class="text-center text-muted">No hay notas registradas.</td>
                       </tr>
                     @endforelse
                   </tbody>
@@ -717,43 +1076,127 @@
           <div class="card h-100">
             <div class="card-header pb-0">
               <h6 class="mb-0">Retenciones</h6>
-              <p class="text-sm text-muted mb-0">Registra retenciones asociadas a esta venta para el libro de ventas.</p>
+              <p class="text-sm text-muted mb-0">Registra aquí retenciones aplicadas por el cliente. Shopix las aplica al saldo interno y puede sincronizarlas con HKA para rastreo fiscal.</p>
             </div>
             <div class="card-body">
+              <div class="alert alert-info text-white bg-info" role="alert">
+                Al registrar la retención, Shopix la aplica al saldo interno y también intenta sincronizarla con HKA si existe una factura fiscal activa y un comprobante válido. Luego puedes usar los botones de cada fila para reenviar o consultar su estado en HKA.
+              </div>
+              <div class="alert alert-light border" role="alert">
+                <div class="row g-2">
+                  <div class="col-md-4">
+                    <strong>IVA facturado</strong><br>
+                    {{ $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD') }} {{ number_format($suggestedRetentionIvaBase, 2) }}
+                  </div>
+                  <div class="col-md-4">
+                    <strong>Base de venta</strong><br>
+                    {{ $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD') }} {{ number_format($suggestedRetentionIncomeBase, 2) }}
+                  </div>
+                  <div class="col-md-4">
+                    <strong>Saldo pendiente</strong><br>
+                    {{ $orderCurrencySymbol ?? '$' }}{{ number_format($paymentBalance, 2) }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Se sincroniza por API</strong>
+                    <p class="text-sm text-muted mb-0 mt-2">HKA recibe la retención por <strong>AplicarRetencion</strong> usando la factura relacionada. Shopix conserva solicitud y respuesta para auditoría.</p>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Moneda en HKA</strong>
+                    <p class="text-sm text-muted mb-0 mt-2">El API de retenciones no expone un campo de moneda en la descarga. Shopix toma la moneda registrada y convierte los montos a la moneda fiscal de la factura antes de sincronizar.</p>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Descarga permitida</strong>
+                    <p class="text-sm text-muted mb-0 mt-2">El comprobante PDF se genera en Shopix con la retención registrada. Además puedes descargar el JSON técnico con la solicitud y respuesta HKA como evidencia de integración.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Paso 1</strong>
+                    <p class="text-sm text-muted mb-0">Selecciona el tipo de retención. Para IVA, la base sugerida es el IVA facturado, no el total completo de la venta.</p>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Paso 2</strong>
+                    <p class="text-sm text-muted mb-0">Ingresa tasa y comprobante. Si es IVA, el comprobante debe tener formato SENIAT: período `YYYYMM` + correlativo de 8 dígitos.</p>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="border rounded p-3 h-100 bg-light">
+                    <strong>Paso 3</strong>
+                    <p class="text-sm text-muted mb-0">Al guardar, la retención se aplica como pago interno y reduce el saldo pendiente de la orden.</p>
+                  </div>
+                </div>
+              </div>
+
+              @if($errors->has('retention_type') || $errors->has('retention_date') || $errors->has('retention_rate') || $errors->has('taxable_base') || $errors->has('retained_amount') || $errors->has('certificate_number'))
+                <div class="alert alert-danger" role="alert">
+                  <strong>No se pudo registrar la retención.</strong>
+                  <ul class="mb-0 mt-2 ps-3">
+                    @foreach (['retention_type', 'retention_date', 'retention_rate', 'taxable_base', 'retained_amount', 'certificate_number'] as $retentionErrorField)
+                      @error($retentionErrorField)
+                        <li>{{ $message }}</li>
+                      @enderror
+                    @endforeach
+                  </ul>
+                </div>
+              @endif
+
               <form method="POST" action="{{ route('sales.retentions.store', $order->id) }}" class="row g-3">
                 @csrf
                 <div class="col-md-4">
                   <label class="form-label">Tipo</label>
-                  <select name="retention_type" class="form-select border border-1 p-2" required>
-                    <option value="iva">IVA</option>
-                    <option value="islr">ISLR</option>
-                    <option value="municipal">Municipal</option>
-                    <option value="other">Otra</option>
+                  <select name="retention_type" id="retentionType" class="form-select border border-1 p-2" required>
+                    <option value="iva" {{ old('retention_type') === 'iva' || !old('retention_type') ? 'selected' : '' }}>IVA</option>
+                    <option value="islr" {{ old('retention_type') === 'islr' ? 'selected' : '' }}>ISLR</option>
+                    <option value="municipal" {{ old('retention_type') === 'municipal' ? 'selected' : '' }}>Municipal</option>
+                    <option value="other" {{ old('retention_type') === 'other' ? 'selected' : '' }}>Otra</option>
                   </select>
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Fecha</label>
-                  <input type="date" name="retention_date" class="form-control border border-1 p-2" value="{{ now()->toDateString() }}" required>
+                  <input type="date" name="retention_date" class="form-control border border-1 p-2" value="{{ old('retention_date', now()->toDateString()) }}" required>
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Tasa (%)</label>
-                  <input type="number" name="retention_rate" min="0" max="100" step="0.01" class="form-control border border-1 p-2" required data-decimal-friendly="true">
+                  <input type="number" id="retentionRate" name="retention_rate" min="0" max="100" step="0.01" class="form-control border border-1 p-2" value="{{ old('retention_rate', '75.00') }}" required data-decimal-friendly="true">
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Base imponible</label>
-                  <input type="number" name="taxable_base" min="0.01" step="0.01" class="form-control border border-1 p-2" value="{{ number_format($orderGrossTotal, 2, '.', '') }}" required data-decimal-friendly="true">
+                  <input type="number" id="retentionTaxableBase" name="taxable_base" min="0.01" step="0.01" class="form-control border border-1 p-2" value="{{ old('taxable_base', number_format($suggestedRetentionIvaBase > 0 ? $suggestedRetentionIvaBase : $suggestedRetentionIncomeBase, 2, '.', '')) }}" required data-decimal-friendly="true">
+                  <small class="text-muted" id="retentionBaseHint">Para IVA se sugiere usar el IVA facturado: {{ number_format($suggestedRetentionIvaBase, 2) }}.</small>
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Monto retenido</label>
-                  <input type="number" name="retained_amount" min="0.01" step="0.01" class="form-control border border-1 p-2" data-decimal-friendly="true">
+                  <input type="number" id="retentionRetainedAmount" name="retained_amount" min="0.01" step="0.01" class="form-control border border-1 p-2" value="{{ old('retained_amount', $suggestedRetentionIva75 > 0 ? number_format($suggestedRetentionIva75, 2, '.', '') : '') }}" data-decimal-friendly="true">
+                  <small class="text-muted">Si no lo modificas, el sistema puede sugerirlo según Base x Tasa.</small>
                 </div>
                 <div class="col-md-4">
                   <label class="form-label">Comprobante</label>
-                  <input type="text" name="certificate_number" class="form-control border border-1 p-2" maxlength="60">
+                  <input type="text" id="retentionCertificateNumber" name="certificate_number" class="form-control border border-1 p-2" value="{{ old('certificate_number') }}" maxlength="14" inputmode="numeric" pattern="\d{14}" placeholder="YYYYMM########">
+                  <small class="text-muted" id="retentionCertificateHint">Para IVA usa formato SENIAT: YYYYMM + 8 digitos.</small>
+                </div>
+                <div class="col-12">
+                  <div class="border rounded p-3 bg-light">
+                    <strong>Vista previa de aplicación</strong>
+                    <div class="text-sm text-muted mt-1" id="retentionPreview">La retención registrada reducirá el saldo pendiente de esta orden cuando sea guardada.</div>
+                  </div>
                 </div>
                 <div class="col-12">
                   <label class="form-label">Observaciones</label>
-                  <textarea name="notes" class="form-control border border-1 p-2" rows="2"></textarea>
+                  <textarea name="notes" class="form-control border border-1 p-2" rows="2" placeholder="Ej. Retención practicada por el cliente según comprobante entregado.">{{ old('notes') }}</textarea>
                 </div>
                 <div class="col-12 d-flex justify-content-end">
                   <button type="submit" class="btn btn-dark mb-0">Registrar retención</button>
@@ -764,25 +1207,139 @@
                 <table class="table align-items-center mb-0">
                   <thead>
                     <tr>
+                      <th>Correlativo</th>
                       <th>Fecha</th>
                       <th>Tipo</th>
+                      <th>Documento relacionado</th>
+                      <th>Moneda</th>
                       <th>Comprobante</th>
                       <th>Monto</th>
-                      <th>Estatus</th>
+                      <th>Interno</th>
+                      <th>HKA</th>
+                      <th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     @forelse($order->retentions as $retention)
+                      @php
+                        $retentionApplyPayload = data_get($retention->response_payload, 'apply', []);
+                        $retentionStatusPayload = data_get($retention->response_payload, 'status', []);
+                        $retentionReferenceNumber = data_get($retention->request_payload, 'apply.numeroDocumento', optional($retention->electronicDocument)->numero_documento ?: ($edoc->numero_documento ?? null));
+                        $retentionReferenceControl = data_get($retention->request_payload, 'apply.numeroControl', optional($retention->electronicDocument)->numero_control ?: ($edoc->numero_control ?? null));
+                        $retentionCurrency = strtoupper((string) ($retention->currency_code ?: ($orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD'))));
+                        $retentionHkaCurrency = strtoupper((string) (data_get(optional($retention->electronicDocument)->request_payload, 'encabezado.identificacionDocumento.moneda') ?: data_get($edoc?->request_payload ?? [], 'encabezado.identificacionDocumento.moneda') ?: $retentionCurrency));
+                        $retentionHkaCode = (string) (data_get($retentionApplyPayload, 'codigo') ?: data_get($retentionStatusPayload, 'codigo') ?: '');
+                        $retentionHkaMessage = (string) (data_get($retentionApplyPayload, 'mensaje') ?: data_get($retentionStatusPayload, 'mensaje') ?: '');
+                        $retentionHkaBadge = str_contains((string) $retention->status, 'hka_error')
+                          ? 'bg-gradient-danger'
+                          : (str_contains((string) $retention->status, 'hka') ? 'bg-gradient-success' : 'bg-gradient-secondary');
+                        $retentionHkaLabel = str_contains((string) $retention->status, 'hka_error')
+                          ? 'Con error'
+                          : (str_contains((string) $retention->status, 'hka') ? 'Sincronizada' : 'Pendiente');
+                        $retentionStatusClass = match ((string) ($retention->status ?? 'registered')) {
+                          'registered' => 'bg-gradient-secondary',
+                          'applied' => 'bg-gradient-info',
+                          'applied_hka' => 'bg-gradient-success',
+                          'applied_hka_error' => 'bg-gradient-warning',
+                          default => 'bg-gradient-secondary',
+                        };
+                        $retentionStatusLabel = match ((string) ($retention->status ?? 'registered')) {
+                          'registered' => 'Registrada',
+                          'applied' => 'Aplicada',
+                          'applied_hka' => 'Aplicada + HKA',
+                          'applied_hka_error' => 'Aplicada con error HKA',
+                          default => ucfirst(str_replace('_', ' ', (string) ($retention->status ?? 'registered'))),
+                        };
+                        $retentionDetailId = 'retentionDetail' . $retention->id;
+                      @endphp
                       <tr>
+                        <td>{{ $retention->internal_number ?? 'N/A' }}</td>
                         <td>{{ optional($retention->retention_date)->format('d/m/Y') ?? 'N/A' }}</td>
                         <td>{{ strtoupper($retention->retention_type ?? 'N/A') }}</td>
+                        <td>
+                          <div>{{ $retentionReferenceNumber ?: 'N/A' }}</div>
+                          <small class="text-muted">Ctrl: {{ $retentionReferenceControl ?: 'N/A' }}</small>
+                        </td>
+                        <td>
+                          <div>{{ $retentionCurrency ?: 'N/D' }}</div>
+                          @if($retentionHkaCurrency !== '' && $retentionHkaCurrency !== $retentionCurrency)
+                            <small class="text-muted">HKA: {{ $retentionHkaCurrency }}</small>
+                          @endif
+                        </td>
                         <td>{{ $retention->certificate_number ?? 'N/A' }}</td>
-                        <td>{{ $retention->currency_code }} {{ number_format((float) $retention->retained_amount, 2) }}</td>
-                        <td><span class="badge bg-gradient-secondary">{{ ucfirst(str_replace('_', ' ', $retention->status ?? 'registered')) }}</span></td>
+                        <td>{{ $retentionCurrency }} {{ number_format((float) $retention->retained_amount, 2) }}</td>
+                        <td><span class="badge {{ $retentionStatusClass }}">{{ $retentionStatusLabel }}</span></td>
+                        <td>
+                          <span class="badge {{ $retentionHkaBadge }}">{{ $retentionHkaLabel }}</span>
+                          @if($retentionHkaCode !== '')
+                            <div class="text-xs text-muted mt-1">Código: {{ $retentionHkaCode }}</div>
+                          @endif
+                          @if($retentionHkaMessage !== '')
+                            <div class="text-xs text-muted">{{ \Illuminate\Support\Str::limit($retentionHkaMessage, 90) }}</div>
+                          @endif
+                        </td>
+                        <td>
+                          <div class="d-flex flex-column gap-2">
+                            <button
+                              class="btn btn-outline-dark btn-sm mb-0 w-100"
+                              type="button"
+                              data-bs-toggle="collapse"
+                              data-bs-target="#{{ $retentionDetailId }}"
+                              aria-expanded="false"
+                              aria-controls="{{ $retentionDetailId }}"
+                            >
+                              Ver detalle
+                            </button>
+                            <form method="POST" action="{{ route('sales.retentions.syncHka', $retention->id) }}">
+                              @csrf
+                              <button type="submit" class="btn btn-outline-dark btn-sm mb-0 w-100">Enviar/Actualizar HKA</button>
+                            </form>
+                            <form method="POST" action="{{ route('sales.retentions.statusHka', $retention->id) }}">
+                              @csrf
+                              <button type="submit" class="btn btn-outline-secondary btn-sm mb-0 w-100">Consultar HKA</button>
+                            </form>
+                            <a href="{{ route('sales.retentions.certificate', ['retention' => $retention->id, 'disposition' => 'inline']) }}" class="btn btn-outline-secondary btn-sm mb-0 w-100">Ver comprobante PDF</a>
+                            <a href="{{ route('sales.retentions.download', ['retention' => $retention->id, 'disposition' => 'attachment']) }}" class="btn btn-outline-secondary btn-sm mb-0 w-100">Descargar JSON HKA</a>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr class="collapse" id="{{ $retentionDetailId }}">
+                        <td colspan="10" class="bg-light">
+                          <div class="p-3">
+                            <div class="row g-3">
+                              <div class="col-md-4">
+                                <strong>Relación fiscal</strong>
+                                <div class="text-sm text-muted mt-1">Factura relacionada: {{ $retentionReferenceNumber ?: 'N/A' }}</div>
+                                <div class="text-sm text-muted">Control: {{ $retentionReferenceControl ?: 'N/A' }}</div>
+                                <div class="text-sm text-muted">Comprobante: {{ $retention->certificate_number ?: 'N/A' }}</div>
+                              </div>
+                              <div class="col-md-4">
+                                <strong>Montos y moneda</strong>
+                                <div class="text-sm text-muted mt-1">Moneda de registro: {{ $retentionCurrency ?: 'N/D' }}</div>
+                                <div class="text-sm text-muted">Moneda fiscal HKA: {{ $retentionHkaCurrency ?: 'N/D' }}</div>
+                                <div class="text-sm text-muted">Base: {{ $retentionCurrency }} {{ number_format((float) ($retention->taxable_base ?? 0), 2) }}</div>
+                                <div class="text-sm text-muted">Retenido: {{ $retentionCurrency }} {{ number_format((float) ($retention->retained_amount ?? 0), 2) }}</div>
+                                <div class="text-sm text-muted">Tasa: {{ number_format((float) ($retention->retention_rate ?? 0), 2) }}%</div>
+                              </div>
+                              <div class="col-md-4">
+                                <strong>Traza HKA</strong>
+                                <div class="text-sm text-muted mt-1">Código: {{ $retentionHkaCode ?: 'N/A' }}</div>
+                                <div class="text-sm text-muted">Mensaje: {{ $retentionHkaMessage ?: 'Sin mensaje almacenado.' }}</div>
+                                <div class="text-sm text-muted">Aplicada el: {{ optional($retention->applied_at)->format('d/m/Y H:i') ?? 'N/A' }}</div>
+                              </div>
+                              @if(!empty($retention->notes))
+                                <div class="col-12">
+                                  <strong>Observaciones internas</strong>
+                                  <div class="text-sm text-muted mt-1">{{ $retention->notes }}</div>
+                                </div>
+                              @endif
+                            </div>
+                          </div>
+                        </td>
                       </tr>
                     @empty
                       <tr>
-                        <td colspan="5" class="text-center text-muted">No hay retenciones registradas.</td>
+                        <td colspan="10" class="text-center text-muted">No hay retenciones registradas.</td>
                       </tr>
                     @endforelse
                   </tbody>
@@ -800,6 +1357,29 @@
           <h6 class="mb-0">{{ $isDeliveryOnlyView ? 'Lo que vas a entregar' : 'Productos en la Orden' }}</h6>
         </div>
         <div class="card-body">
+          @php
+            $orderSubtotalBeforeDiscount = (float) ($order->subtotal_before_discount ?? 0);
+            if ($orderSubtotalBeforeDiscount <= 0) {
+              $orderSubtotalBeforeDiscount = (float) $order->details->sum(function ($detail) {
+                return (float) ($detail->line_subtotal_before_discount ?? $detail->amount ?? 0);
+              });
+            }
+
+            $orderSubtotalNet = (float) $order->details->sum('amount');
+            $orderDiscountTotal = (float) ($order->total_discount ?? 0);
+            if ($orderDiscountTotal <= 0) {
+              $orderDiscountTotal = max(0, round($orderSubtotalBeforeDiscount - $orderSubtotalNet, 2));
+            }
+
+            $orderTaxTotalDetail = (float) $order->details->flatMap->taxes->sum('tax_amount');
+            if ($orderTaxTotalDetail <= 0) {
+              $orderTaxTotalDetail = (float) $order->details->sum(function ($detail) {
+                return (float) ($detail->tax_amount ?? 0);
+              });
+            }
+
+            $orderTotalWithTaxes = round($orderSubtotalNet + $orderTaxTotalDetail, 2);
+          @endphp
           <div class="table-responsive order-table-wrapper">
           <table class="table order-detail-table align-middle mb-0">
             <thead>
@@ -808,20 +1388,37 @@
                 <th>Cantidad</th>
                 <th>Variante</th>
                 @unless($isDeliveryOnlyView)
-                <th>Precio Unitario</th>
-                <th>Subtotal</th>
+                <th>Precio Inicial</th>
+                <th>Descuento</th>
+                <th>Precio Neto</th>
+                <th>Subtotal Neto</th>
                 @endunless
               </tr>
             </thead>
             <tbody>
               @foreach($order->details as $detalle)
+              @php
+                $detailQty = max(1, (float) ($detalle->quantity ?? 0));
+                $detailSubtotalBeforeDiscount = (float) ($detalle->line_subtotal_before_discount ?? 0);
+                if ($detailSubtotalBeforeDiscount <= 0) {
+                  $detailSubtotalBeforeDiscount = (float) ($detalle->amount ?? 0);
+                }
+                $detailDiscountAmount = (float) ($detalle->line_discount_amount ?? 0);
+                if ($detailDiscountAmount <= 0) {
+                  $detailDiscountAmount = max(0, round($detailSubtotalBeforeDiscount - (float) ($detalle->amount ?? 0), 2));
+                }
+                $detailOriginalUnitPrice = $detailQty > 0 ? round($detailSubtotalBeforeDiscount / $detailQty, 2) : (float) ($detalle->price ?? 0);
+                $detailDiscountUnitPrice = $detailQty > 0 ? round($detailDiscountAmount / $detailQty, 2) : 0.0;
+              @endphp
               <tr>
                 <td data-label="Producto">{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
                 <td data-label="Cantidad">{{ $detalle->quantity }}</td>
                 <td data-label="Variante">{{ $detalle->variant->size ?? '' }}</td>
                 @unless($isDeliveryOnlyView)
-                <td data-label="Precio Unitario"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</span></td>
-                <td data-label="Subtotal"><span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->amount, 2) }}</span></td>
+                <td data-label="Precio Inicial"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detailOriginalUnitPrice, 2) }}</span></td>
+                <td data-label="Descuento"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detailDiscountUnitPrice, 2) }}</span></td>
+                <td data-label="Precio Neto"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</span></td>
+                <td data-label="Subtotal Neto"><span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->amount, 2) }}</span></td>
                 @endunless
               </tr>
               @endforeach
@@ -831,8 +1428,24 @@
           @unless($isDeliveryOnlyView)
           <div class="order-total-stack mt-3">
             <div class="order-total-line">
-              <span class="order-total-label">Total Orden</span>
-              <span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalOrden, 2) }}</span>
+              <span class="order-total-label">Subtotal Antes De Descuento</span>
+              <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderSubtotalBeforeDiscount, 2) }}</span>
+            </div>
+            <div class="order-total-line">
+              <span class="order-total-label">Total Descuento</span>
+              <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderDiscountTotal, 2) }}</span>
+            </div>
+            <div class="order-total-line">
+              <span class="order-total-label">Subtotal Neto</span>
+              <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderSubtotalNet, 2) }}</span>
+            </div>
+            <div class="order-total-line">
+              <span class="order-total-label">Total Impuestos</span>
+              <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderTaxTotalDetail, 2) }}</span>
+            </div>
+            <div class="order-total-line">
+              <span class="order-total-label">Total A Pagar</span>
+              <span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderTotalWithTaxes, 2) }}</span>
             </div>
             @if($order->has_returns)
               <div class="order-total-line">
@@ -948,6 +1561,7 @@
                                           <th>Producto</th>
                                           <th>Cantidad</th>
                                           <th>Devolver</th>
+                                          <th>Destino</th>
                                       </tr>
                                   </thead>
                                   <tbody>
@@ -963,6 +1577,13 @@
                                                       min="0" 
                                                       max="{{ $detalle->quantity }}">
                                               </td>
+                                            <td data-label="Destino">
+                                              <select class="form-select border border-1 border-radius-lg p-2 return-disposition" data-id="{{ $detalle->variant->id }}">
+                                                <option value="resalable">Apto para venta</option>
+                                                <option value="damaged">Merma / dañado</option>
+                                                <option value="no_physical_return">No retorna físicamente</option>
+                                              </select>
+                                            </td>
                                           </tr>
                                       @endforeach
                                   </tbody>
@@ -1628,12 +2249,12 @@ function runLinkedAppointmentWorkflow(payload) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const amountInput = document.getElementById('appointment-paid-amount');
-  const methodSelect = document.getElementById('appointment-payment-method');
-  const rateInput = document.getElementById('appointment-payment-rate');
-  const referenceInput = document.getElementById('appointment-payment-reference');
+  const appointmentAmountInput = document.getElementById('appointment-paid-amount');
+  const appointmentMethodSelect = document.getElementById('appointment-payment-method');
+  const appointmentRateInput = document.getElementById('appointment-payment-rate');
+  const appointmentReferenceInput = document.getElementById('appointment-payment-reference');
 
-  [amountInput, methodSelect, rateInput, referenceInput].forEach(element => {
+  [appointmentAmountInput, appointmentMethodSelect, appointmentRateInput, appointmentReferenceInput].forEach(element => {
     if (!element) {
       return;
     }
@@ -1643,6 +2264,193 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   syncLinkedAppointmentPaymentUi();
+
+  const noteTypeSelect = document.getElementById('adjustmentNoteType');
+  const adjustmentModeSelect = document.getElementById('adjustmentMode');
+  const adjustmentAmountInput = document.getElementById('adjustmentAmount');
+  const taxableBaseInput = document.getElementById('adjustmentTaxableBase');
+  const taxRateInput = document.getElementById('adjustmentTaxRate');
+  const igtfInput = document.getElementById('adjustmentIgtfAmount');
+  const adjustmentReasonInput = document.getElementById('adjustmentReason');
+  const adjustmentNoteHelper = document.getElementById('adjustmentNoteHelper');
+  const adjustmentNotePreview = document.getElementById('adjustmentNotePreview');
+
+  const retentionTypeSelect = document.getElementById('retentionType');
+  const retentionRateInput = document.getElementById('retentionRate');
+  const retentionTaxableBaseInput = document.getElementById('retentionTaxableBase');
+  const retentionRetainedAmountInput = document.getElementById('retentionRetainedAmount');
+  const retentionCertificateInput = document.getElementById('retentionCertificateNumber');
+  const retentionBaseHint = document.getElementById('retentionBaseHint');
+  const retentionCertificateHint = document.getElementById('retentionCertificateHint');
+  const retentionPreview = document.getElementById('retentionPreview');
+
+  const suggestedOrderTaxBase = {{ json_encode(number_format($orderTaxBase, 2, '.', '')) }};
+  const suggestedOrderTaxTotal = {{ json_encode(number_format($suggestedRetentionIvaBase, 2, '.', '')) }};
+  const suggestedVatRate = {{ json_encode(number_format($suggestedVatRate, 2, '.', '')) }};
+  const suggestedIgtfAmount = {{ json_encode($orderIgtfTotal > 0 ? number_format($orderIgtfTotal, 2, '.', '') : '0.00') }};
+  const pendingBalanceAmount = {{ json_encode(number_format($paymentBalance, 2, '.', '')) }};
+  let retentionAmountTouched = Boolean(retentionRetainedAmountInput?.value);
+
+  const toNumber = (value) => {
+    const parsed = Number.parseFloat(String(value || '').replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const formatMoney = (value) => {
+    return toNumber(value).toLocaleString('es-VE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const syncAdjustmentNoteUi = () => {
+    const type = noteTypeSelect?.value || 'credit';
+    const mode = adjustmentModeSelect?.value || 'manual';
+    const autoCalculatedDebit = type === 'debit' && ['exchange_rate_diff', 'price_error'].includes(mode);
+    const taxableBase = toNumber(taxableBaseInput?.value);
+    const taxRate = toNumber(taxRateInput?.value);
+    const igtfAmount = toNumber(igtfInput?.value);
+    const taxAmount = taxableBase > 0 && taxRate > 0 ? (taxableBase * taxRate) / 100 : 0;
+    const calculatedAmount = taxableBase + taxAmount + Math.max(0, igtfAmount);
+
+    if (adjustmentModeSelect) {
+      adjustmentModeSelect.disabled = type === 'credit';
+      if (type === 'credit') {
+        adjustmentModeSelect.value = 'manual';
+      }
+    }
+
+    if (adjustmentAmountInput) {
+      adjustmentAmountInput.required = !autoCalculatedDebit;
+      adjustmentAmountInput.disabled = autoCalculatedDebit;
+      if (autoCalculatedDebit) {
+        adjustmentAmountInput.value = calculatedAmount > 0 ? calculatedAmount.toFixed(2) : '';
+      }
+    }
+
+    if (taxableBaseInput) {
+      taxableBaseInput.required = autoCalculatedDebit;
+    }
+
+    if (taxRateInput) {
+      taxRateInput.required = autoCalculatedDebit;
+    }
+
+    if (igtfInput && type !== 'debit') {
+      igtfInput.value = '';
+    }
+
+    if (adjustmentReasonInput && !adjustmentReasonInput.value.trim()) {
+      if (type === 'credit') {
+        adjustmentReasonInput.placeholder = 'Ej. Devolución parcial, anulación de renglón, descuento posterior.';
+      } else if (mode === 'exchange_rate_diff') {
+        adjustmentReasonInput.placeholder = 'Ej. Ajuste por diferencial cambiario de factura emitida.';
+      } else if (mode === 'price_error') {
+        adjustmentReasonInput.placeholder = 'Ej. Ajuste por error de precio detectado luego de facturar.';
+      } else {
+        adjustmentReasonInput.placeholder = 'Ej. Ajuste fiscal posterior a la emisión.';
+      }
+    }
+
+    if (adjustmentNoteHelper) {
+      adjustmentNoteHelper.textContent = type === 'credit'
+        ? 'La nota de crédito rebaja o revierte una porción de la factura original. Usa el monto exacto que deseas descontar y documenta claramente el motivo.'
+        : (autoCalculatedDebit
+          ? 'Esta nota de débito aumentará la factura. El monto final se calculará automáticamente con Base + IVA + IGTF.'
+          : 'Esta nota de débito aumentará la factura original. Puedes indicar manualmente el monto final o usar una causa estructurada.');
+    }
+
+    if (adjustmentNotePreview) {
+      const manualAmount = toNumber(adjustmentAmountInput?.value);
+      if (autoCalculatedDebit) {
+        adjustmentNotePreview.textContent = `Base ${formatMoney(taxableBase)} + IVA ${formatMoney(taxAmount)} + IGTF ${formatMoney(igtfAmount)} = ${formatMoney(calculatedAmount)}.`;
+      } else if (manualAmount > 0) {
+        adjustmentNotePreview.textContent = `Se enviará una ${type === 'credit' ? 'nota de crédito' : 'nota de débito'} por ${formatMoney(manualAmount)} con motivo fiscal documentado.`;
+      } else {
+        adjustmentNotePreview.textContent = 'Completa los campos para ver el cálculo estimado antes de emitir la nota.';
+      }
+    }
+  };
+
+  const syncRetentionUi = (forceSuggestedAmount = false) => {
+    const type = retentionTypeSelect?.value || 'iva';
+    const rate = toNumber(retentionRateInput?.value);
+    const base = toNumber(retentionTaxableBaseInput?.value);
+    const pendingBalance = toNumber(pendingBalanceAmount);
+
+    if (type === 'iva') {
+      if (retentionRateInput && (!retentionRateInput.value || forceSuggestedAmount)) {
+        retentionRateInput.value = '75.00';
+      }
+
+      if (retentionTaxableBaseInput && (!retentionTaxableBaseInput.value || forceSuggestedAmount)) {
+        retentionTaxableBaseInput.value = suggestedOrderTaxTotal;
+      }
+
+      if (retentionCertificateInput) {
+        retentionCertificateInput.maxLength = 14;
+        retentionCertificateInput.setAttribute('pattern', '\\d{14}');
+        retentionCertificateInput.setAttribute('placeholder', 'YYYYMM########');
+      }
+
+      if (retentionBaseHint) {
+        retentionBaseHint.textContent = `Para IVA se sugiere usar el IVA facturado: ${formatMoney(suggestedOrderTaxTotal)}.`;
+      }
+
+      if (retentionCertificateHint) {
+        retentionCertificateHint.textContent = 'Para IVA usa formato SENIAT: YYYYMM + 8 digitos.';
+      }
+    } else {
+      if (retentionTaxableBaseInput && (!retentionTaxableBaseInput.value || forceSuggestedAmount)) {
+        retentionTaxableBaseInput.value = suggestedOrderTaxBase;
+      }
+
+      if (retentionBaseHint) {
+        retentionBaseHint.textContent = 'Para ISLR, municipal u otras retenciones, revisa la base y tasa según el comprobante entregado por el cliente.';
+      }
+
+      if (retentionCertificateHint) {
+        retentionCertificateHint.textContent = 'El comprobante es recomendado para auditoría interna y obligatorio si tu proceso fiscal así lo exige.';
+      }
+    }
+
+    const effectiveRate = toNumber(retentionRateInput?.value);
+    const effectiveBase = toNumber(retentionTaxableBaseInput?.value);
+    const calculatedRetention = effectiveBase > 0 && effectiveRate > 0 ? (effectiveBase * effectiveRate) / 100 : 0;
+
+    if (retentionRetainedAmountInput && (forceSuggestedAmount || !retentionAmountTouched || !retentionRetainedAmountInput.value)) {
+      retentionRetainedAmountInput.value = calculatedRetention > 0 ? calculatedRetention.toFixed(2) : '';
+    }
+
+    const effectiveRetention = toNumber(retentionRetainedAmountInput?.value);
+    const projectedBalance = Math.max(0, pendingBalance - effectiveRetention);
+
+    if (retentionPreview) {
+      retentionPreview.textContent = effectiveRetention > 0
+        ? `Se registrará una retención por ${formatMoney(effectiveRetention)}. El saldo pendiente estimado bajará de ${formatMoney(pendingBalance)} a ${formatMoney(projectedBalance)}.`
+        : 'La retención registrada reducirá el saldo pendiente de esta orden cuando sea guardada.';
+    }
+  };
+
+  noteTypeSelect?.addEventListener('change', syncAdjustmentNoteUi);
+  adjustmentModeSelect?.addEventListener('change', syncAdjustmentNoteUi);
+  [adjustmentAmountInput, taxableBaseInput, taxRateInput, igtfInput].forEach(element => {
+    element?.addEventListener('input', syncAdjustmentNoteUi);
+    element?.addEventListener('change', syncAdjustmentNoteUi);
+  });
+
+  retentionRetainedAmountInput?.addEventListener('input', () => {
+    retentionAmountTouched = true;
+    syncRetentionUi(false);
+  });
+
+  [retentionTypeSelect, retentionRateInput, retentionTaxableBaseInput, retentionCertificateInput].forEach(element => {
+    element?.addEventListener('input', () => syncRetentionUi(false));
+    element?.addEventListener('change', () => syncRetentionUi(element === retentionTypeSelect));
+  });
+
+  syncAdjustmentNoteUi();
+  syncRetentionUi(false);
 });
 
 const returnForm = document.getElementById('returnForm');
@@ -1658,9 +2466,11 @@ if (returnForm) {
       const quantity = parseInt(input.value);
       const maxQuantity = parseInt(input.getAttribute('data-max'));
       const id = input.getAttribute('data-id');
+      const dispositionInput = document.querySelector(`.return-disposition[data-id="${id}"]`);
+      const disposition = dispositionInput?.value || 'resalable';
 
       if (quantity > 0 && quantity <= maxQuantity) {
-        items.push({ id, quantity });
+        items.push({ id, quantity, disposition });
       }
     });
 

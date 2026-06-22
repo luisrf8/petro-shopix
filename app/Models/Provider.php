@@ -12,6 +12,10 @@ class Provider extends Model
     protected $fillable = [
         'tenant_id',
         'name',
+        'rif',
+        'fiscal_person_type',
+        'fiscal_residency_type',
+        'is_special_taxpayer',
         'contact_name',
         'email',
         'phone_number',
@@ -22,6 +26,7 @@ class Provider extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_special_taxpayer' => 'boolean',
     ];
 
     public function tenant()

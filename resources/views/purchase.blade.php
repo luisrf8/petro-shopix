@@ -192,10 +192,33 @@
                             </div>
                 <div class="mb-3" id="providerBlock">
                     <label for="providerName" class="form-label">Proveedor</label>
-                    <input type="text" id="providerName" list="purchaseProviderOptions" class="form-control border border-1 p-2" placeholder="Ej: Distribuidora ABC">
-                    <small class="text-muted">Puedes seleccionar un proveedor registrado o escribir varios nombres separados por coma.</small>
+                    <input type="text" id="providerName" list="purchaseProviderOptions" class="form-control border border-1 p-2" placeholder="Razón social del proveedor">
+                    <small class="text-muted">Selecciona o escribe el proveedor principal de la factura.</small>
                     <div class="mt-2">
                         <a href="{{ route('providers.index') }}" class="btn btn-outline-dark btn-sm mb-0">Gestionar proveedores</a>
+                    </div>
+                </div>
+                <div class="row g-3 mb-3" id="providerTaxBlock">
+                    <div class="col-md-4">
+                        <label for="providerRif" class="form-label">RIF proveedor</label>
+                        <input type="text" id="providerRif" class="form-control border border-1 p-2" placeholder="J-111222555">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="supplierInvoiceNumber" class="form-label">Nro. factura</label>
+                        <input type="text" id="supplierInvoiceNumber" class="form-control border border-1 p-2" placeholder="20260200000019">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="supplierInvoiceControlNumber" class="form-label">Nro. control</label>
+                        <input type="text" id="supplierInvoiceControlNumber" class="form-control border border-1 p-2" placeholder="00-00000019">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="supplierInvoiceDate" class="form-label">Fecha factura</label>
+                        <input type="date" id="supplierInvoiceDate" class="form-control border border-1 p-2">
+                    </div>
+                    <div class="col-md-8">
+                        <label for="supplierInvoiceFile" class="form-label">Factura soporte</label>
+                        <input type="file" id="supplierInvoiceFile" class="form-control border border-1 p-2" accept=".pdf,.jpg,.jpeg,.png">
+                        <small class="text-muted">Opcional. Se almacenará como respaldo de la retención.</small>
                     </div>
                 </div>
                 <datalist id="purchaseProviderOptions">
@@ -285,6 +308,12 @@
             const backToStep1 = document.getElementById('backToStep1');
             const backToStep2 = document.getElementById('backToStep2');
             const providerInput = document.getElementById("providerName");
+            const providerRifInput = document.getElementById("providerRif");
+            const providerTaxBlock = document.getElementById('providerTaxBlock');
+            const supplierInvoiceNumberInput = document.getElementById('supplierInvoiceNumber');
+            const supplierInvoiceControlNumberInput = document.getElementById('supplierInvoiceControlNumber');
+            const supplierInvoiceDateInput = document.getElementById('supplierInvoiceDate');
+            const supplierInvoiceFileInput = document.getElementById('supplierInvoiceFile');
             const purchaseDateInput = document.getElementById('purchaseDate');
             const warehouseIdInput = document.getElementById('warehouseId');
             const entryModeSwitch = document.getElementById('entryModeSwitch');
@@ -323,6 +352,7 @@
                     : 'Paso 2: Proveedor y fecha de entrada';
 
                 providerBlock.classList.toggle('d-none', isProduction);
+                providerTaxBlock.classList.toggle('d-none', isProduction);
 
                 document.querySelectorAll('.purchase-price, .purchase-currency').forEach((el) => {
                     const variantId = el.dataset.variantId;
@@ -345,7 +375,7 @@
 
                 toStep3.disabled = isProduction
                     ? (!purchaseDateInput.value || !warehouseIdInput.value)
-                    : (providerInput.value.trim() === '' || !purchaseDateInput.value || !warehouseIdInput.value);
+                    : (providerInput.value.trim() === '' || providerRifInput.value.trim() === '' || supplierInvoiceNumberInput.value.trim() === '' || supplierInvoiceControlNumberInput.value.trim() === '' || !supplierInvoiceDateInput.value || !purchaseDateInput.value || !warehouseIdInput.value);
             }
 
             function buildConsumableOptions(selectedId = '') {
@@ -685,7 +715,31 @@
             providerInput.addEventListener('input', function () {
                 toStep3.disabled = entryMode === 'production'
                     ? (!purchaseDateInput.value || !warehouseIdInput.value)
-                    : (providerInput.value.trim() === '' || !purchaseDateInput.value || !warehouseIdInput.value);
+                    : (providerInput.value.trim() === '' || providerRifInput.value.trim() === '' || supplierInvoiceNumberInput.value.trim() === '' || supplierInvoiceControlNumberInput.value.trim() === '' || !supplierInvoiceDateInput.value || !purchaseDateInput.value || !warehouseIdInput.value);
+            });
+
+            providerRifInput.addEventListener('input', function () {
+                toStep3.disabled = entryMode === 'production'
+                    ? (!purchaseDateInput.value || !warehouseIdInput.value)
+                    : (providerInput.value.trim() === '' || providerRifInput.value.trim() === '' || supplierInvoiceNumberInput.value.trim() === '' || supplierInvoiceControlNumberInput.value.trim() === '' || !supplierInvoiceDateInput.value || !purchaseDateInput.value || !warehouseIdInput.value);
+            });
+
+            supplierInvoiceNumberInput.addEventListener('input', function () {
+                toStep3.disabled = entryMode === 'production'
+                    ? (!purchaseDateInput.value || !warehouseIdInput.value)
+                    : (providerInput.value.trim() === '' || providerRifInput.value.trim() === '' || supplierInvoiceNumberInput.value.trim() === '' || supplierInvoiceControlNumberInput.value.trim() === '' || !supplierInvoiceDateInput.value || !purchaseDateInput.value || !warehouseIdInput.value);
+            });
+
+            supplierInvoiceControlNumberInput.addEventListener('input', function () {
+                toStep3.disabled = entryMode === 'production'
+                    ? (!purchaseDateInput.value || !warehouseIdInput.value)
+                    : (providerInput.value.trim() === '' || providerRifInput.value.trim() === '' || supplierInvoiceNumberInput.value.trim() === '' || supplierInvoiceControlNumberInput.value.trim() === '' || !supplierInvoiceDateInput.value || !purchaseDateInput.value || !warehouseIdInput.value);
+            });
+
+            supplierInvoiceDateInput.addEventListener('change', function () {
+                toStep3.disabled = entryMode === 'production'
+                    ? (!purchaseDateInput.value || !warehouseIdInput.value)
+                    : (providerInput.value.trim() === '' || providerRifInput.value.trim() === '' || supplierInvoiceNumberInput.value.trim() === '' || supplierInvoiceControlNumberInput.value.trim() === '' || !supplierInvoiceDateInput.value || !purchaseDateInput.value || !warehouseIdInput.value);
             });
 
             purchaseDateInput.addEventListener('change', function () {
@@ -701,13 +755,34 @@
             });
 
             toStep3.addEventListener('click', function () {
-                const providers = providerInput.value
-                    .split(',')
-                    .map(name => name.trim())
-                    .filter(Boolean);
+                const providerName = providerInput.value.trim();
+                const providerRif = providerRifInput.value.trim();
+                const supplierInvoiceNumber = supplierInvoiceNumberInput.value.trim();
+                const supplierInvoiceControlNumber = supplierInvoiceControlNumberInput.value.trim();
+                const supplierInvoiceDate = supplierInvoiceDateInput.value;
 
-                if (entryMode === 'purchase' && providers.length === 0) {
-                    alert('Debes indicar al menos un proveedor.');
+                if (entryMode === 'purchase' && !providerName) {
+                    alert('Debes indicar el proveedor principal.');
+                    return;
+                }
+
+                if (entryMode === 'purchase' && !providerRif) {
+                    alert('Debes indicar el RIF del proveedor.');
+                    return;
+                }
+
+                if (entryMode === 'purchase' && !supplierInvoiceNumber) {
+                    alert('Debes indicar el número de factura del proveedor.');
+                    return;
+                }
+
+                if (entryMode === 'purchase' && !supplierInvoiceControlNumber) {
+                    alert('Debes indicar el número de control del proveedor.');
+                    return;
+                }
+
+                if (entryMode === 'purchase' && !supplierInvoiceDate) {
+                    alert('Debes indicar la fecha de la factura del proveedor.');
                     return;
                 }
 
@@ -722,7 +797,7 @@
                     return;
                 }
 
-                itemsSelected = itemsSelected.map(item => ({ ...item, providers: entryMode === 'purchase' ? providers : [] }));
+                itemsSelected = itemsSelected.map(item => ({ ...item, providers: entryMode === 'purchase' ? [providerName] : [] }));
 
                 const providerContainer = document.getElementById('providerContainer');
                 providerContainer.innerHTML = '';
@@ -769,7 +844,7 @@
 
                 const finalSummaryText = document.getElementById('finalSummaryText');
                 const warehouseText = warehouseIdInput.options[warehouseIdInput.selectedIndex]?.text || '';
-                finalSummaryText.textContent = `Almacén: ${warehouseText} | Proveedor(es): ${providers.join(', ')} | Fecha: ${purchaseDate} | Unidades: ${totalUnits} | Monto total: ${totalAmount.toFixed(2)} ${baseCurrencyCode}`;
+                finalSummaryText.textContent = `Almacén: ${warehouseText} | Proveedor: ${providerName} | RIF: ${providerRif} | Factura: ${supplierInvoiceNumber} | Control: ${supplierInvoiceControlNumber} | Fecha factura: ${supplierInvoiceDate} | Fecha entrada: ${purchaseDate} | Unidades: ${totalUnits} | Monto total: ${totalAmount.toFixed(2)} ${baseCurrencyCode}`;
                 if (entryMode === 'production') {
                     finalSummaryText.textContent = `Almacén: ${warehouseText} | Modo: Producción interna | Fecha: ${purchaseDate} | Unidades producidas: ${totalUnits} | Costo total consumibles: ${totalAmount.toFixed(2)} ${baseCurrencyCode}`;
                 }
@@ -793,10 +868,10 @@
                 }
 
                 const providerName = providerInput.value.trim();
-                if (entryMode === 'purchase' && !providerName) {
-                    alert('Debes indicar un proveedor válido.');
-                    return;
-                }
+                const providerRif = providerRifInput.value.trim();
+                const supplierInvoiceNumber = supplierInvoiceNumberInput.value.trim();
+                const supplierInvoiceControlNumber = supplierInvoiceControlNumberInput.value.trim();
+                const supplierInvoiceDate = supplierInvoiceDateInput.value;
 
                 if (!purchaseDateInput.value) {
                     alert('Debes indicar la fecha de compra.');
@@ -812,18 +887,37 @@
                 createOrderButton.textContent = 'Guardando...';
 
                 try {
+                    const formData = new FormData();
+                    formData.append('_token', document.querySelector('input[name="_token"]').value);
+                    formData.append('entry_mode', entryMode);
+                    formData.append('purchase_date', purchaseDateInput.value);
+                    formData.append('warehouse_id', Number(warehouseIdInput.value));
+                    formData.append('provider_name', providerName);
+                    formData.append('provider_rif', providerRif);
+                    formData.append('supplier_invoice_number', supplierInvoiceNumber);
+                    formData.append('supplier_invoice_control_number', supplierInvoiceControlNumber);
+                    formData.append('supplier_invoice_date', supplierInvoiceDate);
+                    if (supplierInvoiceFileInput.files && supplierInvoiceFileInput.files[0]) {
+                        formData.append('supplier_invoice_file', supplierInvoiceFileInput.files[0]);
+                    }
+
+                    itemsSelected.forEach((item, index) => {
+                        formData.append(`itemsSelected[${index}][product_id]`, item.product_id);
+                        formData.append(`itemsSelected[${index}][name]`, item.name || '');
+                        formData.append(`itemsSelected[${index}][quantity]`, item.quantity);
+                        formData.append(`itemsSelected[${index}][price]`, item.price);
+                        formData.append(`itemsSelected[${index}][currency]`, item.currency || baseCurrencyCode);
+                        formData.append(`itemsSelected[${index}][variant][id]`, item.variant?.id || '');
+                        formData.append(`itemsSelected[${index}][variant][size]`, item.variant?.size || '');
+                        formData.append(`itemsSelected[${index}][variant][product_image]`, item.variant?.product_image || '');
+                    });
+
                     const response = await fetch('/api/create-order', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
                         },
-                        body: JSON.stringify({
-                            itemsSelected,
-                            entry_mode: entryMode,
-                            purchase_date: purchaseDateInput.value,
-                            warehouse_id: Number(warehouseIdInput.value)
-                        }),
+                        body: formData,
                     });
 
                     const data = await response.json();

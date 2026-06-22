@@ -6,6 +6,22 @@
     <style>
         body {
             font-family: Arial, sans-serif;
+            position: relative;
+        }
+
+        .non-fiscal-watermark {
+            position: fixed;
+            top: 38%;
+            left: 8%;
+            right: 8%;
+            transform: rotate(-28deg);
+            font-size: 34px;
+            font-weight: 800;
+            text-align: center;
+            color: rgba(160, 0, 0, 0.18);
+            letter-spacing: 2px;
+            z-index: 0;
+            pointer-events: none;
         }
 
         table {
@@ -30,6 +46,7 @@
     </style>
 </head>
 <body>
+<div class="non-fiscal-watermark">DOCUMENTO INTERNO - NO FISCAL - SIN VALIDEZ TRIBUTARIA</div>
 @php
     $orderCurrencyCode = strtoupper(trim((string) ($orderCurrencyCode ?? $order->sale_currency_code ?? ($tienda->base_currency ?? 'USD'))));
     $orderCurrencyCode = in_array($orderCurrencyCode, ['USD', 'EUR', 'VES'], true) ? $orderCurrencyCode : 'USD';
@@ -43,7 +60,7 @@
 <table width="100%" style="border-collapse: collapse; border: none;">
     <tr>
         <td style="text-align: left; padding: 0; border: none;">
-            <p>"Sin derecho a crédito fiscal."</p>
+            <p><strong>ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VÁLIDO COMO DOCUMENTO FISCAL</strong></p>
             <h1>{{ $tienda->name }}</h1>
             <p>RIF: {{ $tienda->rif }} J-00000005 </p>
             <p>Direccion de la empresa: {{ $tienda->country }} {{ $tienda->state }} {{ $tienda->city  }}</p>
