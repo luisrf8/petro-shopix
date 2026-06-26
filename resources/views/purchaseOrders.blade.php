@@ -31,6 +31,14 @@
                 </div>
               </div> 
               <div class="card-body">
+                <div class="mb-3">
+                  <input
+                    type="text"
+                    id="purchaseOrdersSearch"
+                    class="form-control border border-1 p-2 bg-white"
+                    placeholder="Buscar por orden, proveedor, almacén o tipo..."
+                  >
+                </div>
                 <div class="table-responsive">
                   <table class="table align-items-center mb-0">
                     <thead class="text-center">
@@ -47,9 +55,15 @@
                         <th>Acciones</th>
                       </tr>
                     </thead>
-                    <tbody class="text-center">
+                    <tbody class="text-center" id="purchaseOrdersTableBody">
                       @foreach($purchaseOrders as $order)
-                        <tr>
+                        <tr data-search="{{ \Illuminate\Support\Str::lower(collect([
+                          $order->id,
+                          $order->date,
+                          optional($order->warehouse)->name,
+                          $order->entry_mode_label,
+                          $order->provider_display_name,
+                        ])->filter()->implode(' ')) }}">
                           <td>
                             <img src="{{ $order->preview_image }}" alt="preview" style="width:48px;height:48px;object-fit:cover;border-radius:8px;">
                           </td>
@@ -86,85 +100,24 @@
 
 <!-- Control Center for Material Dashboard: parallax effects, scripts for the example pages etc -->
   <script>
-    document.getElementById('createProductForm').addEventListener('submit', function(event) {
-      event.preventDefault(); // Evita el envío normal del formulario
+    const normalizeSearchText = (value) => String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
 
-      let formData = new FormData(this); // Crear un FormData con los datos del formulario
-      const token = localStorage.getItem('authToken');
-      fetch('api/create-product', {
-        method: 'POST',
-        headers: {
-          // 'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
-          'Authorization': `Bearer ${token}`
-          
-        },
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.message === 'Product created successfully') {
-          alert('Producto creado correctamente');
-          // Cierra el modal y refresca o actualiza el contenido
-          $('#createProductModal').modal('hide');
-          // Aquí puedes añadir lógica para actualizar la lista de productos si existe
-        } else {
-          alert('Ocurrió un error al crear el producto');
-        }
-      })
-      .catch(error => console.error('Error:', error));
-    });
+    const purchaseOrdersSearchInput = document.getElementById('purchaseOrdersSearch');
+    const purchaseOrdersRows = document.querySelectorAll('#purchaseOrdersTableBody tr');
 
-    document.getElementById('createCategoryForm').addEventListener('submit', function(event) {
-      event.preventDefault(); // Evita el envío normal del formulario
+    if (purchaseOrdersSearchInput) {
+      purchaseOrdersSearchInput.addEventListener('input', function () {
+        const searchValue = normalizeSearchText(this.value);
 
-      let formData = new FormData(this); // Crear un FormData con los datos del formulario
-      const token = localStorage.getItem('authToken');
-      fetch('api/create-category', {
-        method: 'POST',
-        headers: {
-          // 'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 201) {
-          alert('Categoría creado correctamente');
-          // Cierra el modal y refresca o actualiza el contenido
-          $('#createCategoryModal').modal('hide');
-          // Aquí puedes añadir lógica para actualizar la lista de Categoría si existe
-        } else {
-          alert('Ocurrió un error al crear la Categoría');
-        }
-      })
-      .catch(error => console.error('Error:', error));
-    });
-    function getSucursales() {
-      const token = localStorage.getItem('authToken');
-      fetch('api/categories', {
-          method: 'post',
-          headers: {
-              // 'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
-              'Authorization': `Bearer ${token}`
-          }
-      })
-      .then(response => response.json())
-      .then(data => {
-          const categorySelector = document.getElementById('categorySelector');
-          
-          // Limpiamos las opciones actuales
-          categorySelector.innerHTML = '<option value="">Selecciona una categoría</option>';
-          
-          // Agregamos cada categoría al selector
-          data.forEach(category => {
-              const option = document.createElement('option');
-              option.value = category.id;
-              option.textContent = category.name;
-              categorySelector.appendChild(option);
-          });
-      })
-      .catch(error => console.error('Error:', error));
-  }
+        purchaseOrdersRows.forEach((row) => {
+          const searchableText = normalizeSearchText(row.getAttribute('data-search'));
+          row.style.display = searchableText.includes(searchValue) ? '' : 'none';
+        });
+      });
+    }
   </script>
 @endpush

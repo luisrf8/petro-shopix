@@ -31,7 +31,8 @@ use App\Http\Controllers\{
     ElectronicInvoicingController,
     SalesFiscalController,
     SellerCommissionController,
-    WithholdingController
+    WithholdingController,
+    ProjectModuleController
 };
 
 // RUTAS DE INVITADOS
@@ -264,6 +265,33 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::post('/appointments/schedules', [AppointmentController::class, 'storeSchedule'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.schedules.store');
     Route::post('/appointments/packages', [AppointmentController::class, 'storePackage'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.packages.store');
     Route::get('/appointments/available-slots', [AppointmentController::class, 'availableSlots'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.availableSlots');
+
+    // Módulos separados: nómina, proyectos y cotizaciones
+    Route::get('/projects-module', [ProjectModuleController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.index');
+
+    Route::get('/nomina', [ProjectModuleController::class, 'payrollIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.payroll.index');
+    Route::post('/nomina/team-members', [ProjectModuleController::class, 'storeTeamMember'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.team.store');
+    Route::post('/nomina/team-members/{teamMember}/status', [ProjectModuleController::class, 'updateTeamMemberStatus'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.team.status');
+    Route::post('/nomina/payrolls', [ProjectModuleController::class, 'storePayroll'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.payrolls.store');
+
+    Route::get('/proyectos', [ProjectModuleController::class, 'projectsIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.index');
+    Route::post('/proyectos', [ProjectModuleController::class, 'storeProject'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.store');
+    Route::get('/proyectos/{project}', [ProjectModuleController::class, 'projectShow'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.show');
+    Route::post('/proyectos/{project}/assets', [ProjectModuleController::class, 'storeProjectAsset'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.assets.store');
+    Route::get('/proyectos/assets/{asset}/file', [ProjectModuleController::class, 'projectAssetFile'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.assets.file');
+    Route::post('/proyectos/{project}/phase', [ProjectModuleController::class, 'updateProjectPhase'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.phase');
+    Route::post('/proyectos/{project}/complete', [ProjectModuleController::class, 'completeProject'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.complete');
+    Route::post('/proyectos/{project}/tasks', [ProjectModuleController::class, 'storeProjectTask'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.tasks.store');
+    Route::post('/proyectos/tasks/{task}/status', [ProjectModuleController::class, 'updateProjectTaskStatus'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.tasks.status');
+    Route::post('/proyectos/{project}/assignments', [ProjectModuleController::class, 'storeProjectAssignment'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.assignments.store');
+
+    Route::get('/cotizaciones', [ProjectModuleController::class, 'quotationsIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.index');
+    Route::post('/cotizaciones', [ProjectModuleController::class, 'storeQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.store');
+    Route::put('/cotizaciones/{quotation}', [ProjectModuleController::class, 'updateQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.update');
+    Route::get('/cotizaciones/{quotation}/pdf', [ProjectModuleController::class, 'quotationPdf'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.pdf');
+    Route::post('/cotizaciones/{quotation}/to-project', [ProjectModuleController::class, 'convertQuotationToProject'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.toProject');
+    Route::post('/cotizaciones/{quotation}/to-sale', [ProjectModuleController::class, 'convertQuotationToSale'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.toSale');
+    Route::post('/cotizaciones/{quotation}/to-inventory-entry', [ProjectModuleController::class, 'convertQuotationToInventoryEntry'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.toInventory');
 
     // Reportes PDF
     Route::get('/reports', [ReportController::class, 'index'])->middleware('role.name:owner,admin,administrador')->name('reports.index');

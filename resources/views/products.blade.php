@@ -267,7 +267,7 @@
                     $icon = 'category'; // ícono por defecto
                 }
               @endphp
-              <div class="category-item flex-shrink-0" data-name="{{ strtolower($categoryItem['name']) }}">
+              <div class="category-item flex-shrink-0" data-search="{{ \Illuminate\Support\Str::lower((string) $categoryItem['name']) }}">
                 <a href="{{ route('products.byCategory', $categoryItem->id) }}" class="category-filter-link {{ (isset($category) && (int) $category->id === (int) $categoryItem->id) ? 'is-active' : '' }}" aria-label="Filtrar por categoria {{ $categoryItem['name'] }}">
                   <i class="material-symbols-rounded category-filter-icon">{{ $icon }}</i>
                   <span>{{ $categoryItem['name'] }}</span>
@@ -400,7 +400,21 @@
             ? $product->images[0]
             : $variantImage;
         @endphp
-        <div class="product-item col-12 col-md-6 col-xl-3 mb-2" data-name="{{ strtolower($product->name) }}">
+        @php
+          $productSearchTerms = collect([
+            $product->name,
+            $product->description,
+            optional($product->category)->name,
+          ])->merge($product->variants->map(function ($variant) {
+            return collect([
+              $variant->size,
+              $variant->barcode,
+              $variant->sku,
+              $variant->code,
+            ])->filter()->implode(' ');
+          }))->filter()->implode(' ');
+        @endphp
+        <div class="product-item col-12 col-md-6 col-xl-3 mb-2" data-search="{{ \Illuminate\Support\Str::lower($productSearchTerms) }}">
           <div class="product-card-clean">
               <a href="{{ route('productItem', $product->id) }}" class="product-thumb-clean" aria-label="Abrir producto {{ $product->name }}">
                 @if($productCoverImage)
@@ -522,80 +536,86 @@
       });
     }
 
-    document.getElementById('createProductForm').addEventListener('submit', function(event) {
-      event.preventDefault(); // Evita el envío normal del formulario
+    const createProductForm = document.getElementById('createProductForm');
+    if (createProductForm) {
+      createProductForm.addEventListener('submit', function(event) {
+        event.preventDefault(); // Evita el envío normal del formulario
 
-      let formData = new FormData(this); // Crear un FormData con los datos del formulario
+        let formData = new FormData(this); // Crear un FormData con los datos del formulario
 
-      fetch(createProductEndpoint, {
-        method: 'POST',
-        headers: {
-          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'same-origin',
-        body: formData
-      })
-      .then(async response => {
-        const data = await response.json().catch(() => ({}));
+        fetch(createProductEndpoint, {
+          method: 'POST',
+          headers: {
+            'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'same-origin',
+          body: formData
+        })
+        .then(async response => {
+          const data = await response.json().catch(() => ({}));
 
-        if (!response.ok) {
-          const validationMessage = data?.errors
-            ? Object.values(data.errors).flat().join('\n')
-            : null;
-          throw new Error(validationMessage || data.message || data.error || 'No se pudo crear el producto.');
-        }
+          if (!response.ok) {
+            const validationMessage = data?.errors
+              ? Object.values(data.errors).flat().join('\n')
+              : null;
+            throw new Error(validationMessage || data.message || data.error || 'No se pudo crear el producto.');
+          }
 
-        return data;
-      })
-      .then(data => {
-        if (data.success || data.message === 'Product created successfully') {
-          alert('Producto creado correctamente');
-          // Cierra el modal y refresca o actualiza el contenido
-          $('#createProductModal').modal('hide');
-          window.location.reload();
-        } else {
-          throw new Error(data.message || 'No se pudo crear el producto.');
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert(error.message || 'No se pudo crear el producto.');
+          return data;
+        })
+        .then(data => {
+          if (data.success || data.message === 'Product created successfully') {
+            alert('Producto creado correctamente');
+            // Cierra el modal y refresca o actualiza el contenido
+            $('#createProductModal').modal('hide');
+            window.location.reload();
+          } else {
+            throw new Error(data.message || 'No se pudo crear el producto.');
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert(error.message || 'No se pudo crear el producto.');
+        });
       });
-    });
+    }
 
-    document.getElementById('createCategoryForm').addEventListener('submit', function(event) {
-      event.preventDefault(); // Evita el envío normal del formulario
+    const createCategoryForm = document.getElementById('createCategoryForm');
+    if (createCategoryForm) {
+      createCategoryForm.addEventListener('submit', function(event) {
+        event.preventDefault(); // Evita el envío normal del formulario
 
-      let formData = new FormData(this); // Crear un FormData con los datos del formulario
+        let formData = new FormData(this); // Crear un FormData con los datos del formulario
 
-      fetch('api/create-category', {
-        method: 'POST',
-        headers: {
-          'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
-          'Accept': 'application/json'
-        },
-        body: formData
-      })
-      .then(async response => {
-        const payload = await response.json().catch(() => ({}));
+        fetch('api/create-category', {
+          method: 'POST',
+          headers: {
+            'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value,
+            'Accept': 'application/json'
+          },
+          body: formData
+        })
+        .then(async response => {
+          const payload = await response.json().catch(() => ({}));
 
-        if (response.status === 201 || payload?.category) {
-          alert('Categoría creada correctamente');
-          window.location.reload();
-        } else {
-          const validationMessage = payload?.errors
-            ? Object.values(payload.errors).flat().join('\n')
-            : null;
-          throw new Error(validationMessage || payload.message || payload.error || 'No se pudo crear la categoría.');
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert(error.message || 'No se pudo crear la categoría.');
+          if (response.status === 201 || payload?.category) {
+            alert('Categoría creada correctamente');
+            window.location.reload();
+          } else {
+            const validationMessage = payload?.errors
+              ? Object.values(payload.errors).flat().join('\n')
+              : null;
+            throw new Error(validationMessage || payload.message || payload.error || 'No se pudo crear la categoría.');
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert(error.message || 'No se pudo crear la categoría.');
+        });
       });
-    });
+    }
 
     function getSucursales() {
       fetch('api/categories', {
@@ -621,32 +641,37 @@
       })
       .catch(error => console.error('Error:', error));
   }
-  document.getElementById('searchCategory').addEventListener('input', function () {
-    const searchValue = this.value.toLowerCase();
-    const items = document.querySelectorAll('.category-item');
+  const normalizeSearchText = (value) => String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
 
-    items.forEach(item => {
-      const name = item.getAttribute('data-name');
-      if (name.includes(searchValue)) {
-        item.style.display = 'block';
-      } else {
-        item.style.display = 'none';
-      }
-    });
-  });
-  document.getElementById('searchProduct').addEventListener('input', function () {
-    const searchValue = this.value.toLowerCase();
-    const items = document.querySelectorAll('.product-item');
+  const searchCategoryInput = document.getElementById('searchCategory');
+  if (searchCategoryInput) {
+    searchCategoryInput.addEventListener('input', function () {
+      const searchValue = normalizeSearchText(this.value);
+      const items = document.querySelectorAll('.category-item');
 
-    items.forEach(item => {
-      const name = item.getAttribute('data-name');
-      if (name.includes(searchValue)) {
-        item.style.display = 'block';
-      } else {
-        item.style.display = 'none';
-      }
+      items.forEach((item) => {
+        const searchableText = normalizeSearchText(item.getAttribute('data-search'));
+        item.style.display = searchableText.includes(searchValue) ? 'block' : 'none';
+      });
     });
-  });
+  }
+
+  const searchProductInput = document.getElementById('searchProduct');
+  if (searchProductInput) {
+    searchProductInput.addEventListener('input', function () {
+      const searchValue = normalizeSearchText(this.value);
+      const items = document.querySelectorAll('.product-item');
+
+      items.forEach((item) => {
+        const searchableText = normalizeSearchText(item.getAttribute('data-search'));
+        item.style.display = searchableText.includes(searchValue) ? 'block' : 'none';
+      });
+    });
+  }
   function getReport() {
     fetch('api/products/report', {
       method: 'GET',

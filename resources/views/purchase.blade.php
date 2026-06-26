@@ -105,7 +105,21 @@
                                 ? (\App\Support\ImageStorage::url($item->images[0]->path) ?? asset('assets/img/shopix5.png'))
                                 : asset('assets/img/shopix5.png');
                         @endphp
-                        <div class="col product-item" data-name="{{ strtolower($item->name) }}">
+                        @php
+                            $purchaseSearchTerms = collect([
+                                $item->name,
+                                $item->description,
+                                optional($item->category)->name,
+                            ])->merge(($item->variants ?? collect())->map(function ($variant) {
+                                return collect([
+                                    $variant->size,
+                                    $variant->barcode,
+                                    $variant->sku,
+                                    $variant->code,
+                                ])->filter()->implode(' ');
+                            }))->filter()->implode(' ');
+                        @endphp
+                        <div class="col product-item" data-search="{{ \Illuminate\Support\Str::lower($purchaseSearchTerms) }}">
                             <div class="card h-100">
                                 <div class="card-body">
                                                                     <div class="d-flex gap-3 align-items-center mb-2">
@@ -941,14 +955,22 @@
             updateSummaryPills();
         });
 
+        function normalizeSearchText(value) {
+            return String(value || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        }
+
         function filterProducts() {
             const searchInput = document.getElementById('searchInput');
-            const filter = searchInput.value.toLowerCase();
+            const filter = normalizeSearchText(searchInput.value);
             const productItems = document.querySelectorAll('.product-item');
 
             productItems.forEach(item => {
-                const name = item.getAttribute('data-name');
-                if (name.includes(filter)) {
+                const searchableText = normalizeSearchText(item.getAttribute('data-search'));
+                if (searchableText.includes(filter)) {
                     item.style.display = 'block'; // Mostrar si coincide
                 } else {
                     item.style.display = 'none'; // Ocultar si no coincide

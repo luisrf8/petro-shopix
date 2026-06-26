@@ -262,7 +262,7 @@
                 <div class="mb-3">
                   <label for="slug" class="form-label fw-bold">Slug / URL de acceso</label>
                   <input type="text" name="slug" id="slug" class="form-control form-control-lg" placeholder="mi-empresa" required>
-                  <small class="text-muted">Tu empresa estará disponible en: <strong>https://shopixv.com/<span id="slug-preview">mi-empresa</span></strong></small>
+                  <small class="text-muted">Tu empresa estará disponible en: <strong>https://shopixve.com/<span id="slug-preview">mi-empresa</span></strong></small>
                 </div>
 
                 <div class="mb-3">
