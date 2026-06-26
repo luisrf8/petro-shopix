@@ -2320,11 +2320,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const retentionCertificateHint = document.getElementById('retentionCertificateHint');
   const retentionPreview = document.getElementById('retentionPreview');
 
-  const suggestedOrderTaxBase = {{ json_encode(number_format($orderTaxBase, 2, '.', '')) }};
-  const suggestedOrderTaxTotal = {{ json_encode(number_format($suggestedRetentionIvaBase, 2, '.', '')) }};
-  const suggestedVatRate = {{ json_encode(number_format($suggestedVatRate, 2, '.', '')) }};
-  const suggestedIgtfAmount = {{ json_encode($orderIgtfTotal > 0 ? number_format($orderIgtfTotal, 2, '.', '') : '0.00') }};
-  const pendingBalanceAmount = {{ json_encode(number_format($paymentBalance, 2, '.', '')) }};
+  const suggestedOrderTaxBase = {{ \Illuminate\Support\Js::from(number_format($orderTaxBase, 2, '.', '')) }};
+  const suggestedOrderTaxTotal = {{ \Illuminate\Support\Js::from(number_format($suggestedRetentionIvaBase, 2, '.', '')) }};
+  const suggestedVatRate = {{ \Illuminate\Support\Js::from(number_format($suggestedVatRate, 2, '.', '')) }};
+  const suggestedIgtfAmount = {{ \Illuminate\Support\Js::from($orderIgtfTotal > 0 ? number_format($orderIgtfTotal, 2, '.', '') : '0.00') }};
+  const pendingBalanceAmount = {{ \Illuminate\Support\Js::from(number_format($paymentBalance, 2, '.', '')) }};
   let retentionAmountTouched = Boolean(retentionRetainedAmountInput?.value);
 
   const toNumber = (value) => {
