@@ -283,7 +283,7 @@
                     @if($order->has_returns)
                       <span class="text-danger">Devolución Registrada</span>
                     @elseif($canApproveDelivery)
-                      <select id="deliver-status" class="btn btn-sm toggle-status-btn {{ $order->deliver_status == 0 ? 'btn-outline-warning' : ($order->deliver_status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" onchange="updateDeliverStatus(this, {{ $order->id }})">
+                      <select id="deliver-status" data-deliver-id="{{ $order->id }}" class="btn btn-sm toggle-status-btn js-deliver-status {{ $order->deliver_status == 0 ? 'btn-outline-warning' : ($order->deliver_status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}">
                         <option value="0" {{ $order->deliver_status == 0 ? 'selected' : '' }}>Pendiente ↓</option>
                         <option value="1" {{ $order->deliver_status == 1 ? 'selected' : '' }}>Entregado ↓</option>
                         <option value="2" {{ $order->deliver_status == 2 ? 'selected' : '' }}>Cancelado ↓</option>
@@ -299,7 +299,7 @@
                     @elseif($order->has_returns)
                       <span class="text-danger">Devolución Registrada</span>
                     @elseif($canApproveSale)
-                      <select id="order-status" class="btn btn-sm toggle-status-btn {{ $order->status == 0 ? 'btn-outline-warning' : ($order->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" onchange="updateOrderStatus(this, {{ $order->id }})">
+                      <select id="order-status" data-order-id="{{ $order->id }}" class="btn btn-sm toggle-status-btn js-order-status {{ $order->status == 0 ? 'btn-outline-warning' : ($order->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}">
                         <option value="0" {{ $order->status == 0 ? 'selected' : '' }}>En Proceso ↓</option>
                         <option value="1" {{ $order->status == 1 ? 'selected' : '' }}>Aprobado ↓</option>
                         <option value="2" {{ $order->status == 2 ? 'selected' : '' }}>Negado ↓</option>
@@ -1501,9 +1501,8 @@
                 </td>
                 <td data-label="Estado">
                     @if($canApprovePayments)
-                      <select class="btn btn-sm toggle-status-btn 
-                        {{ $payment->status == 0 ? 'btn-outline-warning' : ($payment->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}" 
-                        onchange="updatePaymentStatus(this, {{ $payment->id }})">
+                      <select data-payment-id="{{ $payment->id }}" class="btn btn-sm toggle-status-btn js-payment-status 
+                        {{ $payment->status == 0 ? 'btn-outline-warning' : ($payment->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}">
                           <option value="0" {{ $payment->status == 0 ? 'selected' : '' }}>En Proceso ↓</option>
                           <option value="1" {{ $payment->status == 1 ? 'selected' : '' }}>Pagado ↓</option>
                           <option value="3" {{ $payment->status == 3 ? 'selected' : '' }}>Cancelado ↓</option>
@@ -2026,6 +2025,10 @@ function updatePaymentStatus(selectElement, paymentId) {
     });
 }
 
+window.updateOrderStatus = updateOrderStatus;
+window.updateDeliverStatus = updateDeliverStatus;
+window.updatePaymentStatus = updatePaymentStatus;
+
 function submitLinkedAppointmentWorkflowAction() {
   const workflowCard = document.getElementById('linked-appointment-workflow');
   const actionSelect = document.getElementById('appointment-workflow-action');
@@ -2249,6 +2252,39 @@ function runLinkedAppointmentWorkflow(payload) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.js-order-status[data-order-id]').forEach((selectElement) => {
+    selectElement.addEventListener('change', () => {
+      const orderId = Number(selectElement.dataset.orderId || 0);
+      if (!orderId) {
+        return;
+      }
+
+      updateOrderStatus(selectElement, orderId);
+    });
+  });
+
+  document.querySelectorAll('.js-deliver-status[data-deliver-id]').forEach((selectElement) => {
+    selectElement.addEventListener('change', () => {
+      const deliverId = Number(selectElement.dataset.deliverId || 0);
+      if (!deliverId) {
+        return;
+      }
+
+      updateDeliverStatus(selectElement, deliverId);
+    });
+  });
+
+  document.querySelectorAll('.js-payment-status[data-payment-id]').forEach((selectElement) => {
+    selectElement.addEventListener('change', () => {
+      const paymentId = Number(selectElement.dataset.paymentId || 0);
+      if (!paymentId) {
+        return;
+      }
+
+      updatePaymentStatus(selectElement, paymentId);
+    });
+  });
+
   const appointmentAmountInput = document.getElementById('appointment-paid-amount');
   const appointmentMethodSelect = document.getElementById('appointment-payment-method');
   const appointmentRateInput = document.getElementById('appointment-payment-rate');
