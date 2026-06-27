@@ -647,31 +647,42 @@
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
 
-  const searchCategoryInput = document.getElementById('searchCategory');
-  if (searchCategoryInput) {
-    searchCategoryInput.addEventListener('input', function () {
-      const searchValue = normalizeSearchText(this.value);
-      const items = document.querySelectorAll('.category-item');
+  const applySearchFilter = (inputId, itemSelector) => {
+    const input = document.getElementById(inputId);
+    if (!input) {
+      return;
+    }
 
-      items.forEach((item) => {
-        const searchableText = normalizeSearchText(item.getAttribute('data-search'));
-        item.style.display = searchableText.includes(searchValue) ? 'block' : 'none';
-      });
+    const searchValue = normalizeSearchText(input.value);
+    document.querySelectorAll(itemSelector).forEach((item) => {
+      const searchableText = normalizeSearchText(
+        item.getAttribute('data-search') || item.textContent || ''
+      );
+      const isVisible = searchValue === '' || searchableText.includes(searchValue);
+      item.classList.toggle('d-none', !isVisible);
+      item.style.display = isVisible ? '' : 'none';
     });
-  }
+  };
 
-  const searchProductInput = document.getElementById('searchProduct');
-  if (searchProductInput) {
-    searchProductInput.addEventListener('input', function () {
-      const searchValue = normalizeSearchText(this.value);
-      const items = document.querySelectorAll('.product-item');
+  document.addEventListener('input', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
 
-      items.forEach((item) => {
-        const searchableText = normalizeSearchText(item.getAttribute('data-search'));
-        item.style.display = searchableText.includes(searchValue) ? 'block' : 'none';
-      });
-    });
-  }
+    if (target.id === 'searchCategory') {
+      applySearchFilter('searchCategory', '.category-item');
+    }
+
+    if (target.id === 'searchProduct') {
+      applySearchFilter('searchProduct', '.product-item');
+    }
+  });
+
+  window.addEventListener('load', () => {
+    applySearchFilter('searchCategory', '.category-item');
+    applySearchFilter('searchProduct', '.product-item');
+  });
   function getReport() {
     fetch('api/products/report', {
       method: 'GET',

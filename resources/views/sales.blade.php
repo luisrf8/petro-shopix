@@ -739,7 +739,10 @@
                                                     @endif
                                                 </div>
                                                 <div class="flex-grow-1">
-                                                    <h6 class="mb-1">{{ $package->name }}</h6>
+                                                    <h6
+                                                        class="mb-1"
+                                                        style="font-size: {{ mb_strlen((string) $package->name) > 30 ? '0.88rem' : '1rem' }}; line-height: 1.15; white-space: normal; overflow-wrap: anywhere;"
+                                                    >{{ $package->name }}</h6>
                                                     <p class="text-sm text-muted mb-0">{{ $package->items->count() }} materiales</p>
                                                     <p class="text-sm fw-bold mb-0">{{ number_format($packageTotal, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</p>
                                                     @if(!is_null($package->package_price))
@@ -779,7 +782,10 @@
                                             </a>
                                             <!-- Contenedor del texto -->
                                             <div class="flex-grow-1">
-                                                <h5 class="text-truncate" style="max-width: calc(100% - 80px); overflow: hidden; white-space: nowrap;">{{ $item->name }}</h5>
+                                                <h5
+                                                    class="mb-1"
+                                                    style="font-size: {{ mb_strlen((string) $item->name) > 30 ? '0.92rem' : '1.06rem' }}; line-height: 1.15; white-space: normal; overflow-wrap: anywhere;"
+                                                >{{ $item->name }}</h5>
                                                 <p class="text-truncate" style="max-width: calc(100% - 80px); overflow: hidden; white-space: nowrap;">{{ $item->description }}</p>
                                             </div>
                                         </div>
@@ -2211,9 +2217,58 @@ function updateQuantity(id, newQty) {
 
         let activeCategory = 'all';
 
+        function normalizeSalesSearchText(value) {
+            return String(value || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        }
+
+        function getSalesSearchTerm() {
+            const searchInput = document.getElementById('searchInput');
+            return normalizeSalesSearchText(searchInput?.value || '');
+        }
+
+        function shouldShowSalesItem(item, filter) {
+            const itemCategory = String(item.getAttribute('data-category') || '').trim();
+            const itemSearchText = normalizeSalesSearchText(
+                item.getAttribute('data-search') ||
+                item.getAttribute('data-name') ||
+                item.textContent ||
+                ''
+            );
+
+            let categoryAllowed = true;
+            if (activeCategory === 'packages') {
+                categoryAllowed = itemCategory === 'packages';
+            } else if (activeCategory !== 'all') {
+                if (itemCategory === 'packages') {
+                    const packageCategoriesRaw = String(item.getAttribute('data-package-categories') || '').trim();
+                    const packageCategories = packageCategoriesRaw === ''
+                        ? []
+                        : packageCategoriesRaw.split(',').map(v => v.trim()).filter(Boolean);
+                    categoryAllowed = packageCategories.includes(activeCategory);
+                } else {
+                    categoryAllowed = itemCategory === activeCategory;
+                }
+            }
+
+            const searchAllowed = filter === '' || itemSearchText.includes(filter);
+            return categoryAllowed && searchAllowed;
+        }
+
+        function applySalesFilters() {
+            const productItems = document.querySelectorAll('.product-item');
+            const filter = getSalesSearchTerm();
+
+            productItems.forEach(item => {
+                item.classList.toggle('d-none', !shouldShowSalesItem(item, filter));
+            });
+        }
+
         function filterProductsByCategory(categoryId) {
             activeCategory = String(categoryId || 'all').trim();
-            const productItems = document.querySelectorAll('.product-item');
             const categoryButtons = document.querySelectorAll('.category-filter.sale-category-pill');
 
             categoryButtons.forEach(button => button.classList.remove('is-active'));
@@ -2222,32 +2277,7 @@ function updateQuantity(id, newQty) {
                 activeCategoryItem.classList.add('is-active');
             }
 
-            const isAll = activeCategory === 'all';
-            const isPackages = activeCategory === 'packages';
-
-            productItems.forEach(item => {
-                const itemCategory = String(item.getAttribute('data-category') || '').trim();
-                let shouldShow = false;
-
-                if (itemCategory === 'packages') {
-                    const packageCategoriesRaw = String(item.getAttribute('data-package-categories') || '').trim();
-                    const packageCategories = packageCategoriesRaw === ''
-                        ? []
-                        : packageCategoriesRaw.split(',').map(v => v.trim()).filter(Boolean);
-
-                    shouldShow = isAll || isPackages || (!isPackages && packageCategories.includes(activeCategory));
-                } else {
-                    shouldShow = isAll || (!isPackages && itemCategory === activeCategory);
-                }
-
-                item.classList.toggle('d-none', !shouldShow);
-            });
-
-            // Limpiar el campo de búsqueda de productos al cambiar de categoría
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                searchInput.value = '';
-            }
+            applySalesFilters();
         }
 
         function toggleProductVariantPanel(productId) {
@@ -2284,34 +2314,21 @@ function updateQuantity(id, newQty) {
         }
         
         function filterProducts() {
-            const searchInput = document.getElementById('searchInput');
-            const filter = String(searchInput?.value || '').toLowerCase().trim();
-            const productItems = document.querySelectorAll('.product-item');
-
-            const isAll = activeCategory === 'all';
-            const isPackages = activeCategory === 'packages';
-
-            productItems.forEach(item => {
-                const name = String(item.getAttribute('data-name') || '');
-                const searchableText = String(item.getAttribute('data-search') || name).toLowerCase();
-                const itemCategory = String(item.getAttribute('data-category') || '').trim();
-                let matchCategory = false;
-
-                if (itemCategory === 'packages') {
-                    const packageCategoriesRaw = String(item.getAttribute('data-package-categories') || '').trim();
-                    const packageCategories = packageCategoriesRaw === ''
-                        ? []
-                        : packageCategoriesRaw.split(',').map(v => v.trim()).filter(Boolean);
-                    matchCategory = isAll || isPackages || (!isPackages && packageCategories.includes(activeCategory));
-                } else {
-                    matchCategory = isAll || (!isPackages && itemCategory === activeCategory);
-                }
-
-                const shouldShow = matchCategory && searchableText.includes(filter);
-
-                item.classList.toggle('d-none', !shouldShow);
-            });
+            applySalesFilters();
         }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', filterProducts);
+                searchInput.addEventListener('search', filterProducts);
+            }
+
+            applySalesFilters();
+        });
+
+        window.filterProducts = filterProducts;
+        window.filterProductsByCategory = filterProductsByCategory;
 
         function showProductDetails(name, description, imageUrl, price, stock, size) {
             // Rellenar los datos del modal
