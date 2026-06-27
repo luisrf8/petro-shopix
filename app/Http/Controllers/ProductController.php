@@ -636,10 +636,26 @@ class ProductController extends Controller
             $createdProducts = 0;
             $createdVariants = 0;
             $skippedRows = 0;
+            $lastCategoryName = '';
+            $lastProductName = '';
 
             foreach ($normalizedRows as $row) {
-                $categoryName = trim((string) ($row['category_name'] ?? ''));
-                $productName = trim((string) ($row['product_name'] ?? ''));
+                $rawCategoryName = trim((string) ($row['category_name'] ?? ''));
+                $rawProductName = trim((string) ($row['product_name'] ?? ''));
+
+                if ($rawCategoryName !== '') {
+                    if ($lastCategoryName !== '' && $rawCategoryName !== $lastCategoryName) {
+                        $lastProductName = '';
+                    }
+                    $lastCategoryName = $rawCategoryName;
+                }
+
+                if ($rawProductName !== '') {
+                    $lastProductName = $rawProductName;
+                }
+
+                $categoryName = $rawCategoryName !== '' ? $rawCategoryName : $lastCategoryName;
+                $productName = $rawProductName !== '' ? $rawProductName : $lastProductName;
 
                 if ($categoryName === '' || $productName === '') {
                     $skippedRows++;
@@ -690,6 +706,7 @@ class ProductController extends Controller
                             'size' => $row['variant_size'] ?? 'Única',
                             'price' => $row['variant_price'] ?? null,
                             'stock' => $row['variant_stock'] ?? 0,
+                            'barcode' => $row['variant_barcode'] ?? null,
                             'unit_type' => $row['variant_unit_type'] ?? 'unidad',
                         ]];
                     }
@@ -736,6 +753,20 @@ class ProductController extends Controller
                     }
 
                     $productVariant = ProductVariant::updateOrCreate($variantLookup, $variantValues);
+
+                    $barcode = $this->sanitizeVariantCode($variant['barcode'] ?? null);
+                    if (!empty($barcode)) {
+                        try {
+                            $this->assertVariantCodeAvailable($barcode, (int) $productVariant->id);
+                            if ((string) ($productVariant->barcode ?? '') !== $barcode) {
+                                $productVariant->barcode = $barcode;
+                                $productVariant->save();
+                            }
+                        } catch (\Illuminate\Validation\ValidationException $exception) {
+                            // Continue import when barcode is duplicated in DB or CSV.
+                        }
+                    }
+
                     $this->ensureVariantCodes($productVariant);
 
                     $createdVariants++;
@@ -1133,9 +1164,10 @@ class ProductController extends Controller
             'category_description' => ['category_description', 'descripcion_categoria', 'desc_categoria'],
             'product_name' => ['product_name', 'nombre_producto', 'producto_nombre', 'producto_base', 'producto', 'name', 'nombre', 'item', 'articulo'],
             'product_description' => ['product_description', 'descripcion_producto', 'description', 'descripcion'],
-            'variant_size' => ['size', 'talla', 'variant_size', 'variantes', 'variantes_especificaciones', 'especificaciones', 'presentacion'],
+            'variant_size' => ['size', 'talla', 'variant_size', 'variante', 'variantes', 'variantes_especificaciones', 'especificaciones', 'presentacion'],
             'variant_price' => ['price', 'precio', 'variant_price', 'costo'],
-            'variant_stock' => ['stock', 'existencia', 'inventario', 'variant_stock'],
+            'variant_stock' => ['stock', 'existencia', 'inventario', 'cantidad', 'cant', 'qty', 'variant_stock'],
+            'variant_barcode' => ['variant_barcode', 'barcode', 'codigo', 'codigo_barras', 'cod_barra'],
             'variant_unit_type' => ['unit_type', 'unidad', 'tipo_unidad'],
             'variants' => ['variants', 'variantes'],
             'product_is_active' => ['product_is_active', 'activo_producto', 'estado_producto'],
@@ -1186,6 +1218,7 @@ class ProductController extends Controller
             'variant_size',
             'variant_price',
             'variant_stock',
+            'variant_barcode',
             'variant_unit_type',
             'variants',
             'product_is_active',
