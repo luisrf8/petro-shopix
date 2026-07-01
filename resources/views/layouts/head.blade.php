@@ -45,6 +45,16 @@
   $dollarRateValue = isset($dollarRate) ? $dollarRate : null;
 @endphp
 <style>
+  #navbarBlur {
+    position: relative;
+    z-index: 2;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: saturate(180%) blur(6px);
+    -webkit-backdrop-filter: saturate(180%) blur(6px);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    margin-bottom: 0.35rem;
+  }
+
   #navbarBlur .container-fluid {
     display: flex;
     align-items: center;

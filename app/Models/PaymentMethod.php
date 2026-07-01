@@ -10,11 +10,12 @@ class PaymentMethod extends Model
 {
     use HasFactory;
     
-    protected $fillable = ['name', 'currency_id', 'admin_name', 'dni', 'description', 'bank', 'status', 'tenant_id', 'qr_image', 'has_reference', 'applies_igtf_base'];
+    protected $fillable = ['name', 'currency_id', 'admin_name', 'dni', 'description', 'bank', 'status', 'tenant_id', 'qr_image', 'has_reference', 'requires_proof_image', 'applies_igtf_base'];
 
     protected $casts = [
         'status' => 'boolean',
         'has_reference' => 'boolean',
+        'requires_proof_image' => 'boolean',
         'applies_igtf_base' => 'boolean',
     ];
 
@@ -35,5 +36,14 @@ class PaymentMethod extends Model
         }
 
         return !in_array(Str::lower(trim((string) $this->name)), ['efectivo', 'punto de venta', 'pago movil'], true);
+    }
+
+    public function requiresProofImage(): bool
+    {
+        if (array_key_exists('requires_proof_image', $this->attributes) && $this->attributes['requires_proof_image'] !== null) {
+            return (bool) $this->attributes['requires_proof_image'];
+        }
+
+        return $this->usesReference();
     }
 }

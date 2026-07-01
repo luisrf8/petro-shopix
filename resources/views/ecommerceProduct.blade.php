@@ -1660,6 +1660,7 @@
                 productId: selectedVariant.productId,
                 productName: selectedVariant.productName,
                 variantSize: selectedVariant.size,
+                imageSrc: selectedVariant.imageSrc || null,
                 price: Number(selectedVariant.price),
                 qty: 1
               };

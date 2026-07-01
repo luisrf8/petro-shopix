@@ -123,6 +123,8 @@ class SaleController extends Controller
         $validated = $request->validate([
             'delivery_type' => 'nullable|in:pickup,delivery,shipping',
             'delivery_address' => 'nullable|string|max:500',
+            'delivery_receiver_name' => 'nullable|string|max:120',
+            'delivery_receiver_phone' => 'nullable|string|max:30',
             'delivery_city_id' => 'nullable|integer|exists:cities,id',
             'delivery_distance_km' => 'nullable|numeric|min:0',
             'global_discount_percentage' => 'nullable|numeric|min:0|max:100',
@@ -203,6 +205,8 @@ class SaleController extends Controller
         $dollarRate = $request->dollarRate;
         $deliveryType = $validated['delivery_type'] ?? 'pickup';
         $deliveryAddress = trim((string) ($validated['delivery_address'] ?? ''));
+        $deliveryReceiverName = trim((string) ($validated['delivery_receiver_name'] ?? ''));
+        $deliveryReceiverPhone = trim((string) ($validated['delivery_receiver_phone'] ?? ''));
         $markDelivered = (bool) ($validated['mark_delivered'] ?? false);
         $markPaymentsPaid = (bool) ($validated['mark_payments_paid'] ?? false);
         $markSaleCompleted = (bool) ($validated['mark_sale_completed'] ?? false);
@@ -212,6 +216,10 @@ class SaleController extends Controller
 
         if (in_array($deliveryType, ['delivery', 'shipping'], true) && $deliveryAddress === '') {
             return response()->json(['error' => 'La dirección es obligatoria para delivery o envío.'], 422);
+        }
+
+        if (in_array($deliveryType, ['delivery', 'shipping'], true) && ($deliveryReceiverName === '' || $deliveryReceiverPhone === '')) {
+            return response()->json(['error' => 'Debes indicar nombre y teléfono de la persona que recibe para delivery o envío.'], 422);
         }
 
         $tienda = Tenant::find($tenantId);
@@ -238,6 +246,9 @@ class SaleController extends Controller
             default => 'Retiro en tienda',
         };
         $address = $deliveryType !== 'pickup' ? $deliveryAddress : 'Tienda';
+        if ($deliveryType !== 'pickup') {
+            $address .= "\nRecibe: {$deliveryReceiverName}\nTeléfono receptor: {$deliveryReceiverPhone}";
+        }
 
         if (!$customerId) {
             return response()->json(['error' => 'ID de cliente no válido.'], 400);
@@ -443,7 +454,7 @@ class SaleController extends Controller
                     return response()->json(['error' => 'El método de pago ' . $paymentMethod->name . ' requiere una referencia.'], 422);
                 }
 
-                if ($requiresReference && !$request->hasFile("payments.$index.proof_image")) {
+                if ($paymentMethod->requiresProofImage() && !$request->hasFile("payments.$index.proof_image")) {
                     return response()->json(['error' => 'El método de pago ' . $paymentMethod->name . ' requiere comprobante.'], 422);
                 }
 
@@ -836,6 +847,8 @@ class SaleController extends Controller
         $customerId = $request->customer_id;
         $preference = $request->preference;
         $address = $request->direccion;
+        $deliveryReceiverName = trim((string) $request->input('delivery_receiver_name', ''));
+        $deliveryReceiverPhone = trim((string) $request->input('delivery_receiver_phone', ''));
     
         // Validación de productos
         if (empty($itemsSelected) || !is_array($itemsSelected)) {
@@ -891,6 +904,10 @@ class SaleController extends Controller
             return response()->json(['error' => 'La dirección es obligatoria para delivery o envío.'], 422);
         }
 
+        if (in_array($deliveryType, ['delivery', 'shipping'], true) && ($deliveryReceiverName === '' || $deliveryReceiverPhone === '')) {
+            return response()->json(['error' => 'Debes indicar nombre y teléfono de la persona que recibe para delivery o envío.'], 422);
+        }
+
         if ($deliveryType === 'delivery' && (bool) ($tenantForSale->restrict_delivery_city_to_tenant ?? true)) {
             $deliveryCityId = (int) $request->input('delivery_city_id', 0);
             $shippingCityValidation = $this->validateShippingCityAgainstTenant($tenantForSale, $deliveryCityId);
@@ -907,12 +924,16 @@ class SaleController extends Controller
         $saleCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenantForSale);
 
         // Crear orden de venta con status en 0 (pendiente)
+        $formattedAddress = in_array($deliveryType, ['delivery', 'shipping'], true)
+            ? trim((string) $address) . "\nRecibe: {$deliveryReceiverName}\nTeléfono receptor: {$deliveryReceiverPhone}"
+            : ($address ?? 'Tienda');
+
         $salesOrder = SalesOrder::create([
             'user_id' => $customerId,
             'sales_rep_user_id' => $this->resolveSalesRepresentativeId(),
             'date' => now()->toDateString(),
             'status' => 0, // Pendiente por defecto en eCommerce
-            'address' => $address ?? 'Tienda',
+            'address' => $formattedAddress,
             'preference' => $preference,
             'tenant_id' => $tenantForSale->id,
             'sale_currency_code' => $saleCurrencyCode,
@@ -2431,7 +2452,7 @@ class SaleController extends Controller
         DB::raw("SET @user_id = " . auth()->id());
 
         $user = auth()->user();
-        if (!$user?->hasStoreRole('owner', 'admin', 'warehouse', 'delivery')) {
+        if (!$user?->hasStoreRole('owner', 'admin', 'seller', 'warehouse', 'delivery')) {
             return response()->json(['message' => 'No autorizado para cambiar el estado de entrega.'], 403);
         }
 
@@ -2602,6 +2623,103 @@ class SaleController extends Controller
                 'message' => 'Pago actualizado, pero no se envió correo.'
             ]);
         }
+    }
+
+    public function updatePaymentEntry($id, Request $request)
+    {
+        $user = auth()->user();
+        if (!$user?->hasStoreRole('owner', 'admin', 'seller')) {
+            return response()->json(['success' => false, 'message' => 'No autorizado para editar pagos.'], 403);
+        }
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'reference' => 'nullable|string|max:255',
+            'proof_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+        ]);
+
+        $payment = Payment::with(['salesOrder', 'images'])->findOrFail($id);
+
+        if ((int) ($payment->status ?? 0) === 1) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Los pagos aprobados no se pueden editar.',
+            ], 422);
+        }
+
+        $updatedAmount = round((float) ($validated['amount'] ?? 0), 2);
+        $payment->amount = $updatedAmount;
+        $payment->amount_base = $updatedAmount;
+        $payment->amount_original = $updatedAmount;
+        $payment->exchange_rate_to_base = 1;
+        $payment->reference = trim((string) ($validated['reference'] ?? '')) ?: null;
+        $payment->save();
+
+        if ($request->hasFile('proof_image')) {
+            foreach ($payment->images as $existingImage) {
+                $existingPath = trim((string) ($existingImage->image_path ?? ''));
+                if ($existingPath !== '') {
+                    ImageStorage::deleteIfExists($existingPath);
+                }
+                $existingImage->delete();
+            }
+
+            $proofPath = ImageStorage::storeUploadedFile($request->file('proof_image'), 'payment_proofs');
+            if (!empty($proofPath)) {
+                PaymentImage::create([
+                    'payment_id' => $payment->id,
+                    'image_path' => $proofPath,
+                ]);
+            }
+        }
+
+        if ($payment->salesOrder) {
+            $payment->salesOrder->loadMissing(['payments', 'details', 'returns.items', 'salesRepresentative']);
+            $this->syncSellerCommissionForOrder($payment->salesOrder);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pago actualizado correctamente.',
+        ]);
+    }
+
+    public function deletePaymentEntry($id)
+    {
+        $user = auth()->user();
+        if (!$user?->hasStoreRole('owner', 'admin', 'seller')) {
+            return response()->json(['success' => false, 'message' => 'No autorizado para eliminar pagos.'], 403);
+        }
+
+        $payment = Payment::with(['salesOrder', 'images'])->findOrFail($id);
+
+        if ((int) ($payment->status ?? 0) === 1) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Los pagos aprobados no se pueden eliminar.',
+            ], 422);
+        }
+
+        foreach ($payment->images as $existingImage) {
+            $existingPath = trim((string) ($existingImage->image_path ?? ''));
+            if ($existingPath !== '') {
+                ImageStorage::deleteIfExists($existingPath);
+            }
+            $existingImage->delete();
+        }
+
+        $order = $payment->salesOrder;
+        $payment->delete();
+
+        if ($order) {
+            $order->loadMissing(['payments', 'details', 'returns.items', 'salesRepresentative']);
+            $this->syncSellerCommissionForOrder($order);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pago eliminado correctamente.',
+        ]);
     }
 
     private function attemptElectronicEmission(SalesOrder $order): void

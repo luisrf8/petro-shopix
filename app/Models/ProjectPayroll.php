@@ -20,11 +20,15 @@ class ProjectPayroll extends Model
         'currency_code',
         'paid_at',
         'notes',
+        'payment_reason',
+        'deduction_reason',
+        'total_to_pay',
         'created_by',
     ];
 
     protected $casts = [
         'amount' => 'float',
+        'total_to_pay' => 'float',
         'paid_at' => 'date',
     ];
 
@@ -36,5 +40,10 @@ class ProjectPayroll extends Model
     public function teamMember()
     {
         return $this->belongsTo(ProjectTeamMember::class, 'team_member_id');
+    }
+
+    public function items()
+    {
+        return $this->hasMany(ProjectPayrollItem::class, 'payroll_entry_id')->orderBy('sort_order');
     }
 }

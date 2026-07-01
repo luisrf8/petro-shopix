@@ -1321,7 +1321,9 @@
           <div>
             <div class="products-summary">
               <span id="products-counter">Mostrando {{ $productItems->count() }} resultado{{ $productItems->count() == 1 ? '' : 's' }}</span>
-              <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn">Ver todos los productos</a>
+              <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-dark btn-sm px-3">
+                <i class="bi bi-grid me-1"></i>Ver todos los productos
+              </a>
             </div>
 
             <div class="row" id="products-container">

@@ -41,10 +41,10 @@ Route::middleware('guest')->group(function () {
     Route::post('admin/login', [AuthenticatedSessionController::class, 'authenticateAdmin'])->name('admin.login.submit');
     Route::post('client/login', [AuthenticatedSessionController::class, 'authenticateCustomer'])->name('client.login.submit');
     Route::get('client/login/{provider}', [AuthenticatedSessionController::class, 'redirectToCustomerProvider'])
-        ->where('provider', 'google|facebook|apple')
+        ->where('provider', 'google')
         ->name('client.social.redirect');
     Route::get('client/login/{provider}/callback', [AuthenticatedSessionController::class, 'handleCustomerProviderCallback'])
-        ->where('provider', 'google|facebook|apple')
+        ->where('provider', 'google')
         ->name('client.social.callback');
     Route::get('login', function () {
         return redirect('/admin/login');
@@ -273,6 +273,7 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::post('/nomina/team-members', [ProjectModuleController::class, 'storeTeamMember'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.team.store');
     Route::post('/nomina/team-members/{teamMember}/status', [ProjectModuleController::class, 'updateTeamMemberStatus'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.team.status');
     Route::post('/nomina/payrolls', [ProjectModuleController::class, 'storePayroll'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.payrolls.store');
+    Route::get('/nomina/payrolls/{payroll}/comprobante', [ProjectModuleController::class, 'payrollReceipt'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.payrolls.receipt');
 
     Route::get('/proyectos', [ProjectModuleController::class, 'projectsIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.index');
     Route::post('/proyectos', [ProjectModuleController::class, 'storeProject'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.projects.store');

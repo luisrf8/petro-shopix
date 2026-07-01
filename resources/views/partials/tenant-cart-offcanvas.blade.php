@@ -727,18 +727,6 @@
       'icon' => 'bi bi-google',
       'enabled' => filled(config('services.google.client_id')) && filled(config('services.google.client_secret')) && filled(config('services.google.redirect')),
     ],
-    [
-      'key' => 'facebook',
-      'label' => 'Facebook',
-      'icon' => 'bi bi-facebook',
-      'enabled' => filled(config('services.facebook.client_id')) && filled(config('services.facebook.client_secret')) && filled(config('services.facebook.redirect')),
-    ],
-    [
-      'key' => 'apple',
-      'label' => 'Apple',
-      'icon' => 'bi bi-apple',
-      'enabled' => filled(config('services.apple.client_id')) && filled(config('services.apple.client_secret')) && filled(config('services.apple.redirect')),
-    ],
   ];
 @endphp
 
@@ -852,6 +840,9 @@
             <i class="bi bi-whatsapp me-2"></i>Realizar pedido
           @endif
         </button>
+        <button id="tenant-cart-whatsapp-consult" type="button" class="btn btn-outline-success w-100 mt-2">
+          <i class="bi bi-whatsapp me-2"></i>Consultar disponibilidad por WhatsApp
+        </button>
       </div>
     </div>
   </div>
@@ -922,7 +913,7 @@
                       <input type="text" class="form-control" id="tenant-pro-register-name" placeholder="Nombre" required>
                     </div>
                     <div class="col-12 col-md-6">
-                      <input type="email" class="form-control" id="tenant-pro-register-email" placeholder="Email (opcional)">
+                      <input type="email" class="form-control" id="tenant-pro-register-email" placeholder="Email" required>
                     </div>
                     <div class="col-12 col-md-6">
                       <div class="input-group">
@@ -937,10 +928,10 @@
                       </div>
                     </div>
                     <div class="col-12 col-md-6">
-                      <input type="text" class="form-control" id="tenant-pro-register-dni" placeholder="DNI (opcional)">
+                      <input type="text" class="form-control" id="tenant-pro-register-dni" placeholder="DNI" required>
                     </div>
                     <div class="col-4 col-md-2">
-                      <select class="form-select" id="tenant-pro-register-phone-code" aria-label="Código de país teléfono">
+                      <select class="form-select" id="tenant-pro-register-phone-code" aria-label="Código de país teléfono" required>
                         <option value="+58" selected>+58</option>
                         <option value="+1">+1</option>
                         <option value="+52">+52</option>
@@ -951,7 +942,7 @@
                       </select>
                     </div>
                     <div class="col-8 col-md-4">
-                      <input type="text" class="form-control" id="tenant-pro-register-phone" placeholder="Teléfono (opcional)">
+                      <input type="text" class="form-control" id="tenant-pro-register-phone" placeholder="Teléfono" required>
                     </div>
                     <div class="col-12">
                       <button type="submit" class="btn btn-dark">Crear cuenta</button>
@@ -1354,6 +1345,7 @@
     const cartSubtotalElement = document.getElementById('tenant-cart-subtotal');
     const cartDisabledAlert = document.getElementById('tenant-cart-disabled-alert');
     const checkoutButton = document.getElementById('tenant-cart-checkout');
+    const whatsappConsultButton = document.getElementById('tenant-cart-whatsapp-consult');
     const checkoutForm = document.getElementById('tenant-checkout-form');
 
     const shippingAddressContainer = document.getElementById('tenant-shipping-address-container');
@@ -2114,10 +2106,16 @@
       cartSubtotalElement.textContent = `${subtotal.toFixed(2)} ${getBaseCurrencySymbol()}`;
 
       checkoutButton.disabled = cart.length === 0;
+      if (whatsappConsultButton) {
+        whatsappConsultButton.disabled = cart.length === 0;
+      }
 
       if (cart.length === 0) {
         cartItemsElement.innerHTML = '<p class="tenant-cart-empty">No hay productos en el carrito.</p>';
         checkoutButton.disabled = true;
+        if (whatsappConsultButton) {
+          whatsappConsultButton.disabled = true;
+        }
         return;
       }
 
@@ -2449,7 +2447,8 @@
       saveCart(cart);
     }
 
-    function checkoutByWhatsApp() {
+    function checkoutByWhatsApp(options = {}) {
+      const consultOnly = Boolean(options?.consultOnly);
       const cart = getCart();
       if (cart.length === 0) {
         alert('Tu carrito está vacío.');
@@ -2474,13 +2473,13 @@
       const authUser = getAuthUser();
       const customerName = (authUser?.name || '').trim();
 
-      if (requiresAddress && !shippingAddressResult.valid) {
+      if (!consultOnly && requiresAddress && !shippingAddressResult.valid) {
         alert(shippingAddressResult.message);
         return;
       }
 
       const deliveryContext = getTenantDeliveryContext(deliveryType, shippingDistanceInput, true);
-      if (!deliveryContext.valid) {
+      if (!consultOnly && !deliveryContext.valid) {
         alert(deliveryContext.message || 'Debes completar la información del delivery.');
         return;
       }
@@ -2492,7 +2491,11 @@
       }
 
       const lines = [];
-      lines.push(`Hola ${tenantName}, quiero realizar este pedido:`);
+      if (consultOnly) {
+        lines.push(`Hola ${tenantName}, quiero consultar disponibilidad de este carrito:`);
+      } else {
+        lines.push(`Hola ${tenantName}, quiero realizar este pedido:`);
+      }
       if (customerName) {
         lines.push(`Cliente: ${customerName}`);
       }
@@ -2505,25 +2508,29 @@
 
       lines.push('');
       lines.push(`Subtotal: ${getSubtotal(cart).toFixed(2)} ${getBaseCurrencySymbol()}`);
-      lines.push(`Entrega: ${isStoreDelivery ? 'Delivery tienda' : (isThirdPartyShipping ? 'Envío por tercero' : 'Retiro en tienda')}`);
-      if (isStoreDelivery) {
-        lines.push(`Costo delivery: ${Number(deliveryContext.fee || 0).toFixed(2)} ${getBaseCurrencySymbol()} (${deliveryContext.label || 'Retiro en tienda'})`);
-      }
-      if (requiresAddress) {
+      if (consultOnly) {
+        lines.push('Solicitud: Consulta de existencia/disponibilidad antes de confirmar pedido.');
+      } else {
+        lines.push(`Entrega: ${isStoreDelivery ? 'Delivery tienda' : (isThirdPartyShipping ? 'Envío por tercero' : 'Retiro en tienda')}`);
         if (isStoreDelivery) {
-          lines.push(`Recibe: ${shippingAddressResult.receiverName}`);
-          lines.push(`Teléfono receptor: ${shippingAddressResult.receiverPhone}`);
-          if (shippingAddressResult.extraInfo) {
-            lines.push(`Información adicional: ${shippingAddressResult.extraInfo}`);
+          lines.push(`Costo delivery: ${Number(deliveryContext.fee || 0).toFixed(2)} ${getBaseCurrencySymbol()} (${deliveryContext.label || 'Retiro en tienda'})`);
+        }
+        if (requiresAddress) {
+          if (isStoreDelivery) {
+            lines.push(`Recibe: ${shippingAddressResult.receiverName}`);
+            lines.push(`Teléfono receptor: ${shippingAddressResult.receiverPhone}`);
+            if (shippingAddressResult.extraInfo) {
+              lines.push(`Información adicional: ${shippingAddressResult.extraInfo}`);
+            }
+          } else {
+            lines.push(`Dirección: ${shippingAddressResult.address}`);
           }
-        } else {
-          lines.push(`Dirección: ${shippingAddressResult.address}`);
-        }
-        if (deliveryContext.distanceKm) {
-          lines.push(`Distancia estimada: ${deliveryContext.distanceKm.toFixed(2)} km`);
-        }
-        if (shippingAddressResult.latitude !== null && shippingAddressResult.longitude !== null) {
-          lines.push(`Ubicación exacta: https://www.google.com/maps?q=${shippingAddressResult.latitude},${shippingAddressResult.longitude}`);
+          if (deliveryContext.distanceKm) {
+            lines.push(`Distancia estimada: ${deliveryContext.distanceKm.toFixed(2)} km`);
+          }
+          if (shippingAddressResult.latitude !== null && shippingAddressResult.longitude !== null) {
+            lines.push(`Ubicación exacta: https://www.google.com/maps?q=${shippingAddressResult.latitude},${shippingAddressResult.longitude}`);
+          }
         }
       }
 
@@ -5758,9 +5765,19 @@
       }
     });
 
+    whatsappConsultButton?.addEventListener('click', () => {
+      closeTenantCartOffcanvas();
+      checkoutByWhatsApp({ consultOnly: true });
+    });
+
     document.getElementById('tenant-pro-login-form')?.addEventListener('submit', loginProCustomer);
     document.getElementById('tenant-pro-register-form')?.addEventListener('submit', registerProCustomer);
     document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+      if (button.dataset.shopixPasswordToggleBound === '1') {
+        return;
+      }
+
+      button.dataset.shopixPasswordToggleBound = '1';
       button.addEventListener('click', () => {
         const inputId = button.getAttribute('data-password-toggle');
         const input = inputId ? document.getElementById(inputId) : null;

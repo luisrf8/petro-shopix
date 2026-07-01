@@ -28,6 +28,13 @@
     <title>@yield('title', 'Mi App')</title>
     <link rel="stylesheet" href="{{ asset('assets/css/material-dashboard.min.css') }}">
     <style>
+      :root {
+        --z-cart: 1030;
+        --z-header: 1040;
+        --z-modal-backdrop: 1050;
+        --z-modal: 1055;
+      }
+
       .module-wizard-backdrop {
         position: fixed;
         inset: 0;
@@ -257,6 +264,13 @@
         margin-bottom: 0 !important;
         border-radius: 0 !important;
       }
+
+      /* Keep a single browser scroll so top navbar sticky works consistently. */
+      .main-content {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+      }
     </style>
     @stack('styles')
 </head>
@@ -280,7 +294,7 @@
       <aside class="sidenav navbar navbar-vertical navbar-expand-xs fixed-start ms-0 d-lg-block bg-white sidebar-full-height" id="sidenav-main">
         @include('layouts.navbar')
       </aside>
-    <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg ">
+    <main class="main-content position-relative border-radius-lg">
     @include('layouts.head')
 
         <div class="container-fluid pt-2">

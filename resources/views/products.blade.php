@@ -105,9 +105,9 @@
   }
 
   .variant-row-clean {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    column-gap: 0.45rem;
     align-items: center;
     padding: 0.2rem 0.35rem;
     border-radius: 0.5rem;
@@ -116,8 +116,32 @@
     line-height: 1.1;
   }
 
+  .variant-size-clean {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .variant-price-clean {
     font-weight: 600;
+    white-space: nowrap;
+    text-align: right;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.08rem;
+  }
+
+  .variant-price-bs-clean {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--bs-secondary-color);
+  }
+
+  .variant-stock-clean {
+    white-space: nowrap;
+    text-align: right;
   }
 
   .variant-more-clean {
@@ -227,6 +251,16 @@
 
     .variant-row-clean {
       font-size: 0.72rem;
+    }
+
+    .variant-row-clean {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: 0.15rem;
+    }
+
+    .variant-stock-clean {
+      grid-column: 1 / -1;
+      text-align: left;
     }
   }
 </style>
@@ -435,14 +469,23 @@
 
                 <div class="variants-list-clean">
                   @foreach ($product->variants->take(4) as $variant)
+                    @php
+                      $variantPriceBase = (float) ($variant->price ?? 0);
+                      $variantPriceBs = ($baseRateToBs ?? 0) > 0
+                        ? ($variantPriceBase * (float) $baseRateToBs)
+                        : null;
+                    @endphp
                     <div class="variant-row-clean">
-                      <span>
+                      <span class="variant-size-clean">
                         <strong>{{ $variant->size }}</strong>
                       </span>
                       <span class="variant-price-clean">
-                        {{ number_format((float) $variant->price, 2) }} {{ $baseCurrencySymbol ?? '$' }}
+                        <span>{{ number_format($variantPriceBase, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</span>
+                        @if(!is_null($variantPriceBs))
+                          <span class="variant-price-bs-clean">Bs {{ number_format((float) $variantPriceBs, 2) }}</span>
+                        @endif
                       </span>
-                      <span class="{{ $variant->stock < 1 ? 'text-danger' : ($variant->stock < 5 ? 'text-warning' : 'text-success') }}">
+                      <span class="variant-stock-clean {{ $variant->stock < 1 ? 'text-danger' : ($variant->stock < 5 ? 'text-warning' : 'text-success') }}">
                         {{ $variant->stock }} unidades
                       </span>
                     </div>

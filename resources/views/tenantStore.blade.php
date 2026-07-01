@@ -208,6 +208,7 @@
     $tenantStoreUrl = $tenantExternalUrl !== '' ? $tenantExternalUrl : $tenantShopixUrl;
     $freePlanOperationalLock = !$tenantPlanCapabilities->allowsOperationalDeliverySettings();
     $tenantBusinessType = \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'tienda'));
+    $isServiceBusinessType = in_array($tenantBusinessType, ['servicio', 'service', 'services'], true);
     $currentPlanName = $currentPlanPayment?->plan?->name ?? 'Sin plan activo';
     $currentPlanAmount = $currentPlanPayment?->amount;
     $currentCutoffDate = optional($currentPlanCutoffDate)->format('d/m/Y H:i') ?? 'Sin fecha de corte';
@@ -408,18 +409,70 @@
                                 </div>
 
                                 <div class="row mb-3">
+                                    @php
+                                        $tenantBusinessTypeForActivity = in_array(
+                                            \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'tienda')),
+                                            ['servicio', 'service', 'services'],
+                                            true
+                                        ) ? 'servicio' : 'tienda';
+                                        $tenantBusinessCatalog = [
+                                            'tienda' => [
+                                                'Supermercado y Abastos',
+                                                'Panaderia y Pasteleria',
+                                                'Moda y Boutique',
+                                                'Calzado y Marroquineria',
+                                                'Ferreteria y Construccion',
+                                                'Hogar, Muebles y Decoracion',
+                                                'Tecnologia y Computacion',
+                                                'Telefonia y Accesorios',
+                                                'Farmacia y Bienestar',
+                                                'Mascotas y Agrotienda',
+                                                'Papeleria, Libros y Juguetes',
+                                                'Repuestos y Accesorios Automotrices',
+                                            ],
+                                            'servicio' => [
+                                                'Restaurante, Cafeteria y Delivery',
+                                                'Barberia, Salon y Spa',
+                                                'Consultorio Medico y Odontologico',
+                                                'Asesoria Legal, Contable y Administrativa',
+                                                'Soporte Tecnico y Reparaciones',
+                                                'Educacion, Cursos e Idiomas',
+                                                'Logistica, Envios y Mensajeria',
+                                                'Fitness, Deporte y Bienestar',
+                                                'Eventos, Fotografia y Produccion',
+                                                'Mantenimiento, Limpieza e Instalaciones',
+                                            ],
+                                        ];
+                                        $tenantEconomicOptions = $tenantBusinessCatalog[$tenantBusinessTypeForActivity] ?? [];
+                                        $tenantSelectedEconomic = trim((string) ($tenant->economic_activity ?? ''));
+                                        $tenantEconomicExistsInCatalog = false;
+                                        foreach ($tenantEconomicOptions as $tenantEconomicOption) {
+                                            if (\Illuminate\Support\Str::lower($tenantEconomicOption) === \Illuminate\Support\Str::lower($tenantSelectedEconomic)) {
+                                                $tenantEconomicExistsInCatalog = true;
+                                                break;
+                                            }
+                                        }
+                                    @endphp
                                     <div class="col-md-4">
                                         <label for="business_type" class="form-label fw-bold">Tipo de negocio</label>
                                         <select name="business_type" id="business_type" class="form-select form-select-lg" required>
                                             <option value="">Selecciona una opción</option>
-                                            <option value="tienda" {{ $tenantBusinessType === 'tienda' ? 'selected' : '' }}>Tienda</option>
-                                            <option value="servicio" {{ $tenantBusinessType === 'servicio' ? 'selected' : '' }}>Servicio</option>
+                                            <option value="tienda" {{ !$isServiceBusinessType ? 'selected' : '' }}>Tienda</option>
+                                            <option value="servicio" {{ $isServiceBusinessType ? 'selected' : '' }}>Servicio</option>
                                         </select>
                                     </div>
                                     <div class="col-md-8">
                                         <label for="economic_activity" class="form-label fw-bold">Rubro económico</label>
                                         <select name="economic_activity" id="economic_activity" class="form-select form-select-lg border border-radius-lg" data-selected="{{ $tenant->economic_activity ?? '' }}" required>
                                             <option value="">Selecciona un rubro</option>
+                                            @foreach($tenantEconomicOptions as $tenantEconomicOption)
+                                                <option value="{{ $tenantEconomicOption }}" {{ \Illuminate\Support\Str::lower($tenantEconomicOption) === \Illuminate\Support\Str::lower($tenantSelectedEconomic) ? 'selected' : '' }}>
+                                                    {{ $tenantEconomicOption }}
+                                                </option>
+                                            @endforeach
+                                            @if($tenantSelectedEconomic !== '' && !$tenantEconomicExistsInCatalog)
+                                                <option value="{{ $tenantSelectedEconomic }}" selected>{{ $tenantSelectedEconomic }}</option>
+                                            @endif
                                         </select>
                                         <small id="economic_activity_help" class="text-muted d-block mt-1"></small>
                                     </div>
@@ -481,7 +534,7 @@
                                     <small class="text-muted d-block mt-2">Este horario define cuándo opera la tienda. Los turnos de cada vendedor/profesional se aplican sobre esta base.</small>
                                 </div>
 
-                                <div class="mb-4" id="serviceAppointmentConfigFields" style="display: {{ $tenantBusinessType === 'servicio' ? 'block' : 'none' }};">
+                                <div class="mb-4" id="serviceAppointmentConfigFields" style="display: {{ $isServiceBusinessType ? 'block' : 'none' }};">
                                     <label class="form-label fw-bold d-block">Configuración de agenda de citas</label>
                                     <input type="hidden" name="appointments_first_come_enabled" value="0">
                                     <div class="form-check form-switch">
@@ -1448,7 +1501,10 @@
         };
 
         setValue('input[name="name"]', tenant.name);
-        setValue('select[name="business_type"]', String(tenant.business_type || '').toLowerCase() === 'servicio' ? 'servicio' : 'tienda');
+        setValue(
+            'select[name="business_type"]',
+            ['servicio', 'service', 'services'].includes(String(tenant.business_type || '').toLowerCase()) ? 'servicio' : 'tienda'
+        );
         setValue('#phone_code', tenant.phone_code);
         setValue('#phone_number', tenant.phone_number);
         setValue('#opening_time', String(tenant.opening_time || '').slice(0, 5));
@@ -2114,7 +2170,7 @@ function initMap() {
             return;
         }
 
-        const businessType = String(businessTypeSelect.value || 'tienda').toLowerCase() === 'servicio' ? 'servicio' : 'tienda';
+        const businessType = ['servicio', 'service', 'services'].includes(String(businessTypeSelect.value || 'tienda').toLowerCase()) ? 'servicio' : 'tienda';
         const options = businessCatalog[businessType] || [];
         const help = document.getElementById('economic_activity_help');
 
@@ -2236,7 +2292,7 @@ function initMap() {
         }
 
         const businessType = String(businessTypeSelect.value || '').toLowerCase();
-        const isServiceBusiness = businessType === 'servicio';
+        const isServiceBusiness = ['servicio', 'service', 'services'].includes(businessType);
         scheduleBlock.style.display = 'block';
         if (serviceAppointmentConfigBlock) {
             serviceAppointmentConfigBlock.style.display = isServiceBusiness ? 'block' : 'none';

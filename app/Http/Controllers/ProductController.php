@@ -40,6 +40,7 @@ class ProductController extends Controller
         $tenant = Tenant::find($user->tenant_id);
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
+        $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
 
         $categories = Category::with(['products' => function ($query) use ($user) {
                 $query->where('is_active', true)
@@ -55,7 +56,7 @@ class ProductController extends Controller
             ->where('tenant_id', $user->tenant_id)
             ->orderBy('created_at', 'desc')
             ->get();
-        return view('products', compact('categories', 'productItems', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol'));
+        return view('products', compact('categories', 'productItems', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs'));
     }
 
     public function indexCreateProduct()
@@ -116,6 +117,7 @@ class ProductController extends Controller
         $tenant = Tenant::find($user->tenant_id);
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
+        $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
 
         $category = Category::where('tenant_id', $user->tenant_id)->findOrFail($categoryId);
         $categories = Category::where('tenant_id', $user->tenant_id)
@@ -126,7 +128,7 @@ class ProductController extends Controller
         ->get();
         $taxes = $this->allowedProductTaxes();
     
-        return view('products', compact('productItems', 'category', 'categories', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol'));
+        return view('products', compact('productItems', 'category', 'categories', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs'));
     }
     public function showByCategoryEcomm($categoryId)
     {

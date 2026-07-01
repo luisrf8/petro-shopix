@@ -7,6 +7,7 @@ use App\Models\ProductVariant;
 use App\Models\ProjectAssignment;
 use App\Models\Project;
 use App\Models\ProjectPayroll;
+use App\Models\ProjectPayrollItem;
 use App\Models\ProjectQuotation;
 use App\Models\ProjectQuotationItem;
 use App\Models\ProjectAsset;
@@ -16,6 +17,8 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderDetail;
 use App\Models\Provider;
 use App\Models\Role;
+use App\Models\SalesOrder;
+use App\Models\SalesOrderDetail;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -48,6 +51,8 @@ class ProjectModuleController extends Controller
 
         $tenant = Tenant::query()->find($tenantId);
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $dollarRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'USD');
+        $euroRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'EUR');
 
         $teamMembers = ProjectTeamMember::query()
             ->where('tenant_id', $tenantId)
@@ -334,7 +339,7 @@ class ProjectModuleController extends Controller
             ->get(['id', 'name']);
 
         $productVariants = ProductVariant::query()
-            ->with('product:id,name,tenant_id')
+            ->with('product:id,name,tenant_id,barcode,qr_code')
             ->whereHas('product', function ($query) use ($tenantId) {
                 $query->where('tenant_id', $tenantId);
             })
@@ -349,7 +354,9 @@ class ProjectModuleController extends Controller
             'customers',
             'warehouses',
             'productVariants',
-            'baseCurrencyCode'
+            'baseCurrencyCode',
+            'dollarRateToBs',
+            'euroRateToBs'
         ));
     }
 
@@ -365,7 +372,7 @@ class ProjectModuleController extends Controller
             'starts_at' => 'nullable|date',
             'ends_at' => 'nullable|date',
             'budget_amount' => 'nullable|numeric|min:0',
-            'currency_code' => 'nullable|string|in:USD,EUR,BS,VES',
+            'currency_code' => 'required|string|max:10',
             'quotation_id' => 'nullable|exists:pm_quotations,id',
             'notes' => 'nullable|string|max:4000',
         ]);
@@ -629,6 +636,9 @@ class ProjectModuleController extends Controller
             ]);
         }
 
+        $tenant = Tenant::query()->find($tenantId);
+        $normalizedCurrencyCode = $this->normalizeProjectCurrencyCode($validated['currency_code'] ?? null, $tenant);
+
         $payload = [
             'tenant_id' => $tenantId,
             'type' => $validated['type'],
@@ -641,7 +651,7 @@ class ProjectModuleController extends Controller
             'provider_id' => $validated['provider_id'] ?? null,
             'provider_name' => $providerName,
             'discount_percent' => (float) ($validated['discount_percent'] ?? 0),
-            'currency_code' => strtoupper((string) ($validated['currency_code'] ?? 'USD')),
+            'currency_code' => $normalizedCurrencyCode,
             'valid_until' => $validated['valid_until'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'subtotal' => 0,
@@ -662,6 +672,21 @@ class ProjectModuleController extends Controller
         $quotation->update($totals);
 
         return $quotation;
+    }
+
+    private function normalizeProjectCurrencyCode(?string $currencyCode, ?Tenant $tenant = null): string
+    {
+        $normalized = strtoupper(trim((string) $currencyCode));
+
+        if (in_array($normalized, ['USD', 'EUR'], true)) {
+            return $normalized;
+        }
+
+        if (in_array($normalized, ['BS', 'VES', 'VED', 'VEF', 'BSD', 'BOLIVAR', 'BOLIVARES'], true)) {
+            return 'BS';
+        }
+
+        return TenantCurrency::resolveBaseCurrencyCode($tenant);
     }
 
     private function syncQuotationItems(ProjectQuotation $quotation, array $items, int $tenantId, float $globalDiscountPercent): array
@@ -773,17 +798,156 @@ class ProjectModuleController extends Controller
         abort_if((int) $quotation->tenant_id !== $tenantId, 404);
 
         $validated = $request->validate([
-            'sale_reference' => 'required|string|max:120',
+            'sale_reference' => 'nullable|string|max:120',
         ]);
 
-        $quotation->update([
-            'status' => 'approved',
-            'conversion_target' => 'sale',
-            'converted_sale_reference' => trim((string) $validated['sale_reference']),
-            'converted_to_sale_at' => now(),
-        ]);
+        $quotation->loadMissing('items', 'customer');
 
-        return back()->with('success', 'Cotización marcada como convertida en venta.');
+        $saleItems = $quotation->items
+            ->filter(function (ProjectQuotationItem $item) {
+                return (int) ($item->product_variant_id ?? 0) > 0 && (float) ($item->quantity ?? 0) > 0;
+            })
+            ->values();
+
+        if ($saleItems->isEmpty()) {
+            throw ValidationException::withMessages([
+                'items' => ['La cotización no tiene ítems de producto válidos para crear una venta.'],
+            ]);
+        }
+
+        foreach ($saleItems as $item) {
+            $rawQty = (float) ($item->quantity ?? 0);
+            if (abs($rawQty - round($rawQty)) > 0.00001) {
+                throw ValidationException::withMessages([
+                    'items' => ['La venta solo permite cantidades enteras por producto. Ajusta la cotización antes de convertir.'],
+                ]);
+            }
+        }
+
+        $customer = null;
+        if (!empty($quotation->customer_id)) {
+            $customer = User::query()->find((int) $quotation->customer_id);
+            if ($customer && (int) $customer->tenant_id !== $tenantId) {
+                $customer = null;
+            }
+        }
+
+        if (!$customer) {
+            $customerName = trim((string) ($quotation->customer_name ?? ''));
+            if ($customerName === '') {
+                throw ValidationException::withMessages([
+                    'customer_name' => ['Debes definir un cliente en la cotización para convertirla en venta.'],
+                ]);
+            }
+
+            $customerEmail = trim((string) ($quotation->customer_email ?? ''));
+            if ($customerEmail !== '') {
+                $customer = User::query()
+                    ->where('tenant_id', $tenantId)
+                    ->whereRaw('LOWER(email) = ?', [Str::lower($customerEmail)])
+                    ->first();
+            }
+
+            if (!$customer) {
+                $customer = User::query()->create([
+                    'name' => $customerName,
+                    'email' => $customerEmail !== '' ? $customerEmail : null,
+                    'phone_number' => null,
+                    'tenant_id' => $tenantId,
+                    'role_id' => $this->resolveCustomerRoleId(),
+                    'password' => Hash::make(Str::random(16)),
+                    'is_active' => 1,
+                ]);
+            }
+
+            $quotation->customer_id = (int) $customer->id;
+            $quotation->customer_name = (string) $customer->name;
+            $quotation->customer_email = (string) ($customer->email ?? $customerEmail);
+        }
+
+        $salesOrder = null;
+
+        DB::transaction(function () use ($tenantId, $quotation, $saleItems, $validated, $customer, &$salesOrder) {
+            $salesOrder = SalesOrder::query()->create([
+                'user_id' => (int) $customer->id,
+                'sales_rep_user_id' => null,
+                'date' => now()->toDateString(),
+                'address' => 'Venta generada desde cotización #' . (int) $quotation->id,
+                'status' => 0,
+                'preference' => 'Retiro en tienda',
+                'deliver_status' => 0,
+                'tenant_id' => $tenantId,
+                'document_issue_mode' => 'delivery_note',
+                'sale_currency_code' => (string) ($quotation->currency_code ?: 'USD'),
+                'delivery_fee' => 0,
+                'delivery_fee_mode' => 'free',
+                'subtotal_before_discount' => round((float) ($quotation->subtotal ?? 0), 2),
+                'total_discount' => round((float) ($quotation->discount_amount ?? 0), 2),
+                'total_paid_base' => 0,
+                'igtf_base_amount' => 0,
+                'igtf_amount' => 0,
+                'change_due_base' => 0,
+                'change_paid_in_bs' => false,
+                'change_rate_to_bs' => null,
+                'change_due_bs' => 0,
+            ]);
+
+            foreach ($saleItems as $item) {
+                $variant = ProductVariant::query()->with('product:id,tenant_id')->findOrFail((int) $item->product_variant_id);
+                abort_if((int) ($variant->product->tenant_id ?? 0) !== $tenantId, 404);
+
+                $quantity = (int) round((float) $item->quantity);
+                if ($quantity <= 0) {
+                    throw ValidationException::withMessages([
+                        'items' => ['La cantidad de los ítems a convertir debe ser mayor a cero.'],
+                    ]);
+                }
+
+                if ((float) ($variant->stock ?? 0) < $quantity) {
+                    throw ValidationException::withMessages([
+                        'items' => ['Stock insuficiente para convertir la cotización a venta. Revisa inventario.'],
+                    ]);
+                }
+
+                $lineSubtotalBeforeDiscount = round((float) $item->unit_price * $quantity, 2);
+                $lineTotal = round((float) ($item->total ?? 0), 2);
+                if ($lineTotal <= 0) {
+                    $lineTotal = $lineSubtotalBeforeDiscount;
+                }
+                $lineDiscountAmount = round(max(0, $lineSubtotalBeforeDiscount - $lineTotal), 2);
+                $lineUnitPrice = $quantity > 0 ? round($lineTotal / $quantity, 2) : 0;
+
+                SalesOrderDetail::query()->create([
+                    'sales_order_id' => (int) $salesOrder->id,
+                    'product_variant_id' => (int) $variant->id,
+                    'quantity' => $quantity,
+                    'price' => $lineUnitPrice,
+                    'amount' => $lineTotal,
+                    'line_subtotal_before_discount' => $lineSubtotalBeforeDiscount,
+                    'line_discount_amount' => $lineDiscountAmount,
+                ]);
+
+                $variant->stock = max(0, (float) ($variant->stock ?? 0) - $quantity);
+                $variant->save();
+            }
+
+            $saleReferenceInput = trim((string) ($validated['sale_reference'] ?? ''));
+            $saleReference = $saleReferenceInput !== ''
+                ? $saleReferenceInput . ' · VENTA #' . (int) $salesOrder->id
+                : 'VENTA #' . (int) $salesOrder->id;
+
+            $quotation->update([
+                'customer_id' => (int) $customer->id,
+                'customer_name' => (string) ($customer->name ?? $quotation->customer_name),
+                'customer_email' => (string) ($customer->email ?? $quotation->customer_email),
+                'status' => 'approved',
+                'conversion_target' => 'sale',
+                'converted_sale_reference' => $saleReference,
+                'converted_to_sale_at' => now(),
+            ]);
+        });
+
+        return back()->with('success', 'Cotización convertida a venta correctamente. Orden #' . (int) ($salesOrder->id ?? 0) . ' creada.');
     }
 
     public function convertQuotationToInventoryEntry(Request $request, ProjectQuotation $quotation)
@@ -952,7 +1116,7 @@ class ProjectModuleController extends Controller
             'email' => 'nullable|email|max:255',
             'phone' => ['nullable', 'string', 'max:60', 'regex:/^\+[1-9]\d{6,14}$/'],
             'role' => 'nullable|string|max:120',
-            'payment_frequency' => 'required|in:daily,weekly,package,monthly',
+            'payment_frequency' => 'required|in:daily,weekly,fortnightly,package,monthly',
             'is_active' => 'nullable|boolean',
             'notes' => 'nullable|string|max:2000',
         ]);
@@ -1034,12 +1198,73 @@ class ProjectModuleController extends Controller
         $validated = $request->validate([
             'team_member_id' => 'nullable|exists:pm_team_members,id',
             'project_id' => 'nullable|exists:pm_projects,id',
-            'payment_type' => 'required|in:daily,weekly,monthly,package,contract',
-            'amount' => 'required|numeric|min:0.01',
+            'payment_type' => 'required|in:daily,weekly,fortnightly,monthly,package,contract',
+            'amount' => 'nullable|numeric|min:0.01',
             'currency_code' => 'nullable|string|in:USD,EUR,BS,VES',
             'paid_at' => 'required|date',
+            'payment_reason' => 'nullable|string|max:2000',
+            'deduction_reason' => 'nullable|string|max:2000',
+            'total_to_pay' => 'nullable|numeric|min:0',
+            'payroll_items_json' => 'nullable|string',
             'notes' => 'nullable|string|max:2000',
         ]);
+
+        $rawItems = trim((string) ($validated['payroll_items_json'] ?? ''));
+        $payrollItems = [];
+        $paymentsTotal = 0.0;
+        $deductionsTotal = 0.0;
+
+        if ($rawItems !== '') {
+            $decodedItems = json_decode($rawItems, true);
+            if (!is_array($decodedItems) || empty($decodedItems)) {
+                throw ValidationException::withMessages([
+                    'payroll_items_json' => ['Debes agregar al menos un item de pago o descuento.'],
+                ]);
+            }
+
+            foreach ($decodedItems as $index => $row) {
+                $normalizedType = strtolower(trim((string) data_get($row, 'type', '')));
+                $type = match ($normalizedType) {
+                    'pago', 'payment' => 'payment',
+                    'descuento', 'deduction' => 'deduction',
+                    default => '',
+                };
+
+                $amount = (float) data_get($row, 'amount', 0);
+                $description = trim((string) data_get($row, 'description', ''));
+
+                if ($type === '' || $amount <= 0 || $description === '') {
+                    throw ValidationException::withMessages([
+                        'payroll_items_json' => ['Hay items inválidos. Verifica tipo, monto y descripción en cada fila.'],
+                    ]);
+                }
+
+                if (mb_strlen($description) > 255) {
+                    throw ValidationException::withMessages([
+                        'payroll_items_json' => ['La descripción de cada item debe tener máximo 255 caracteres.'],
+                    ]);
+                }
+
+                if ($type === 'payment') {
+                    $paymentsTotal += $amount;
+                } else {
+                    $deductionsTotal += $amount;
+                }
+
+                $payrollItems[] = [
+                    'item_type' => $type,
+                    'amount' => $amount,
+                    'description' => $description,
+                    'sort_order' => $index,
+                ];
+            }
+
+            if (empty($validated['team_member_id'])) {
+                throw ValidationException::withMessages([
+                    'team_member_id' => ['Debes seleccionar un integrante para registrar el pago de nómina por items.'],
+                ]);
+            }
+        }
 
         if (!empty($validated['team_member_id'])) {
             $teamMember = ProjectTeamMember::query()->findOrFail((int) $validated['team_member_id']);
@@ -1051,17 +1276,80 @@ class ProjectModuleController extends Controller
             abort_if((int) $project->tenant_id !== $tenantId, 404);
         }
 
-        ProjectPayroll::query()->create([
-            'tenant_id' => $tenantId,
-            'team_member_id' => $validated['team_member_id'] ?? null,
-            'project_id' => $validated['project_id'] ?? null,
-            'payment_type' => $validated['payment_type'],
-            'amount' => (float) $validated['amount'],
-            'currency_code' => strtoupper((string) ($validated['currency_code'] ?? 'USD')),
-            'paid_at' => $validated['paid_at'],
-            'notes' => $validated['notes'] ?? null,
-            'created_by' => auth()->id(),
-        ]);
+        $computedTotalToPay = !empty($payrollItems)
+            ? max(0, $paymentsTotal - $deductionsTotal)
+            : (float) ($validated['total_to_pay'] ?? $validated['amount'] ?? 0);
+
+        if ($computedTotalToPay <= 0) {
+            throw ValidationException::withMessages([
+                'total_to_pay' => ['El total a pagar debe ser mayor que 0. Revisa los montos de pagos y descuentos.'],
+            ]);
+        }
+
+        $amountBase = !empty($payrollItems)
+            ? $paymentsTotal
+            : (float) ($validated['amount'] ?? 0);
+
+        if ($amountBase <= 0) {
+            throw ValidationException::withMessages([
+                'amount' => ['Debes indicar un monto válido o agregar items de pago.'],
+            ]);
+        }
+
+        $paymentReason = trim((string) ($validated['payment_reason'] ?? ''));
+        $deductionReason = trim((string) ($validated['deduction_reason'] ?? ''));
+
+        if (!empty($payrollItems)) {
+            $paymentReason = collect($payrollItems)
+                ->where('item_type', 'payment')
+                ->pluck('description')
+                ->implode(' | ');
+
+            $deductionReason = collect($payrollItems)
+                ->where('item_type', 'deduction')
+                ->pluck('description')
+                ->implode(' | ');
+        }
+
+        DB::transaction(function () use ($tenantId, $validated, $amountBase, $computedTotalToPay, $paymentReason, $deductionReason, $payrollItems) {
+            $entry = ProjectPayroll::query()->create([
+                'tenant_id' => $tenantId,
+                'team_member_id' => $validated['team_member_id'] ?? null,
+                'project_id' => $validated['project_id'] ?? null,
+                'payment_type' => $validated['payment_type'],
+                'amount' => $amountBase,
+                'currency_code' => strtoupper((string) ($validated['currency_code'] ?? 'USD')),
+                'paid_at' => $validated['paid_at'],
+                'notes' => $validated['notes'] ?? null,
+                'payment_reason' => $paymentReason !== '' ? $paymentReason : null,
+                'deduction_reason' => $deductionReason !== '' ? $deductionReason : null,
+                'total_to_pay' => $computedTotalToPay,
+                'created_by' => auth()->id(),
+            ]);
+
+            if (empty($payrollItems)) {
+                ProjectPayrollItem::query()->create([
+                    'tenant_id' => $tenantId,
+                    'payroll_entry_id' => $entry->id,
+                    'item_type' => 'payment',
+                    'amount' => $amountBase,
+                    'description' => $paymentReason !== '' ? $paymentReason : 'Pago base de nómina',
+                    'sort_order' => 0,
+                ]);
+                return;
+            }
+
+            foreach ($payrollItems as $row) {
+                ProjectPayrollItem::query()->create([
+                    'tenant_id' => $tenantId,
+                    'payroll_entry_id' => $entry->id,
+                    'item_type' => $row['item_type'],
+                    'amount' => $row['amount'],
+                    'description' => $row['description'],
+                    'sort_order' => $row['sort_order'],
+                ]);
+            }
+        });
 
         return back()->with('success', 'Pago de nómina registrado correctamente.');
     }
@@ -1078,10 +1366,41 @@ class ProjectModuleController extends Controller
         return match ($normalized) {
             'daily' => $base->addDay(),
             'weekly' => $base->addWeek(),
+            'fortnightly' => $base->addDays(15),
             'monthly' => $base->addMonth(),
             'package', 'contract' => null,
             default => null,
         };
+    }
+
+    public function payrollReceipt(ProjectPayroll $payroll)
+    {
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        abort_if($tenantId <= 0 || (int) $payroll->tenant_id !== $tenantId, 404);
+
+        $payroll->loadMissing(['teamMember', 'project', 'items']);
+
+        $html = view('payroll.receipt', [
+            'payroll' => $payroll,
+            'forPdf' => true,
+        ])->render();
+
+        $options = new Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'DejaVu Sans');
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        $filename = 'comprobante-nomina-' . (int) $payroll->id . '.pdf';
+        $disposition = request()->boolean('download') ? 'attachment' : 'inline';
+
+        return response($dompdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+        ]);
     }
 
     private function resolveCustomerRoleIds(): array

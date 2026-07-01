@@ -14,11 +14,12 @@
       $dispatchGuideIssued = (bool) optional($dispatchGuideEdoc)->issued_at;
       $hasAnnulledInvoice = (bool) ($order->has_annulled_invoice ?? false);
       $canApproveSale = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
-      $canApproveDelivery = $currentUser?->hasStoreRole('owner', 'admin', 'warehouse', 'delivery') ?? false;
+      $canApproveDelivery = $currentUser?->hasStoreRole('owner', 'admin', 'seller', 'warehouse', 'delivery') ?? false;
       $canRegisterReturn = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canApprovePayments = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $canDownloadPdfs = $currentUser?->hasStoreRole('owner', 'admin', 'seller', 'warehouse') ?? false;
       $canDownloadInvoicePdf = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
+      $isDigitalInvoicingEnabled = (bool) ($order->tenant->electronic_invoicing_enabled ?? false);
       $canManageAppointmentWorkflow = $currentUser?->hasStoreRole('owner', 'admin', 'seller') ?? false;
       $linkedAppointment = $linkedAppointment ?? null;
       $appointmentPaymentMethods = $appointmentPaymentMethods ?? collect();
@@ -211,7 +212,7 @@
                     @endif
                   </select>
                 </div>
-                @if($canDownloadInvoicePdf)
+                @if($canDownloadInvoicePdf && $isDigitalInvoicingEnabled)
                   @if(!$hasAnnulledInvoice)
                   <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-dark mb-0">Factura PDF</a>
                   @else
@@ -219,9 +220,6 @@
                   @endif
                 @endif
                 <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-dark mb-0">Orden de entrega</a>
-                @endif
-                @if($storeWhatsappUrl)
-                  <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
                 @endif
                 @if($canRegisterReturn)
                   <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">Registrar Devolución</button>
@@ -267,6 +265,222 @@
             </div>
           </div>
         </div>
+        @endunless
+
+        <!-- Tabla de Detalles de la Orden -->
+        <details class="order-detail-disclosure mb-4" open>
+          <summary>Productos de la orden</summary>
+          <div class="card order-surface-card">
+            <div class="card-header">
+              <h6 class="mb-0">{{ $isDeliveryOnlyView ? 'Lo que vas a entregar' : 'Productos en la Orden' }}</h6>
+            </div>
+            <div class="card-body">
+              @php
+                $orderSubtotalBeforeDiscount = (float) ($order->subtotal_before_discount ?? 0);
+                if ($orderSubtotalBeforeDiscount <= 0) {
+                  $orderSubtotalBeforeDiscount = (float) $order->details->sum(function ($detail) {
+                    return (float) ($detail->line_subtotal_before_discount ?? $detail->amount ?? 0);
+                  });
+                }
+
+                $orderSubtotalNet = (float) $order->details->sum('amount');
+                $orderDiscountTotal = (float) ($order->total_discount ?? 0);
+                if ($orderDiscountTotal <= 0) {
+                  $orderDiscountTotal = max(0, round($orderSubtotalBeforeDiscount - $orderSubtotalNet, 2));
+                }
+
+                $orderTaxTotalDetail = (float) $order->details->flatMap->taxes->sum('tax_amount');
+                if ($orderTaxTotalDetail <= 0) {
+                  $orderTaxTotalDetail = (float) $order->details->sum(function ($detail) {
+                    return (float) ($detail->tax_amount ?? 0);
+                  });
+                }
+
+                $orderTotalWithTaxes = round($orderSubtotalNet + $orderTaxTotalDetail, 2);
+              @endphp
+              <div class="table-responsive order-table-wrapper">
+                <table class="table order-detail-table align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th>Cantidad</th>
+                      <th>Variante</th>
+                      @unless($isDeliveryOnlyView)
+                      <th>Precio Inicial</th>
+                      <th>Descuento</th>
+                      <th>Precio Neto</th>
+                      <th>Subtotal Neto</th>
+                      @endunless
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @foreach($order->details as $detalle)
+                    @php
+                      $detailQty = max(1, (float) ($detalle->quantity ?? 0));
+                      $detailSubtotalBeforeDiscount = (float) ($detalle->line_subtotal_before_discount ?? 0);
+                      if ($detailSubtotalBeforeDiscount <= 0) {
+                        $detailSubtotalBeforeDiscount = (float) ($detalle->amount ?? 0);
+                      }
+                      $detailDiscountAmount = (float) ($detalle->line_discount_amount ?? 0);
+                      if ($detailDiscountAmount <= 0) {
+                        $detailDiscountAmount = max(0, round($detailSubtotalBeforeDiscount - (float) ($detalle->amount ?? 0), 2));
+                      }
+                      $detailOriginalUnitPrice = $detailQty > 0 ? round($detailSubtotalBeforeDiscount / $detailQty, 2) : (float) ($detalle->price ?? 0);
+                      $detailDiscountUnitPrice = $detailQty > 0 ? round($detailDiscountAmount / $detailQty, 2) : 0.0;
+                    @endphp
+                    <tr>
+                      <td data-label="Producto">{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
+                      <td data-label="Cantidad">{{ $detalle->quantity }}</td>
+                      <td data-label="Variante">{{ $detalle->variant->size ?? '' }}</td>
+                      @unless($isDeliveryOnlyView)
+                      <td data-label="Precio Inicial"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detailOriginalUnitPrice, 2) }}</span></td>
+                      <td data-label="Descuento"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detailDiscountUnitPrice, 2) }}</span></td>
+                      <td data-label="Precio Neto"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</span></td>
+                      <td data-label="Subtotal Neto"><span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->amount, 2) }}</span></td>
+                      @endunless
+                    </tr>
+                    @endforeach
+                  </tbody>
+                </table>
+              </div>
+              @unless($isDeliveryOnlyView)
+              <div class="order-total-stack mt-3">
+                <div class="order-total-line">
+                  <span class="order-total-label">Subtotal Antes De Descuento</span>
+                  <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderSubtotalBeforeDiscount, 2) }}</span>
+                </div>
+                <div class="order-total-line">
+                  <span class="order-total-label">Total Descuento</span>
+                  <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderDiscountTotal, 2) }}</span>
+                </div>
+                <div class="order-total-line">
+                  <span class="order-total-label">Subtotal Neto</span>
+                  <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderSubtotalNet, 2) }}</span>
+                </div>
+                <div class="order-total-line">
+                  <span class="order-total-label">Total Impuestos</span>
+                  <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderTaxTotalDetail, 2) }}</span>
+                </div>
+                <div class="order-total-line">
+                  <span class="order-total-label">Total A Pagar</span>
+                  <span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderTotalWithTaxes, 2) }}</span>
+                </div>
+                @if($order->has_returns)
+                  <div class="order-total-line">
+                    <span class="order-total-label">Total Devolución</span>
+                    <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($order->total_devuelto, 2) }}</span>
+                  </div>
+                @endif
+              </div>
+              @endunless
+            </div>
+          </div>
+        </details>
+
+        @unless($isDeliveryOnlyView)
+        <!-- Tabla de Pagos -->
+        <details class="order-detail-disclosure mb-4" open>
+          <summary>Pagos registrados</summary>
+          <div class="card order-surface-card">
+            <div class="card-header">
+              <h6 class="mb-0">Pagos Registrados</h6>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive order-table-wrapper">
+                <table class="table order-detail-table align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Moneda</th>
+                      <th>Método de Pago</th>
+                      <th>Monto</th>
+                      <th>Beneficiario</th>
+                      <th>Banco</th>
+                      <th>Referencia</th>
+                      <th>Comprobante</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @foreach($order->payments as $payment)
+                    @php
+                      $paymentCurrencyCode = strtoupper(trim((string) ($payment->currency ?? '')));
+                      $paymentSymbol = $resolveCurrencySymbol($paymentCurrencyCode);
+                      $paymentProofUrl = $payment->images->isNotEmpty()
+                        ? (\App\Support\ImageStorage::url($payment->images->first()->image_path) ?? null)
+                        : null;
+                    @endphp
+                    <tr>
+                      <td data-label="Moneda">{{ $payment->currency }}</td>
+                      <td data-label="Método de Pago">{{ $payment->payment->name}}</td>
+                      <td data-label="Monto"><span class="amount-chip amount-chip-strong">{{ $paymentSymbol }}{{ number_format($payment->amount, 2) }}{{ $paymentSymbol === '' && $paymentCurrencyCode !== '' ? ' ' . $paymentCurrencyCode : '' }}</span></td>
+                      <td data-label="Beneficiario">{{ $payment->payment->admin_name }}</td>
+                      <td data-label="Banco">{{ $payment->payment->bank }}</td>
+                      <td data-label="Referencia">{{ $payment->reference ?? 'N/A' }}</td>
+                      <td id="payment-{{ $payment->id }}" data-label="Comprobante">
+                          @if($paymentProofUrl)
+                            <a href="{{ $paymentProofUrl }}" target="_blank" class="btn btn-sm btn-outline-dark mb-0">Ver imagen</a>
+                          @else
+                            <span class="text-muted">Sin imagen</span>
+                          @endif
+                      </td>
+                      <td data-label="Estado">
+                          @if($canApprovePayments)
+                            <select data-payment-id="{{ $payment->id }}" class="btn btn-sm toggle-status-btn js-payment-status 
+                              {{ $payment->status == 0 ? 'btn-outline-warning' : ($payment->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}">
+                                <option value="0" {{ $payment->status == 0 ? 'selected' : '' }}>En Proceso ↓</option>
+                                <option value="1" {{ $payment->status == 1 ? 'selected' : '' }}>Pagado ↓</option>
+                                <option value="3" {{ $payment->status == 3 ? 'selected' : '' }}>Cancelado ↓</option>
+                            </select>
+                          @else
+                            <span class="text-sm">{{ $payment->status == 0 ? 'En Proceso' : ($payment->status == 1 ? 'Pagado' : 'Cancelado') }}</span>
+                          @endif
+                      </td>
+                      <td data-label="Acciones">
+                        @if($canApprovePayments && (int) ($payment->status ?? 0) !== 1)
+                          <div class="d-flex flex-column gap-2">
+                            <button
+                              type="button"
+                              class="btn btn-sm btn-outline-dark mb-0 js-edit-payment-btn"
+                              data-payment-id="{{ $payment->id }}"
+                              data-payment-amount="{{ number_format((float) $payment->amount, 2, '.', '') }}"
+                              data-payment-reference="{{ $payment->reference ?? '' }}"
+                              data-payment-proof-url="{{ $paymentProofUrl ?? '' }}"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              class="btn btn-sm btn-outline-danger mb-0 js-delete-payment-btn"
+                              data-payment-id="{{ $payment->id }}"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        @else
+                          <span class="text-sm text-muted">{{ (int) ($payment->status ?? 0) === 1 ? 'Pago aprobado' : 'Sin acciones' }}</span>
+                        @endif
+                      </td>
+                    </tr>
+                    @endforeach
+                  </tbody>
+                </table>
+              </div>
+              <div class="order-total-stack mt-3">
+                <div class="order-total-line">
+                  <span class="order-total-label">Total Pagado</span>
+                  <span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalPagado, 2) }}</span>
+                </div>
+                @if($order->has_returns)
+                  <div class="order-total-line">
+                    <span class="order-total-label">Total Devolución</span>
+                    <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($order->total_devuelto, 2) }}</span>
+                  </div>
+                @endif
+              </div>
+            </div>
+          </div>
+        </details>
         @endunless
 
         <div class="row g-4 mb-4">
@@ -536,6 +750,9 @@
       @php
         $documentIssueMode = (string) ($order->document_issue_mode ?? 'delivery_note');
       @endphp
+      @if($isDigitalInvoicingEnabled)
+      <details class="order-detail-disclosure mt-4">
+        <summary>Guía de despacho y Facturación electrónica</summary>
       <div class="card mt-4">
         <div class="card-body py-3">
           <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
@@ -557,7 +774,7 @@
         </div>
       </div>
 
-      @if((bool) ($order->tenant->electronic_invoicing_enabled ?? false))
+      @if($isDigitalInvoicingEnabled)
       <div class="card mt-3">
         <div class="card-body py-3">
           <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2">
@@ -609,7 +826,7 @@
       </div>
       @endif
 
-      @if((bool) ($order->tenant->electronic_invoicing_enabled ?? false) && $documentIssueMode === 'electronic_invoice')
+      @if($isDigitalInvoicingEnabled && $documentIssueMode === 'electronic_invoice')
       <div class="card mt-4">
         <div class="card-header pb-0">
           <h6 class="mb-0">Facturación electrónica (The Factory HKA)</h6>
@@ -681,14 +898,8 @@
           </div>
         </div>
       </div>
-      @else
-      <div class="alert alert-secondary mt-4 mb-0">
-        @if(!(bool) ($order->tenant->electronic_invoicing_enabled ?? false))
-          La facturación digital está desactivada para esta tienda. Un super administrador puede activarla desde Gestión de Tiendas.
-        @else
-          Esta orden está configurada para Orden de entrega. Si deseas factura digital, cambia el tipo de documento arriba.
-        @endif
-      </div>
+      @endif
+      </details>
       @endif
       @php
         $orderTaxBase = (float) $order->details->sum('amount');
@@ -708,8 +919,11 @@
         $suggestedRetentionIncomeBase = round(max(0, $orderTaxBase), 2);
       @endphp
 
+      @if($isDigitalInvoicingEnabled)
       <div class="row mt-4 g-4">
         <div class="col-12 col-xl-6">
+          <details class="order-detail-disclosure">
+            <summary>Notas de crédito y débito</summary>
           <div class="card h-100">
             <div class="card-header pb-0">
               <h6 class="mb-0">Notas de Crédito y Débito</h6>
@@ -1070,9 +1284,12 @@
               </div>
             </div>
           </div>
+          </details>
         </div>
 
         <div class="col-12 col-xl-6">
+          <details class="order-detail-disclosure">
+            <summary>Retenciones</summary>
           <div class="card h-100">
             <div class="card-header pb-0">
               <h6 class="mb-0">Retenciones</h6>
@@ -1347,190 +1564,44 @@
               </div>
             </div>
           </div>
+          </details>
         </div>
       </div>
+      @endif
       @endunless
 
-      <!-- Tabla de Detalles de la Orden -->
-      <div class="card order-surface-card">
-        <div class="card-header">
-          <h6 class="mb-0">{{ $isDeliveryOnlyView ? 'Lo que vas a entregar' : 'Productos en la Orden' }}</h6>
-        </div>
-        <div class="card-body">
-          @php
-            $orderSubtotalBeforeDiscount = (float) ($order->subtotal_before_discount ?? 0);
-            if ($orderSubtotalBeforeDiscount <= 0) {
-              $orderSubtotalBeforeDiscount = (float) $order->details->sum(function ($detail) {
-                return (float) ($detail->line_subtotal_before_discount ?? $detail->amount ?? 0);
-              });
-            }
-
-            $orderSubtotalNet = (float) $order->details->sum('amount');
-            $orderDiscountTotal = (float) ($order->total_discount ?? 0);
-            if ($orderDiscountTotal <= 0) {
-              $orderDiscountTotal = max(0, round($orderSubtotalBeforeDiscount - $orderSubtotalNet, 2));
-            }
-
-            $orderTaxTotalDetail = (float) $order->details->flatMap->taxes->sum('tax_amount');
-            if ($orderTaxTotalDetail <= 0) {
-              $orderTaxTotalDetail = (float) $order->details->sum(function ($detail) {
-                return (float) ($detail->tax_amount ?? 0);
-              });
-            }
-
-            $orderTotalWithTaxes = round($orderSubtotalNet + $orderTaxTotalDetail, 2);
-          @endphp
-          <div class="table-responsive order-table-wrapper">
-          <table class="table order-detail-table align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Cantidad</th>
-                <th>Variante</th>
-                @unless($isDeliveryOnlyView)
-                <th>Precio Inicial</th>
-                <th>Descuento</th>
-                <th>Precio Neto</th>
-                <th>Subtotal Neto</th>
-                @endunless
-              </tr>
-            </thead>
-            <tbody>
-              @foreach($order->details as $detalle)
-              @php
-                $detailQty = max(1, (float) ($detalle->quantity ?? 0));
-                $detailSubtotalBeforeDiscount = (float) ($detalle->line_subtotal_before_discount ?? 0);
-                if ($detailSubtotalBeforeDiscount <= 0) {
-                  $detailSubtotalBeforeDiscount = (float) ($detalle->amount ?? 0);
-                }
-                $detailDiscountAmount = (float) ($detalle->line_discount_amount ?? 0);
-                if ($detailDiscountAmount <= 0) {
-                  $detailDiscountAmount = max(0, round($detailSubtotalBeforeDiscount - (float) ($detalle->amount ?? 0), 2));
-                }
-                $detailOriginalUnitPrice = $detailQty > 0 ? round($detailSubtotalBeforeDiscount / $detailQty, 2) : (float) ($detalle->price ?? 0);
-                $detailDiscountUnitPrice = $detailQty > 0 ? round($detailDiscountAmount / $detailQty, 2) : 0.0;
-              @endphp
-              <tr>
-                <td data-label="Producto">{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
-                <td data-label="Cantidad">{{ $detalle->quantity }}</td>
-                <td data-label="Variante">{{ $detalle->variant->size ?? '' }}</td>
-                @unless($isDeliveryOnlyView)
-                <td data-label="Precio Inicial"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detailOriginalUnitPrice, 2) }}</span></td>
-                <td data-label="Descuento"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detailDiscountUnitPrice, 2) }}</span></td>
-                <td data-label="Precio Neto"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</span></td>
-                <td data-label="Subtotal Neto"><span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->amount, 2) }}</span></td>
-                @endunless
-              </tr>
-              @endforeach
-            </tbody>
-          </table>
-          </div>
-          @unless($isDeliveryOnlyView)
-          <div class="order-total-stack mt-3">
-            <div class="order-total-line">
-              <span class="order-total-label">Subtotal Antes De Descuento</span>
-              <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderSubtotalBeforeDiscount, 2) }}</span>
+      <div class="modal fade" id="editPaymentEntryModal" tabindex="-1" aria-labelledby="editPaymentEntryModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="editPaymentEntryModalLabel">Editar pago registrado</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="order-total-line">
-              <span class="order-total-label">Total Descuento</span>
-              <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderDiscountTotal, 2) }}</span>
+            <div class="modal-body">
+              <form id="editPaymentEntryForm">
+                <input type="hidden" id="editPaymentEntryId">
+                <div class="mb-3">
+                  <label for="editPaymentEntryAmount" class="form-label">Monto</label>
+                  <input type="number" id="editPaymentEntryAmount" class="form-control border border-1 p-2" min="0.01" step="0.01" required>
+                </div>
+                <div class="mb-3">
+                  <label for="editPaymentEntryReference" class="form-label">Referencia</label>
+                  <input type="text" id="editPaymentEntryReference" class="form-control border border-1 p-2" maxlength="255" placeholder="Opcional">
+                </div>
+                <div class="mb-3">
+                  <label for="editPaymentEntryProof" class="form-label">Comprobante (imagen)</label>
+                  <input type="file" id="editPaymentEntryProof" class="form-control border border-1 p-2" accept="image/jpeg,image/png,image/jpg,image/webp">
+                  <small id="editPaymentEntryProofCurrent" class="text-muted d-block mt-1">Sin imagen actual.</small>
+                </div>
+              </form>
             </div>
-            <div class="order-total-line">
-              <span class="order-total-label">Subtotal Neto</span>
-              <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderSubtotalNet, 2) }}</span>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancelar</button>
+              <button type="button" class="btn btn-dark mb-0" id="savePaymentEntryChangesBtn">Guardar cambios</button>
             </div>
-            <div class="order-total-line">
-              <span class="order-total-label">Total Impuestos</span>
-              <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderTaxTotalDetail, 2) }}</span>
-            </div>
-            <div class="order-total-line">
-              <span class="order-total-label">Total A Pagar</span>
-              <span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderTotalWithTaxes, 2) }}</span>
-            </div>
-            @if($order->has_returns)
-              <div class="order-total-line">
-                <span class="order-total-label">Total Devolución</span>
-                <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($order->total_devuelto, 2) }}</span>
-              </div>
-            @endif
-          </div>
-          @endunless
-        </div>
-      </div>
-
-      @unless($isDeliveryOnlyView)
-      <!-- Tabla de Pagos -->
-      <div class="card mt-4 order-surface-card">
-        <div class="card-header">
-          <h6 class="mb-0">Pagos Registrados</h6>
-        </div>
-        <div class="card-body">
-          <div class="table-responsive order-table-wrapper">
-          <table class="table order-detail-table align-middle mb-0">
-            <thead>
-              <tr>
-                <th>Moneda</th>
-                <th>Método de Pago</th>
-                <th>Monto</th>
-                <th>Beneficiario</th>
-                <th>Banco</th>
-                <th>Referencia</th>
-                <th>Comprobante</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              @foreach($order->payments as $payment)
-              @php
-                $paymentCurrencyCode = strtoupper(trim((string) ($payment->currency ?? '')));
-                $paymentSymbol = $resolveCurrencySymbol($paymentCurrencyCode);
-              @endphp
-              <tr>
-                <td data-label="Moneda">{{ $payment->currency }}</td>
-                <td data-label="Método de Pago">{{ $payment->payment->name}}</td>
-                <td data-label="Monto"><span class="amount-chip amount-chip-strong">{{ $paymentSymbol }}{{ number_format($payment->amount, 2) }}{{ $paymentSymbol === '' && $paymentCurrencyCode !== '' ? ' ' . $paymentCurrencyCode : '' }}</span></td>
-                <td data-label="Beneficiario">{{ $payment->payment->admin_name }}</td>
-                <td data-label="Banco">{{ $payment->payment->bank }}</td>
-                <td data-label="Referencia">{{ $payment->reference ?? 'N/A' }}</td>
-                <td id="payment-{{ $payment->id }}" data-label="Comprobante">
-                    @if($payment->images->isNotEmpty())
-                      <a href="{{ \App\Support\ImageStorage::url($payment->images->first()->image_path) ?? '#' }}" target="_blank" class="btn btn-sm btn-outline-dark mb-0">Ver imagen</a>
-                    @else
-                      <span class="text-muted">Sin imagen</span>
-                    @endif
-                </td>
-                <td data-label="Estado">
-                    @if($canApprovePayments)
-                      <select data-payment-id="{{ $payment->id }}" class="btn btn-sm toggle-status-btn js-payment-status 
-                        {{ $payment->status == 0 ? 'btn-outline-warning' : ($payment->status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}">
-                          <option value="0" {{ $payment->status == 0 ? 'selected' : '' }}>En Proceso ↓</option>
-                          <option value="1" {{ $payment->status == 1 ? 'selected' : '' }}>Pagado ↓</option>
-                          <option value="3" {{ $payment->status == 3 ? 'selected' : '' }}>Cancelado ↓</option>
-                      </select>
-                    @else
-                      <span class="text-sm">{{ $payment->status == 0 ? 'En Proceso' : ($payment->status == 1 ? 'Pagado' : 'Cancelado') }}</span>
-                    @endif
-                </td>
-              </tr>
-              @endforeach
-            </tbody>
-          </table>
-          </div>
-          <div class="order-total-stack mt-3">
-            <div class="order-total-line">
-              <span class="order-total-label">Total Pagado</span>
-              <span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalPagado, 2) }}</span>
-            </div>
-            @if($order->has_returns)
-              <div class="order-total-line">
-                <span class="order-total-label">Total Devolución</span>
-                <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($order->total_devuelto, 2) }}</span>
-              </div>
-            @endif
           </div>
         </div>
       </div>
-      @endunless
 
       <!-- Modal para realizar devoluciones -->
       @if($canRegisterReturn)
@@ -1607,6 +1678,62 @@
 <style>
   .order-shell {
     max-width: 1240px;
+  }
+
+  .order-detail-disclosure {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 0.5rem;
+    box-shadow: 0 14px 30px -28px rgba(15, 23, 42, 0.45);
+  }
+
+  .order-detail-disclosure > summary {
+    list-style: none;
+    cursor: pointer;
+    font-weight: 700;
+    color: #0f172a;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.7rem;
+    background: #f1f5f9;
+    margin-bottom: 0.5rem;
+    position: relative;
+    user-select: none;
+  }
+
+  .order-detail-disclosure > summary::after {
+    content: '+';
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1rem;
+    font-weight: 800;
+    color: #334155;
+  }
+
+  .order-detail-disclosure[open] > summary::after {
+    content: '-';
+  }
+
+  .order-detail-disclosure > :not(summary) {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: max-height 0.35s ease, opacity 0.28s ease, transform 0.28s ease;
+    pointer-events: none;
+  }
+
+  .order-detail-disclosure[open] > :not(summary) {
+    max-height: 400rem;
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .order-detail-disclosure > summary::-webkit-details-marker {
+    display: none;
   }
 
   .order-hero-panel {
@@ -2025,9 +2152,139 @@ function updatePaymentStatus(selectElement, paymentId) {
     });
 }
 
+function openEditPaymentEntryModal(triggerButton) {
+  const paymentIdInput = document.getElementById('editPaymentEntryId');
+  const amountInput = document.getElementById('editPaymentEntryAmount');
+  const referenceInput = document.getElementById('editPaymentEntryReference');
+  const proofInput = document.getElementById('editPaymentEntryProof');
+  const proofCurrent = document.getElementById('editPaymentEntryProofCurrent');
+  const modalElement = document.getElementById('editPaymentEntryModal');
+
+  if (!paymentIdInput || !amountInput || !referenceInput || !modalElement) {
+    return;
+  }
+
+  paymentIdInput.value = String(triggerButton.dataset.paymentId || '');
+  amountInput.value = String(triggerButton.dataset.paymentAmount || '0.00');
+  referenceInput.value = String(triggerButton.dataset.paymentReference || '');
+
+  if (proofInput) {
+    proofInput.value = '';
+  }
+
+  const currentProofUrl = String(triggerButton.dataset.paymentProofUrl || '').trim();
+  if (proofCurrent) {
+    proofCurrent.innerHTML = currentProofUrl !== ''
+      ? `<a href="${currentProofUrl}" target="_blank" rel="noopener">Ver comprobante actual</a>`
+      : 'Sin imagen actual.';
+  }
+
+  const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
+  modalInstance.show();
+}
+
+function savePaymentEntryChanges() {
+  const paymentId = Number(document.getElementById('editPaymentEntryId')?.value || 0);
+  const amount = Number(document.getElementById('editPaymentEntryAmount')?.value || 0);
+  const reference = String(document.getElementById('editPaymentEntryReference')?.value || '');
+  const proofInput = document.getElementById('editPaymentEntryProof');
+  const saveButton = document.getElementById('savePaymentEntryChangesBtn');
+
+  if (!paymentId) {
+    alert('No se pudo identificar el pago a editar.');
+    return;
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert('Ingresa un monto válido mayor a 0.');
+    return;
+  }
+
+  const payload = new FormData();
+  payload.append('amount', amount.toFixed(2));
+  payload.append('reference', reference.trim());
+  if (proofInput?.files?.[0]) {
+    payload.append('proof_image', proofInput.files[0]);
+  }
+
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = 'Guardando...';
+  }
+
+  fetch(`/api/payment/${paymentId}/update`, {
+    method: 'POST',
+    headers: {
+      'X-CSRF-TOKEN': '{{ csrf_token() }}',
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: payload,
+  })
+    .then(async response => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'No se pudo actualizar el pago.');
+      }
+
+      alert(data.message || 'Pago actualizado correctamente.');
+      location.reload();
+    })
+    .catch(error => {
+      alert(String(error?.message || 'No se pudo actualizar el pago.'));
+    })
+    .finally(() => {
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.textContent = 'Guardar cambios';
+      }
+    });
+}
+
+function deletePaymentEntry(paymentId) {
+  if (!paymentId) {
+    return;
+  }
+
+  const reason = window.shopixRequestActionReason('Indica el motivo para eliminar este pago no aprobado.');
+  if (!reason) {
+    return;
+  }
+
+  if (!window.confirm('¿Eliminar este pago? Esta acción no se puede deshacer.')) {
+    return;
+  }
+
+  fetch(`/api/payment/${paymentId}`, {
+    method: 'DELETE',
+    headers: {
+      'X-CSRF-TOKEN': '{{ csrf_token() }}',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: JSON.stringify({ action_reason: reason }),
+  })
+    .then(async response => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'No se pudo eliminar el pago.');
+      }
+
+      alert(data.message || 'Pago eliminado correctamente.');
+      location.reload();
+    })
+    .catch(error => {
+      alert(String(error?.message || 'No se pudo eliminar el pago.'));
+    });
+}
+
 window.updateOrderStatus = updateOrderStatus;
 window.updateDeliverStatus = updateDeliverStatus;
 window.updatePaymentStatus = updatePaymentStatus;
+window.openEditPaymentEntryModal = openEditPaymentEntryModal;
+window.savePaymentEntryChanges = savePaymentEntryChanges;
+window.deletePaymentEntry = deletePaymentEntry;
 
 function submitLinkedAppointmentWorkflowAction() {
   const workflowCard = document.getElementById('linked-appointment-workflow');
@@ -2284,6 +2541,28 @@ document.addEventListener('DOMContentLoaded', () => {
       updatePaymentStatus(selectElement, paymentId);
     });
   });
+
+  document.querySelectorAll('.js-edit-payment-btn[data-payment-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      openEditPaymentEntryModal(button);
+    });
+  });
+
+  document.querySelectorAll('.js-delete-payment-btn[data-payment-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const paymentId = Number(button.dataset.paymentId || 0);
+      if (!paymentId) {
+        return;
+      }
+
+      deletePaymentEntry(paymentId);
+    });
+  });
+
+  const savePaymentEntryChangesBtn = document.getElementById('savePaymentEntryChangesBtn');
+  if (savePaymentEntryChangesBtn) {
+    savePaymentEntryChangesBtn.addEventListener('click', savePaymentEntryChanges);
+  }
 
   const appointmentAmountInput = document.getElementById('appointment-paid-amount');
   const appointmentMethodSelect = document.getElementById('appointment-payment-method');

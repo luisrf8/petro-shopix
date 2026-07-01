@@ -21,7 +21,7 @@
         right: max(16px, env(safe-area-inset-right));
         bottom: max(16px, env(safe-area-inset-bottom));
         left: auto !important;
-        z-index: 1080;
+        z-index: var(--z-cart-mobile, var(--z-cart, 1030));
         box-shadow: 0 14px 28px rgba(15, 23, 42, 0.22);
     }
 
@@ -415,7 +415,11 @@
     }
 
     #cart {
-        --bs-offcanvas-zindex: 2000;
+        --bs-offcanvas-zindex: var(--z-cart-mobile, var(--z-cart, 1030));
+    }
+
+    .offcanvas-backdrop {
+        z-index: calc(var(--z-cart-mobile, var(--z-cart, 1030)) - 1) !important;
     }
 
     @media (min-width: 1200px) {
@@ -447,6 +451,10 @@
     }
 
     @media (max-width: 1199.98px) {
+        :root {
+            --z-cart-mobile: 1048;
+        }
+
         #cart.offcanvas-admin-desktop {
             width: min(96vw, 460px);
         }
@@ -592,7 +600,7 @@
         <button type="button"
             id="openAdminCartBtn"
             class="btn btn-dark admin-cart-fab d-xl-none"
-            style="position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); left: auto; z-index: 1080; box-shadow: 0 14px 28px rgba(15, 23, 42, 0.22);"
+            style="position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); left: auto; z-index: var(--z-cart-mobile, var(--z-cart, 1030)); box-shadow: 0 14px 28px rgba(15, 23, 42, 0.22);"
             data-bs-toggle="offcanvas"
             data-bs-target="#cart"
             aria-controls="cart">
@@ -704,6 +712,9 @@
                                     $packageTotal = !is_null($package->package_price)
                                         ? (float) $package->package_price
                                         : $packageTotalCalculated;
+                                    $packageTotalBs = ($baseRateToBs ?? 0) > 0
+                                        ? ((float) $packageTotal * (float) $baseRateToBs)
+                                        : null;
 
                                     $packageSearchParts = [mb_strtolower((string) ($package->name ?? ''))];
                                     $packageCategoryIds = [];
@@ -745,6 +756,9 @@
                                                     >{{ $package->name }}</h6>
                                                     <p class="text-sm text-muted mb-0">{{ $package->items->count() }} materiales</p>
                                                     <p class="text-sm fw-bold mb-0">{{ number_format($packageTotal, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</p>
+                                                    @if(!is_null($packageTotalBs))
+                                                        <p class="text-xs text-muted mb-0">Bs {{ number_format((float) $packageTotalBs, 2) }}</p>
+                                                    @endif
                                                     @if(!is_null($package->package_price))
                                                         <p class="text-xs text-dark mb-0">Precio fijo combo</p>
                                                     @endif
@@ -768,7 +782,32 @@
                         @endif
 
                         @foreach($productItems as $item)
-                            <div class="product-item" data-category="{{ $item->category_id }}" data-name="{{ strtolower($item->name) }}">
+                            @php
+                                $productSearchParts = [
+                                    mb_strtolower((string) ($item->name ?? '')),
+                                    mb_strtolower((string) ($item->description ?? '')),
+                                    mb_strtolower((string) ($item->barcode ?? '')),
+                                    mb_strtolower((string) ($item->qr_code ?? '')),
+                                    'p' . (int) ($item->id ?? 0),
+                                    (string) (int) ($item->id ?? 0),
+                                ];
+
+                                foreach (($item->variants ?? []) as $variantSearch) {
+                                    $productSearchParts[] = mb_strtolower((string) ($variantSearch->size ?? ''));
+                                    $productSearchParts[] = mb_strtolower((string) ($variantSearch->barcode ?? ''));
+                                    $productSearchParts[] = mb_strtolower((string) ($variantSearch->qr_code ?? ''));
+                                    $productSearchParts[] = 'v' . (int) ($variantSearch->id ?? 0);
+                                    $productSearchParts[] = (string) (int) ($variantSearch->id ?? 0);
+                                }
+
+                                $productSearchText = trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($productSearchParts))));
+                            @endphp
+                            <div
+                                class="product-item"
+                                data-category="{{ $item->category_id }}"
+                                data-name="{{ mb_strtolower((string) ($item->name ?? '')) }}"
+                                data-search="{{ $productSearchText }}"
+                            >
                                 <div class="card h-100">
                                     <div class="card-body">
                                         <div class="d-flex gap-4 align-items-center">
@@ -795,6 +834,12 @@
                                                 $productDiscount = (float) ($item->discount_percentage ?? 0);
                                                 $variantDiscount = (float) ($variant->discount_percentage ?? 0);
                                                 $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+                                                $effectiveVariantPriceBs = ($baseRateToBs ?? 0) > 0
+                                                    ? ((float) $effectiveVariantPrice * (float) $baseRateToBs)
+                                                    : null;
+                                                $originalVariantPriceBs = ($baseRateToBs ?? 0) > 0
+                                                    ? ((float) $variant->price * (float) $baseRateToBs)
+                                                    : null;
                                                 $variantCardImagePath = optional($variant->images->first())->path;
                                                 $productCardImagePath = optional($item->images->first())->path;
                                                 $variantCardImage = $variantCardImagePath
@@ -816,9 +861,15 @@
                                                         @if($productDiscount > 0 || $variantDiscount > 0)
                                                             <span class="text-decoration-line-through text-muted">{{ number_format((float) $variant->price, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</span>
                                                             <span class="fw-semibold">{{ number_format($effectiveVariantPrice, 2) }} {{ $baseCurrencyCode ?? 'USD' }}</span>
+                                                            @if(!is_null($effectiveVariantPriceBs))
+                                                                <small class="text-muted">| Bs {{ number_format((float) $effectiveVariantPriceBs, 2) }}</small>
+                                                            @endif
                                                             <small class="text-success">(-{{ number_format($productDiscount + $variantDiscount, 2) }}%)</small>
                                                         @else
                                                             {{ number_format((float) $variant->price, 2) }} {{ $baseCurrencyCode ?? 'USD' }}
+                                                            @if(!is_null($originalVariantPriceBs))
+                                                                <small class="text-muted">| Bs {{ number_format((float) $originalVariantPriceBs, 2) }}</small>
+                                                            @endif
                                                         @endif
                                                         | Stock: {{ $variant->stock }}
                                                     </span>
@@ -919,6 +970,7 @@
                                                 @endif
                                                 @php
                                                     $noReference = !$method->usesReference();
+                                                    $requiresProofImage = $method->requiresProofImage();
                                                     $methodCurrencyCode = strtoupper(trim((string) ($currencyCode ?? '')));
                                                     $normalizedBaseCurrency = strtoupper(trim((string) ($baseCurrencyCode ?? 'USD')));
                                                     $methodNameForIgtf = \Illuminate\Support\Str::lower(trim((string) ($method->name ?? '')));
@@ -928,9 +980,9 @@
                                                         ? $fallbackAppliesIgtf
                                                         : (bool) $method->applies_igtf_base;
                                                 @endphp
-                                                <div id="paymentFields_{{ $method->id }}" class="d-none mt-2 payment-method-fields" data-currency="{{ $currencyCode }}" data-no-reference="{{ $noReference ? '1' : '0' }}">
+                                                <div id="paymentFields_{{ $method->id }}" class="d-none mt-2 payment-method-fields" data-currency="{{ $currencyCode }}" data-no-reference="{{ $noReference ? '1' : '0' }}" data-requires-proof="{{ $requiresProofImage ? '1' : '0' }}">
                                                     <div id="paymentRows_{{ $method->id }}" class="d-flex flex-column gap-2"></div>
-                                                    <button type="button" class="btn btn-outline-dark btn-sm mt-2" onclick="addPaymentEntry('{{ $method->id }}', '{{ $currencyCode }}', {{ $noReference ? 'true' : 'false' }}, '{{ $method->name }}', {{ $methodAppliesIgtf ? 'true' : 'false' }})">
+                                                    <button type="button" class="btn btn-outline-dark btn-sm mt-2" onclick="addPaymentEntry('{{ $method->id }}', '{{ $currencyCode }}', {{ $noReference ? 'true' : 'false' }}, {{ $requiresProofImage ? 'true' : 'false' }}, '{{ $method->name }}', {{ $methodAppliesIgtf ? 'true' : 'false' }})">
                                                         + Agregar otro pago
                                                     </button>
                                                 </div>
@@ -1085,6 +1137,14 @@
                                 <div class="col-12">
                                     <input type="text" id="deliveryAddressDetail" class="form-control border border-1 p-2 bg-white" placeholder="Dirección exacta (calle, referencia, etc.)">
                                 </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label mb-1" for="deliveryReceiverName">Persona que recibe</label>
+                                    <input type="text" id="deliveryReceiverName" class="form-control border border-1 p-2 bg-white" placeholder="Nombre y apellido">
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label mb-1" for="deliveryReceiverPhone">Teléfono de quien recibe</label>
+                                    <input type="text" id="deliveryReceiverPhone" class="form-control border border-1 p-2 bg-white" placeholder="Ej: +58 412 1234567">
+                                </div>
                                 <div class="col-12 col-md-4 d-none" id="deliveryDistanceContainer">
                                     <label class="form-label mb-1" for="deliveryDistanceKm">Distancia estimada (km)</label>
                                     <input type="number" min="0" step="0.01" id="deliveryDistanceKm" class="form-control border border-1 p-2 bg-white" placeholder="Ej: 6.5">
@@ -1204,6 +1264,7 @@
                         <h5 id="modalProductName"></h5>
                         <p id="modalProductDescription"></p>
                         <p><strong>Precio:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="modalProductPrice"></span></p>
+                        <p><strong>Precio Bs:</strong> Bs <span id="modalProductPriceBs"></span></p>
                         <p><strong>Stock:</strong> <span id="modalProductStock"></span></p>
                         <p><strong>Variante:</strong> <span id="modalProductSize"></span></p>
                     </div>
@@ -2332,9 +2393,12 @@ function updateQuantity(id, newQty) {
 
         function showProductDetails(name, description, imageUrl, price, stock, size) {
             // Rellenar los datos del modal
+            const numericPrice = Number(price || 0);
+            const numericPriceBs = baseRateToBs > 0 ? (numericPrice * baseRateToBs) : 0;
             document.getElementById('modalProductName').textContent = name;
             document.getElementById('modalProductDescription').textContent = description;
-            document.getElementById('modalProductPrice').textContent = price;
+            document.getElementById('modalProductPrice').textContent = numericPrice.toFixed(2);
+            document.getElementById('modalProductPriceBs').textContent = numericPriceBs.toFixed(2);
             document.getElementById('modalProductStock').textContent = stock;
             document.getElementById('modalProductSize').textContent = size;
 
@@ -2749,14 +2813,15 @@ function updateQuantity(id, newQty) {
             return `${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
         }
 
-        function createPaymentRowHtml(methodId, currency, noReference, entryId) {
+        function createPaymentRowHtml(methodId, currency, noReference, requiresProofImage, entryId) {
             const referenceInput = noReference
                 ? `<input type="hidden" class="payment-reference-input" data-method-id="${methodId}" data-entry-id="${entryId}" data-requires-reference="0" value="">`
                 : `<input type="text" class="form-control payment-reference-input border border-1 p-2" data-method-id="${methodId}" data-entry-id="${entryId}" data-requires-reference="1" placeholder="Referencia" oninput="updatePayment(this)">`;
 
-            const proofInput = noReference
-                ? `<div class="small text-muted py-2">No requiere comprobante para este método.</div>`
-                : `<input type="file" class="form-control border border-1 p-2 payment-proof-input" accept="image/*" data-method-id="${methodId}" data-entry-id="${entryId}" onchange="updatePaymentProof(this)">`;
+            const proofInput = `<input type="file" class="form-control border border-1 p-2 payment-proof-input" accept="image/*" data-method-id="${methodId}" data-entry-id="${entryId}" data-requires-proof="${requiresProofImage ? '1' : '0'}" onchange="updatePaymentProof(this)">`;
+            const proofHelp = requiresProofImage
+                ? `<div class="small text-danger mt-1">Comprobante requerido.</div>`
+                : `<div class="small text-muted mt-1">Comprobante opcional.</div>`;
 
             return `
                 <div class="border rounded-3 p-2 bg-white" data-payment-entry-row="${entryId}">
@@ -2774,8 +2839,9 @@ function updateQuantity(id, newQty) {
                             ${referenceInput}
                         </div>
                         <div class="flex-grow-1">
-                            <label class="form-label mb-1">Comprobante</label>
+                            <label class="form-label mb-1">Comprobante ${requiresProofImage ? '(Requerido)' : '(Opcional)'}</label>
                             ${proofInput}
+                            ${proofHelp}
                         </div>
                         <div class="align-self-end">
                             <button type="button" class="btn btn-outline-danger btn-sm" onclick="removePaymentEntry('${methodId}', '${entryId}')">X</button>
@@ -2785,12 +2851,12 @@ function updateQuantity(id, newQty) {
             `;
         }
 
-        function addPaymentEntry(methodId, currency, noReference = false, methodName = '', appliesIgtf = false) {
+        function addPaymentEntry(methodId, currency, noReference = false, requiresProofImage = false, methodName = '', appliesIgtf = false) {
             const rowsContainer = document.getElementById(`paymentRows_${methodId}`);
             if (!rowsContainer) return;
 
             const entryId = generatePaymentEntryId();
-            rowsContainer.insertAdjacentHTML('beforeend', createPaymentRowHtml(methodId, currency, noReference, entryId));
+            rowsContainer.insertAdjacentHTML('beforeend', createPaymentRowHtml(methodId, currency, noReference, requiresProofImage, entryId));
 
             payments.push({
                 entryId,
@@ -2805,6 +2871,7 @@ function updateQuantity(id, newQty) {
                 reference: '',
                 hasProofImage: false,
                 requiresReference: !noReference,
+                requiresProofImage: Boolean(requiresProofImage),
             });
 
             validatePaymentDetails();
@@ -2958,13 +3025,14 @@ function updateQuantity(id, newQty) {
             const paymentFields = document.getElementById(`paymentFields_${methodId}`);
             const currency = paymentFields?.dataset.currency || checkbox.dataset.currency;
             const noReference = paymentFields?.dataset.noReference === '1';
+            const requiresProofImage = paymentFields?.dataset.requiresProof === '1';
             const appliesIgtf = checkbox.dataset.appliesIgtf === '1';
 
             if (checkbox.checked) {
                 paymentFields.classList.remove('d-none');
                 const hasEntriesForMethod = payments.some(payment => payment.methodId === String(methodId));
                 if (!hasEntriesForMethod) {
-                    addPaymentEntry(methodId, currency, noReference, methodName, appliesIgtf);
+                    addPaymentEntry(methodId, currency, noReference, requiresProofImage, methodName, appliesIgtf);
                 }
             } else {
                 const rowsContainer = document.getElementById(`paymentRows_${methodId}`);
@@ -3008,6 +3076,8 @@ function updateQuantity(id, newQty) {
             if (payment) {
                 payment.hasProofImage = Boolean(input.files?.[0]);
             }
+
+            validatePaymentDetails();
         }
 
         function getBaseCurrencyPaymentsTotal() {
@@ -3150,6 +3220,8 @@ function updateQuantity(id, newQty) {
             const newCustomerEmail = (document.getElementById('newCustomerEmail')?.value || '').trim();
             const newCustomerPhone = (document.getElementById('newCustomerPhone')?.value || '').trim();
             const newCustomerDni = (document.getElementById('newCustomerDni')?.value || '').trim();
+            const deliveryReceiverName = (document.getElementById('deliveryReceiverName')?.value || '').trim();
+            const deliveryReceiverPhone = (document.getElementById('deliveryReceiverPhone')?.value || '').trim();
             
             container.innerHTML = ''; // Limpiar resumen anterior
 
@@ -3189,6 +3261,12 @@ function updateQuantity(id, newQty) {
             const addressDiv = document.createElement('p');
             addressDiv.innerHTML = `<strong>Dirección:</strong> ${deliveryType === 'shipping' ? (deliveryAddressData.address || 'No indicada') : 'Tienda'}`;
             container.appendChild(addressDiv);
+
+            if (deliveryType !== 'pickup') {
+                const receiverDiv = document.createElement('p');
+                receiverDiv.innerHTML = `<strong>Recibe:</strong> ${deliveryReceiverName || 'No indicado'} (${deliveryReceiverPhone || 'Sin teléfono'})`;
+                container.appendChild(receiverDiv);
+            }
 
             const customerDiv = document.createElement('p');
             customerDiv.innerHTML = `<strong>Cliente:</strong> ${shouldCreateNewCustomer ? 'Nuevo cliente' : (selectedCustomerLabel || 'Cliente existente no seleccionado')}`;
@@ -3311,8 +3389,28 @@ function updateQuantity(id, newQty) {
                 return !payment.reference || payment.reference.trim() === '';
             });
 
+            const hasMissingRequiredProof = payments.some(payment => {
+                const amount = Number(payment.amountBase ?? payment.amount) || 0;
+                if (amount <= 0) return false;
+
+                const proofInput = document.querySelector(`.payment-proof-input[data-entry-id="${payment.entryId}"]`);
+                const requiresProof = proofInput
+                    ? proofInput.dataset.requiresProof === '1'
+                    : Boolean(payment.requiresProofImage);
+
+                if (!requiresProof) return false;
+                return !(proofInput?.files?.[0]);
+            });
+
             if (hasEmptyReference) {
                 messageText = `Todos los métodos de pago deben tener una referencia válida.`;
+                messageClass = 'text-danger';
+                disableStep3 = true;
+                if (changeControls) {
+                    changeControls.classList.add('d-none');
+                }
+            } else if (hasMissingRequiredProof) {
+                messageText = `Los métodos de pago marcados con comprobante requerido deben subir imagen del comprobante.`;
                 messageClass = 'text-danger';
                 disableStep3 = true;
                 if (changeControls) {
@@ -3412,6 +3510,8 @@ function updateQuantity(id, newQty) {
             const stateSelect = document.getElementById('deliveryState');
             const citySelect = document.getElementById('deliveryCity');
             const addressDetailInput = document.getElementById('deliveryAddressDetail');
+            const receiverNameInput = document.getElementById('deliveryReceiverName');
+            const receiverPhoneInput = document.getElementById('deliveryReceiverPhone');
 
             if (selectedType === 'shipping') {
                 addressContainer.classList.remove('d-none');
@@ -3427,6 +3527,8 @@ function updateQuantity(id, newQty) {
                 if (stateSelect) resetLocationSelect(stateSelect, 'Estado (parte del país)', true);
                 if (citySelect) resetLocationSelect(citySelect, 'Ciudad', true);
                 if (addressDetailInput) addressDetailInput.value = '';
+                if (receiverNameInput) receiverNameInput.value = '';
+                if (receiverPhoneInput) receiverPhoneInput.value = '';
                 if (distanceInput) distanceInput.value = '';
             }
 
@@ -3476,6 +3578,18 @@ function updateQuantity(id, newQty) {
 
         document.getElementById('deliveryDistanceKm')?.addEventListener('input', function () {
             renderCart();
+            if (!document.getElementById('step3').classList.contains('d-none')) {
+                renderSummary();
+            }
+        });
+
+        document.getElementById('deliveryReceiverName')?.addEventListener('input', function () {
+            if (!document.getElementById('step3').classList.contains('d-none')) {
+                renderSummary();
+            }
+        });
+
+        document.getElementById('deliveryReceiverPhone')?.addEventListener('input', function () {
             if (!document.getElementById('step3').classList.contains('d-none')) {
                 renderSummary();
             }
@@ -3572,9 +3686,18 @@ function updateQuantity(id, newQty) {
     const newCustomerEmail = (document.getElementById('newCustomerEmail')?.value || '').trim();
     const newCustomerPhone = (document.getElementById('newCustomerPhone')?.value || '').trim();
     const newCustomerDni = (document.getElementById('newCustomerDni')?.value || '').trim();
+    const deliveryReceiverName = (document.getElementById('deliveryReceiverName')?.value || '').trim();
+    const deliveryReceiverPhone = (document.getElementById('deliveryReceiverPhone')?.value || '').trim();
 
     if (deliveryType === 'shipping' && !deliveryAddressData.valid) {
         alert(deliveryAddressData.message || 'Debes indicar la dirección cuando la entrega es por envío.');
+        button.disabled = false;
+        button.innerHTML = originalText;
+        return;
+    }
+
+    if (deliveryType !== 'pickup' && (!deliveryReceiverName || !deliveryReceiverPhone)) {
+        alert('Debes indicar nombre y teléfono de la persona que recibe para delivery o envío.');
         button.disabled = false;
         button.innerHTML = originalText;
         return;
@@ -3626,6 +3749,8 @@ function updateQuantity(id, newQty) {
         dollarRate: baseRateToBs,
         delivery_type: deliveryType,
         delivery_address: deliveryType === 'shipping' ? deliveryAddressData.address : 'Tienda',
+        delivery_receiver_name: deliveryType !== 'pickup' ? deliveryReceiverName : null,
+        delivery_receiver_phone: deliveryType !== 'pickup' ? deliveryReceiverPhone : null,
         delivery_city_id: deliveryType === 'shipping' ? Number(deliveryAddressData.cityId || 0) : null,
         delivery_distance_km: deliveryType === 'shipping' ? deliveryContext.distanceKm : null,
         create_new_customer: shouldCreateNewCustomer,
@@ -3652,6 +3777,8 @@ function updateQuantity(id, newQty) {
     appendFormDataValue(formData, 'dollarRate', summary.dollarRate);
     appendFormDataValue(formData, 'delivery_type', summary.delivery_type);
     appendFormDataValue(formData, 'delivery_address', summary.delivery_address);
+    appendFormDataValue(formData, 'delivery_receiver_name', summary.delivery_receiver_name);
+    appendFormDataValue(formData, 'delivery_receiver_phone', summary.delivery_receiver_phone);
     appendFormDataValue(formData, 'delivery_city_id', summary.delivery_city_id);
     appendFormDataValue(formData, 'delivery_distance_km', summary.delivery_distance_km);
     appendFormDataValue(formData, 'create_new_customer', summary.create_new_customer);

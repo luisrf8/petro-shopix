@@ -67,6 +67,7 @@ class PaymentMethodController extends Controller
             'dni' => 'nullable|string',
             'bank' => 'nullable|string',
             'has_reference' => 'nullable|boolean',
+            'requires_proof_image' => 'nullable|boolean',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
             'tenant_id' => 'required'
         ]);
@@ -83,6 +84,7 @@ class PaymentMethodController extends Controller
             'dni' => $request->dni,
             'bank' => $request->bank,
             'has_reference' => $request->boolean('has_reference', true),
+            'requires_proof_image' => $request->boolean('requires_proof_image', true),
             'tenant_id' => $request->tenant_id
         ]);
         if ($request->hasFile('image')) {
@@ -133,6 +135,7 @@ class PaymentMethodController extends Controller
             'dni' => 'nullable|string',
             'bank' => 'nullable|string',
             'has_reference' => 'nullable|boolean',
+            'requires_proof_image' => 'nullable|boolean',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
         ]);
 
@@ -145,6 +148,7 @@ class PaymentMethodController extends Controller
             'dni' => $validated['dni'] ?? null,
             'bank' => $validated['bank'] ?? null,
             'has_reference' => $request->boolean('has_reference', true),
+            'requires_proof_image' => $request->boolean('requires_proof_image', true),
         ]);
 
         // Procesar la imagen QR si se envía

@@ -42,6 +42,23 @@
   transition: margin-left 0.3s ease-in-out;
 }
 
+/* Keep top header visible while using a single browser scroll. */
+.sidenav.fixed-start + .main-content #navbarBlur {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 15rem;
+  z-index: var(--z-header, 1040);
+}
+
+.sidenav.fixed-start.closed + .main-content #navbarBlur {
+  left: 0;
+}
+
+.main-content {
+  padding-top: 5.5rem;
+}
+
 /* Desktop */
 @media (min-width: 992px) {
   .sidenav.fixed-start + .main-content {
@@ -65,6 +82,15 @@
 
 /* Móvil y tablet */
 @media (max-width: 991px) {
+  .sidenav.fixed-start + .main-content #navbarBlur,
+  .sidenav.fixed-start.closed + .main-content #navbarBlur {
+    left: 0;
+  }
+
+  .main-content {
+    padding-top: 6rem;
+  }
+
   #sidenav-main {
     height: 100vh;
     max-height: 100vh;

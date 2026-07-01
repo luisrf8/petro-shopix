@@ -393,6 +393,7 @@
                     <div class="pm-method-main">
                       <p class="pm-method-name">{{ $method->name }}</p>
                       <span class="badge bg-gradient-{{ $method->usesReference() ? 'info' : 'secondary' }}">{{ $method->usesReference() ? 'Posee referencia' : 'Sin referencia' }}</span>
+                      <span class="badge bg-gradient-{{ $method->requiresProofImage() ? 'danger' : 'light text-dark' }}">{{ $method->requiresProofImage() ? 'Comprobante requerido' : 'Comprobante opcional' }}</span>
                     </div>
 
                     <div class="pm-method-actions">
@@ -408,7 +409,8 @@
                         data-bank="{{ $method->bank }}"
                         data-dni="{{ $method->dni }}"
                         data-description="{{ $method->description }}"
-                        data-has-reference="{{ $method->usesReference() ? '1' : '0' }}">edit</i>
+                        data-has-reference="{{ $method->usesReference() ? '1' : '0' }}"
+                        data-requires-proof-image="{{ $method->requiresProofImage() ? '1' : '0' }}">edit</i>
                       <button class="pm-toggle-link toggle-status-btn {{ $method->status ? 'text-success' : 'text-danger'}}" 
                           data-id="{{ $method->id }}" 
                           data-status="{{ $method->status ? 'active' : 'inactive' }}">
@@ -525,6 +527,14 @@
                   </div>
                   <small class="text-muted">Activa esta opción para métodos como transferencia. Desactívala para efectivo o punto de venta.</small>
                 </div>
+                <div class="mb-3">
+                  <input type="hidden" name="requires_proof_image" value="0">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="paymentMethodRequiresProofImage" name="requires_proof_image" value="1" checked>
+                    <label class="form-check-label" for="paymentMethodRequiresProofImage">Comprobante de imagen requerido</label>
+                  </div>
+                  <small class="text-muted">Define si este método obliga subir imagen del comprobante en la venta.</small>
+                </div>
                 <div class="mb-3 d-flex flex-column">
                   <label for="paymentMethodQr" class="form-label">QR</label>
                     <input type="file" class="form-control border border-1 p-2 " id="image" name="image" accept="image/*">
@@ -584,7 +594,15 @@
                     <input class="form-check-input" type="checkbox" role="switch" id="editPaymentMethodHasReference" name="has_reference" value="1" checked>
                     <label class="form-check-label" for="editPaymentMethodHasReference">Posee referencia</label>
                   </div>
-                  <small class="text-muted">Si está apagado, el flujo de venta no exigirá referencia ni comprobante.</small>
+                  <small class="text-muted">Si está apagado, el flujo de venta no exigirá referencia para este método.</small>
+                </div>
+                <div class="mb-3">
+                  <input type="hidden" name="requires_proof_image" value="0">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="editPaymentMethodRequiresProofImage" name="requires_proof_image" value="1" checked>
+                    <label class="form-check-label" for="editPaymentMethodRequiresProofImage">Comprobante de imagen requerido</label>
+                  </div>
+                  <small class="text-muted">Si está apagado, el comprobante será opcional en la venta para este método.</small>
                 </div>
                 <div class="mb-3 d-flex flex-column">
                   <label for="editPaymentMethodQr" class="form-label">QR</label>
@@ -787,6 +805,7 @@
           const methodDni = this.getAttribute('data-dni') || '';
           const methodDescription = this.getAttribute('data-description') || '';
           const methodHasReference = this.getAttribute('data-has-reference') === '1';
+          const methodRequiresProofImage = this.getAttribute('data-requires-proof-image') === '1';
           const methodQr = this.getAttribute('data-qr') || null;
 
           // Asigna valores al formulario del modal
@@ -797,6 +816,7 @@
           document.getElementById('editPaymentMethodBank').value = methodBank;
           document.getElementById('editPaymentMethodDescription').value = methodDescription;
           document.getElementById('editPaymentMethodHasReference').checked = methodHasReference;
+          document.getElementById('editPaymentMethodRequiresProofImage').checked = methodRequiresProofImage;
 
           // Selecciona la moneda si está disponible
           const currencySelect = document.getElementById('editPaymentMethodCurrency');

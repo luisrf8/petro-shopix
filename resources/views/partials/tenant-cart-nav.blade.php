@@ -26,6 +26,15 @@
   [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
   [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
   [$tenantAccentR, $tenantAccentG, $tenantAccentB] = $toRgb($tenantColorAccent);
+  $tenantAuthRedirect = request()->getRequestUri() ?: '/';
+  $tenantSocialProviders = [
+    [
+      'key' => 'google',
+      'label' => 'Google',
+      'icon' => 'bi bi-google',
+      'enabled' => filled(config('services.google.client_id')) && filled(config('services.google.client_secret')) && filled(config('services.google.redirect')),
+    ],
+  ];
 @endphp
 
 <style>
@@ -200,6 +209,13 @@
     gap: 0.5rem;
     align-items: center;
     justify-content: flex-end;
+  }
+
+  .tenant-notification-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
   }
 
   @media (max-width: 575.98px) {
@@ -864,6 +880,20 @@
       </div>
       <div class="modal-body">
         <div class="tenant-auth-shell">
+        <div class="tenant-auth-social-grid mb-3">
+          @foreach($tenantSocialProviders as $provider)
+            <a href="{{ route('client.social.redirect', ['provider' => $provider['key'], 'redirect' => $tenantAuthRedirect]) }}"
+               class="tenant-auth-social-btn {{ $provider['enabled'] ? '' : 'is-disabled' }}"
+               data-provider="{{ $provider['key'] }}"
+               aria-disabled="{{ $provider['enabled'] ? 'false' : 'true' }}">
+              <i class="{{ $provider['icon'] }} fs-5"></i>
+              <span>Continuar con {{ $provider['label'] }}</span>
+            </a>
+          @endforeach
+        </div>
+
+        <div class="tenant-auth-divider">o con correo</div>
+
         <ul class="nav nav-tabs" id="tenantPublicAuthTabs" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="tenant-public-login-tab" data-bs-toggle="tab" data-bs-target="#tenant-public-login-panel" type="button" role="tab">Iniciar sesión</button>
@@ -895,7 +925,7 @@
                 <input type="text" class="form-control" id="tenant-public-register-name" placeholder="Nombre" required>
               </div>
               <div class="col-12">
-                <input type="email" class="form-control" id="tenant-public-register-email" placeholder="Email (opcional)">
+                <input type="email" class="form-control" id="tenant-public-register-email" placeholder="Email" required>
               </div>
               <div class="col-12">
                 <div class="input-group">
@@ -910,10 +940,10 @@
                 </div>
               </div>
               <div class="col-12">
-                <input type="text" class="form-control" id="tenant-public-register-dni" placeholder="DNI (opcional)">
+                <input type="text" class="form-control" id="tenant-public-register-dni" placeholder="DNI" required>
               </div>
               <div class="col-4 col-md-3">
-                <select class="form-select" id="tenant-public-register-phone-code" aria-label="Código de país teléfono">
+                <select class="form-select" id="tenant-public-register-phone-code" aria-label="Código de país teléfono" required>
                   <option value="+58" selected>+58</option>
                   <option value="+1">+1</option>
                   <option value="+52">+52</option>
@@ -924,7 +954,7 @@
                 </select>
               </div>
               <div class="col-8 col-md-9">
-                <input type="text" class="form-control" id="tenant-public-register-phone" placeholder="Teléfono (opcional)">
+                <input type="text" class="form-control" id="tenant-public-register-phone" placeholder="Teléfono" required>
               </div>
               <div class="col-12">
                 <button type="submit" class="btn btn-dark w-100 tenant-auth-primary-btn">Crear cuenta</button>
@@ -2907,6 +2937,11 @@
     document.getElementById('tenant-public-login-form')?.addEventListener('submit', submitTenantPublicLogin);
     document.getElementById('tenant-public-register-form')?.addEventListener('submit', submitTenantPublicRegister);
     document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+      if (button.dataset.shopixPasswordToggleBound === '1') {
+        return;
+      }
+
+      button.dataset.shopixPasswordToggleBound = '1';
       button.addEventListener('click', () => {
         const inputId = button.getAttribute('data-password-toggle');
         const input = inputId ? document.getElementById(inputId) : null;

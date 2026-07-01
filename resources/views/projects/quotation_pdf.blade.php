@@ -51,6 +51,15 @@
   </style>
 </head>
 <body>
+  @php
+    $quotationCurrencyCode = strtoupper(trim((string) ($quotation->currency_code ?? 'USD')));
+    if (in_array($quotationCurrencyCode, ['VES', 'VED', 'VEF', 'BSD'], true)) {
+      $quotationCurrencyCode = 'BS';
+    }
+    $quotationCurrencySymbol = $quotationCurrencyCode === 'EUR'
+      ? '€'
+      : ($quotationCurrencyCode === 'BS' ? 'Bs' : '$');
+  @endphp
   <div class="header">
     <h1>Cotizacion #{{ $quotation->id }}</h1>
     <div class="muted">{{ $quotation->title }}</div>
@@ -62,7 +71,7 @@
     <p><strong>Cliente:</strong> {{ $quotation->customer_name ?: '-' }}</p>
     <p><strong>Proveedor:</strong> {{ $quotation->provider_name ?: optional($quotation->provider)->name ?: '-' }}</p>
     <p><strong>Valida hasta:</strong> {{ optional($quotation->valid_until)->format('d/m/Y') ?: '-' }}</p>
-    <p><strong>Moneda:</strong> {{ $quotation->currency_code }}</p>
+    <p><strong>Moneda:</strong> {{ $quotationCurrencyCode }} ({{ $quotationCurrencySymbol }})</p>
   </div>
 
   <table>
@@ -104,15 +113,15 @@
   <table class="totals">
     <tr>
       <th>Subtotal</th>
-      <td class="right">{{ number_format((float) $quotation->subtotal, 2) }} {{ $quotation->currency_code }}</td>
+      <td class="right">{{ number_format((float) $quotation->subtotal, 2) }} {{ $quotationCurrencyCode }}</td>
     </tr>
     <tr>
       <th>Descuentos</th>
-      <td class="right">{{ number_format((float) $quotation->discount_amount, 2) }} {{ $quotation->currency_code }}</td>
+      <td class="right">{{ number_format((float) $quotation->discount_amount, 2) }} {{ $quotationCurrencyCode }}</td>
     </tr>
     <tr>
       <th>Total</th>
-      <td class="right"><strong>{{ number_format((float) $quotation->total_amount, 2) }} {{ $quotation->currency_code }}</strong></td>
+      <td class="right"><strong>{{ number_format((float) $quotation->total_amount, 2) }} {{ $quotationCurrencyCode }}</strong></td>
     </tr>
   </table>
 

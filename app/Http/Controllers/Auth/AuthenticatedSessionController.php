@@ -326,11 +326,11 @@ class AuthenticatedSessionController extends Controller
         // Validación de los datos
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'nullable|email|unique:users,email',
+            'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
-            'dni' => 'nullable|string|max:100',
+            'dni' => 'required|string|max:100',
             'phone_code' => ['nullable', 'string', 'max:10', 'regex:/^\+?[0-9]{1,4}$/'],
-            'phone_number' => 'nullable|string|max:50',
+            'phone_number' => 'required|string|max:50',
             'country_id' => 'nullable|integer|exists:countries,id',
             'state_id' => 'nullable|integer|exists:states,id',
             'city_id' => 'nullable|integer|exists:cities,id',
@@ -340,19 +340,25 @@ class AuthenticatedSessionController extends Controller
         ]);
 
         $dni = trim((string) $request->input('dni', ''));
-        if ($dni === '') {
-            $dni = 'CLI-' . now()->format('YmdHis') . '-' . random_int(100, 999);
-        }
 
         $phoneNumber = $this->normalizeCustomerPhone(
             (string) $request->input('phone_number', ''),
             $request->input('phone_code')
         );
+
+        if (!$phoneNumber) {
+            return response()->json([
+                'message' => 'El teléfono es obligatorio.',
+                'errors' => [
+                    'phone_number' => ['El teléfono es obligatorio.'],
+                ],
+            ], 422);
+        }
     
         // Crear el usuario
         $user = User::create([
             'name' => $request->name,
-            'email' => trim((string) $request->email) ?: null,
+            'email' => trim((string) $request->email),
             'password' => Hash::make($request->password),  // Hashear la contraseña
             'role_id' => $this->resolveCustomerRoleId(),
             'dni' => $dni,
@@ -529,14 +535,6 @@ class AuthenticatedSessionController extends Controller
                 'label' => 'Google',
                 'icon' => 'bi bi-google',
             ],
-            'facebook' => [
-                'label' => 'Facebook',
-                'icon' => 'bi bi-facebook',
-            ],
-            'apple' => [
-                'label' => 'Apple',
-                'icon' => 'bi bi-apple',
-            ],
         ];
     }
 
@@ -548,12 +546,9 @@ class AuthenticatedSessionController extends Controller
     private function isSocialProviderConfigured(string $provider): bool
     {
         return match ($provider) {
-            'google', 'facebook' => filled(config("services.{$provider}.client_id"))
-                && filled(config("services.{$provider}.client_secret"))
-                && filled(config("services.{$provider}.redirect")),
-            'apple' => filled(config('services.apple.client_id'))
-                && filled(config('services.apple.client_secret'))
-                && filled(config('services.apple.redirect')),
+            'google' => filled(config('services.google.client_id'))
+                && filled(config('services.google.client_secret'))
+                && filled(config('services.google.redirect')),
             default => false,
         };
     }
