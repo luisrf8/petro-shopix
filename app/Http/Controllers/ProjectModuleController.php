@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\AppointmentService;
 use App\Models\ProjectAssignment;
 use App\Models\Project;
 use App\Models\ProjectPayroll;
@@ -23,6 +24,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\ProductVariantWarehouseStock;
+use App\Support\WorkflowNotifier;
 use App\Support\TenantCurrency;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
@@ -300,6 +302,8 @@ class ProjectModuleController extends Controller
 
         $tenant = Tenant::query()->find($tenantId);
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $dollarRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'USD');
+        $euroRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'EUR');
 
         $quotations = ProjectQuotation::query()
             ->where('tenant_id', $tenantId)
@@ -347,6 +351,19 @@ class ProjectModuleController extends Controller
             ->take(500)
             ->get();
 
+        $appointmentServices = AppointmentService::query()
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->take(200)
+            ->get(['id', 'name', 'description', 'price']);
+
+        $projects = Project::query()
+            ->where('tenant_id', $tenantId)
+            ->orderByDesc('id')
+            ->take(100)
+            ->get(['id', 'name', 'budget_amount']);
+
         return view('quotations.index', compact(
             'quotations',
             'editingQuotation',
@@ -354,6 +371,8 @@ class ProjectModuleController extends Controller
             'customers',
             'warehouses',
             'productVariants',
+            'appointmentServices',
+            'projects',
             'baseCurrencyCode',
             'dollarRateToBs',
             'euroRateToBs'
@@ -946,6 +965,26 @@ class ProjectModuleController extends Controller
                 'converted_to_sale_at' => now(),
             ]);
         });
+
+        WorkflowNotifier::notifyTenantRoles($tenantId, ['owner', 'administrador', 'admin', 'vendedor'], [
+            'title' => 'Nueva venta creada',
+            'message' => 'La cotización #' . (int) $quotation->id . ' se convirtió en la venta #' . (int) ($salesOrder->id ?? 0) . '.',
+            'type' => 'new-order',
+            'tenant_id' => $tenantId,
+            'order_id' => $salesOrder ? (int) $salesOrder->id : null,
+            'action' => 'review_sale',
+        ]);
+
+        if ($customer) {
+            WorkflowNotifier::notifyUser($customer, [
+                'title' => 'Tu venta fue creada',
+                'message' => 'Se registró tu venta #' . (int) ($salesOrder->id ?? 0) . '. Puedes revisarla desde tu pedido.',
+                'type' => 'new-order',
+                'tenant_id' => $tenantId,
+                'order_id' => $salesOrder ? (int) $salesOrder->id : null,
+                'action' => 'review_my_order',
+            ]);
+        }
 
         return back()->with('success', 'Cotización convertida a venta correctamente. Orden #' . (int) ($salesOrder->id ?? 0) . ' creada.');
     }

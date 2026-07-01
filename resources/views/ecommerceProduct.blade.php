@@ -35,6 +35,8 @@
     $baseCurrencyCode = strtoupper((string) ($baseCurrencyCode ?? ($tenant->base_currency ?? 'USD')));
     $baseCurrencyCode = in_array($baseCurrencyCode, ['USD', 'EUR'], true) ? $baseCurrencyCode : 'USD';
     $baseCurrencySymbol = (string) ($baseCurrencySymbol ?? ($baseCurrencyCode === 'EUR' ? '€' : '$'));
+    $showBsPrices = (bool) ($showBsPrices ?? ($tenant->show_bs_prices_in_storefront ?? false));
+    $storefrontBsRate = (float) ($storefrontBsRate ?? 0);
     $tenantExternalUrl = trim((string) ($tenant->external_url ?? ''));
     if ($tenantExternalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($tenantExternalUrl), ['http://', 'https://'])) {
       $tenantExternalUrl = 'https://' . $tenantExternalUrl;
@@ -1241,6 +1243,7 @@
                     $productDiscount = (float) ($product->discount_percentage ?? 0);
                     $variantDiscount = (float) ($variant->discount_percentage ?? 0);
                     $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+                    $effectiveVariantPriceBs = $showBsPrices && $storefrontBsRate > 0 ? $effectiveVariantPrice * $storefrontBsRate : null;
                     $variantImage = optional($variant->images->first())->path;
                     $variantImageUrl = $variantImage ? (\App\Support\ImageStorage::url($variantImage) ?? asset('assets/img/shopix5.png')) : (isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'));
                   @endphp
@@ -1249,6 +1252,7 @@
                           data-variant-id="{{ $variant->id }}"
                           data-size="{{ $variant->size }}"
                           data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}"
+                          data-price-bs="{{ !is_null($effectiveVariantPriceBs) ? number_format($effectiveVariantPriceBs, 2, '.', '') : '' }}"
                           data-stock="{{ $variant->stock }}"
                           data-product-name="{{ $product->name }}"
                           data-image-src="{{ $variantImageUrl }}"
@@ -1270,6 +1274,9 @@
                               <span>{{ number_format($effectiveVariantPrice, 2) }}</span>
                               <span class="text-muted small">{{ $baseCurrencySymbol }}</span>
                             </div>
+                            @if(!is_null($effectiveVariantPriceBs))
+                              <small class="text-muted d-block">Bs {{ number_format($effectiveVariantPriceBs, 2) }}</small>
+                            @endif
                           </div>
                     @if($productDiscount > 0 || $variantDiscount > 0)
                       <small class="variant-discount d-block mt-1">Desc: {{ number_format($productDiscount + $variantDiscount, 2) }}%</small>
@@ -1576,6 +1583,7 @@
         let selectedVariant = null;
         const tenantSlug = @json($tenant->slug);
         const baseCurrencySymbol = @json($baseCurrencySymbol ?? '$');
+        const showBsPrices = @json((bool) ($showBsPrices ?? false));
 
         const tenantPhoneCode = @json($tenant->phone_code ?? '');
         const tenantPhoneNumber = @json($tenant->phone_number ?? '');
@@ -1611,6 +1619,7 @@
                     variantId: button.dataset.variantId,
                     size: button.dataset.size,
                     price: button.dataset.price,
+                  priceBs: button.dataset.priceBs || '',
                   productName: button.dataset.productName,
                   productId: @json($product->id),
                   imageSrc: button.dataset.imageSrc || null,
@@ -1626,7 +1635,8 @@
                 }
 
                 if (selectedVariantIndicator && selectedVariantLabel) {
-                  selectedVariantLabel.textContent = `${selectedVariant.size} (${selectedVariant.price} ${baseCurrencySymbol})`;
+                  const bsSuffix = showBsPrices && selectedVariant.priceBs ? ` · Bs ${selectedVariant.priceBs}` : '';
+                  selectedVariantLabel.textContent = `${selectedVariant.size} (${selectedVariant.price} ${baseCurrencySymbol}${bsSuffix})`;
                   selectedVariantIndicator.classList.remove('d-none');
                 }
 

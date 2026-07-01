@@ -34,6 +34,7 @@ use App\Models\UserScheduleRule;
 use App\Support\ImageStorage;
 use App\Support\ActionReason;
 use App\Support\TenantPlanCapabilities;
+use App\Support\TenantCurrency;
 use App\Services\GeminiImageService;
 use App\Services\ShopixSetupDocumentService;
 use App\Services\ShopixSetupImportService;
@@ -482,6 +483,7 @@ class TenantController extends Controller
             'delivery_fee_per_km' => is_numeric($tenantInput['delivery_fee_per_km'] ?? null) ? (float) $tenantInput['delivery_fee_per_km'] : null,
             'restrict_delivery_city_to_tenant' => filter_var($tenantInput['restrict_delivery_city_to_tenant'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'delivery_notifications_enabled' => filter_var($tenantInput['delivery_notifications_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'show_bs_prices_in_storefront' => filter_var($tenantInput['show_bs_prices_in_storefront'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'social_profiles' => $this->normalizeSocialProfiles($tenantInput['social_profiles'] ?? ($seed['social_profiles'] ?? [])),
             'color_primary' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($tenantInput['color_primary'] ?? '')) ? strtoupper((string) $tenantInput['color_primary']) : null,
             'color_secondary' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($tenantInput['color_secondary'] ?? '')) ? strtoupper((string) $tenantInput['color_secondary']) : null,
@@ -1309,8 +1311,10 @@ class TenantController extends Controller
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
         $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
+        $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
+        $storefrontBsRate = $this->resolveStorefrontBsRate($tenant);
 
-        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol'));
+        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate'));
     }
 
     public function store(Request $request)
@@ -1747,6 +1751,7 @@ class TenantController extends Controller
             'delivery_fixed_fee' => 'nullable|numeric|min:0',
             'delivery_fee_per_km' => 'nullable|numeric|min:0',
             'delivery_notifications_enabled' => 'nullable|boolean',
+                'show_bs_prices_in_storefront' => 'nullable|boolean',
         ]);
 
         if (array_key_exists('economic_activity', $validated)) {
@@ -1899,6 +1904,7 @@ class TenantController extends Controller
             'delivery_fixed_fee' => $validated['delivery_fixed_fee'] ?? $tenant->delivery_fixed_fee,
             'delivery_fee_per_km' => $validated['delivery_fee_per_km'] ?? $tenant->delivery_fee_per_km,
             'delivery_notifications_enabled' => $validated['delivery_notifications_enabled'] ?? $tenant->delivery_notifications_enabled,
+            'show_bs_prices_in_storefront' => $validated['show_bs_prices_in_storefront'] ?? $tenant->show_bs_prices_in_storefront,
         ];
 
         $tenant->fill($tenantData);
@@ -2036,6 +2042,7 @@ class TenantController extends Controller
                 'delivery_fixed_fee' => 'nullable|numeric|min:0',
                 'delivery_fee_per_km' => 'nullable|numeric|min:0',
                 'delivery_notifications_enabled' => 'nullable|boolean',
+                'show_bs_prices_in_storefront' => 'nullable|boolean',
                 'import_payload' => 'nullable|string',
             ]);
 
@@ -2319,6 +2326,8 @@ class TenantController extends Controller
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
         $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
+        $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
+        $storefrontBsRate = $this->resolveStorefrontBsRate($tenant);
 
         return view('ecommerceCategory', compact(
             'tenant',
@@ -2328,7 +2337,9 @@ class TenantController extends Controller
             'cartEnabled',
             'cartPlanName',
             'baseCurrencyCode',
-            'baseCurrencySymbol'
+            'baseCurrencySymbol',
+            'showBsPrices',
+            'storefrontBsRate'
         ));
     }
     public function publicTenantProduct(Tenant $tenant, string $product)
@@ -2367,8 +2378,10 @@ class TenantController extends Controller
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
         $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
+        $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
+        $storefrontBsRate = $this->resolveStorefrontBsRate($tenant);
 
-        return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol'));
+        return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate'));
     }
 
     public function publicTenantPaymentMethods(Tenant $tenant)
@@ -2437,6 +2450,27 @@ class TenantController extends Controller
     private function resolveCurrencySymbol(string $code): string
     {
         return strtoupper(trim($code)) === 'EUR' ? '€' : '$';
+    }
+
+    private function shouldShowStorefrontBsPrices(Tenant $tenant): bool
+    {
+        return (bool) ($tenant->show_bs_prices_in_storefront ?? false);
+    }
+
+    private function resolveStorefrontBsRate(Tenant $tenant): float
+    {
+        $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
+        $tenantRate = (float) TenantCurrency::resolveRateToBs((int) $tenant->id, $baseCurrencyCode);
+
+        if ($tenantRate > 0) {
+            return $tenantRate;
+        }
+
+        if ($baseCurrencyCode === 'EUR') {
+            return (float) (EuroRate::query()->latest('created_at')->value('rate') ?: 0);
+        }
+
+        return (float) (DollarRate::query()->latest('created_at')->value('rate') ?: 0);
     }
 
     private function resolveIgtfRate(): float

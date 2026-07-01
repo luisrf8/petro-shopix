@@ -696,7 +696,27 @@
                                     </div>
                                     <small class="text-muted">Úsalo junto al rol <strong>delivery</strong> para despachos y reparto.</small>
                                 </div>
+
                                 @endunless
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold d-block">Mostrar precios en Bs en la tienda</label>
+                                    <input type="hidden" name="show_bs_prices_in_storefront" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
+                                            id="show_bs_prices_in_storefront"
+                                            name="show_bs_prices_in_storefront"
+                                            value="1"
+                                            {{ (bool) ($tenant->show_bs_prices_in_storefront ?? false) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="show_bs_prices_in_storefront">
+                                            Mostrar un precio pequeño en bolívares según la tasa BCV de esta tienda
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">El precio base seguirá siendo la moneda madre; Bs se mostrará como referencia adicional.</small>
+                                </div>
                             </div>
 
                             {{-- TAB 2 --}}
@@ -1538,6 +1558,7 @@
         setFormCheckboxValue('#delivery_enabled', tenant.delivery_enabled);
         setFormCheckboxValue('#restrict_delivery_city_to_tenant', tenant.restrict_delivery_city_to_tenant);
         setFormCheckboxValue('#delivery_notifications_enabled', tenant.delivery_notifications_enabled);
+        setFormCheckboxValue('#show_bs_prices_in_storefront', tenant.show_bs_prices_in_storefront);
 
         await applyTenantLocationImport(tenant);
     }

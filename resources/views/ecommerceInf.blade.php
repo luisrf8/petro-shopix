@@ -35,6 +35,8 @@
     $baseCurrencyCode = strtoupper((string) ($baseCurrencyCode ?? ($tenant->base_currency ?? 'USD')));
     $baseCurrencyCode = in_array($baseCurrencyCode, ['USD', 'EUR'], true) ? $baseCurrencyCode : 'USD';
     $baseCurrencySymbol = (string) ($baseCurrencySymbol ?? ($baseCurrencyCode === 'EUR' ? '€' : '$'));
+    $showBsPrices = (bool) ($showBsPrices ?? ($tenant->show_bs_prices_in_storefront ?? false));
+    $storefrontBsRate = (float) ($storefrontBsRate ?? 0);
 
     $countryName = $tenant->country_name ?? '';
     $stateName = $tenant->state_name ?? '';
@@ -1331,6 +1333,17 @@
               <div class="col-12 col-sm-6 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
                 <a href="{{ route('tenant.public.product', ['tenant' => $tenant->slug, 'product' => $product->slug]) }}" class="text-decoration-none d-block h-100">
                   <div class="card card-product h-100">
+                    @php
+                      $firstVariant = $product->variants->first();
+                      $productDiscount = (float) ($product->discount_percentage ?? 0);
+                      $variantDiscount = (float) ($firstVariant?->discount_percentage ?? 0);
+                      $displayPrice = $firstVariant
+                        ? (float) $firstVariant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100)
+                        : null;
+                      $displayPriceBs = !is_null($displayPrice) && $showBsPrices && $storefrontBsRate > 0
+                        ? $displayPrice * $storefrontBsRate
+                        : null;
+                    @endphp
                     @if(isset($product->images[0]))
                       <img src="{{ \App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png') }}" class="card-img-top landing-media-image" style="height: 300px; object-fit: cover;">
                     @else
@@ -1341,6 +1354,17 @@
                     <div class="card-body text-start">
                       <h5 class="fw-bold text-dark mb-1">{{ $product->name }}</h5>
                       <p class="text-muted small mb-0">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta tienda.', 72) }}</p>
+                      @if(!is_null($displayPrice))
+                        <p class="mb-0 mt-2">
+                          <span class="price-neo-chip">
+                            <strong>{{ number_format($displayPrice, 2) }}</strong>
+                            <span>{{ $baseCurrencySymbol }}</span>
+                          </span>
+                        </p>
+                        @if(!is_null($displayPriceBs))
+                          <p class="text-muted small mb-0">Bs {{ number_format($displayPriceBs, 2) }}</p>
+                        @endif
+                      @endif
                     </div>
                   </div>
                 </a>
@@ -1369,6 +1393,7 @@
                   $packageTotal = !is_null($package->package_price)
                     ? (float) $package->package_price
                     : $packageTotalCalculated;
+                  $packageTotalBs = $showBsPrices && $storefrontBsRate > 0 ? $packageTotal * $storefrontBsRate : null;
                 @endphp
                 <div class="col-12 col-sm-6 col-lg-4 mb-4 package-item" data-name="{{ strtolower($package->name) }}">
                   <div class="card card-product h-100">
@@ -1389,6 +1414,9 @@
                           <span>{{ $baseCurrencySymbol }}</span>
                         </span>
                       </p>
+                      @if(!is_null($packageTotalBs))
+                        <p class="text-muted small mb-2">Bs {{ number_format($packageTotalBs, 2) }}</p>
+                      @endif
                       @if(!is_null($package->package_price))
                         <p class="text-dark small mb-2">Precio fijo combo</p>
                       @endif

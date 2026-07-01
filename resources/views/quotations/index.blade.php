@@ -242,6 +242,73 @@
           ];
         })->values()->all()
       : [];
+
+    $productVariantItems = $productVariants->map(function ($variant) {
+      $productName = $variant->product->name ?? 'Producto';
+      $variantName = $variant->size ?? 'Variante';
+      $variantBarcode = trim((string) ($variant->barcode ?? ''));
+      $variantQrCode = trim((string) ($variant->qr_code ?? ''));
+      $productBarcode = trim((string) ($variant->product->barcode ?? ''));
+      $productQrCode = trim((string) ($variant->product->qr_code ?? ''));
+      $productCode = 'P' . (int) $variant->product_id;
+      $variantCode = 'V' . (int) $variant->id;
+
+      return [
+        'id' => (int) $variant->id,
+        'product_id' => (int) $variant->product_id,
+        'label' => $productName . ' - ' . $variantName,
+        'product_name' => $productName,
+        'variant_name' => $variantName,
+        'price' => number_format((float) $variant->price, 2, '.', ''),
+        'search' => collect([
+          $productName,
+          $variantName,
+          $variantBarcode,
+          $variantQrCode,
+          $productBarcode,
+          $productQrCode,
+          $productCode,
+          $variantCode,
+          (string) ((int) $variant->id),
+          (string) ((int) $variant->product_id),
+        ])->filter()->implode(' | '),
+      ];
+    })->values()->all();
+
+    $appointmentServiceItems = collect($appointmentServices ?? [])->map(function ($service) {
+      $serviceName = trim((string) ($service->name ?? 'Servicio'));
+      $serviceDescription = trim((string) ($service->description ?? ''));
+
+      return [
+        'id' => (int) $service->id,
+        'name' => $serviceName,
+        'label' => $serviceDescription !== '' ? ($serviceName . ' - ' . $serviceDescription) : $serviceName,
+        'description' => $serviceDescription,
+        'price' => number_format((float) ($service->price ?? 0), 2, '.', ''),
+        'search' => collect([
+          $serviceName,
+          $serviceDescription,
+          (string) ((int) $service->id),
+        ])->filter()->implode(' | '),
+      ];
+    })->values()->all();
+
+    $projectItems = collect($projects ?? [])->map(function ($project) {
+      $projectName = trim((string) ($project->name ?? 'Proyecto'));
+      $projectBudget = (float) ($project->budget_amount ?? 0);
+
+      return [
+        'id' => (int) $project->id,
+        'name' => $projectName,
+        'label' => $projectName,
+        'description' => $projectName,
+        'price' => number_format($projectBudget, 2, '.', ''),
+        'search' => collect([
+          $projectName,
+          (string) ((int) $project->id),
+        ])->filter()->implode(' | '),
+      ];
+    })->values()->all();
   @endphp
 
   <div class="card my-4">
@@ -351,7 +418,7 @@
             <div class="col-12">
               <div class="table-responsive border rounded">
                 <table class="table table-sm mb-0 quotation-items-table">
-                  <thead><tr><th style="min-width:170px;">Tipo ítem</th><th style="min-width:280px;">Producto / Variante</th><th style="min-width:180px;">Servicio</th><th style="min-width:200px;">Descripción</th><th style="min-width:120px;">Cantidad</th><th style="min-width:140px;">Precio unit.</th><th style="min-width:120px;">Desc. %</th><th style="min-width:60px;"></th></tr></thead>
+                  <thead><tr><th style="min-width:170px;">Tipo ítem</th><th style="min-width:280px;">Buscar ítem</th><th style="min-width:180px;">Nombre / referencia</th><th style="min-width:200px;">Descripción</th><th style="min-width:120px;">Cantidad</th><th style="min-width:140px;">Precio unit.</th><th style="min-width:120px;">Desc. %</th><th style="min-width:60px;"></th></tr></thead>
                   <tbody id="quotationItemsBody"></tbody>
                 </table>
               </div>
@@ -428,44 +495,54 @@
     </td>
     <td class="quotation-item-select2-wrap">
       <input type="hidden" class="js-item-product-id" value="">
-      <select class="form-control border border-1 p-2 js-item-variant" data-name="product_variant_id">
-        <option value="">Ítem libre</option>
-        @foreach($productVariants as $variant)
-          @php
-            $productName = $variant->product->name ?? 'Producto';
-            $variantName = $variant->size ?? 'Variante';
-            $variantBarcode = trim((string) ($variant->barcode ?? ''));
-            $variantQrCode = trim((string) ($variant->qr_code ?? ''));
-            $productBarcode = trim((string) ($variant->product->barcode ?? ''));
-            $productQrCode = trim((string) ($variant->product->qr_code ?? ''));
-            $productCode = 'P' . (int) $variant->product_id;
-            $variantCode = 'V' . (int) $variant->id;
-            $searchTokens = collect([
-              $productName,
-              $variantName,
-              $variantBarcode,
-              $variantQrCode,
-              $productBarcode,
-              $productQrCode,
-              $productCode,
-              $variantCode,
-              (string) ((int) $variant->id),
-              (string) ((int) $variant->product_id),
-            ])->filter()->implode(' | ');
-          @endphp
-          <option
-            value="{{ $variant->id }}"
-            data-product-id="{{ $variant->product_id }}"
-            data-product-name="{{ $productName }}"
-            data-variant-name="{{ $variantName }}"
-            data-price="{{ number_format((float) $variant->price, 2, '.', '') }}"
-            data-search="{{ $searchTokens }}">
-            {{ $productName }} - {{ $variantName }}
-          </option>
-        @endforeach
-      </select>
+      <div class="quotation-item-source-field" data-source-type="product">
+        <select class="form-control border border-1 p-2 js-item-source-select" data-source-type="product">
+          <option value="">Buscar producto o variante</option>
+          @foreach($productVariantItems as $variant)
+            <option
+              value="{{ $variant['id'] }}"
+              data-product-id="{{ $variant['product_id'] }}"
+              data-product-name="{{ $variant['product_name'] }}"
+              data-variant-name="{{ $variant['variant_name'] }}"
+              data-price="{{ $variant['price'] }}"
+              data-search="{{ $variant['search'] }}">
+              {{ $variant['label'] }}
+            </option>
+          @endforeach
+        </select>
+      </div>
+      <div class="quotation-item-source-field d-none" data-source-type="service">
+        <select class="form-control border border-1 p-2 js-item-source-select" data-source-type="service">
+          <option value="">Buscar servicio</option>
+          @foreach($appointmentServiceItems as $service)
+            <option
+              value="{{ $service['id'] }}"
+              data-service-name="{{ $service['name'] }}"
+              data-description="{{ $service['description'] }}"
+              data-price="{{ $service['price'] }}"
+              data-search="{{ $service['search'] }}">
+              {{ $service['label'] }}
+            </option>
+          @endforeach
+        </select>
+      </div>
+      <div class="quotation-item-source-field d-none" data-source-type="project">
+        <select class="form-control border border-1 p-2 js-item-source-select" data-source-type="project">
+          <option value="">Buscar proyecto</option>
+          @foreach($projectItems as $project)
+            <option
+              value="{{ $project['id'] }}"
+              data-project-name="{{ $project['name'] }}"
+              data-description="{{ $project['description'] }}"
+              data-price="{{ $project['price'] }}"
+              data-search="{{ $project['search'] }}">
+              {{ $project['label'] }}
+            </option>
+          @endforeach
+        </select>
+      </div>
     </td>
-    <td><input type="text" class="form-control border border-1 p-2" data-name="service_name" placeholder="Servicio"></td>
+    <td><input type="text" class="form-control border border-1 p-2 js-item-source-name" data-name="service_name" placeholder="Nombre del ítem"></td>
     <td><input type="text" class="form-control border border-1 p-2 js-item-description" data-name="description" required></td>
     <td><input type="number" min="0.01" step="0.01" class="form-control border border-1 p-2" data-name="quantity" value="1" required></td>
     <td><input type="number" min="0" step="0.01" class="form-control border border-1 p-2 js-item-unit-price" data-name="unit_price" value="0" required></td>
@@ -483,6 +560,13 @@ document.addEventListener('DOMContentLoaded', function () {
   const baseCurrencyCode = @json(strtoupper((string) ($baseCurrencyCode ?? 'USD')));
   const dollarRateToBs = Number(@json((float) ($dollarRateToBs ?? 0)) || 0);
   const euroRateToBs = Number(@json((float) ($euroRateToBs ?? 0)) || 0);
+  const itemSourceGroups = {
+    product: 'product',
+    materials: 'product',
+    service: 'service',
+    project: 'project',
+    free: null,
+  };
 
   const normalizeCurrencyCode = (value) => {
     const code = String(value || '').trim().toUpperCase();
@@ -556,20 +640,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
   let lastSelectedItemType = resolveLastSelectedItemType();
 
-  const initVariantSelect2 = (row) => {
-    const variantSelect = row ? row.querySelector('.js-item-variant') : null;
-    if (!variantSelect || !window.jQuery || !window.jQuery.fn?.select2) {
+  const getItemSourceGroup = (itemType) => itemSourceGroups[String(itemType || '').trim()] || 'product';
+
+  const getActiveSourceSelect = (row, itemType) => {
+    const sourceGroup = getItemSourceGroup(itemType);
+    if (!sourceGroup) {
+      return null;
+    }
+
+    return row ? row.querySelector(`.js-item-source-select[data-source-type="${sourceGroup}"]`) : null;
+  };
+
+  const initSourceSelect2 = (select, sourceGroup) => {
+    if (!select || !window.jQuery || !window.jQuery.fn?.select2) {
       return;
     }
 
-    const $select = window.jQuery(variantSelect);
+    const $select = window.jQuery(select);
     if ($select.hasClass('select2-hidden-accessible')) {
       $select.select2('destroy');
     }
 
+    const placeholders = {
+      product: 'Buscar producto, variante, barcode o código',
+      service: 'Buscar servicio',
+      project: 'Buscar proyecto',
+    };
+
     $select.select2({
       width: '100%',
-      placeholder: 'Buscar por nombre, codigo o barcode',
+      placeholder: placeholders[sourceGroup] || 'Buscar ítem',
       allowClear: true,
       matcher: function (params, data) {
         const term = String(params?.term || '').trim().toLowerCase();
@@ -586,8 +686,180 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     $select.off('change.select2-sync').on('change.select2-sync', function () {
-      variantSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      const row = select.closest('tr');
+      if (row) {
+        syncItemSourceToFields(row, true);
+      }
     });
+  };
+
+  const syncRowFieldNames = (row) => {
+    const rows = Array.from(itemsBody ? itemsBody.querySelectorAll('tr') : []);
+    const index = rows.indexOf(row);
+    if (index < 0) {
+      return;
+    }
+
+    row.querySelectorAll('[data-name]').forEach((field) => {
+      const key = field.getAttribute('data-name');
+      field.name = `items[${index}][${key}]`;
+    });
+
+    const productIdInput = row.querySelector('.js-item-product-id');
+    if (productIdInput) {
+      productIdInput.name = `items[${index}][product_id]`;
+    }
+
+    row.querySelectorAll('.js-item-source-select').forEach((select) => {
+      select.removeAttribute('name');
+    });
+
+    const itemType = row.querySelector('[data-name="item_type"]')?.value || 'product';
+    const activeSelect = getActiveSourceSelect(row, itemType);
+    if (activeSelect && ['product', 'materials'].includes(itemType)) {
+      activeSelect.name = `items[${index}][product_variant_id]`;
+    }
+  };
+
+  const syncItemSourceToFields = (row, forceWrite = false) => {
+    const typeInput = row.querySelector('[data-name="item_type"]');
+    const itemType = String(typeInput?.value || 'product');
+    const sourceGroup = getItemSourceGroup(itemType);
+    const sourceSelect = getActiveSourceSelect(row, itemType);
+    const productIdInput = row.querySelector('.js-item-product-id');
+    const nameInput = row.querySelector('.js-item-source-name');
+    const descriptionInput = row.querySelector('.js-item-description');
+    const unitPriceInput = row.querySelector('.js-item-unit-price');
+
+    if (!sourceGroup) {
+      if (productIdInput) productIdInput.value = '';
+      return;
+    }
+
+    const selected = sourceSelect ? sourceSelect.options[sourceSelect.selectedIndex] : null;
+    if (!selected || !String(sourceSelect?.value || '').trim()) {
+      if (sourceGroup === 'product' && productIdInput) {
+        productIdInput.value = '';
+      }
+      return;
+    }
+
+    const readText = (value) => String(value || '').trim();
+
+    if (sourceGroup === 'product') {
+      if (productIdInput) productIdInput.value = selected.getAttribute('data-product-id') || '';
+
+      const productName = selected.getAttribute('data-product-name') || 'Producto';
+      const variantName = selected.getAttribute('data-variant-name') || 'Variante';
+      const label = `${productName} - ${variantName}`;
+      const price = Number(selected.getAttribute('data-price') || 0);
+
+      if (nameInput && (forceWrite || !readText(nameInput.value))) {
+        nameInput.value = label;
+      }
+
+      if (descriptionInput && (forceWrite || !readText(descriptionInput.value))) {
+        descriptionInput.value = label;
+      }
+
+      if (unitPriceInput && (forceWrite || Number(unitPriceInput.value || 0) <= 0)) {
+        const selectedCurrency = normalizeCurrencyCode(quotationCurrencySelect?.value || baseCurrencyCode);
+        unitPriceInput.value = convertCurrencyAmount(price, baseCurrencyCode, selectedCurrency).toFixed(2);
+      }
+
+      return;
+    }
+
+    if (productIdInput) productIdInput.value = '';
+
+    if (sourceGroup === 'service') {
+      const serviceName = selected.getAttribute('data-service-name') || selected.textContent || 'Servicio';
+      const serviceDescription = selected.getAttribute('data-description') || serviceName;
+      const price = Number(selected.getAttribute('data-price') || 0);
+
+      if (nameInput && (forceWrite || !readText(nameInput.value))) {
+        nameInput.value = serviceName;
+      }
+
+      if (descriptionInput && (forceWrite || !readText(descriptionInput.value))) {
+        descriptionInput.value = serviceDescription;
+      }
+
+      if (unitPriceInput && (forceWrite || Number(unitPriceInput.value || 0) <= 0)) {
+        unitPriceInput.value = price.toFixed(2);
+      }
+
+      return;
+    }
+
+    if (sourceGroup === 'project') {
+      const projectName = selected.getAttribute('data-project-name') || selected.textContent || 'Proyecto';
+      const projectDescription = selected.getAttribute('data-description') || projectName;
+      const price = Number(selected.getAttribute('data-price') || 0);
+
+      if (nameInput && (forceWrite || !readText(nameInput.value))) {
+        nameInput.value = projectName;
+      }
+
+      if (descriptionInput && (forceWrite || !readText(descriptionInput.value))) {
+        descriptionInput.value = projectDescription;
+      }
+
+      if (unitPriceInput && (forceWrite || Number(unitPriceInput.value || 0) <= 0)) {
+        unitPriceInput.value = price.toFixed(2);
+      }
+    }
+  };
+
+  const applyItemTypeState = (row, itemType, forceWrite = false) => {
+    const sourceGroup = getItemSourceGroup(itemType);
+
+    row.querySelectorAll('.quotation-item-source-field').forEach((field) => {
+      field.classList.toggle('d-none', field.dataset.sourceType !== sourceGroup);
+    });
+
+    syncRowFieldNames(row);
+
+    const activeSelect = getActiveSourceSelect(row, itemType);
+    if (activeSelect && !activeSelect.dataset.select2Ready) {
+      initSourceSelect2(activeSelect, sourceGroup);
+      activeSelect.dataset.select2Ready = '1';
+    }
+
+    syncItemSourceToFields(row, forceWrite);
+  };
+
+  const setInitialSourceSelection = (row, defaults) => {
+    const typeInput = row.querySelector('[data-name="item_type"]');
+    const itemType = String(typeInput?.value || 'product');
+    const sourceGroup = getItemSourceGroup(itemType);
+    const sourceSelect = getActiveSourceSelect(row, itemType);
+    if (!sourceSelect || !defaults) {
+      return;
+    }
+
+    if (sourceGroup === 'product' && defaults.product_variant_id) {
+      sourceSelect.value = String(defaults.product_variant_id);
+      sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+
+    const targetName = String(defaults.service_name || '').trim().toLowerCase();
+    if (!targetName) {
+      return;
+    }
+
+    const matchingOption = Array.from(sourceSelect.options).find((option) => {
+      const optionText = String(option.textContent || '').trim().toLowerCase();
+      const searchText = String(option.dataset.search || '').trim().toLowerCase();
+      return optionText === targetName || optionText.includes(targetName) || searchText.includes(targetName);
+    });
+
+    if (matchingOption) {
+      sourceSelect.value = matchingOption.value;
+      sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
   };
 
   const quotationType = document.getElementById('quotationType');
@@ -623,57 +895,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const initialItems = {{ \Illuminate\Support\Js::from($editingQuotationItems) }};
 
-  const assignRowNames = (row, index) => {
-    row.querySelectorAll('[data-name]').forEach((field) => {
-      const key = field.getAttribute('data-name');
-      field.name = `items[${index}][${key}]`;
-    });
-
-    const productIdInput = row.querySelector('.js-item-product-id');
-    if (productIdInput) {
-      productIdInput.name = `items[${index}][product_id]`;
-    }
-  };
-
-  const syncVariantToFields = (row, forceWrite = false) => {
-    const variantSelect = row.querySelector('.js-item-variant');
-    const descriptionInput = row.querySelector('.js-item-description');
-    const unitPriceInput = row.querySelector('.js-item-unit-price');
-    const productIdInput = row.querySelector('.js-item-product-id');
-
-    const selected = variantSelect ? variantSelect.options[variantSelect.selectedIndex] : null;
-    if (!selected || !String(variantSelect.value || '').trim()) {
-      if (productIdInput) productIdInput.value = '';
-      return;
-    }
-
-    if (productIdInput) productIdInput.value = selected.getAttribute('data-product-id') || '';
-
-    if (descriptionInput && (forceWrite || !String(descriptionInput.value || '').trim())) {
-      const productName = selected.getAttribute('data-product-name') || 'Producto';
-      const variantName = selected.getAttribute('data-variant-name') || 'Variante';
-      descriptionInput.value = `${productName} - ${variantName}`;
-    }
-
-    if (unitPriceInput && (forceWrite || Number(unitPriceInput.value || 0) <= 0)) {
-      const price = Number(selected.getAttribute('data-price') || 0);
-      const selectedCurrency = normalizeCurrencyCode(quotationCurrencySelect?.value || baseCurrencyCode);
-      const convertedPrice = convertCurrencyAmount(price, baseCurrencyCode, selectedCurrency);
-      unitPriceInput.value = convertedPrice.toFixed(2);
-    }
+  const assignRowNames = (row) => {
+    syncRowFieldNames(row);
   };
 
   const addItemRow = (defaults) => {
     if (!template || !itemsBody) return;
 
     const row = template.content.firstElementChild.cloneNode(true);
-    const index = itemsBody.querySelectorAll('tr').length;
-    assignRowNames(row, index);
+    assignRowNames(row);
 
     if (defaults) {
-      const variantSelect = row.querySelector('.js-item-variant');
-      if (variantSelect) variantSelect.value = String(defaults.product_variant_id || '');
-
       const productIdInput = row.querySelector('.js-item-product-id');
       if (productIdInput) productIdInput.value = String(defaults.product_id || '');
 
@@ -713,21 +945,38 @@ document.addEventListener('DOMContentLoaded', function () {
       typeInput.addEventListener('change', function () {
         lastSelectedItemType = String(typeInput.value || 'product');
         persistLastSelectedItemType(lastSelectedItemType);
+        syncRowFieldNames(row);
+        applyItemTypeState(row, lastSelectedItemType, true);
       });
       persistLastSelectedItemType(typeInput.value || lastSelectedItemType);
     }
 
-    const variantSelect = row.querySelector('.js-item-variant');
-    if (variantSelect) {
-      variantSelect.addEventListener('change', function () { syncVariantToFields(row); });
-      initVariantSelect2(row);
-      if (defaults && defaults.product_variant_id) {
-        syncVariantToFields(row, false);
-      }
+    const sourceSelects = row.querySelectorAll('.js-item-source-select');
+    sourceSelects.forEach((select) => {
+      select.addEventListener('change', function () {
+        syncItemSourceToFields(row, false);
+      });
+    });
+
+    if (typeInput) {
+      syncRowFieldNames(row);
+      applyItemTypeState(row, typeInput.value || lastSelectedItemType, false);
+    }
+
+    if (defaults) {
+      setInitialSourceSelection(row, defaults);
+      syncItemSourceToFields(row, false);
     }
 
     const removeBtn = row.querySelector('.js-remove-item');
-    if (removeBtn) removeBtn.addEventListener('click', function () { row.remove(); });
+    if (removeBtn) removeBtn.addEventListener('click', function () {
+      row.remove();
+      if (itemsBody) {
+        Array.from(itemsBody.querySelectorAll('tr')).forEach((remainingRow) => {
+          syncRowFieldNames(remainingRow);
+        });
+      }
+    });
   };
 
   if (addItemBtn) addItemBtn.addEventListener('click', function () { addItemRow(null); });

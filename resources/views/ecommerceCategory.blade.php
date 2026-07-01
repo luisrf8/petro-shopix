@@ -35,6 +35,8 @@
     $baseCurrencyCode = strtoupper((string) ($baseCurrencyCode ?? ($tenant->base_currency ?? 'USD')));
     $baseCurrencyCode = in_array($baseCurrencyCode, ['USD', 'EUR'], true) ? $baseCurrencyCode : 'USD';
     $baseCurrencySymbol = (string) ($baseCurrencySymbol ?? ($baseCurrencyCode === 'EUR' ? '€' : '$'));
+    $showBsPrices = (bool) ($showBsPrices ?? ($tenant->show_bs_prices_in_storefront ?? false));
+    $storefrontBsRate = (float) ($storefrontBsRate ?? 0);
     $tenantExternalUrl = trim((string) ($tenant->external_url ?? ''));
     if ($tenantExternalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($tenantExternalUrl), ['http://', 'https://'])) {
       $tenantExternalUrl = 'https://' . $tenantExternalUrl;
@@ -1318,6 +1320,7 @@
                             $productDiscount = (float) ($product->discount_percentage ?? 0);
                             $variantDiscount = (float) ($variant->discount_percentage ?? 0);
                             $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
+                            $effectiveVariantPriceBs = $showBsPrices && $storefrontBsRate > 0 ? $effectiveVariantPrice * $storefrontBsRate : null;
                           @endphp
                           <div class="product-variant-chip">
                             <span class="product-variant-size">
@@ -1327,6 +1330,9 @@
                             <span class="product-variant-price">
                               <small>{{ $baseCurrencySymbol }}</small>
                               <strong>{{ number_format($effectiveVariantPrice, 2) }}</strong>
+                              @if(!is_null($effectiveVariantPriceBs))
+                                <small class="d-block text-muted">Bs {{ number_format($effectiveVariantPriceBs, 2) }}</small>
+                              @endif
                             </span>
                           </div>
                         @endforeach
@@ -1369,6 +1375,7 @@
                   $packageTotal = !is_null($package->package_price)
                     ? (float) $package->package_price
                     : $packageTotalCalculated;
+                  $packageTotalBs = $showBsPrices && $storefrontBsRate > 0 ? $packageTotal * $storefrontBsRate : null;
                 @endphp
                 <div class="col-12 col-sm-6 col-md-4 col-lg-4 mb-4 package-item" data-name="{{ strtolower($package->name) }}">
                   <div class="card card-product h-100">
@@ -1389,6 +1396,9 @@
                           <span>{{ $baseCurrencySymbol }}</span>
                         </span>
                       </p>
+                      @if(!is_null($packageTotalBs))
+                        <p class="text-muted small mb-2">Bs {{ number_format($packageTotalBs, 2) }}</p>
+                      @endif
                       @if(!is_null($package->package_price))
                         <p class="text-dark small mb-2">Precio fijo combo</p>
                       @endif
