@@ -2199,14 +2199,14 @@ class TenantController extends Controller
                 $tenant->background_image = $backgroundPath;
             }
             // Actualizar campos
-            $tenant->update([
+            $tenantUpdatePayload = [
                 'name'            => $validated['name'] ?? $tenant->name,
                 'slug'            => isset($validated['slug']) ? Str::slug($validated['slug']) : $tenant->slug,
                 'external_url'    => array_key_exists('external_url', $validated) ? $normalizedExternalUrl : $tenant->external_url,
                 'slogan'          => $validated['slogan'] ?? $tenant->slogan,
                 'description'     => $validated['description'] ?? $tenant->description,
                 'business_type'   => $this->normalizeBusinessType($validated['business_type']),
-                'economic_activity'=> $this->normalizeEconomicActivity($validated['economic_activity'], $validated['business_type']),
+                'economic_activity'=> $this->normalizeEconomicActivity($validated['economic_activity'] ?? null, $validated['business_type']),
                 'color_primary'   => $validated['color_primary'] ?? $tenant->color_primary,
                 'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
                 'color_accent'    => $validated['color_accent'] ?? $tenant->color_accent,
@@ -2237,7 +2237,13 @@ class TenantController extends Controller
                 'delivery_fee_per_km' => $validated['delivery_fee_per_km'] ?? $tenant->delivery_fee_per_km,
                 'delivery_notifications_enabled' => $validated['delivery_notifications_enabled'] ?? $tenant->delivery_notifications_enabled,
                 'background_image'=> $tenant->background_image, // 👈 clave
-            ]);
+            ];
+
+            if (Schema::hasColumn('tenants', 'show_bs_prices_in_storefront')) {
+                $tenantUpdatePayload['show_bs_prices_in_storefront'] = $request->boolean('show_bs_prices_in_storefront');
+            }
+
+            $tenant->update($tenantUpdatePayload);
 
             if ($shouldCreateNewUser) {
                 User::create([

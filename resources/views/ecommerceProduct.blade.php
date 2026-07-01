@@ -1243,7 +1243,7 @@
                     $productDiscount = (float) ($product->discount_percentage ?? 0);
                     $variantDiscount = (float) ($variant->discount_percentage ?? 0);
                     $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
-                    $effectiveVariantPriceBs = $showBsPrices && $storefrontBsRate > 0 ? $effectiveVariantPrice * $storefrontBsRate : null;
+                    $effectiveVariantPriceBs = $showBsPrices ? $effectiveVariantPrice * $storefrontBsRate : null;
                     $variantImage = optional($variant->images->first())->path;
                     $variantImageUrl = $variantImage ? (\App\Support\ImageStorage::url($variantImage) ?? asset('assets/img/shopix5.png')) : (isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'));
                   @endphp

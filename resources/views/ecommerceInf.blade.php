@@ -1340,7 +1340,7 @@
                       $displayPrice = $firstVariant
                         ? (float) $firstVariant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100)
                         : null;
-                      $displayPriceBs = !is_null($displayPrice) && $showBsPrices && $storefrontBsRate > 0
+                      $displayPriceBs = !is_null($displayPrice) && $showBsPrices
                         ? $displayPrice * $storefrontBsRate
                         : null;
                     @endphp
@@ -1393,7 +1393,7 @@
                   $packageTotal = !is_null($package->package_price)
                     ? (float) $package->package_price
                     : $packageTotalCalculated;
-                  $packageTotalBs = $showBsPrices && $storefrontBsRate > 0 ? $packageTotal * $storefrontBsRate : null;
+                  $packageTotalBs = $showBsPrices ? $packageTotal * $storefrontBsRate : null;
                 @endphp
                 <div class="col-12 col-sm-6 col-lg-4 mb-4 package-item" data-name="{{ strtolower($package->name) }}">
                   <div class="card card-product h-100">

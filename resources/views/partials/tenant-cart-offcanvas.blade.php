@@ -22,6 +22,8 @@
   $tenantColorPrimary = $normalizeTenantHex($tenantThemeModel->color_primary ?? null, '#0F172A');
   $tenantColorSecondary = $normalizeTenantHex($tenantThemeModel->color_secondary ?? null, '#334155');
   $tenantColorAccent = $normalizeTenantHex($tenantThemeModel->color_accent ?? null, '#38BDF8');
+  $showBsPricesInStorefront = (bool) ($showBsPrices ?? ($tenantThemeModel->show_bs_prices_in_storefront ?? false));
+  $storefrontBsRateValue = (float) ($storefrontBsRate ?? 0);
 
   [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
   [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
@@ -161,6 +163,12 @@
     color: var(--tenant-primary);
     font-size: 1.1rem;
     font-weight: 700;
+  }
+
+  .tenant-cart-subtotal-bs {
+    color: #64748b;
+    font-size: 0.82rem;
+    font-weight: 600;
   }
 
   #tenant-checkout-form .form-label {
@@ -752,7 +760,10 @@
     <div class="border-top pt-3 mt-auto tenant-cart-section-footer">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <span class="fw-semibold tenant-cart-subtotal-label">Subtotal</span>
-        <span class="fw-bold tenant-cart-subtotal-amount" id="tenant-cart-subtotal">0.00 $</span>
+        <div class="text-end">
+          <span class="fw-bold tenant-cart-subtotal-amount" id="tenant-cart-subtotal">0.00 $</span>
+          <div class="tenant-cart-subtotal-bs d-none" id="tenant-cart-subtotal-bs">Bs 0.00</div>
+        </div>
       </div>
 
       <div id="tenant-checkout-form">
@@ -1329,6 +1340,8 @@
     const tenantStateId = @json($tenant->state ?? null);
     const tenantCityId = @json($tenant->city ?? null);
     const tenantDeliveryConfig = @json(\App\Support\DeliveryManager::settings($tenant));
+    const showBsPricesInStorefront = @json((bool) ($showBsPricesInStorefront ?? false));
+    const storefrontBsRateValue = @json((float) ($storefrontBsRateValue ?? 0));
     const tenantAppointmentAvailabilityEndpoint = `/${tenantSlug}/appointments/public-availability`;
     const initialCsrfToken = @json(csrf_token());
     const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
@@ -1343,6 +1356,7 @@
     const cartCountElements = Array.from(document.querySelectorAll('.tenant-cart-count'));
     const cartItemsElement = document.getElementById('tenant-cart-items');
     const cartSubtotalElement = document.getElementById('tenant-cart-subtotal');
+    const cartSubtotalBsElement = document.getElementById('tenant-cart-subtotal-bs');
     const cartDisabledAlert = document.getElementById('tenant-cart-disabled-alert');
     const checkoutButton = document.getElementById('tenant-cart-checkout');
     const whatsappConsultButton = document.getElementById('tenant-cart-whatsapp-consult');
@@ -1871,6 +1885,10 @@
       return cart.reduce((sum, item) => sum + (Number(item.price) * Number(item.qty)), 0);
     }
 
+    function getBsAmount(baseAmount) {
+      return Number(baseAmount || 0) * Number(storefrontBsRateValue || 0);
+    }
+
     function getTenantDeliveryModeLabel(mode, distanceKm = null) {
       if (!tenantDeliveryConfig?.enabled) {
         return 'Retiro en tienda';
@@ -2104,6 +2122,14 @@
         el.textContent = totalQty;
       });
       cartSubtotalElement.textContent = `${subtotal.toFixed(2)} ${getBaseCurrencySymbol()}`;
+      if (cartSubtotalBsElement) {
+        if (showBsPricesInStorefront) {
+          cartSubtotalBsElement.classList.remove('d-none');
+          cartSubtotalBsElement.textContent = `Bs ${getBsAmount(subtotal).toFixed(2)}`;
+        } else {
+          cartSubtotalBsElement.classList.add('d-none');
+        }
+      }
 
       checkoutButton.disabled = cart.length === 0;
       if (whatsappConsultButton) {
@@ -2130,6 +2156,7 @@
                 <div class="tenant-cart-item-name">${item.productName}</div>
                 <div class="tenant-cart-item-variant">Variante: ${item.variantSize}</div>
                 <div class="tenant-cart-item-price">${Number(item.price).toFixed(2)} ${getBaseCurrencySymbol()} c/u</div>
+                ${showBsPricesInStorefront ? `<div class="tenant-cart-item-variant">Bs ${getBsAmount(Number(item.price)).toFixed(2)} c/u</div>` : ''}
                 </div>
               </div>
               <button type="button" class="btn btn-sm btn-outline-danger tenant-cart-remove-btn" data-remove-index="${index}">

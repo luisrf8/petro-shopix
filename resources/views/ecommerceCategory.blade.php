@@ -1320,7 +1320,7 @@
                             $productDiscount = (float) ($product->discount_percentage ?? 0);
                             $variantDiscount = (float) ($variant->discount_percentage ?? 0);
                             $effectiveVariantPrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
-                            $effectiveVariantPriceBs = $showBsPrices && $storefrontBsRate > 0 ? $effectiveVariantPrice * $storefrontBsRate : null;
+                            $effectiveVariantPriceBs = $showBsPrices ? $effectiveVariantPrice * $storefrontBsRate : null;
                           @endphp
                           <div class="product-variant-chip">
                             <span class="product-variant-size">
@@ -1375,7 +1375,7 @@
                   $packageTotal = !is_null($package->package_price)
                     ? (float) $package->package_price
                     : $packageTotalCalculated;
-                  $packageTotalBs = $showBsPrices && $storefrontBsRate > 0 ? $packageTotal * $storefrontBsRate : null;
+                  $packageTotalBs = $showBsPrices ? $packageTotal * $storefrontBsRate : null;
                 @endphp
                 <div class="col-12 col-sm-6 col-md-4 col-lg-4 mb-4 package-item" data-name="{{ strtolower($package->name) }}">
                   <div class="card card-product h-100">

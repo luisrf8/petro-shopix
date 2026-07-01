@@ -701,7 +701,6 @@
 
                                 <div class="mb-3">
                                     <label class="form-label fw-bold d-block">Mostrar precios en Bs en la tienda</label>
-                                    <input type="hidden" name="show_bs_prices_in_storefront" value="0">
                                     <div class="form-check form-switch">
                                         <input
                                             class="form-check-input"

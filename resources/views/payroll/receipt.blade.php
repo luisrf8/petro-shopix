@@ -247,7 +247,7 @@
 
         <table class="signatures" aria-label="Firmas del comprobante">
           <tr>
-            <td class="sign-box">
+            <td cl ass="sign-box">
               <div class="sign-line">Firma empresa</div>
             </td>
             <td class="sign-box">
