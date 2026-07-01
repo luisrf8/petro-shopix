@@ -55,6 +55,41 @@
     color: #334155;
   }
 
+  .quotations-history-table th,
+  .quotations-history-table td {
+    vertical-align: middle;
+    text-align: center;
+  }
+
+  .quotations-history-table td[data-label="Acciones"] {
+    justify-content: center;
+    align-items: center;
+  }
+
+  .quotation-status-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 110px;
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    background: #f8fafc;
+  }
+
+  .quotation-status-chip[data-status="invalidated"],
+  .quotation-status-chip[data-status="annulled"],
+  .quotation-status-chip[data-status="replaced"] {
+    color: #991b1b;
+    border-color: #fecaca;
+    background: #fef2f2;
+  }
+
   @media (max-width: 991.98px) {
     .quotation-page-shell {
       padding-left: 0.35rem;
@@ -433,9 +468,12 @@
 
       <div class="table-responsive">
         <table class="table table-sm align-items-center mb-0 quotations-history-table">
-          <thead><tr><th>#</th><th>Tipo</th><th>Categoría</th><th>Título</th><th>Total</th><th>Control</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>#</th><th>Tipo</th><th>Categoría</th><th>Título</th><th>Total</th><th>Control</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>
             @forelse($quotations as $quotation)
+              @php
+                $isClosedQuotation = in_array(strtolower((string) ($quotation->status ?? '')), ['invalidated', 'annulled', 'replaced'], true);
+              @endphp
               <tr>
                 <td data-label="#">{{ $quotation->id }}</td>
                 <td data-label="Tipo">{{ $quotation->type === 'supplier_request' ? 'Proveedor' : 'Cliente' }}</td>
@@ -453,27 +491,45 @@
                     Pendiente
                   @endif
                 </td>
+                <td data-label="Estado">
+                  <span class="quotation-status-chip" data-status="{{ strtolower((string) ($quotation->status ?? 'draft')) }}">
+                    {{ strtoupper((string) ($quotation->status ?? 'draft')) }}
+                  </span>
+                </td>
                 <td data-label="Acciones" class="d-flex flex-wrap gap-2">
                   <a href="{{ route('projects.module.quotations.index', ['edit' => $quotation->id]) }}" class="btn btn-outline-primary btn-sm mb-0">Editar</a>
                   <a href="{{ route('projects.module.quotations.pdf', $quotation) }}" class="btn btn-outline-dark btn-sm mb-0" target="_blank">PDF</a>
-                  <form method="POST" action="{{ route('projects.module.quotations.toProject', $quotation) }}" class="d-flex gap-1">@csrf<input type="text" name="project_name" class="form-control form-control-sm border border-1 p-2" placeholder="Nombre proyecto"><button class="btn btn-outline-primary btn-sm mb-0" type="submit">A proyecto</button></form>
-                  <form method="POST" action="{{ route('projects.module.quotations.toSale', $quotation) }}" class="d-flex gap-1">@csrf<input type="text" name="sale_reference" class="form-control form-control-sm border border-1 p-2" placeholder="Ref venta" required><button class="btn btn-outline-success btn-sm mb-0" type="submit">A venta</button></form>
+                  <form method="POST" action="{{ route('projects.module.quotations.toProject', $quotation) }}" class="d-flex gap-1">@csrf<input type="text" name="project_name" class="form-control form-control-sm border border-1 p-2" placeholder="Nombre proyecto" {{ $isClosedQuotation ? 'disabled' : '' }}><button class="btn btn-outline-primary btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>A proyecto</button></form>
+                  <form method="POST" action="{{ route('projects.module.quotations.toSale', $quotation) }}" class="d-flex gap-1">@csrf<input type="text" name="sale_reference" class="form-control form-control-sm border border-1 p-2" placeholder="Ref venta" required {{ $isClosedQuotation ? 'disabled' : '' }}><button class="btn btn-outline-success btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>A venta</button></form>
                   @if($quotation->type === 'supplier_request')
                     <form method="POST" action="{{ route('projects.module.quotations.toInventory', $quotation) }}" class="d-flex gap-1">
                       @csrf
-                      <select name="warehouse_id" class="form-control form-control-sm border border-1 p-2">
+                      <select name="warehouse_id" class="form-control form-control-sm border border-1 p-2" {{ $isClosedQuotation ? 'disabled' : '' }}>
                         <option value="">Almacén automático</option>
                         @foreach($warehouses as $warehouse)
                           <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
                         @endforeach
                       </select>
-                      <button class="btn btn-outline-warning btn-sm mb-0" type="submit">A inventario</button>
+                      <button class="btn btn-outline-warning btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>A inventario</button>
                     </form>
                   @endif
+                  <form method="POST" action="{{ route('projects.module.quotations.invalidate', $quotation) }}" onsubmit="return confirm('¿Invalidar esta cotización?');">
+                    @csrf
+                    <button class="btn btn-outline-secondary btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>Invalidar</button>
+                  </form>
+                  <form method="POST" action="{{ route('projects.module.quotations.annul', $quotation) }}" onsubmit="return confirm('¿Anular esta cotización?');">
+                    @csrf
+                    <button class="btn btn-outline-danger btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>Anular</button>
+                  </form>
+                  <form method="POST" action="{{ route('projects.module.quotations.replace', $quotation) }}" class="d-flex gap-1" onsubmit="return confirm('¿Anular y reemplazar esta cotización con una nueva versión?');">
+                    @csrf
+                    <input type="text" name="replacement_title" class="form-control form-control-sm border border-1 p-2" placeholder="Título reemplazo" {{ $isClosedQuotation ? 'disabled' : '' }}>
+                    <button class="btn btn-outline-info btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>Anular y reemplazar</button>
+                  </form>
                 </td>
               </tr>
             @empty
-              <tr><td colspan="7" class="text-center text-muted">Sin cotizaciones registradas.</td></tr>
+              <tr><td colspan="8" class="text-center text-muted">Sin cotizaciones registradas.</td></tr>
             @endforelse
           </tbody>
         </table>
@@ -485,7 +541,7 @@
 <template id="quotationItemTemplate">
   <tr>
     <td>
-      <select class="form-control border border-1 p-2" data-name="item_type" required>
+      <select class="form-control border border-1 p-2 js-item-type-select" data-name="item_type" required>
         <option value="product">Producto</option>
         <option value="materials">Lista de materiales</option>
         <option value="service">Servicio</option>
@@ -553,6 +609,7 @@
 @endsection
 
 @push('scripts')
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -691,6 +748,22 @@ document.addEventListener('DOMContentLoaded', function () {
       if (row) {
         syncItemSourceToFields(row, true);
       }
+    });
+  };
+
+  const initItemTypeSelect2 = (select) => {
+    if (!select || !window.jQuery || !window.jQuery.fn?.select2) {
+      return;
+    }
+
+    const $select = window.jQuery(select);
+    if ($select.hasClass('select2-hidden-accessible')) {
+      $select.select2('destroy');
+    }
+
+    $select.select2({
+      width: '100%',
+      minimumResultsForSearch: Infinity,
     });
   };
 
@@ -941,13 +1014,23 @@ document.addEventListener('DOMContentLoaded', function () {
     itemsBody.appendChild(row);
 
     const typeInput = row.querySelector('[data-name="item_type"]');
+    initItemTypeSelect2(typeInput);
+
     if (typeInput) {
-      typeInput.addEventListener('change', function () {
+      const onTypeChanged = function () {
         lastSelectedItemType = String(typeInput.value || 'product');
         persistLastSelectedItemType(lastSelectedItemType);
         syncRowFieldNames(row);
         applyItemTypeState(row, lastSelectedItemType, true);
-      });
+      };
+
+      typeInput.addEventListener('change', onTypeChanged);
+      if (window.jQuery) {
+        const $typeInput = window.jQuery(typeInput);
+        $typeInput.off('change.shopixType select2:select.shopixType');
+        $typeInput.on('change.shopixType select2:select.shopixType', onTypeChanged);
+      }
+
       persistLastSelectedItemType(typeInput.value || lastSelectedItemType);
     }
 
@@ -961,6 +1044,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (typeInput) {
       syncRowFieldNames(row);
       applyItemTypeState(row, typeInput.value || lastSelectedItemType, false);
+
+      // Keep Select2 source in sync with the currently selected item type from first render.
+      if (window.jQuery) {
+        window.jQuery(typeInput).trigger('change.shopixType');
+      }
     }
 
     if (defaults) {

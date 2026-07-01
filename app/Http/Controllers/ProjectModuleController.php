@@ -567,13 +567,136 @@ class ProjectModuleController extends Controller
         return redirect()->route('projects.module.quotations.index')->with('success', 'Cotización actualizada correctamente.');
     }
 
+    public function invalidateQuotation(Request $request, ProjectQuotation $quotation)
+    {
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        abort_if((int) $quotation->tenant_id !== $tenantId, 404);
+
+        if ($this->isQuotationLockedStatus((string) $quotation->status)) {
+            return back()->with('warning', 'La cotización ya fue cerrada y no se puede invalidar nuevamente.');
+        }
+
+        $reason = trim((string) $request->input('reason', ''));
+        $notePrefix = '[INVALIDADA ' . now()->format('d/m/Y H:i') . ']';
+        $noteLine = $reason !== '' ? ($notePrefix . ' Motivo: ' . $reason) : ($notePrefix . ' Motivo no especificado.');
+
+        $quotation->update([
+            'status' => 'invalidated',
+            'notes' => $this->appendLifecycleNote((string) ($quotation->notes ?? ''), $noteLine),
+        ]);
+
+        return back()->with('success', 'Cotización invalidada correctamente.');
+    }
+
+    public function annulQuotation(Request $request, ProjectQuotation $quotation)
+    {
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        abort_if((int) $quotation->tenant_id !== $tenantId, 404);
+
+        if ($this->isQuotationLockedStatus((string) $quotation->status)) {
+            return back()->with('warning', 'La cotización ya fue cerrada y no se puede anular nuevamente.');
+        }
+
+        $reason = trim((string) $request->input('reason', ''));
+        $notePrefix = '[ANULADA ' . now()->format('d/m/Y H:i') . ']';
+        $noteLine = $reason !== '' ? ($notePrefix . ' Motivo: ' . $reason) : ($notePrefix . ' Motivo no especificado.');
+
+        $quotation->update([
+            'status' => 'annulled',
+            'notes' => $this->appendLifecycleNote((string) ($quotation->notes ?? ''), $noteLine),
+        ]);
+
+        return back()->with('success', 'Cotización anulada correctamente.');
+    }
+
+    public function replaceQuotation(Request $request, ProjectQuotation $quotation)
+    {
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        abort_if((int) $quotation->tenant_id !== $tenantId, 404);
+
+        if ($this->isQuotationLockedStatus((string) $quotation->status)) {
+            return back()->with('warning', 'La cotización ya fue cerrada y no se puede reemplazar nuevamente.');
+        }
+
+        $validated = $request->validate([
+            'replacement_title' => 'nullable|string|max:255',
+            'reason' => 'nullable|string|max:1000',
+        ]);
+
+        $quotation->loadMissing('items');
+
+        $replacementTitle = trim((string) ($validated['replacement_title'] ?? ''));
+        if ($replacementTitle === '') {
+            $replacementTitle = trim((string) $quotation->title) . ' (Reemplazo)';
+        }
+
+        $newQuotation = null;
+
+        DB::transaction(function () use ($quotation, $replacementTitle, $validated, &$newQuotation) {
+            $newQuotation = ProjectQuotation::query()->create([
+                'tenant_id' => (int) $quotation->tenant_id,
+                'type' => (string) $quotation->type,
+                'quotation_kind' => (string) $quotation->quotation_kind,
+                'status' => 'draft',
+                'title' => $replacementTitle,
+                'customer_id' => $quotation->customer_id,
+                'customer_name' => $quotation->customer_name,
+                'customer_email' => $quotation->customer_email,
+                'provider_id' => $quotation->provider_id,
+                'provider_name' => $quotation->provider_name,
+                'discount_percent' => (float) ($quotation->discount_percent ?? 0),
+                'subtotal' => (float) ($quotation->subtotal ?? 0),
+                'discount_amount' => (float) ($quotation->discount_amount ?? 0),
+                'total_amount' => (float) ($quotation->total_amount ?? 0),
+                'currency_code' => (string) ($quotation->currency_code ?? 'USD'),
+                'valid_until' => $quotation->valid_until,
+                'notes' => $this->appendLifecycleNote(
+                    (string) ($quotation->notes ?? ''),
+                    '[REEMPLAZO] Generada desde cotización #' . (int) $quotation->id
+                ),
+                'created_by' => auth()->id(),
+            ]);
+
+            foreach ($quotation->items as $item) {
+                ProjectQuotationItem::query()->create([
+                    'quotation_id' => (int) $newQuotation->id,
+                    'tenant_id' => (int) $item->tenant_id,
+                    'product_id' => $item->product_id,
+                    'product_variant_id' => $item->product_variant_id,
+                    'item_type' => (string) ($item->item_type ?? 'product'),
+                    'service_name' => $item->service_name,
+                    'description' => (string) $item->description,
+                    'quantity' => (float) $item->quantity,
+                    'unit_price' => (float) $item->unit_price,
+                    'discount_percent' => (float) ($item->discount_percent ?? 0),
+                    'total' => (float) $item->total,
+                ]);
+            }
+
+            $reason = trim((string) ($validated['reason'] ?? ''));
+            $line = '[REEMPLAZADA ' . now()->format('d/m/Y H:i') . '] Nueva cotización #' . (int) $newQuotation->id;
+            if ($reason !== '') {
+                $line .= ' | Motivo: ' . $reason;
+            }
+
+            $quotation->update([
+                'status' => 'replaced',
+                'notes' => $this->appendLifecycleNote((string) ($quotation->notes ?? ''), $line),
+            ]);
+        });
+
+        return redirect()
+            ->route('projects.module.quotations.index', ['edit' => (int) $newQuotation->id])
+            ->with('success', 'Cotización reemplazada. Se creó la nueva cotización #' . (int) $newQuotation->id . '.');
+    }
+
     private function persistQuotation(Request $request, int $tenantId, ?ProjectQuotation $quotation = null): ProjectQuotation
     {
         $validated = $request->validate([
             'type' => 'required|in:customer,supplier_request',
             'quotation_kind' => 'required|in:products,services,materials,project,mixed',
             'title' => 'required|string|max:255',
-            'status' => 'nullable|in:draft,sent,approved,rejected',
+            'status' => 'nullable|in:draft,sent,approved,rejected,invalidated,annulled,replaced',
             'customer_id' => 'nullable|exists:users,id',
             'create_customer' => 'nullable|boolean',
             'customer_name' => 'nullable|string|max:255',
@@ -778,6 +901,10 @@ class ProjectModuleController extends Controller
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if((int) $quotation->tenant_id !== $tenantId, 404);
 
+        if ($this->isQuotationLockedStatus((string) $quotation->status)) {
+            return back()->with('warning', 'La cotización está cerrada y no puede convertirse a proyecto.');
+        }
+
         if ($quotation->converted_project_id) {
             return back()->with('success', 'La cotización ya estaba convertida en proyecto.');
         }
@@ -815,6 +942,10 @@ class ProjectModuleController extends Controller
     {
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if((int) $quotation->tenant_id !== $tenantId, 404);
+
+        if ($this->isQuotationLockedStatus((string) $quotation->status)) {
+            return back()->with('warning', 'La cotización está cerrada y no puede convertirse a venta.');
+        }
 
         $validated = $request->validate([
             'sale_reference' => 'nullable|string|max:120',
@@ -994,6 +1125,10 @@ class ProjectModuleController extends Controller
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if((int) $quotation->tenant_id !== $tenantId, 404);
 
+        if ($this->isQuotationLockedStatus((string) $quotation->status)) {
+            return back()->with('warning', 'La cotización está cerrada y no puede convertirse a inventario.');
+        }
+
         if ($quotation->type !== 'supplier_request') {
             throw ValidationException::withMessages([
                 'quotation' => ['Solo las cotizaciones a proveedor pueden convertirse en entrada de inventario.'],
@@ -1125,7 +1260,16 @@ class ProjectModuleController extends Controller
 
         $quotation->load(['items.product', 'items.variant', 'provider']);
 
-        $html = view('projects.quotation_pdf', compact('quotation'))->render();
+        $quotationCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) ($quotation->currency_code ?? 'USD'));
+        $quotationRateToBs = TenantCurrency::resolveRateToBs($tenantId, $quotationCurrencyCode);
+        $usdRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'USD');
+
+        $html = view('projects.quotation_pdf', compact(
+            'quotation',
+            'quotationCurrencyCode',
+            'quotationRateToBs',
+            'usdRateToBs'
+        ))->render();
 
         $options = new Options();
         $options->set('isRemoteEnabled', true);
@@ -1142,6 +1286,23 @@ class ProjectModuleController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="' . $filename . '"',
         ]);
+    }
+
+    private function isQuotationLockedStatus(string $status): bool
+    {
+        return in_array(Str::lower(trim($status)), ['invalidated', 'annulled', 'replaced'], true);
+    }
+
+    private function appendLifecycleNote(string $existingNotes, string $newLine): string
+    {
+        $existing = trim($existingNotes);
+        $line = trim($newLine);
+
+        if ($existing === '') {
+            return $line;
+        }
+
+        return $existing . "\n" . $line;
     }
 
     public function storeTeamMember(Request $request)
