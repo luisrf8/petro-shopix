@@ -797,6 +797,16 @@
                                 </div>
                                 <div class="mb-4">
                                     <div class="d-flex align-items-center gap-3 flex-wrap">
+                                        <img id="billing-logo-preview" src="{{ \App\Support\ImageStorage::url($tenant->billing_logo) ?? \App\Support\ImageStorage::url($tenant->logo) ?? asset('assets/img/shopix5.png') }}" class="logo-preview rounded p-2 bg-white shadow-sm">
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Logo de facturación / PDFs (PNG, JPG, JPEG o SVG)</label>
+                                    <input type="file" name="billing_logo" id="billing_logo" class="form-control form-control-lg border border-radius-lg" accept=".png,.jpg,.jpeg,.webp,.svg">
+                                    <small class="text-muted">Este logo se usa en facturas, cotizaciones y documentos PDF. El logo principal de la tienda se mantiene aparte.</small>
+                                </div>
+                                <div class="mb-4">
+                                    <div class="d-flex align-items-center gap-3 flex-wrap">
                                         <img id="bg-preview" src="{{ \App\Support\ImageStorage::url($tenant->background_image) ?? asset('assets/img/shopix5.png') }}" class="logo-preview rounded p-2 bg-white shadow-sm">
                                     </div>
                                 </div>
@@ -2096,6 +2106,8 @@ function initMap() {
 }
     const logoInput = document.getElementById("logo");
     const logoPreview = document.getElementById("logo-preview");
+    const billingLogoInput = document.getElementById("billing_logo");
+    const billingLogoPreview = document.getElementById("billing-logo-preview");
     const backgroundInput = document.getElementById("background_image");
     const backgroundPreview = document.getElementById("bg-preview");
     const openLogoAiModalBtn = document.getElementById('openLogoAiModalBtn');
@@ -2474,6 +2486,18 @@ function initMap() {
 
         await optimizeTenantInputFile('logo', 'logo-preview');
     });
+
+    if (billingLogoInput && billingLogoPreview) {
+        billingLogoInput.addEventListener('change', async (event) => {
+            if (!event.target.files?.length) {
+                billingLogoPreview.src = '#';
+                billingLogoPreview.classList.add('d-none');
+                return;
+            }
+
+            await optimizeTenantInputFile('billing_logo', 'billing-logo-preview');
+        });
+    }
 
         backgroundInput.addEventListener('change', async (event) => {
             if (!event.target.files?.length) {

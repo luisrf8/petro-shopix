@@ -1327,6 +1327,7 @@ class TenantController extends Controller
             'email'           => 'required|email|unique:tenants,email',
             'external_url'    => 'nullable|string|max:255',
             'logo'            => 'nullable|image|mimes:png,svg,webp|max:2048',
+            'billing_logo'    => 'nullable|image|mimes:png,svg,webp|max:2048',
             'color_primary'   => 'required|string|max:7',
             'color_secondary' => 'required|string|max:7',
             'color_accent'    => 'required|string|max:7',
@@ -1390,12 +1391,18 @@ class TenantController extends Controller
                 $logoPath = ImageStorage::storeUploadedImageAsWebp($request->file('logo'), 'tenants/logos');
             }
 
+            $billingLogoPath = null;
+            if ($request->hasFile('billing_logo')) {
+                $billingLogoPath = ImageStorage::storeUploadedImageAsWebp($request->file('billing_logo'), 'tenants/billing-logos');
+            }
+
             $tenantData = [
                 'name'            => $validated['name'],
                 'slug'            => $normalizedSlug,
                 'email'           => $validated['email'],
                 'external_url'    => $normalizedExternalUrl,
                 'logo'            => $logoPath,
+                'billing_logo'    => $billingLogoPath,
                 'color_primary'   => $validated['color_primary'],
                 'color_secondary' => $validated['color_secondary'],
                 'color_accent'    => $validated['color_accent'],
@@ -1526,6 +1533,7 @@ class TenantController extends Controller
             'email'                 => 'required|email|unique:tenants,email',
             'external_url'          => 'nullable|string|max:255',
             'logo'                  => 'nullable|image|mimes:png,svg,webp|max:2048',
+            'billing_logo'          => 'nullable|image|mimes:png,svg,webp|max:2048',
             'background_image'      => 'nullable|image|mimes:png,jpg,jpeg,webp|max:4096',
             'color_primary'         => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
             'color_secondary'       => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
@@ -1589,6 +1597,11 @@ class TenantController extends Controller
                 $logoPath = ImageStorage::storeUploadedImageAsWebp($request->file('logo'), 'tenants/logos');
             }
 
+            $billingLogoPath = null;
+            if ($request->hasFile('billing_logo')) {
+                $billingLogoPath = ImageStorage::storeUploadedImageAsWebp($request->file('billing_logo'), 'tenants/billing-logos');
+            }
+
             $backgroundPath = null;
             if ($request->hasFile('background_image')) {
                 $backgroundPath = ImageStorage::storeUploadedImageAsWebp($request->file('background_image'), 'tenants/backgrounds');
@@ -1600,6 +1613,7 @@ class TenantController extends Controller
                 'email'           => $validated['email'],
                 'external_url'    => $normalizedExternalUrl,
                 'logo'            => $logoPath,
+                'billing_logo'    => $billingLogoPath,
                 'color_primary'   => $validated['color_primary'],
                 'color_secondary' => $validated['color_secondary'],
                 'color_accent'    => $validated['color_accent'],
@@ -1711,6 +1725,7 @@ class TenantController extends Controller
             'email' => 'nullable|email|unique:tenants,email,' . $tenant->id,
             'external_url' => 'sometimes|nullable|string|max:255',
             'logo'  => 'nullable|string',
+            'billing_logo'  => 'nullable|string',
             'color_primary'   => 'nullable|string|max:7',
             'color_secondary' => 'nullable|string|max:7',
             'color_accent'    => 'nullable|string|max:7',
@@ -1862,6 +1877,7 @@ class TenantController extends Controller
             'email' => $validated['email'] ?? $tenant->email,
             'external_url' => array_key_exists('external_url', $validated) ? $normalizedExternalUrl : $tenant->external_url,
             'logo' => $validated['logo'] ?? $tenant->logo,
+            'billing_logo' => $validated['billing_logo'] ?? $tenant->billing_logo,
             'color_primary' => $validated['color_primary'] ?? $tenant->color_primary,
             'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
             'color_accent' => $validated['color_accent'] ?? $tenant->color_accent,
@@ -2013,6 +2029,7 @@ class TenantController extends Controller
                 'business_type'   => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
                 'economic_activity' => 'nullable|string|max:150|regex:/.*\S.*/',
                 'logo'            => 'nullable|image|mimes:png,svg,webp|max:2048',
+                'billing_logo'    => 'nullable|image|mimes:png,svg,webp|max:2048',
                 'color_primary'   => 'nullable|string|max:7',
                 'color_secondary' => 'nullable|string|max:7',
                 'color_accent'    => 'nullable|string|max:7',
@@ -2185,6 +2202,14 @@ class TenantController extends Controller
                 $logoPath = ImageStorage::storeUploadedImageAsWebp($request->file('logo'), 'tenants/logos');
                 $tenant->logo = $logoPath;
             }
+            if ($request->hasFile('billing_logo')) {
+                if ($tenant->billing_logo && ImageStorage::exists($tenant->billing_logo)) {
+                    ImageStorage::delete($tenant->billing_logo);
+                }
+
+                $billingLogoPath = ImageStorage::storeUploadedImageAsWebp($request->file('billing_logo'), 'tenants/billing-logos');
+                $tenant->billing_logo = $billingLogoPath;
+            }
             // Manejar imagen de fondo
             if ($request->hasFile('background_image')) {
 
@@ -2236,6 +2261,7 @@ class TenantController extends Controller
                 'delivery_fixed_fee' => $validated['delivery_fixed_fee'] ?? $tenant->delivery_fixed_fee,
                 'delivery_fee_per_km' => $validated['delivery_fee_per_km'] ?? $tenant->delivery_fee_per_km,
                 'delivery_notifications_enabled' => $validated['delivery_notifications_enabled'] ?? $tenant->delivery_notifications_enabled,
+                'billing_logo'    => $tenant->billing_logo,
                 'background_image'=> $tenant->background_image, // 👈 clave
             ];
 

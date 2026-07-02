@@ -31,6 +31,7 @@ class Tenant extends Model
         'external_url',
         'is_active',
         'logo',
+        'billing_logo',
         'color_primary',
         'color_secondary',
         'color_accent',

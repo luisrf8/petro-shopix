@@ -39,8 +39,6 @@
     .logo-box {
       width: 145px;
       height: 80px;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
       text-align: center;
       vertical-align: middle;
       overflow: hidden;
@@ -194,7 +192,7 @@
 
     $quotationRateToBs = (float) ($quotationRateToBs ?? 0);
     $usdRateToBs = (float) ($usdRateToBs ?? 0);
-    $logoUrl = (string) ($tenantLogoDataUri ?? '');
+    $logoUrl = (string) ($billingLogoDataUri ?? '');
     $tenantRif = trim((string) ($tenant->rif ?? $tenant->slug ?? '-'));
     $tenantPhoneCode = trim((string) ($tenant->phone_code ?? ''));
     $tenantPhoneNumber = trim((string) ($tenant->phone_number ?? ''));
@@ -276,7 +274,7 @@
       <tr>
         <td class="logo-wrap">
           <div class="logo-box">
-            <img src="{{ $logoUrl }}" alt="Logo tienda">
+            <img src="{{ $logoUrl }}" alt="Logo de facturación">
           </div>
         </td>
         <td class="company-wrap">

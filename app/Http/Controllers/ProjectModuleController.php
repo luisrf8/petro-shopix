@@ -1261,7 +1261,7 @@ class ProjectModuleController extends Controller
 
         $quotation->load(['items.product.taxes', 'items.variant', 'provider']);
         $tenant = Tenant::query()->find($tenantId);
-        $tenantLogoDataUri = $this->resolveTenantLogoDataUri($tenant);
+        $billingLogoDataUri = $this->resolveTenantBillingLogoDataUri($tenant);
 
         $quotationCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) ($quotation->currency_code ?? 'USD'));
         $quotationRateToBs = TenantCurrency::resolveRateToBs($tenantId, $quotationCurrencyCode);
@@ -1270,7 +1270,7 @@ class ProjectModuleController extends Controller
         $html = view('projects.quotation_pdf', compact(
             'quotation',
             'tenant',
-            'tenantLogoDataUri',
+            'billingLogoDataUri',
             'quotationCurrencyCode',
             'quotationRateToBs',
             'usdRateToBs'
@@ -1293,16 +1293,16 @@ class ProjectModuleController extends Controller
         ]);
     }
 
-    private function resolveTenantLogoDataUri(?Tenant $tenant): ?string
+    private function resolveTenantBillingLogoDataUri(?Tenant $tenant): ?string
     {
         $fallbackPath = public_path('assets/img/shopix5.png');
         $fallbackDataUri = $this->buildDataUriFromPath($fallbackPath);
 
-        if (!$tenant || empty($tenant->logo)) {
+        if (!$tenant || (empty($tenant->billing_logo) && empty($tenant->logo))) {
             return $fallbackDataUri;
         }
 
-        $logoPath = trim((string) $tenant->logo);
+        $logoPath = trim((string) ($tenant->billing_logo ?: $tenant->logo));
         if ($logoPath === '') {
             return $fallbackDataUri;
         }

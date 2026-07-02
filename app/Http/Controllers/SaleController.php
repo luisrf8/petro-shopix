@@ -558,9 +558,7 @@ class SaleController extends Controller
         if ($approvedPayments->isNotEmpty()) {
             $serverIp = request()->getHost();
 
-            $imagePath = storage_path('app/public/products/infblack.png');
-            $imageData = base64_encode(file_get_contents($imagePath));
-            $imageBase64 = 'data:image/png;base64,' . $imageData;
+            $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
 
             // Totales
             $totalOrden = (float) $order->gross_total;
@@ -819,9 +817,7 @@ class SaleController extends Controller
         $qrCodeImage = $writer->write($qrCode);
         $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
 
-        $imagePath = storage_path('app/public/products/infblack.png');
-        $imageData = base64_encode(file_get_contents($imagePath));
-        $imageBase64 = 'data:image/png;base64,' . $imageData;
+        $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
 
         $pdfContent = view('orderPdf', compact('order', 'totalOrden', 'totalPagado', 'imageBase64', 'qrCodeBase64'))->render();
 
@@ -1762,9 +1758,7 @@ class SaleController extends Controller
         $pdfCurrencyContext = $this->buildPdfCurrencyContext($order, $orderCurrencyCode);
 
         $serverIp = request()->getHost();
-        $imagePath = storage_path('app/public/products/infblack.png');
-        $imageData = file_exists($imagePath) ? base64_encode(file_get_contents($imagePath)) : '';
-        $imageBase64 = $imageData !== '' ? 'data:image/png;base64,' . $imageData : null;
+        $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
 
         $totalOrden = (float) $order->gross_total;
         $totalTaxes = (float) $order->details->flatMap->taxes->sum('tax_amount');
@@ -1851,9 +1845,7 @@ class SaleController extends Controller
         }
 
         $serverIp = request()->getHost();
-        $imagePath = storage_path('app/public/products/infblack.png');
-        $imageData = file_exists($imagePath) ? base64_encode(file_get_contents($imagePath)) : '';
-        $imageBase64 = $imageData !== '' ? 'data:image/png;base64,' . $imageData : null;
+        $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
 
         $totalOrden = (float) $order->gross_total;
         $totalTaxes = (float) $order->details->flatMap->taxes->sum('tax_amount');
@@ -2247,10 +2239,8 @@ class SaleController extends Controller
         if ($order->status == 1) {
             $serverIp = request()->getHost(); // Obtiene la IP o dominio del servidor
 
-            // Cargar la imagen y convertirla a base64
-            $imagePath = storage_path('app/public/products/infblack.png');
-            $imageData = base64_encode(file_get_contents($imagePath));
-            $imageBase64 = 'data:image/png;base64,' . $imageData;
+            // Cargar el logo de facturación y convertirlo a base64
+            $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
     
             // Calcular totales
             $totalOrden = (float) $order->gross_total;
@@ -3036,6 +3026,75 @@ class SaleController extends Controller
     private function resolveInternalDispatchFilename(int $orderId): string
     {
         return 'depachointernoshpx' . $orderId . '.pdf';
+    }
+
+    private function resolveTenantBillingLogoDataUri(?Tenant $tenant): ?string
+    {
+        $fallbackPath = public_path('assets/img/shopix5.png');
+        $fallbackDataUri = $this->buildDataUriFromPath($fallbackPath);
+
+        if (!$tenant || (empty($tenant->billing_logo) && empty($tenant->logo))) {
+            return $fallbackDataUri;
+        }
+
+        $logoPath = trim((string) ($tenant->billing_logo ?: $tenant->logo));
+        if ($logoPath === '') {
+            return $fallbackDataUri;
+        }
+
+        try {
+            if (ImageStorage::isGooglePath($logoPath)) {
+                $googleFileId = ImageStorage::extractGoogleFileId($logoPath);
+                if ($googleFileId !== '') {
+                    $file = ImageStorage::downloadGoogleFileById($googleFileId);
+                    $content = (string) ($file['content'] ?? '');
+                    $mime = trim((string) ($file['mime_type'] ?? 'image/png'));
+
+                    if ($content !== '') {
+                        return 'data:' . ($mime !== '' ? $mime : 'image/png') . ';base64,' . base64_encode($content);
+                    }
+                }
+            }
+
+            if (Storage::disk('public')->exists($logoPath)) {
+                $content = Storage::disk('public')->get($logoPath);
+                $mime = (string) (Storage::disk('public')->mimeType($logoPath) ?: 'image/png');
+
+                if ($content !== '') {
+                    return 'data:' . $mime . ';base64,' . base64_encode($content);
+                }
+            }
+
+            $publicPath = public_path(ltrim($logoPath, '/'));
+            if (is_file($publicPath)) {
+                return $this->buildDataUriFromPath($publicPath) ?: $fallbackDataUri;
+            }
+
+            $storagePublicPath = public_path('storage/' . ltrim($logoPath, '/'));
+            if (is_file($storagePublicPath)) {
+                return $this->buildDataUriFromPath($storagePublicPath) ?: $fallbackDataUri;
+            }
+        } catch (\Throwable $exception) {
+            // Silently fallback to default logo for PDF rendering stability.
+        }
+
+        return $fallbackDataUri;
+    }
+
+    private function buildDataUriFromPath(string $path): ?string
+    {
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $content = @file_get_contents($path);
+        if ($content === false || $content === '') {
+            return null;
+        }
+
+        $mime = @mime_content_type($path) ?: 'image/png';
+
+        return 'data:' . $mime . ';base64,' . base64_encode($content);
     }
 
     private function validateShippingCityAgainstTenant(Tenant $tenant, int $deliveryCityId): array
