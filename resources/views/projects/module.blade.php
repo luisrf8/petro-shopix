@@ -158,7 +158,7 @@
     </td>
     <td><input type="text" class="form-control border border-1 p-2" data-name="service_name" placeholder="Servicio opcional"></td>
     <td><input type="text" class="form-control border border-1 p-2 js-item-description" data-name="description" placeholder="Detalle del ítem" required></td>
-    <td><input type="number" min="0.0001" step="0.01" class="form-control border border-1 p-2" data-name="quantity" value="1" required></td>
+    <td><input type="text" inputmode="decimal" pattern="^[0-9]+(\.[0-9]+)?$" class="form-control border border-1 p-2" data-name="quantity" value="1" required></td>
     <td><input type="number" min="0" step="0.01" class="form-control border border-1 p-2 js-item-unit-price" data-name="unit_price" value="0" required></td>
     <td><input type="number" min="0" max="100" step="0.01" class="form-control border border-1 p-2" data-name="discount_percent" value="0"></td>
     <td><button type="button" class="btn btn-outline-danger btn-sm mb-0 js-remove-item">X</button></td>

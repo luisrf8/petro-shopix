@@ -408,7 +408,7 @@
       const selectedMode = String(seed.selection_mode || 'variant');
       const selectedVariantId = seed.variant_id ? String(seed.variant_id) : '';
       const selectedProductId = seed.product_id ? String(seed.product_id) : '';
-      const selectedQuantity = (seed.quantity ?? 1);
+      const selectedQuantity = String(seed.quantity ?? 1);
 
       const scopedVariantOptions = variantOptions.replace(
         `value="${selectedVariantId}"`,
@@ -448,7 +448,7 @@
           </div>
           <div class="col-8 col-md-3">
             <label class="form-label mb-1">Cantidad</label>
-            <input type="number" name="items[${index}][quantity]" class="form-control border border-1 p-2 bg-white" min="0.01" step="0.01" placeholder="1" value="${selectedQuantity}" required>
+            <input type="text" name="items[${index}][quantity]" class="form-control border border-1 p-2 bg-white" inputmode="decimal" pattern="^[0-9]+(\.[0-9]+)?$" placeholder="1" value="${selectedQuantity}" required>
           </div>
           <div class="col-4 col-md-1">
             <button type="button" class="btn btn-outline-danger w-100 remove-row">X</button>
