@@ -61,9 +61,10 @@
     <tr>
         <td style="text-align: left; padding: 0; border: none;">
             <p><strong>ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VÁLIDO COMO DOCUMENTO FISCAL</strong></p>
-            <h1>{{ $tienda->name }}</h1>
+            <h1>ORDEN DE DESPACHO SHOPIX</h1>
+            <p><strong>{{ $tienda->name }}</strong></p>
             <p>RIF: {{ $tienda->rif }} J-00000005 </p>
-            <p>Direccion de la empresa: {{ $tienda->country }} {{ $tienda->state }} {{ $tienda->city  }}</p>
+            <p>Dirección de la empresa: {{ $tienda->country_name ?? $tienda->countryName() ?? $tienda->country }} {{ $tienda->state_name ?? $tienda->stateName() ?? $tienda->state }} {{ $tienda->city_name ?? $tienda->cityName() ?? $tienda->city }}</p>
         </td>
         <td style="text-align: right; padding: 0; border: none;">
             <img src="{{ $imageBase64 }}" alt="main_logo" style="width: 150px; height: 150px">

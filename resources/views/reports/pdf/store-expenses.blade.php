@@ -19,7 +19,8 @@
     <div class="meta">Categoría: <strong>{{ $summary['expense_category'] !== '' ? $summary['expense_category'] : 'Todas' }}</strong></div>
     <div class="meta">
         Gastos: <strong>{{ number_format($summary['expenses']) }}</strong> |
-        Total egresado: <strong>{{ number_format($summary['total_amount'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong>
+        Total egresado: <strong>{{ number_format($summary['total_amount'], 2) }} {{ $summary['currency_code'] ?? 'USD' }}</strong> |
+        Total Bs: <strong>{{ number_format($summary['total_amount_bs'] ?? 0, 2) }} Bs</strong>
     </div>
     <table>
         <thead>
@@ -29,7 +30,10 @@
                 <th>Categoria</th>
                 <th>Proveedor</th>
                 <th>Metodo</th>
-                <th class="num">Monto</th>
+                <th>Moneda</th>
+                <th class="num">Monto original</th>
+                <th class="num">Tasa Bs</th>
+                <th class="num">Monto Bs</th>
                 <th>Estado</th>
             </tr>
         </thead>
@@ -41,11 +45,14 @@
                     <td>{{ $expense->category ?? 'N/A' }}</td>
                     <td>{{ $expense->provider_name ?? 'N/A' }}</td>
                     <td>{{ $expense->payment_method ?? 'N/A' }}</td>
-                    <td class="num">{{ number_format((float) $expense->amount, 2) }}</td>
+                    <td>{{ strtoupper((string) ($expense->currency_code ?? 'USD')) }}</td>
+                    <td class="num">{{ number_format((float) ($expense->amount_original ?? $expense->amount ?? 0), 4) }}</td>
+                    <td class="num">{{ number_format((float) ($expense->exchange_rate_to_bs ?? 1), 4) }}</td>
+                    <td class="num">{{ number_format((float) ($expense->amount_bs ?? $expense->amount ?? 0), 2) }}</td>
                     <td>{{ ucfirst((string) ($expense->status ?? 'paid')) }}</td>
                 </tr>
             @empty
-                <tr><td colspan="7">No hay gastos en el rango seleccionado.</td></tr>
+                <tr><td colspan="10">No hay gastos en el rango seleccionado.</td></tr>
             @endforelse
         </tbody>
     </table>

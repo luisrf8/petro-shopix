@@ -1719,16 +1719,46 @@ class ProductController extends Controller
 
     public function generateReport(Request $request)
     {
-        $products = Product::with('variants')
-        ->where('tenant_id', $request->tenant_id)
-        ->get();
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
 
-        $csvData = "Nombre,Descripción,Precio,Stock Total\n";
+        $validated = $request->validate([
+            'category_id' => 'nullable|integer',
+            'status' => 'nullable|in:all,active,inactive',
+        ]);
+
+        $productsQuery = Product::with(['variants', 'category'])
+            ->where('tenant_id', $tenantId);
+
+        if (!empty($validated['category_id'])) {
+            $productsQuery->where('category_id', (int) $validated['category_id']);
+        }
+
+        if (($validated['status'] ?? 'all') === 'active') {
+            $productsQuery->where('is_active', true);
+        } elseif (($validated['status'] ?? 'all') === 'inactive') {
+            $productsQuery->where('is_active', false);
+        }
+
+        $products = $productsQuery->orderBy('name')->get();
+
+        $stream = fopen('php://temp', 'r+');
+        fputcsv($stream, ['Categoría', 'Nombre', 'Descripción', 'Precio', 'Stock Total', 'Estado']);
 
         foreach ($products as $product) {
             $totalStock = $product->variants->sum('stock');
-            $csvData .= "{$product->name},{$product->description},{$product->price},{$totalStock}\n";
+            fputcsv($stream, [
+                $product->category->name ?? '',
+                $product->name,
+                $product->description,
+                $product->price,
+                $totalStock,
+                $product->is_active ? 'Activo' : 'Inactivo',
+            ]);
         }
+
+        rewind($stream);
+        $csvData = stream_get_contents($stream);
+        fclose($stream);
 
         $fileName = "reporte_productos_" . now()->format('Y-m-d') . ".csv";
 

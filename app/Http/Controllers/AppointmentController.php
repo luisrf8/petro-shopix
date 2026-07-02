@@ -325,10 +325,11 @@ class AppointmentController extends Controller
             'customer_id' => ['nullable', 'integer'],
             'create_customer' => ['nullable', 'boolean'],
             'contact_name' => ['required_without:customer_id', 'nullable', 'string', 'max:255'],
-            'contact_phone' => ['nullable', 'string', 'max:30'],
+            'contact_phone' => ['required_without:customer_id', 'nullable', 'string', 'max:30'],
             'contact_phone_code' => ['nullable', 'string', 'max:10', 'regex:/^\+?[0-9]{1,4}$/'],
-            'customer_email' => ['nullable', 'email', 'max:255'],
-            'customer_dni' => ['nullable', 'string', 'max:100'],
+            'customer_email' => ['required_if:create_customer,1', 'nullable', 'email', 'max:255'],
+            'customer_dni' => ['required_if:create_customer,1', 'nullable', 'string', 'max:100'],
+            'is_retention_agent' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'status' => ['nullable', Rule::in(array_keys(Appointment::STATUSES))],
             'payment_method_id' => ['nullable', 'integer'],
@@ -440,6 +441,7 @@ class AppointmentController extends Controller
                     'tenant_id' => $tenantId,
                     'dni' => trim((string) ($validated['customer_dni'] ?? '')) ?: null,
                     'phone_number' => $normalizedContactPhone,
+                    'is_retention_agent' => (bool) ($validated['is_retention_agent'] ?? false),
                 ]);
 
                 $customerId = (int) $newCustomer->id;

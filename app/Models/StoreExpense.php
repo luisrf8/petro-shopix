@@ -15,6 +15,10 @@ class StoreExpense extends Model
         'category',
         'description',
         'amount',
+        'currency_code',
+        'amount_original',
+        'exchange_rate_to_bs',
+        'amount_bs',
         'spent_at',
         'payment_method',
         'provider_name',
@@ -25,6 +29,9 @@ class StoreExpense extends Model
     protected $casts = [
         'spent_at' => 'date',
         'amount' => 'decimal:2',
+        'amount_original' => 'decimal:4',
+        'exchange_rate_to_bs' => 'decimal:4',
+        'amount_bs' => 'decimal:2',
     ];
 
     public function tenant()

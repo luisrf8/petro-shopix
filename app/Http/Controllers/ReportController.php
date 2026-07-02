@@ -913,7 +913,9 @@ class ReportController extends Controller
             ->get();
 
         $rows->transform(function ($expense) use ($currency, $user) {
-            $expense->amount = TenantCurrency::convertAmount((float) $expense->amount, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $expense->amount_bs = (float) ($expense->amount_bs ?? $expense->amount ?? 0);
+            $expense->amount_original = (float) ($expense->amount_original ?? $expense->amount ?? 0);
+            $expense->report_amount = TenantCurrency::convertAmount((float) $expense->amount_bs, 'BS', $currency['code'], (int) $user->tenant_id);
             return $expense;
         });
 
@@ -922,7 +924,8 @@ class ReportController extends Controller
             'end_date' => $endDate,
             'expense_category' => $expenseCategory,
             'expenses' => (int) $rows->count(),
-            'total_amount' => (float) $rows->sum('amount'),
+            'total_amount' => (float) $rows->sum('report_amount'),
+            'total_amount_bs' => (float) $rows->sum(fn ($expense) => (float) ($expense->amount_bs ?? $expense->amount ?? 0)),
             'currency_code' => $currency['code'],
         ];
 

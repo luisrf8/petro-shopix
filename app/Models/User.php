@@ -35,6 +35,7 @@ class User extends Authenticatable implements JWTSubject
         'phone_number',
         'dni',
         'is_active',
+        'is_retention_agent',
         'commission_percentage',
         'google_id',
         'facebook_id',

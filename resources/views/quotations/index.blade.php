@@ -401,20 +401,28 @@
             </div>
             <div class="col-md-4" id="customerNameWrap">
               <label class="form-label">Cliente nuevo / manual</label>
-              <input type="text" name="customer_name" class="form-control border border-1 p-2" value="{{ old('customer_name', $editingQuotation->customer_name ?? '') }}">
+              <input type="text" name="customer_name" id="customerNameInput" class="form-control border border-1 p-2" value="{{ old('customer_name', $editingQuotation->customer_name ?? '') }}">
             </div>
             <div class="col-md-4" id="customerEmailWrap">
               <label class="form-label">Correo cliente</label>
-              <input type="email" name="customer_email" class="form-control border border-1 p-2" value="{{ old('customer_email', $editingQuotation->customer_email ?? '') }}">
+              <input type="email" name="customer_email" id="customerEmailInput" class="form-control border border-1 p-2" value="{{ old('customer_email', $editingQuotation->customer_email ?? '') }}">
             </div>
             <div class="col-md-4" id="customerPhoneWrap">
-              <label class="form-label">Teléfono cliente (opcional)</label>
-              <input type="text" name="customer_phone" class="form-control border border-1 p-2" value="{{ old('customer_phone') }}">
+              <label class="form-label">Teléfono cliente</label>
+              <input type="text" name="customer_phone" id="customerPhoneInput" class="form-control border border-1 p-2" value="{{ old('customer_phone', $editingQuotation->customer_phone ?? '') }}">
+            </div>
+            <div class="col-md-4" id="customerDniWrap">
+              <label class="form-label">DNI cliente</label>
+              <input type="text" name="customer_dni" id="customerDniInput" class="form-control border border-1 p-2" value="{{ old('customer_dni') }}">
             </div>
             <div class="col-md-8" id="createCustomerWrap">
               <div class="form-check mt-4 pt-1">
                 <input class="form-check-input" type="checkbox" value="1" name="create_customer" id="createCustomer" {{ old('create_customer') ? 'checked' : '' }}>
                 <label class="form-check-label" for="createCustomer">Crear cliente automáticamente con los datos ingresados</label>
+              </div>
+              <div class="form-check mt-2 pt-1">
+                <input class="form-check-input" type="checkbox" value="1" name="is_retention_agent" id="quotationRetentionAgent">
+                <label class="form-check-label" for="quotationRetentionAgent">Agente de retención</label>
               </div>
             </div>
 
@@ -703,7 +711,7 @@
     </td>
     <td><input type="text" class="form-control border border-1 p-2 js-item-source-name" data-name="service_name" placeholder="Nombre del ítem"></td>
     <td><input type="text" class="form-control border border-1 p-2 js-item-description" data-name="description" required></td>
-    <td><input type="number" min="0.01" step="0.01" class="form-control border border-1 p-2" data-name="quantity" value="1" required></td>
+    <td><input type="text" inputmode="decimal" pattern="^[0-9]+(\.[0-9]+)?$" class="form-control border border-1 p-2" data-name="quantity" value="1" required></td>
     <td><input type="number" min="0" step="0.01" class="form-control border border-1 p-2 js-item-unit-price" data-name="unit_price" value="0" required></td>
     <td><input type="number" min="0" max="100" step="0.01" class="form-control border border-1 p-2" data-name="discount_percent" value="0"></td>
     <td><button type="button" class="btn btn-outline-danger btn-sm mb-0 js-remove-item">X</button></td>
@@ -1090,30 +1098,47 @@ document.addEventListener('DOMContentLoaded', function () {
 
   const quotationType = document.getElementById('quotationType');
   const customerSelectWrap = document.getElementById('customerSelectWrap');
+  const customerIdInput = document.getElementById('customerId');
   const customerNameWrap = document.getElementById('customerNameWrap');
   const customerEmailWrap = document.getElementById('customerEmailWrap');
   const customerPhoneWrap = document.getElementById('customerPhoneWrap');
+  const customerDniWrap = document.getElementById('customerDniWrap');
   const createCustomerWrap = document.getElementById('createCustomerWrap');
+  const createCustomerCheckbox = document.getElementById('createCustomer');
+  const customerNameInput = document.getElementById('customerNameInput');
+  const customerEmailInput = document.getElementById('customerEmailInput');
+  const customerPhoneInput = document.getElementById('customerPhoneInput');
+  const customerDniInput = document.getElementById('customerDniInput');
   const providerSelectWrap = document.getElementById('providerSelectWrap');
   const providerNameWrap = document.getElementById('providerNameWrap');
 
   const toggleQuotationTypeFields = () => {
     const isSupplier = quotationType && quotationType.value === 'supplier_request';
+    const shouldRequireCustomerData = !isSupplier && ((!customerIdInput || !customerIdInput.value) || (createCustomerCheckbox && createCustomerCheckbox.checked));
 
     if (customerSelectWrap) customerSelectWrap.classList.toggle('d-none', isSupplier);
     if (customerNameWrap) customerNameWrap.classList.toggle('d-none', isSupplier);
     if (customerEmailWrap) customerEmailWrap.classList.toggle('d-none', isSupplier);
     if (customerPhoneWrap) customerPhoneWrap.classList.toggle('d-none', isSupplier);
+    if (customerDniWrap) customerDniWrap.classList.toggle('d-none', isSupplier);
     if (createCustomerWrap) createCustomerWrap.classList.toggle('d-none', isSupplier);
 
     if (providerSelectWrap) providerSelectWrap.classList.toggle('d-none', !isSupplier);
     if (providerNameWrap) providerNameWrap.classList.toggle('d-none', !isSupplier);
+
+    if (customerNameInput) customerNameInput.required = shouldRequireCustomerData;
+    if (customerEmailInput) customerEmailInput.required = shouldRequireCustomerData;
+    if (customerPhoneInput) customerPhoneInput.required = shouldRequireCustomerData;
+    if (customerDniInput) customerDniInput.required = shouldRequireCustomerData;
   };
 
   if (quotationType) {
     quotationType.addEventListener('change', toggleQuotationTypeFields);
     toggleQuotationTypeFields();
   }
+
+  createCustomerCheckbox?.addEventListener('change', toggleQuotationTypeFields);
+  customerIdInput?.addEventListener('change', toggleQuotationTypeFields);
 
   const itemsBody = document.getElementById('quotationItemsBody');
   const template = document.getElementById('quotationItemTemplate');
@@ -1148,7 +1173,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (descriptionInput) descriptionInput.value = defaults.description || '';
 
       const quantityInput = row.querySelector('[data-name="quantity"]');
-      if (quantityInput) quantityInput.value = Number(defaults.quantity || 1).toFixed(2);
+      if (quantityInput) quantityInput.value = String(defaults.quantity || 1);
 
       const unitPriceInput = row.querySelector('.js-item-unit-price');
       if (unitPriceInput) unitPriceInput.value = Number(defaults.unit_price || 0).toFixed(2);

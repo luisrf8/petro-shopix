@@ -703,6 +703,8 @@ class ProjectModuleController extends Controller
             'customer_name' => 'nullable|string|max:255',
             'customer_email' => 'nullable|email|max:255',
             'customer_phone' => 'nullable|string|max:30',
+            'customer_dni' => 'nullable|string|max:100',
+            'is_retention_agent' => 'nullable|boolean',
             'provider_id' => 'nullable|exists:providers,id',
             'provider_name' => 'nullable|string|max:255',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
@@ -742,20 +744,24 @@ class ProjectModuleController extends Controller
                 $customerName = (string) $customer->name;
                 $customerEmail = (string) ($customer->email ?? '');
             } elseif ((bool) ($validated['create_customer'] ?? false)) {
-                if (empty($validated['customer_name'])) {
-                    throw ValidationException::withMessages([
-                        'customer_name' => ['Debes indicar el nombre del cliente para crearlo.'],
-                    ]);
+                foreach (['customer_name', 'customer_email', 'customer_phone', 'customer_dni'] as $fieldName) {
+                    if (trim((string) ($validated[$fieldName] ?? '')) === '') {
+                        throw ValidationException::withMessages([
+                            $fieldName => ['Debes completar todos los datos del cliente para crearlo.'],
+                        ]);
+                    }
                 }
 
                 $customer = User::query()->create([
                     'name' => trim((string) $validated['customer_name']),
-                    'email' => !empty($validated['customer_email']) ? trim((string) $validated['customer_email']) : null,
-                    'phone_number' => !empty($validated['customer_phone']) ? trim((string) $validated['customer_phone']) : null,
+                    'email' => trim((string) $validated['customer_email']),
+                    'phone_number' => trim((string) $validated['customer_phone']),
+                    'dni' => trim((string) $validated['customer_dni']),
                     'tenant_id' => $tenantId,
                     'role_id' => $this->resolveCustomerRoleId(),
                     'password' => Hash::make(Str::random(12)),
                     'is_active' => 1,
+                    'is_retention_agent' => (bool) ($validated['is_retention_agent'] ?? false),
                 ]);
 
                 $customerId = (int) $customer->id;
@@ -764,10 +770,12 @@ class ProjectModuleController extends Controller
             } else {
                 $customerName = trim((string) ($validated['customer_name'] ?? ''));
                 $customerEmail = trim((string) ($validated['customer_email'] ?? ''));
+                $customerPhone = trim((string) ($validated['customer_phone'] ?? ''));
+                $customerDni = trim((string) ($validated['customer_dni'] ?? ''));
 
-                if ($customerName === '') {
+                if ($customerName === '' || $customerEmail === '' || $customerPhone === '' || $customerDni === '') {
                     throw ValidationException::withMessages([
-                        'customer_name' => ['Debes indicar el cliente para la cotización.'],
+                        'customer_name' => ['Debes completar todos los datos del cliente para la cotización.'],
                     ]);
                 }
             }

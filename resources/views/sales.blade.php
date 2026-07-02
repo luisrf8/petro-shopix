@@ -1063,7 +1063,7 @@
                             </div>
                             <div class="col-12 col-md-6">
                                 <label for="newCustomerEmail" class="form-label mb-1">Correo</label>
-                                <input type="email" id="newCustomerEmail" class="form-control border border-1 p-2 bg-white" placeholder="correo@ejemplo.com (opcional)">
+                                <input type="email" id="newCustomerEmail" class="form-control border border-1 p-2 bg-white" placeholder="correo@ejemplo.com">
                             </div>
                             <div class="col-12 col-md-6">
                                 <label for="newCustomerPhone" class="form-label mb-1">Teléfono</label>
@@ -1087,6 +1087,12 @@
                             <div class="col-12 col-md-6">
                                 <label for="newCustomerDni" class="form-label mb-1">DNI</label>
                                 <input type="text" id="newCustomerDni" class="form-control border border-1 p-2 bg-white" placeholder="Documento de identidad">
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="newCustomerRetentionAgent" value="1">
+                                    <label class="form-check-label" for="newCustomerRetentionAgent">Agente de retención</label>
+                                </div>
                             </div>
                             <div class="col-12">
                                 <small class="text-muted">Al crear cliente nuevo se asigna contraseña temporal <strong>12345678</strong> para que el cliente la cambie luego desde su cuenta en la landing.</small>
@@ -2833,6 +2839,9 @@ function updateQuantity(id, newQty) {
                                 data-entry-id="${entryId}"
                                 data-currency="${currency}"
                                 oninput="updatePayment(this)">
+                            <button type="button" class="btn btn-outline-dark btn-sm mt-2 w-100" data-fill-remaining-payment="1" data-method-id="${methodId}" data-entry-id="${entryId}">
+                                Cargar monto restante
+                            </button>
                         </div>
                         <div class="flex-grow-1">
                             <label class="form-label mb-1">Referencia</label>
@@ -3067,6 +3076,42 @@ function updateQuantity(id, newQty) {
             renderCart();
             validatePaymentDetails();
         }
+
+        function fillRemainingPaymentAmount(methodId, entryId) {
+            const input = document.querySelector(`.payment-input[data-method-id="${methodId}"][data-entry-id="${entryId}"]`);
+            if (!input) {
+                return;
+            }
+
+            const payment = payments.find(item => item.methodId === String(methodId) && item.entryId === entryId);
+            const currency = input.dataset.currency || payment?.currency || normalizedBaseCurrencyCode;
+            const baseTotal = roundMoney(totalAmount);
+            const otherPaymentsBase = payments.reduce((sum, item) => {
+                if (item.methodId === String(methodId) && item.entryId === entryId) {
+                    return sum;
+                }
+
+                return sum + (Number(item.amountBase ?? item.amount) || 0);
+            }, 0);
+
+            const remainingBase = roundMoney(Math.max(baseTotal - roundMoney(otherPaymentsBase), 0));
+            const rateToBase = resolvePaymentRateToBase(currency);
+            const remainingOriginal = currency === normalizedBaseCurrencyCode
+                ? remainingBase
+                : (rateToBase > 0 ? roundMoney(remainingBase / rateToBase) : remainingBase);
+
+            input.value = remainingOriginal > 0 ? formatAmountDisplay(remainingOriginal) : '';
+            updatePayment(input);
+        }
+
+        document.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-fill-remaining-payment="1"]');
+            if (!button) {
+                return;
+            }
+
+            fillRemainingPaymentAmount(button.dataset.methodId, button.dataset.entryId);
+        });
 
         function updatePaymentProof(input) {
             const methodId = input.dataset.methodId;
@@ -3548,6 +3593,13 @@ function updateQuantity(id, newQty) {
             newCustomerForm.classList.toggle('d-none', !shouldCreateNewCustomer);
             existingCustomerForm.classList.toggle('d-none', shouldCreateNewCustomer);
 
+            ['newCustomerName', 'newCustomerEmail', 'newCustomerPhone', 'newCustomerDni'].forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                if (field) {
+                    field.required = shouldCreateNewCustomer;
+                }
+            });
+
             if (!shouldCreateNewCustomer) {
                 const existingCustomerSelect = document.getElementById('existingCustomerSelect');
                 selectedExistingCustomerId = Number(existingCustomerSelect?.value || 0);
@@ -3655,6 +3707,12 @@ function updateQuantity(id, newQty) {
             });
         });
 
+        document.getElementById('newCustomerRetentionAgent')?.addEventListener('change', function () {
+            if (!document.getElementById('step3').classList.contains('d-none')) {
+                renderSummary();
+            }
+        });
+
         if (document.getElementById('existingCustomerSelect') && existingCustomersForSale.length > 0) {
             const existingCustomerSelect = document.getElementById('existingCustomerSelect');
             if (existingCustomerSelect && !existingCustomerSelect.value) {
@@ -3686,6 +3744,7 @@ function updateQuantity(id, newQty) {
     const newCustomerEmail = (document.getElementById('newCustomerEmail')?.value || '').trim();
     const newCustomerPhone = (document.getElementById('newCustomerPhone')?.value || '').trim();
     const newCustomerDni = (document.getElementById('newCustomerDni')?.value || '').trim();
+    const newCustomerRetentionAgent = document.getElementById('newCustomerRetentionAgent')?.checked || false;
     const deliveryReceiverName = (document.getElementById('deliveryReceiverName')?.value || '').trim();
     const deliveryReceiverPhone = (document.getElementById('deliveryReceiverPhone')?.value || '').trim();
 
@@ -3719,14 +3778,14 @@ function updateQuantity(id, newQty) {
 
     if (shouldCreateNewCustomer) {
         const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!newCustomerName || !newCustomerPhone || !newCustomerDni) {
-            alert('Para crear un cliente nuevo debes completar nombre, teléfono y DNI.');
+        if (!newCustomerName || !newCustomerEmail || !newCustomerPhone || !newCustomerDni) {
+            alert('Para crear un cliente nuevo debes completar nombre, correo, teléfono y DNI.');
             button.disabled = false;
             button.innerHTML = originalText;
             return;
         }
 
-        if (newCustomerEmail && !emailPattern.test(newCustomerEmail)) {
+        if (!emailPattern.test(newCustomerEmail)) {
             alert('El correo del nuevo cliente no es válido.');
             button.disabled = false;
             button.innerHTML = originalText;
@@ -3757,10 +3816,11 @@ function updateQuantity(id, newQty) {
         customer_new: shouldCreateNewCustomer
             ? {
                 name: newCustomerName,
-                email: newCustomerEmail || null,
+                email: newCustomerEmail,
                 phone_code: document.getElementById('newCustomerPhoneCode')?.value || '+58',
                 phone_number: newCustomerPhone,
                 dni: newCustomerDni,
+                is_retention_agent: newCustomerRetentionAgent,
             }
             : null,
         mark_delivered: document.getElementById('markDelivered')?.checked || false,
@@ -3833,22 +3893,15 @@ function updateQuantity(id, newQty) {
             }
             alert(successMessage);
 
-            if (data.pdf_url) {
+                        const salePdfUrl = data.nota_entrega_pdf_url || data.pdf_url;
+
+                        if (salePdfUrl) {
                 const link = document.createElement('a');
-                link.href = data.pdf_url;
+                            link.href = salePdfUrl;
                 link.download = '';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-            }
-
-            if (data.nota_entrega_pdf_url) {
-                const linkNota = document.createElement('a');
-                linkNota.href = data.nota_entrega_pdf_url;
-                linkNota.download = '';
-                document.body.appendChild(linkNota);
-                linkNota.click();
-                document.body.removeChild(linkNota);
             }
 
             if (data.hka_dispatch_guide_download_url) {
@@ -3864,7 +3917,7 @@ function updateQuantity(id, newQty) {
 
             const redirectDelayMs = data.hka_dispatch_guide_download_url
                 ? 1800
-                : (data.nota_entrega_pdf_url ? 900 : 0);
+                : (salePdfUrl ? 900 : 0);
 
             if (redirectDelayMs > 0) {
                 setTimeout(() => {

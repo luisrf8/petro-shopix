@@ -14,6 +14,10 @@ return new class extends Migration {
             $table->string('category')->nullable();
             $table->text('description')->nullable();
             $table->decimal('amount', 10, 2);
+            $table->string('currency_code', 3)->default('USD');
+            $table->decimal('amount_original', 12, 4)->default(0);
+            $table->decimal('exchange_rate_to_bs', 12, 4)->default(1);
+            $table->decimal('amount_bs', 12, 2)->default(0);
             $table->date('spent_at');
             $table->string('payment_method')->nullable();
             $table->string('provider_name')->nullable();

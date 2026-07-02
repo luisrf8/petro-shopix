@@ -778,12 +778,18 @@
                                             <input type="text" name="contact_phone" id="appointmentContactPhoneInput" class="form-control border border-1 p-2" value="{{ old('contact_phone') }}" placeholder="4120000000">
                                         </div>
                                         <div class="col-md-6 d-none" id="appointmentNewCustomerExtra">
-                                            <label class="form-label">Email cliente (opcional)</label>
+                                            <label class="form-label">Email cliente</label>
                                             <input type="email" name="customer_email" id="appointmentCustomerEmailInput" class="form-control border border-1 p-2" value="{{ old('customer_email') }}" placeholder="cliente@correo.com">
                                         </div>
                                         <div class="col-md-6 d-none" id="appointmentNewCustomerExtraDni">
-                                            <label class="form-label">DNI cliente (opcional)</label>
+                                            <label class="form-label">DNI cliente</label>
                                             <input type="text" name="customer_dni" id="appointmentCustomerDniInput" class="form-control border border-1 p-2" value="{{ old('customer_dni') }}">
+                                        </div>
+                                        <div class="col-12 d-none" id="appointmentNewCustomerRetention">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" name="is_retention_agent" id="appointmentRetentionAgentInput" value="1">
+                                                <label class="form-check-label" for="appointmentRetentionAgentInput">Agente de retención</label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1139,6 +1145,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const customerModeHint = document.getElementById('appointmentCustomerModeHint');
     const customerEmailInput = document.getElementById('appointmentCustomerEmailInput');
     const customerDniInput = document.getElementById('appointmentCustomerDniInput');
+    const newCustomerRetention = document.getElementById('appointmentNewCustomerRetention');
     const newCustomerExtra = document.getElementById('appointmentNewCustomerExtra');
     const newCustomerExtraDni = document.getElementById('appointmentNewCustomerExtraDni');
     const appointmentStatusSelect = document.getElementById('appointmentStatusSelect');
@@ -1400,8 +1407,17 @@ document.addEventListener('DOMContentLoaded', () => {
             contactPhoneInput.required = isEnabled;
         }
 
+        if (customerEmailInput) {
+            customerEmailInput.required = isEnabled;
+        }
+
+        if (customerDniInput) {
+            customerDniInput.required = isEnabled;
+        }
+
         newCustomerExtra?.classList.toggle('d-none', !isEnabled);
         newCustomerExtraDni?.classList.toggle('d-none', !isEnabled);
+        newCustomerRetention?.classList.toggle('d-none', !isEnabled);
 
         if (toggleNewCustomerBtn) {
             toggleNewCustomerBtn.classList.toggle('is-active', isEnabled);
@@ -2253,8 +2269,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (createNewCustomer) {
             const contactName = String(contactNameInput?.value || '').trim();
             const contactPhone = String(contactPhoneInput?.value || '').trim();
-            if (!contactName || !contactPhone) {
-                alert('Si seleccionas "Cliente nuevo", debes completar nombre y teléfono.');
+            const contactEmail = String(customerEmailInput?.value || '').trim();
+            const contactDni = String(customerDniInput?.value || '').trim();
+            if (!contactName || !contactPhone || !contactEmail || !contactDni) {
+                alert('Si seleccionas "Cliente nuevo", debes completar nombre, correo, teléfono y DNI.');
                 showBookingTab(bookingTabDataButton);
                 event.preventDefault();
                 return;

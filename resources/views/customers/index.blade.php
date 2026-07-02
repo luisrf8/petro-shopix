@@ -148,6 +148,7 @@
                           data-customer-email="{{ $customer->email }}"
                           data-customer-phone="{{ $customer->phone_number }}"
                           data-customer-dni="{{ $customer->dni }}"
+                          data-customer-retention-agent="{{ (int) ($customer->is_retention_agent ?? 0) }}"
                           data-customer-active="{{ (int) $customer->is_active }}"
                         >Editar</button>
                         <form method="POST" action="{{ route('customers.toggleStatus', $customer) }}" @if($customer->is_active) data-requires-action-reason="true" data-reason-field="action_reason" data-reason-prompt="Indica el motivo para inactivar este cliente." @endif>
@@ -194,15 +195,19 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Correo</label>
-            <input type="email" name="email" class="form-control border border-1 p-2" placeholder="Opcional">
+            <input type="email" name="email" class="form-control border border-1 p-2" required>
           </div>
           <div class="mb-3">
             <label class="form-label">Teléfono</label>
-            <input type="text" name="phone_number" class="form-control border border-1 p-2">
+            <input type="text" name="phone_number" class="form-control border border-1 p-2" required>
           </div>
           <div class="mb-3">
             <label class="form-label">DNI</label>
-            <input type="text" name="dni" class="form-control border border-1 p-2">
+            <input type="text" name="dni" class="form-control border border-1 p-2" required>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="createCustomerRetentionAgent" name="is_retention_agent" value="1">
+            <label class="form-check-label" for="createCustomerRetentionAgent">Agente de retención</label>
           </div>
           <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" role="switch" id="createCustomerActive" name="is_active" value="1" checked>
@@ -238,15 +243,19 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Correo</label>
-            <input type="email" name="email" id="editCustomerEmail" class="form-control border border-1 p-2" placeholder="Opcional">
+            <input type="email" name="email" id="editCustomerEmail" class="form-control border border-1 p-2" required>
           </div>
           <div class="mb-3">
             <label class="form-label">Teléfono</label>
-            <input type="text" name="phone_number" id="editCustomerPhone" class="form-control border border-1 p-2">
+            <input type="text" name="phone_number" id="editCustomerPhone" class="form-control border border-1 p-2" required>
           </div>
           <div class="mb-3">
             <label class="form-label">DNI</label>
-            <input type="text" name="dni" id="editCustomerDni" class="form-control border border-1 p-2">
+            <input type="text" name="dni" id="editCustomerDni" class="form-control border border-1 p-2" required>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="editCustomerRetentionAgent" name="is_retention_agent" value="1">
+            <label class="form-check-label" for="editCustomerRetentionAgent">Agente de retención</label>
           </div>
           <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" role="switch" id="editCustomerActive" name="is_active" value="1">
@@ -281,6 +290,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('editCustomerEmail').value = button.getAttribute('data-customer-email') || '';
     document.getElementById('editCustomerPhone').value = button.getAttribute('data-customer-phone') || '';
     document.getElementById('editCustomerDni').value = button.getAttribute('data-customer-dni') || '';
+    document.getElementById('editCustomerRetentionAgent').checked = button.getAttribute('data-customer-retention-agent') === '1';
     document.getElementById('editCustomerActive').checked = button.getAttribute('data-customer-active') === '1';
   });
 });

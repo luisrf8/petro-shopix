@@ -332,7 +332,7 @@
                   <i class="material-symbols-rounded">shopping_bag</i>
                   <span>Generar Compra</span>
                 </a>
-                <button id="generateReport" class="btn btn-dark mb-0 admin-mobile-action-trigger" onclick="getReport()">
+                <button type="button" id="generateReport" class="btn btn-dark mb-0 admin-mobile-action-trigger" data-bs-toggle="modal" data-bs-target="#productsReportModal">
                   <i class="material-symbols-rounded">assessment</i>
                   Generar Reporte
                 </button>
@@ -384,6 +384,48 @@
       </div>
     </div>
     <!-- Fin Modal para crear producto -->
+
+    <div class="modal fade" id="productsReportModal" tabindex="-1" aria-labelledby="productsReportModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="productsReportModalLabel">Generar Reporte de Productos</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <form id="productsReportForm" action="{{ url('/api/products/report') }}" method="GET" target="_blank">
+              <div class="mb-3">
+                <label for="reportCategoryId" class="form-label">Categoría</label>
+                <select id="reportCategoryId" name="category_id" class="form-control border border-1 p-2">
+                  <option value="">Todas las categorías</option>
+                  @foreach($categories as $category)
+                    <option value="{{ $category->id }}">{{ $category->name }}</option>
+                  @endforeach
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="reportStatus" class="form-label">Estado</label>
+                <select id="reportStatus" name="status" class="form-control border border-1 p-2" required>
+                  <option value="all" selected>Todos</option>
+                  <option value="active">Activos</option>
+                  <option value="inactive">Inactivos</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="reportFormat" class="form-label">Formato</label>
+                <select id="reportFormat" name="format" class="form-control border border-1 p-2" required>
+                  <option value="csv" selected>CSV</option>
+                </select>
+              </div>
+              <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-dark">Descargar reporte</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="modal fade" id="importCatalogModal" tabindex="-1" aria-labelledby="importCatalogModalLabel" aria-hidden="true">
       <div class="modal-dialog">
@@ -726,23 +768,5 @@
     applySearchFilter('searchCategory', '.category-item');
     applySearchFilter('searchProduct', '.product-item');
   });
-  function getReport() {
-    fetch('api/products/report', {
-      method: 'GET',
-          headers: {
-              'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
-          }
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.message === 'Report generated successfully') {
-        alert('Reporte generado correctamente');
-        // Aquí puedes añadir lógica para manejar el reporte, como descargarlo o mostrarlo
-      } else {
-        alert('Ocurrió un error al generar el reporte');
-      }
-    })
-    .catch(error => console.error('Error:', error));
-  }
   </script>
 @endpush

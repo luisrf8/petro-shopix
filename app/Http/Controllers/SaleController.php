@@ -131,13 +131,14 @@ class SaleController extends Controller
             'global_discount_amount' => 'nullable|numeric|min:0',
             'sale_document_mode' => 'nullable|in:delivery_note,electronic_invoice',
             'create_new_customer' => 'nullable|boolean',
-            'customer_existing_id' => 'nullable|integer|required_unless:create_new_customer,true',
+            'customer_existing_id' => 'nullable|integer|required_unless:create_new_customer,1',
             'customer_new' => 'nullable|array',
-            'customer_new.name' => 'required_if:create_new_customer,true|string|max:255',
-            'customer_new.email' => 'nullable|email|unique:users,email',
+            'customer_new.name' => 'required_if:create_new_customer,1|string|max:255',
+            'customer_new.email' => 'required_if:create_new_customer,1|email|unique:users,email',
             'customer_new.phone_code' => ['nullable', 'string', 'max:10', 'regex:/^\+?[0-9]{1,4}$/'],
-            'customer_new.phone_number' => 'required_if:create_new_customer,true|string|max:20',
-            'customer_new.dni' => 'required_if:create_new_customer,true|string|max:100',
+            'customer_new.phone_number' => 'required_if:create_new_customer,1|string|max:20',
+            'customer_new.dni' => 'required_if:create_new_customer,1|string|max:100',
+            'customer_new.is_retention_agent' => 'nullable|boolean',
             'payments' => 'nullable|array',
             'payments.*.methodId' => 'required_with:payments|integer',
             'payments.*.amount' => 'required_with:payments|numeric|min:0.01',
@@ -178,6 +179,7 @@ class SaleController extends Controller
                     $customerPayload['phone_code'] ?? null
                 ),
                 'dni' => trim((string) ($customerPayload['dni'] ?? '')),
+                'is_retention_agent' => (bool) ($customerPayload['is_retention_agent'] ?? false),
                 'password' => Hash::make($defaultCustomerPassword),
                 'tenant_id' => $tenantId,
                 'role_id' => $customerRoleId,
@@ -1047,7 +1049,9 @@ class SaleController extends Controller
         $canDeliverOrders = $isSeller || $isWarehouse || $isDelivery || ($user?->isAdmin() ?? false) || ($user?->isOwner() ?? false);
         $pageTitle = 'VENTAS REALIZADAS';
         $isPendingDeliveryView = false;
-        $pendingDispatchGuideAlert = $this->buildPendingDispatchGuideAlertData($salesOrders, $tenant);
+        $pendingDispatchGuideAlert = ($tenant?->electronic_invoicing_enabled ?? false)
+            ? $this->buildPendingDispatchGuideAlertData($salesOrders, $tenant)
+            : null;
     
         return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView', 'pendingDispatchGuideAlert'));
     }

@@ -649,7 +649,7 @@ class IndexController extends Controller
         });
 
         $monthlyExpenseRows = Schema::hasTable('store_expenses')
-            ? StoreExpense::selectRaw('DATE_FORMAT(spent_at, "%b") as month, SUM(amount) as total')
+            ? StoreExpense::selectRaw('DATE_FORMAT(spent_at, "%b") as month, SUM(COALESCE(amount_bs, amount)) as total')
                 ->where('tenant_id', $tenantId)
                 ->where('spent_at', '>=', $startOfNineMonthsAgo)
                 ->groupBy(DB::raw('YEAR(spent_at), MONTH(spent_at), DATE_FORMAT(spent_at, "%b")'))
@@ -716,7 +716,7 @@ class IndexController extends Controller
         $expensesAmountCurrentMonth = Schema::hasTable('store_expenses')
             ? (float) StoreExpense::where('tenant_id', $tenantId)
                 ->whereBetween('spent_at', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
-                ->sum('amount')
+                ->sum(DB::raw('COALESCE(amount_bs, amount)'))
             : 0.0;
 
         $receivablesAmount = (float) SalesOrder::with(['details', 'payments'])
@@ -753,7 +753,7 @@ class IndexController extends Controller
 
         $topExpenseCategoryRows = Schema::hasTable('store_expenses')
             ? StoreExpense::query()
-                ->selectRaw("COALESCE(NULLIF(category, ''), 'Sin categoria') as category_name, SUM(amount) as total_amount")
+                ->selectRaw("COALESCE(NULLIF(category, ''), 'Sin categoria') as category_name, SUM(COALESCE(amount_bs, amount)) as total_amount")
                 ->where('tenant_id', $tenantId)
                 ->groupBy('category_name')
                 ->orderByDesc('total_amount')

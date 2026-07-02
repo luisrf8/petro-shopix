@@ -27,118 +27,31 @@
     </div>
 
     <div class="card-body">
-      <div class="row g-4">
+      <div class="row g-4 mb-4">
         <div class="col-12 col-xl-6">
-          <div class="card border">
-            <div class="card-header pb-0"><h6 class="mb-0">Crear Proyecto</h6></div>
-            <div class="card-body">
-              <form method="POST" action="{{ route('projects.module.projects.store') }}" class="row g-3">
-                @csrf
-                <div class="col-12">
-                  <label class="form-label">Nombre del proyecto</label>
-                  <input type="text" name="name" class="form-control border border-1 p-2" required>
-                </div>
-                <div class="col-md-4">
-                  <label class="form-label">Fase</label>
-                  <select name="phase" class="form-control border border-1 p-2" required>
-                    <option value="inicio">Inicio</option>
-                    <option value="desarrollo">Desarrollo</option>
-                    <option value="fin">Fin</option>
-                  </select>
-                </div>
-                <div class="col-md-4"><label class="form-label">Fecha inicio</label><input type="date" name="starts_at" class="form-control border border-1 p-2"></div>
-                <div class="col-md-4"><label class="form-label">Fecha desarrollo</label><input type="date" name="development_at" class="form-control border border-1 p-2"></div>
-                <div class="col-md-4"><label class="form-label">Fecha fin</label><input type="date" name="ends_at" class="form-control border border-1 p-2"></div>
-                <div class="col-md-4"><label class="form-label">Presupuesto</label><input type="number" name="budget_amount" min="0" step="0.01" class="form-control border border-1 p-2" placeholder="0.00"></div>
-                <div class="col-md-4">
-                  <label class="form-label">Moneda</label>
-                  <select name="currency_code" class="form-control border border-1 p-2">
-                    <option value="{{ $baseCurrencyCode ?? 'USD' }}">{{ $baseCurrencyCode ?? 'USD' }}</option>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="BS">BS</option>
-                  </select>
-                </div>
-                <div class="col-12">
-                  <label class="form-label">Asociar cotización (opcional)</label>
-                  <select name="quotation_id" class="form-control border border-1 p-2">
-                    <option value="">Sin cotización</option>
-                    @foreach($quotations as $quotation)
-                      <option value="{{ $quotation->id }}">#{{ $quotation->id }} - {{ $quotation->title }}</option>
-                    @endforeach
-                  </select>
-                </div>
-                <div class="col-12"><label class="form-label">Descripción / notas</label><textarea name="description" rows="2" class="form-control border border-1 p-2"></textarea></div>
-                <div class="col-12 text-end"><button type="submit" class="btn btn-dark mb-0">Guardar proyecto</button></div>
-              </form>
+          <div class="card border h-100">
+            <div class="card-body d-flex flex-column gap-3">
+              <div>
+                <h6 class="mb-1">Crear proyecto</h6>
+                <p class="text-sm text-muted mb-0">Usa la página dedicada para registrar el proyecto y sus tareas sin mezclarlo con el módulo principal.</p>
+              </div>
+              <div class="mt-auto">
+                <a href="{{ route('projects.module.projects.index') }}" class="btn btn-dark mb-0 w-100">Ir a proyectos</a>
+              </div>
             </div>
           </div>
         </div>
 
         <div class="col-12 col-xl-6">
-          <div class="card border">
-            <div class="card-header pb-0"><h6 class="mb-0">Crear Cotización</h6></div>
-            <div class="card-body">
-              <form method="POST" action="{{ route('projects.module.quotations.store') }}" id="quotationForm" class="row g-3">
-                @csrf
-                <div class="col-md-4">
-                  <label class="form-label">Tipo</label>
-                  <select name="type" id="quotationType" class="form-control border border-1 p-2" required>
-                    <option value="customer">Cotización cliente</option>
-                    <option value="supplier_request">Solicitud a proveedor</option>
-                  </select>
-                </div>
-                <div class="col-md-8"><label class="form-label">Título</label><input type="text" name="title" class="form-control border border-1 p-2" required></div>
-
-                <div class="col-md-6" id="customerNameWrap"><label class="form-label">Cliente</label><input type="text" name="customer_name" class="form-control border border-1 p-2"></div>
-                <div class="col-md-6" id="customerEmailWrap"><label class="form-label">Correo cliente</label><input type="email" name="customer_email" class="form-control border border-1 p-2"></div>
-                <div class="col-md-6 d-none" id="providerSelectWrap">
-                  <label class="form-label">Proveedor registrado</label>
-                  <select name="provider_id" class="form-control border border-1 p-2">
-                    <option value="">Selecciona un proveedor</option>
-                    @foreach($providers as $provider)
-                      <option value="{{ $provider->id }}">{{ $provider->name }}</option>
-                    @endforeach
-                  </select>
-                </div>
-                <div class="col-md-6 d-none" id="providerNameWrap"><label class="form-label">Proveedor externo</label><input type="text" name="provider_name" class="form-control border border-1 p-2"></div>
-
-                <div class="col-md-3"><label class="form-label">Desc. global %</label><input type="number" name="discount_percent" min="0" max="100" step="0.01" value="0" class="form-control border border-1 p-2"></div>
-                <div class="col-md-3">
-                  <label class="form-label">Moneda</label>
-                  <select name="currency_code" class="form-control border border-1 p-2">
-                    <option value="{{ $baseCurrencyCode ?? 'USD' }}">{{ $baseCurrencyCode ?? 'USD' }}</option>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="BS">BS</option>
-                  </select>
-                </div>
-                <div class="col-md-3"><label class="form-label">Estado</label><select name="status" class="form-control border border-1 p-2"><option value="draft">Borrador</option><option value="sent">Enviada</option><option value="approved">Aprobada</option><option value="rejected">Rechazada</option></select></div>
-                <div class="col-md-3"><label class="form-label">Válida hasta</label><input type="date" name="valid_until" class="form-control border border-1 p-2"></div>
-
-                <div class="col-12">
-                  <div class="table-responsive border rounded">
-                    <table class="table table-sm mb-0">
-                      <thead>
-                        <tr>
-                          <th style="min-width: 280px;">Producto / Variante</th>
-                          <th style="min-width: 180px;">Servicio</th>
-                          <th style="min-width: 200px;">Descripción</th>
-                          <th style="min-width: 120px;">Cantidad</th>
-                          <th style="min-width: 140px;">Precio unitario</th>
-                          <th style="min-width: 120px;">Desc. %</th>
-                          <th style="min-width: 60px;"></th>
-                        </tr>
-                      </thead>
-                      <tbody id="quotationItemsBody"></tbody>
-                    </table>
-                  </div>
-                  <button type="button" class="btn btn-outline-dark btn-sm mt-2 mb-0" id="addQuotationItemBtn">+ Agregar ítem</button>
-                </div>
-
-                <div class="col-12"><label class="form-label">Notas</label><textarea name="notes" rows="2" class="form-control border border-1 p-2"></textarea></div>
-                <div class="col-12 text-end"><button type="submit" class="btn btn-dark mb-0">Guardar cotización</button></div>
-              </form>
+          <div class="card border h-100">
+            <div class="card-body d-flex flex-column gap-3">
+              <div>
+                <h6 class="mb-1">Crear cotización</h6>
+                <p class="text-sm text-muted mb-0">Abre la página dedicada para crear o editar cotizaciones con su flujo completo.</p>
+              </div>
+              <div class="mt-auto">
+                <a href="{{ route('projects.module.quotations.index') }}" class="btn btn-outline-dark mb-0 w-100">Ir a cotizaciones</a>
+              </div>
             </div>
           </div>
         </div>

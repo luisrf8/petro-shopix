@@ -169,11 +169,16 @@
                         <td>
                           @php
                             $payrollPdfUrl = route('projects.module.payrolls.receipt', ['payroll' => $payroll->id]);
-                            $payrollWsText = urlencode('Comprobante de nomina #' . $payroll->id . ' - ' . $payrollPdfUrl);
                           @endphp
                           <div class="d-flex gap-1">
                             <a href="{{ $payrollPdfUrl }}" target="_blank" class="btn btn-outline-dark btn-sm mb-0">PDF</a>
-                            <a href="https://wa.me/?text={{ $payrollWsText }}" target="_blank" class="btn btn-outline-success btn-sm mb-0">WS</a>
+                            <button
+                              type="button"
+                              class="btn btn-outline-success btn-sm mb-0 payroll-share-btn"
+                              data-pdf-url="{{ $payrollPdfUrl }}"
+                              data-payroll-id="{{ $payroll->id }}">
+                              WS
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -435,10 +440,54 @@
     const teamStatusActionReason = document.getElementById('teamStatusActionReason');
     const teamStatusActionReasonLabel = document.getElementById('teamStatusActionReasonLabel');
     const teamStatusActionModalLabel = document.getElementById('teamStatusActionModalLabel');
+    const payrollShareButtons = document.querySelectorAll('.payroll-share-btn');
 
     if (!form || !typeInput || !amountInput || !descriptionInput || !addButton || !itemsTableBody) {
       return;
     }
+
+    payrollShareButtons.forEach((button) => {
+      button.addEventListener('click', async () => {
+        const pdfUrl = button.getAttribute('data-pdf-url') || '';
+        const payrollId = button.getAttribute('data-payroll-id') || '';
+
+        if (!pdfUrl) {
+          return;
+        }
+
+        try {
+          const response = await fetch(pdfUrl, {
+            credentials: 'same-origin',
+          });
+
+          if (!response.ok) {
+            throw new Error('No se pudo obtener el comprobante.');
+          }
+
+          const pdfBlob = await response.blob();
+          const pdfFile = new File([pdfBlob], `comprobante-nomina-${payrollId}.pdf`, { type: 'application/pdf' });
+
+          if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+            await navigator.share({
+              title: `Comprobante de nomina #${payrollId}`,
+              text: `Comprobante de nomina #${payrollId}`,
+              files: [pdfFile],
+            });
+            return;
+          }
+
+          const objectUrl = URL.createObjectURL(pdfBlob);
+          const fallbackLink = document.createElement('a');
+          fallbackLink.href = objectUrl;
+          fallbackLink.download = `comprobante-nomina-${payrollId}.pdf`;
+          fallbackLink.click();
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+        } catch (error) {
+          console.error(error);
+          window.open(pdfUrl, '_blank', 'noopener');
+        }
+      });
+    });
 
     if (teamStatusActionModal && teamStatusActionForm) {
       teamStatusActionModal.addEventListener('show.bs.modal', (event) => {

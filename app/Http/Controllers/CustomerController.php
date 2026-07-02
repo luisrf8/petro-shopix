@@ -102,23 +102,25 @@ class CustomerController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'nullable|email|max:255|unique:users,email',
-            'phone_number' => 'nullable|string|max:20',
-            'dni' => 'nullable|string|max:100',
+            'email' => 'required|email|max:255|unique:users,email',
+            'phone_number' => 'required|string|max:20',
+            'dni' => 'required|string|max:100',
             'is_active' => 'nullable|boolean',
+            'is_retention_agent' => 'nullable|boolean',
         ]);
 
         $temporaryPassword = strtoupper(Str::random(8));
 
         User::create([
             'name' => trim((string) $validated['name']),
-            'email' => trim((string) ($validated['email'] ?? '')) ?: null,
-            'phone_number' => trim((string) ($validated['phone_number'] ?? '')),
-            'dni' => trim((string) ($validated['dni'] ?? '')),
+            'email' => trim((string) $validated['email']),
+            'phone_number' => trim((string) $validated['phone_number']),
+            'dni' => trim((string) $validated['dni']),
             'tenant_id' => $tenantId,
             'role_id' => $this->resolveCustomerRoleId(),
             'password' => Hash::make($temporaryPassword),
             'is_active' => (int) ($validated['is_active'] ?? 1),
+            'is_retention_agent' => (bool) ($validated['is_retention_agent'] ?? false),
         ]);
 
         return back()->with('success', 'Cliente creado correctamente. Contraseña temporal: ' . $temporaryPassword);
@@ -133,18 +135,20 @@ class CustomerController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'nullable|email|max:255|unique:users,email,' . $customer->id,
-            'phone_number' => 'nullable|string|max:20',
-            'dni' => 'nullable|string|max:100',
+            'email' => 'required|email|max:255|unique:users,email,' . $customer->id,
+            'phone_number' => 'required|string|max:20',
+            'dni' => 'required|string|max:100',
             'is_active' => 'nullable|boolean',
+            'is_retention_agent' => 'nullable|boolean',
         ]);
 
         $customer->update([
             'name' => trim((string) $validated['name']),
-            'email' => trim((string) ($validated['email'] ?? '')) ?: null,
-            'phone_number' => trim((string) ($validated['phone_number'] ?? '')),
-            'dni' => trim((string) ($validated['dni'] ?? '')),
+            'email' => trim((string) $validated['email']),
+            'phone_number' => trim((string) $validated['phone_number']),
+            'dni' => trim((string) $validated['dni']),
             'is_active' => (int) ($validated['is_active'] ?? 0),
+            'is_retention_agent' => (bool) ($validated['is_retention_agent'] ?? false),
         ]);
 
         return back()->with('success', 'Cliente actualizado correctamente.');
