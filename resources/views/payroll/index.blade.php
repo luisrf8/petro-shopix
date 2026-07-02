@@ -159,12 +159,39 @@
                   <tbody>
                     @forelse($payrollEntries as $payroll)
                       <tr>
+                        @php
+                          $entryCurrency = strtoupper((string) ($payroll->currency_code ?? 'USD'));
+                          if (in_array($entryCurrency, ['VES', 'VED', 'VEF', 'BSD'], true)) {
+                            $entryCurrency = 'BS';
+                          }
+
+                          $entryRateToBs = (float) ($payroll->exchange_rate_to_bs ?? 0);
+                          $amountValue = (float) ($payroll->amount ?? 0);
+                          $totalValue = (float) ($payroll->total_to_pay ?? $payroll->amount ?? 0);
+
+                          $amountBsValue = (float) ($payroll->amount_bs ?? 0);
+                          if ($amountBsValue <= 0 && $entryCurrency === 'BS') {
+                            $amountBsValue = $amountValue;
+                          } elseif ($amountBsValue <= 0 && $entryRateToBs > 0) {
+                            $amountBsValue = $amountValue * $entryRateToBs;
+                          }
+
+                          $totalBsValue = (float) ($payroll->total_to_pay_bs ?? 0);
+                          if ($totalBsValue <= 0 && $entryCurrency === 'BS') {
+                            $totalBsValue = $totalValue;
+                          } elseif ($totalBsValue <= 0 && $entryRateToBs > 0) {
+                            $totalBsValue = $totalValue * $entryRateToBs;
+                          }
+
+                          $amountDualText = number_format($amountValue, 2) . ' ' . $entryCurrency . ' / ' . ($amountBsValue > 0 ? ('Bs ' . number_format($amountBsValue, 2)) : 'Bs N/D');
+                          $totalDualText = number_format($totalValue, 2) . ' ' . $entryCurrency . ' / ' . ($totalBsValue > 0 ? ('Bs ' . number_format($totalBsValue, 2)) : 'Bs N/D');
+                        @endphp
                         <td>{{ optional($payroll->paid_at)->format('d/m/Y') }}</td>
                         <td>{{ ['daily' => 'Diario', 'weekly' => 'Semanal', 'fortnightly' => 'Quincenal', 'monthly' => 'Mensual', 'package' => 'Paquete', 'contract' => 'Contrato'][$payroll->payment_type] ?? strtoupper($payroll->payment_type) }}</td>
                         <td>{{ $payroll->teamMember->full_name ?? '-' }}</td>
                         <td>{{ $payroll->project->name ?? '-' }}</td>
-                        <td>{{ number_format((float) $payroll->amount, 2) }} {{ $payroll->currency_code }}</td>
-                        <td>{{ number_format((float) ($payroll->total_to_pay ?? $payroll->amount), 2) }} {{ $payroll->currency_code }}</td>
+                        <td>{{ $amountDualText }}</td>
+                        <td>{{ $totalDualText }}</td>
                         <td>{{ $payroll->next_payment_at ? $payroll->next_payment_at->format('d/m/Y') : 'No aplica' }}</td>
                         <td>
                           @php

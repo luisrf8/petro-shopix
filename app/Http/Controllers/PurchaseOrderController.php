@@ -137,6 +137,7 @@ class PurchaseOrderController extends Controller
         $warehouseId = (int) $request->input('warehouse_id');
         $tenant = Tenant::query()->find((int) $user->tenant_id);
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
 
         $warehouse = Warehouse::where('tenant_id', $user->tenant_id)
             ->where('is_active', true)
@@ -212,6 +213,11 @@ class PurchaseOrderController extends Controller
             $normalizedPriceInBase = (float) TenantCurrency::convertAmount($price, $inputCurrencyCode, $baseCurrencyCode, (int) $user->tenant_id);
             $inputRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $inputCurrencyCode);
 
+            // Preserve the conversion rate used at registration time for historical reconstruction.
+            $conversionRateUsed = $inputCurrencyCode === 'BS'
+                ? ($baseRateToBs > 0 ? $baseRateToBs : null)
+                : ($inputRateToBs > 0 ? $inputRateToBs : null);
+
             if ($variantId <= 0 || $quantity <= 0 || $normalizedPriceInBase <= 0) {
                 return response()->json(['error' => 'Hay productos con datos incompletos (variante, cantidad o precio).'], 422);
             }
@@ -221,7 +227,7 @@ class PurchaseOrderController extends Controller
                 'quantity' => $quantity,
                 'price' => $normalizedPriceInBase,
                 'input_currency_code' => $inputCurrencyCode,
-                'input_exchange_rate' => $inputRateToBs > 0 ? $inputRateToBs : null,
+                'input_exchange_rate' => $conversionRateUsed,
             ];
         }
 

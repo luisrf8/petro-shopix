@@ -18,17 +18,23 @@ class ProjectPayroll extends Model
         'payment_type',
         'amount',
         'currency_code',
+        'exchange_rate_to_bs',
         'paid_at',
         'notes',
         'payment_reason',
         'deduction_reason',
         'total_to_pay',
+        'amount_bs',
+        'total_to_pay_bs',
         'created_by',
     ];
 
     protected $casts = [
         'amount' => 'float',
+        'exchange_rate_to_bs' => 'float',
         'total_to_pay' => 'float',
+        'amount_bs' => 'float',
+        'total_to_pay_bs' => 'float',
         'paid_at' => 'date',
     ];
 

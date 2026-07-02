@@ -35,6 +35,65 @@
 
         return '';
       };
+      $orderBaseCurrencyCode = \App\Support\TenantCurrency::normalizeCurrencyCode($orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD'));
+      $orderRateToBsSnapshot = (float) ($order->sale_rate_to_bs ?? $order->change_rate_to_bs ?? 0);
+      if ($orderBaseCurrencyCode === 'BS') {
+        $orderRateToBsSnapshot = 1.0;
+      }
+
+      $toBsFromBaseAmount = function (float $amountBase) use ($orderBaseCurrencyCode, $orderRateToBsSnapshot): ?float {
+        if ($orderBaseCurrencyCode === 'BS') {
+          return $amountBase;
+        }
+
+        if ($orderRateToBsSnapshot <= 0) {
+          return null;
+        }
+
+        return $amountBase * $orderRateToBsSnapshot;
+      };
+      $toBaseFromBsAmount = function (float $amountBs) use ($orderBaseCurrencyCode, $orderRateToBsSnapshot): ?float {
+        if ($orderBaseCurrencyCode === 'BS') {
+          return $amountBs;
+        }
+
+        if ($orderRateToBsSnapshot <= 0) {
+          return null;
+        }
+
+        return $amountBs / $orderRateToBsSnapshot;
+      };
+      $toUsdFromBaseAmount = function (float $amountBase) use ($orderBaseCurrencyCode, $toBaseFromBsAmount): ?float {
+        if ($orderBaseCurrencyCode === 'USD') {
+          return $amountBase;
+        }
+
+        if ($orderBaseCurrencyCode === 'BS') {
+          return $toBaseFromBsAmount($amountBase);
+        }
+
+        return null;
+      };
+      $formatDualAmount = function (float $amount, ?string $currencyCode) use ($orderBaseCurrencyCode, $toBaseFromBsAmount, $toUsdFromBaseAmount, $toBsFromBaseAmount, $orderRateToBsSnapshot): string {
+        $normalizedCurrency = \App\Support\TenantCurrency::normalizeCurrencyCode($currencyCode);
+        $baseAmount = null;
+
+        if ($normalizedCurrency === $orderBaseCurrencyCode) {
+          $baseAmount = $amount;
+        } elseif ($normalizedCurrency === 'BS') {
+          $baseAmount = $toBaseFromBsAmount($amount);
+        } elseif ($normalizedCurrency === 'USD' && $orderBaseCurrencyCode === 'BS' && $orderRateToBsSnapshot > 0) {
+          $baseAmount = $amount * $orderRateToBsSnapshot;
+        }
+
+        $usdAmount = is_null($baseAmount) ? null : $toUsdFromBaseAmount($baseAmount);
+        $bsAmount = is_null($baseAmount) ? null : $toBsFromBaseAmount($baseAmount);
+
+        $usdText = is_null($usdAmount) ? 'N/D' : ('$' . number_format($usdAmount, 2));
+        $bsText = is_null($bsAmount) ? 'N/D' : ('Bs ' . number_format($bsAmount, 2));
+
+        return $usdText . ' / ' . $bsText;
+      };
 
       $storePhone = preg_replace('/\D+/', '', (string) (($order->tenant->phone_code ?? '') . ($order->tenant->phone_number ?? '')));
       $customerPhone = preg_replace('/\D+/', '', (string) ($order->user->phone_number ?? ''));
@@ -333,10 +392,10 @@
                       <td data-label="Cantidad">{{ $detalle->quantity }}</td>
                       <td data-label="Variante">{{ $detalle->variant->size ?? '' }}</td>
                       @unless($isDeliveryOnlyView)
-                      <td data-label="Precio Inicial"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detailOriginalUnitPrice, 2) }}</span></td>
-                      <td data-label="Descuento"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detailDiscountUnitPrice, 2) }}</span></td>
-                      <td data-label="Precio Neto"><span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</span></td>
-                      <td data-label="Subtotal Neto"><span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->amount, 2) }}</span></td>
+                      <td data-label="Precio Inicial"><span class="amount-chip">{{ $formatDualAmount((float) $detailOriginalUnitPrice, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span></td>
+                      <td data-label="Descuento"><span class="amount-chip">{{ $formatDualAmount((float) $detailDiscountUnitPrice, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span></td>
+                      <td data-label="Precio Neto"><span class="amount-chip">{{ $formatDualAmount((float) $detalle->price, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span></td>
+                      <td data-label="Subtotal Neto"><span class="amount-chip amount-chip-strong">{{ $formatDualAmount((float) $detalle->amount, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span></td>
                       @endunless
                     </tr>
                     @endforeach
@@ -347,28 +406,28 @@
               <div class="order-total-stack mt-3">
                 <div class="order-total-line">
                   <span class="order-total-label">Subtotal Antes De Descuento</span>
-                  <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderSubtotalBeforeDiscount, 2) }}</span>
+                  <span class="amount-chip">{{ $formatDualAmount((float) $orderSubtotalBeforeDiscount, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span>
                 </div>
                 <div class="order-total-line">
                   <span class="order-total-label">Total Descuento</span>
-                  <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderDiscountTotal, 2) }}</span>
+                  <span class="amount-chip">{{ $formatDualAmount((float) $orderDiscountTotal, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span>
                 </div>
                 <div class="order-total-line">
                   <span class="order-total-label">Subtotal Neto</span>
-                  <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderSubtotalNet, 2) }}</span>
+                  <span class="amount-chip">{{ $formatDualAmount((float) $orderSubtotalNet, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span>
                 </div>
                 <div class="order-total-line">
                   <span class="order-total-label">Total Impuestos</span>
-                  <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderTaxTotalDetail, 2) }}</span>
+                  <span class="amount-chip">{{ $formatDualAmount((float) $orderTaxTotalDetail, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span>
                 </div>
                 <div class="order-total-line">
                   <span class="order-total-label">Total A Pagar</span>
-                  <span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($orderTotalWithTaxes, 2) }}</span>
+                  <span class="amount-chip amount-chip-strong">{{ $formatDualAmount((float) $orderTotalWithTaxes, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span>
                 </div>
                 @if($order->has_returns)
                   <div class="order-total-line">
                     <span class="order-total-label">Total Devolución</span>
-                    <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($order->total_devuelto, 2) }}</span>
+                    <span class="amount-chip">{{ $formatDualAmount((float) $order->total_devuelto, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span>
                   </div>
                 @endif
               </div>
@@ -406,6 +465,19 @@
                     @php
                       $paymentCurrencyCode = strtoupper(trim((string) ($payment->currency ?? '')));
                       $paymentSymbol = $resolveCurrencySymbol($paymentCurrencyCode);
+                      $paymentBaseAmount = (float) ($payment->amount_base ?? $payment->amount ?? 0);
+                      $paymentOriginalAmount = (float) ($payment->amount_original ?? 0);
+
+                      $paymentUsdAmount = $toUsdFromBaseAmount($paymentBaseAmount);
+                      $paymentBsAmount = $toBsFromBaseAmount($paymentBaseAmount);
+
+                      if (\App\Support\TenantCurrency::normalizeCurrencyCode($paymentCurrencyCode) === 'BS' && $paymentOriginalAmount > 0) {
+                        $paymentBsAmount = $paymentOriginalAmount;
+                      }
+
+                      $paymentDualText = (is_null($paymentUsdAmount) ? 'N/D' : ('$' . number_format($paymentUsdAmount, 2)))
+                        . ' / '
+                        . (is_null($paymentBsAmount) ? 'N/D' : ('Bs ' . number_format($paymentBsAmount, 2)));
                       $paymentProofUrl = $payment->images->isNotEmpty()
                         ? (\App\Support\ImageStorage::url($payment->images->first()->image_path) ?? null)
                         : null;
@@ -413,7 +485,7 @@
                     <tr>
                       <td data-label="Moneda">{{ $payment->currency }}</td>
                       <td data-label="Método de Pago">{{ $payment->payment->name}}</td>
-                      <td data-label="Monto"><span class="amount-chip amount-chip-strong">{{ $paymentSymbol }}{{ number_format($payment->amount, 2) }}{{ $paymentSymbol === '' && $paymentCurrencyCode !== '' ? ' ' . $paymentCurrencyCode : '' }}</span></td>
+                      <td data-label="Monto"><span class="amount-chip amount-chip-strong">{{ $paymentDualText }}</span></td>
                       <td data-label="Beneficiario">{{ $payment->payment->admin_name }}</td>
                       <td data-label="Banco">{{ $payment->payment->bank }}</td>
                       <td data-label="Referencia">{{ $payment->reference ?? 'N/A' }}</td>
@@ -469,12 +541,12 @@
               <div class="order-total-stack mt-3">
                 <div class="order-total-line">
                   <span class="order-total-label">Total Pagado</span>
-                  <span class="amount-chip amount-chip-strong">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalPagado, 2) }}</span>
+                  <span class="amount-chip amount-chip-strong">{{ $formatDualAmount((float) $totalPagado, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span>
                 </div>
                 @if($order->has_returns)
                   <div class="order-total-line">
                     <span class="order-total-label">Total Devolución</span>
-                    <span class="amount-chip">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($order->total_devuelto, 2) }}</span>
+                    <span class="amount-chip">{{ $formatDualAmount((float) $order->total_devuelto, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span>
                   </div>
                 @endif
               </div>

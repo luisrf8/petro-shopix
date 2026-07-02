@@ -260,6 +260,10 @@ class SaleController extends Controller
             return response()->json(['error' => 'No se enviaron productos válidos.'], 400);
         }
         $saleCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tienda);
+        $saleRateToBs = max(0, (float) ($validated['dollarRate'] ?? 0));
+        if ($saleRateToBs <= 0) {
+            $saleRateToBs = (float) TenantCurrency::resolveRateToBs($tenantId, $saleCurrencyCode);
+        }
 
         if ($requestedDocumentMode === 'electronic_invoice' && !(bool) ($tienda?->electronic_invoicing_enabled ?? false)) {
             return response()->json(['error' => 'La facturacion digital esta desactivada para esta tienda.'], 422);
@@ -373,6 +377,7 @@ class SaleController extends Controller
             'tenant_id' => $tenantId,
             'document_issue_mode' => $documentIssueMode,
             'sale_currency_code' => $saleCurrencyCode,
+            'sale_rate_to_bs' => $saleRateToBs > 0 ? round($saleRateToBs, 6) : null,
             'subtotal_before_discount' => round($lineSubtotalBeforeDiscountTotal, 2),
             'total_discount' => round(max(0, $lineSubtotalBeforeDiscountTotal - ($lineSubtotalAfterLineDiscountTotal - $globalDiscountAmountApplied)), 2),
         ]);
@@ -920,6 +925,7 @@ class SaleController extends Controller
             : null;
 
         $saleCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenantForSale);
+        $saleRateToBs = (float) TenantCurrency::resolveRateToBs((int) $tenantForSale->id, $saleCurrencyCode);
 
         // Crear orden de venta con status en 0 (pendiente)
         $formattedAddress = in_array($deliveryType, ['delivery', 'shipping'], true)
@@ -935,6 +941,7 @@ class SaleController extends Controller
             'preference' => $preference,
             'tenant_id' => $tenantForSale->id,
             'sale_currency_code' => $saleCurrencyCode,
+            'sale_rate_to_bs' => $saleRateToBs > 0 ? round($saleRateToBs, 6) : null,
         ]);
     
         $itemsSubtotal = 0.0;
@@ -2642,10 +2649,20 @@ class SaleController extends Controller
         }
 
         $updatedAmount = round((float) ($validated['amount'] ?? 0), 2);
+        $existingRateToBase = (float) ($payment->exchange_rate_to_base ?? 0);
+        $paymentCurrency = strtoupper(trim((string) ($payment->currency ?? '')));
+
         $payment->amount = $updatedAmount;
         $payment->amount_base = $updatedAmount;
-        $payment->amount_original = $updatedAmount;
-        $payment->exchange_rate_to_base = 1;
+        if ($paymentCurrency === 'BS' || $paymentCurrency === 'VES') {
+            $payment->amount_original = $existingRateToBase > 0
+                ? round($updatedAmount / $existingRateToBase, 2)
+                : round((float) ($payment->amount_original ?? $updatedAmount), 2);
+            $payment->exchange_rate_to_base = $existingRateToBase > 0 ? $existingRateToBase : null;
+        } else {
+            $payment->amount_original = $updatedAmount;
+            $payment->exchange_rate_to_base = 1;
+        }
         $payment->reference = trim((string) ($validated['reference'] ?? '')) ?: null;
         $payment->save();
 

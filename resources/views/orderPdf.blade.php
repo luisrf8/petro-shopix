@@ -56,6 +56,47 @@
     $deliveryFee = (float) ($deliveryFee ?? $order->delivery_fee_amount);
     $orderTotal = (float) ($totalOrden ?? ($itemsSubtotal + $deliveryFee));
     $displayAmount = $displayAmount ?? static fn ($amount) => (float) $amount;
+    $orderRateToBsSnapshot = (float) ($order->sale_rate_to_bs ?? $order->change_rate_to_bs ?? 0);
+    if (in_array($orderCurrencyCode, ['VES', 'BS'], true)) {
+        $orderRateToBsSnapshot = $orderRateToBsSnapshot > 0 ? $orderRateToBsSnapshot : 1.0;
+    }
+
+    $toBsOrderAmount = function (float $amount) use ($orderCurrencyCode, $orderRateToBsSnapshot): ?float {
+        if (in_array($orderCurrencyCode, ['VES', 'BS'], true)) {
+            return $amount;
+        }
+
+        if ($orderRateToBsSnapshot <= 0) {
+            return null;
+        }
+
+        return $amount * $orderRateToBsSnapshot;
+    };
+    $toUsdOrderAmount = function (float $amount) use ($orderCurrencyCode, $toBsOrderAmount, $orderRateToBsSnapshot): ?float {
+        if ($orderCurrencyCode === 'USD') {
+            return $amount;
+        }
+
+        if (in_array($orderCurrencyCode, ['VES', 'BS'], true)) {
+            return $orderRateToBsSnapshot > 0 ? ($amount / $orderRateToBsSnapshot) : null;
+        }
+
+        $amountBs = $toBsOrderAmount($amount);
+        if (is_null($amountBs) || $orderRateToBsSnapshot <= 0) {
+            return null;
+        }
+
+        return $amountBs / $orderRateToBsSnapshot;
+    };
+    $formatDualOrderAmount = function (float $amount) use ($toUsdOrderAmount, $toBsOrderAmount): string {
+        $usdAmount = $toUsdOrderAmount($amount);
+        $bsAmount = $toBsOrderAmount($amount);
+
+        $usdText = is_null($usdAmount) ? 'USD N/D' : ('USD ' . number_format($usdAmount, 2));
+        $bsText = is_null($bsAmount) ? 'Bs N/D' : ('Bs ' . number_format($bsAmount, 2));
+
+        return $usdText . ' / ' . $bsText;
+    };
 @endphp
 <table width="100%" style="border-collapse: collapse; border: none;">
     <tr>
@@ -118,17 +159,17 @@
         <tbody>
             <tr>
                 <td><strong>Subtotal productos</strong></td>
-                <td style="text-align: right;">{{ number_format($displayAmount($itemsSubtotal), 2) }} {{ $emissionCurrencyCode }}</td>
+                <td style="text-align: right;">{{ $formatDualOrderAmount($itemsSubtotal) }}</td>
             </tr>
             @if($deliveryFee > 0)
                 <tr>
                     <td><strong>Delivery</strong></td>
-                    <td style="text-align: right;">{{ number_format($displayAmount($deliveryFee), 2) }} {{ $emissionCurrencyCode }}</td>
+                    <td style="text-align: right;">{{ $formatDualOrderAmount($deliveryFee) }}</td>
                 </tr>
             @endif
             <tr>
                 <td><strong>Total orden</strong></td>
-                <td style="text-align: right;">{{ number_format($displayAmount($orderTotal), 2) }} {{ $emissionCurrencyCode }}</td>
+                <td style="text-align: right;">{{ $formatDualOrderAmount($orderTotal) }}</td>
             </tr>
         </tbody>
     </table>

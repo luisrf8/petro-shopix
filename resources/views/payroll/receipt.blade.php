@@ -181,6 +181,19 @@
     $currency = $payroll->currency_code ?: 'USD';
     $amountBase = (float) ($payroll->amount ?? 0);
     $totalToPay = (float) ($payroll->total_to_pay ?? $payroll->amount ?? 0);
+    $exchangeRateToBs = (float) ($payroll->exchange_rate_to_bs ?? 0);
+    $amountBs = (float) ($payroll->amount_bs ?? 0);
+    $totalToPayBs = (float) ($payroll->total_to_pay_bs ?? 0);
+    if ($amountBs <= 0 && strtoupper((string) $currency) === 'BS') {
+      $amountBs = $amountBase;
+    } elseif ($amountBs <= 0 && $exchangeRateToBs > 0) {
+      $amountBs = $amountBase * $exchangeRateToBs;
+    }
+    if ($totalToPayBs <= 0 && strtoupper((string) $currency) === 'BS') {
+      $totalToPayBs = $totalToPay;
+    } elseif ($totalToPayBs <= 0 && $exchangeRateToBs > 0) {
+      $totalToPayBs = $totalToPay * $exchangeRateToBs;
+    }
     $paidAt = optional($payroll->paid_at)->format('d/m/Y');
     $items = collect($payroll->items ?? []);
     $paymentsTotal = (float) $items->where('item_type', 'payment')->sum('amount');
@@ -207,7 +220,12 @@
           <tbody>
             <tr>
               <th>Total pagos</th>
-              <td>{{ number_format($paymentsTotal > 0 ? $paymentsTotal : $amountBase, 2) }} {{ $currency }}</td>
+              <td>
+                {{ number_format($paymentsTotal > 0 ? $paymentsTotal : $amountBase, 2) }} {{ $currency }}
+                @if($amountBs > 0)
+                  <br><small>Bs {{ number_format($amountBs, 2) }}</small>
+                @endif
+              </td>
             </tr>
             <tr>
               <th>Total descuentos</th>
@@ -215,7 +233,12 @@
             </tr>
             <tr>
               <th>Total a pagar</th>
-              <td><strong>{{ number_format($totalToPay, 2) }} {{ $currency }}</strong></td>
+              <td>
+                <strong>{{ number_format($totalToPay, 2) }} {{ $currency }}</strong>
+                @if($totalToPayBs > 0)
+                  <br><small><strong>Bs {{ number_format($totalToPayBs, 2) }}</strong></small>
+                @endif
+              </td>
             </tr>
           </tbody>
         </table>

@@ -650,6 +650,9 @@ class ProjectModuleController extends Controller
                 'discount_amount' => (float) ($quotation->discount_amount ?? 0),
                 'total_amount' => (float) ($quotation->total_amount ?? 0),
                 'currency_code' => (string) ($quotation->currency_code ?? 'USD'),
+                'exchange_rate_to_bs' => (float) ($quotation->exchange_rate_to_bs ?? 0) ?: null,
+                'base_rate_to_bs' => (float) ($quotation->base_rate_to_bs ?? 0) ?: null,
+                'usd_rate_to_bs' => (float) ($quotation->usd_rate_to_bs ?? 0) ?: null,
                 'valid_until' => $quotation->valid_until,
                 'notes' => $this->appendLifecycleNote(
                     (string) ($quotation->notes ?? ''),
@@ -789,6 +792,10 @@ class ProjectModuleController extends Controller
 
         $tenant = Tenant::query()->find($tenantId);
         $normalizedCurrencyCode = $this->normalizeProjectCurrencyCode($validated['currency_code'] ?? null, $tenant);
+        $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+        $quotationRateToBs = TenantCurrency::resolveRateToBs($tenantId, $normalizedCurrencyCode);
+        $baseRateToBs = TenantCurrency::resolveRateToBs($tenantId, $baseCurrencyCode);
+        $usdRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'USD');
 
         $payload = [
             'tenant_id' => $tenantId,
@@ -803,6 +810,9 @@ class ProjectModuleController extends Controller
             'provider_name' => $providerName,
             'discount_percent' => (float) ($validated['discount_percent'] ?? 0),
             'currency_code' => $normalizedCurrencyCode,
+            'exchange_rate_to_bs' => $quotationRateToBs > 0 ? $quotationRateToBs : null,
+            'base_rate_to_bs' => $baseRateToBs > 0 ? $baseRateToBs : null,
+            'usd_rate_to_bs' => $usdRateToBs > 0 ? $usdRateToBs : null,
             'valid_until' => $validated['valid_until'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'subtotal' => 0,
@@ -1027,6 +1037,14 @@ class ProjectModuleController extends Controller
         $salesOrder = null;
 
         DB::transaction(function () use ($tenantId, $quotation, $saleItems, $validated, $customer, &$salesOrder) {
+            $normalizedSaleCurrency = TenantCurrency::normalizeCurrencyCode((string) ($quotation->currency_code ?: 'USD'));
+            $saleRateToBs = (float) ($quotation->exchange_rate_to_bs ?? 0);
+            if ($normalizedSaleCurrency === 'BS') {
+                $saleRateToBs = 1.0;
+            } elseif ($saleRateToBs <= 0) {
+                $saleRateToBs = TenantCurrency::resolveRateToBs($tenantId, $normalizedSaleCurrency);
+            }
+
             $salesOrder = SalesOrder::query()->create([
                 'user_id' => (int) $customer->id,
                 'sales_rep_user_id' => null,
@@ -1037,7 +1055,8 @@ class ProjectModuleController extends Controller
                 'deliver_status' => 0,
                 'tenant_id' => $tenantId,
                 'document_issue_mode' => 'delivery_note',
-                'sale_currency_code' => (string) ($quotation->currency_code ?: 'USD'),
+                'sale_currency_code' => $normalizedSaleCurrency,
+                'sale_rate_to_bs' => $saleRateToBs > 0 ? $saleRateToBs : null,
                 'delivery_fee' => 0,
                 'delivery_fee_mode' => 'free',
                 'subtotal_before_discount' => round((float) ($quotation->subtotal ?? 0), 2),
@@ -1205,6 +1224,24 @@ class ProjectModuleController extends Controller
         }
 
         DB::transaction(function () use ($tenantId, $quotation, $warehouse, $inventoryItems, $providerId) {
+            $tenant = Tenant::query()->find($tenantId);
+            $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
+            $quotationCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) ($quotation->currency_code ?? $baseCurrencyCode));
+
+            $quotationRateToBs = (float) ($quotation->exchange_rate_to_bs ?? 0);
+            if ($quotationCurrencyCode === 'BS') {
+                $quotationRateToBs = 1.0;
+            } elseif ($quotationRateToBs <= 0) {
+                $quotationRateToBs = TenantCurrency::resolveRateToBs($tenantId, $quotationCurrencyCode);
+            }
+
+            $baseRateToBs = (float) ($quotation->base_rate_to_bs ?? 0);
+            if ($baseCurrencyCode === 'BS') {
+                $baseRateToBs = 1.0;
+            } elseif ($baseRateToBs <= 0) {
+                $baseRateToBs = TenantCurrency::resolveRateToBs($tenantId, $baseCurrencyCode);
+            }
+
             $purchaseOrder = PurchaseOrder::query()->create([
                 'provider_id' => $providerId,
                 'provider_name' => $quotation->provider_name,
@@ -1224,16 +1261,38 @@ class ProjectModuleController extends Controller
                 abort_if((int) ($variant->product->tenant_id ?? 0) !== $tenantId, 404);
 
                 $quantity = (int) max(round((float) $item->quantity), 1);
-                $unitPrice = (float) $item->unit_price;
+                $unitPriceQuote = (float) $item->unit_price;
+                $unitPriceBase = $unitPriceQuote;
+
+                if ($quotationCurrencyCode !== $baseCurrencyCode) {
+                    if ($quotationCurrencyCode === 'BS' && $baseRateToBs > 0) {
+                        $unitPriceBase = $unitPriceQuote / $baseRateToBs;
+                    } elseif ($baseCurrencyCode === 'BS' && $quotationRateToBs > 0) {
+                        $unitPriceBase = $unitPriceQuote * $quotationRateToBs;
+                    } elseif ($quotationRateToBs > 0 && $baseRateToBs > 0) {
+                        $unitPriceBase = ($unitPriceQuote * $quotationRateToBs) / $baseRateToBs;
+                    } else {
+                        $unitPriceBase = (float) TenantCurrency::convertAmount($unitPriceQuote, $quotationCurrencyCode, $baseCurrencyCode, $tenantId);
+                    }
+                }
+
+                $conversionRateUsed = null;
+                if ($quotationCurrencyCode === 'BS') {
+                    $conversionRateUsed = $baseRateToBs > 0 ? $baseRateToBs : null;
+                } elseif ($quotationCurrencyCode === $baseCurrencyCode) {
+                    $conversionRateUsed = $baseRateToBs > 0 ? $baseRateToBs : null;
+                } else {
+                    $conversionRateUsed = $quotationRateToBs > 0 ? $quotationRateToBs : null;
+                }
 
                 PurchaseOrderDetail::query()->create([
                     'purchase_order_id' => $purchaseOrder->id,
                     'product_variant_id' => $variant->id,
                     'quantity' => $quantity,
-                    'price' => $unitPrice,
-                    'amount' => round($quantity * $unitPrice, 4),
-                    'input_currency_code' => $quotation->currency_code,
-                    'input_exchange_rate' => null,
+                    'price' => round($unitPriceBase, 4),
+                    'amount' => round($quantity * $unitPriceBase, 4),
+                    'input_currency_code' => $quotationCurrencyCode,
+                    'input_exchange_rate' => $conversionRateUsed,
                     'tenant_id' => $tenantId,
                 ]);
 
@@ -1272,8 +1331,17 @@ class ProjectModuleController extends Controller
         $billingLogoDataUri = $this->resolveTenantBillingLogoDataUri($tenant);
 
         $quotationCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) ($quotation->currency_code ?? 'USD'));
-        $quotationRateToBs = TenantCurrency::resolveRateToBs($tenantId, $quotationCurrencyCode);
-        $usdRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'USD');
+        $quotationRateToBs = (float) ($quotation->exchange_rate_to_bs ?? 0);
+        if ($quotationCurrencyCode === 'BS') {
+            $quotationRateToBs = 1.0;
+        } elseif ($quotationRateToBs <= 0) {
+            $quotationRateToBs = TenantCurrency::resolveRateToBs($tenantId, $quotationCurrencyCode);
+        }
+
+        $usdRateToBs = (float) ($quotation->usd_rate_to_bs ?? 0);
+        if ($usdRateToBs <= 0) {
+            $usdRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'USD');
+        }
 
         $html = view('projects.quotation_pdf', compact(
             'quotation',
@@ -1606,19 +1674,40 @@ class ProjectModuleController extends Controller
                 ->implode(' | ');
         }
 
-        DB::transaction(function () use ($tenantId, $validated, $amountBase, $computedTotalToPay, $paymentReason, $deductionReason, $payrollItems) {
+        $normalizedCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) ($validated['currency_code'] ?? 'USD'));
+        $exchangeRateToBs = TenantCurrency::resolveRateToBs($tenantId, $normalizedCurrencyCode);
+        if ($normalizedCurrencyCode === 'BS') {
+            $exchangeRateToBs = 1.0;
+        }
+
+        $amountBs = null;
+        $totalToPayBs = null;
+        if ($exchangeRateToBs > 0) {
+            if ($normalizedCurrencyCode === 'BS') {
+                $amountBs = round($amountBase, 4);
+                $totalToPayBs = round($computedTotalToPay, 4);
+            } else {
+                $amountBs = round($amountBase * $exchangeRateToBs, 4);
+                $totalToPayBs = round($computedTotalToPay * $exchangeRateToBs, 4);
+            }
+        }
+
+        DB::transaction(function () use ($tenantId, $validated, $amountBase, $computedTotalToPay, $paymentReason, $deductionReason, $payrollItems, $normalizedCurrencyCode, $exchangeRateToBs, $amountBs, $totalToPayBs) {
             $entry = ProjectPayroll::query()->create([
                 'tenant_id' => $tenantId,
                 'team_member_id' => $validated['team_member_id'] ?? null,
                 'project_id' => $validated['project_id'] ?? null,
                 'payment_type' => $validated['payment_type'],
                 'amount' => $amountBase,
-                'currency_code' => strtoupper((string) ($validated['currency_code'] ?? 'USD')),
+                'currency_code' => $normalizedCurrencyCode,
+                'exchange_rate_to_bs' => $exchangeRateToBs > 0 ? $exchangeRateToBs : null,
                 'paid_at' => $validated['paid_at'],
                 'notes' => $validated['notes'] ?? null,
                 'payment_reason' => $paymentReason !== '' ? $paymentReason : null,
                 'deduction_reason' => $deductionReason !== '' ? $deductionReason : null,
                 'total_to_pay' => $computedTotalToPay,
+                'amount_bs' => $amountBs,
+                'total_to_pay_bs' => $totalToPayBs,
                 'created_by' => auth()->id(),
             ]);
 
