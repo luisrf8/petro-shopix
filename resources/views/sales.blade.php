@@ -2192,7 +2192,44 @@ function updateQuantity(id, newQty) {
                 quantityInput.style.height = 'fit-content';
                 quantityInput.style.padding = '0.25rem 0.5rem';
                 quantityInput.style.border = '1px solid #ced4da';
-                quantityInput.oninput = () => updateQuantity(item.id, parseInt(quantityInput.value));
+                const commitQuantityChange = () => {
+                    const rawValue = String(quantityInput.value ?? '').trim();
+                    if (rawValue === '') {
+                        return;
+                    }
+
+                    updateQuantity(item.id, Number.parseInt(rawValue, 10));
+                };
+
+                quantityInput.addEventListener('change', commitQuantityChange);
+                quantityInput.addEventListener('blur', () => {
+                    const rawValue = String(quantityInput.value ?? '').trim();
+                    if (rawValue === '') {
+                        quantityInput.classList.add('is-invalid');
+                        quantityInput.setCustomValidity('La cantidad minima es 1.');
+                        return;
+                    }
+
+                    quantityInput.classList.remove('is-invalid');
+                    quantityInput.setCustomValidity('');
+                    commitQuantityChange();
+                });
+                quantityInput.addEventListener('input', () => {
+                    const rawValue = String(quantityInput.value ?? '').trim();
+                    const parsedValue = Number.parseInt(rawValue, 10);
+                    const isValid = rawValue !== '' && Number.isFinite(parsedValue) && parsedValue >= 1;
+
+                    if (isValid) {
+                        quantityInput.classList.remove('is-invalid');
+                        quantityInput.setCustomValidity('');
+                    }
+                });
+                quantityInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        quantityInput.blur();
+                    }
+                });
 
                 quantityDiv.appendChild(quantityLabel);
                 quantityDiv.appendChild(quantityInput);
@@ -2752,7 +2789,42 @@ function updateQuantity(id, newQty) {
 
         syncSaleStatusSelectAll();
         setSaleFlowStep(1);
+        function validateCartQuantitiesBeforeStep2() {
+            const quantityInputs = Array.from(document.querySelectorAll('.qty-edit'));
+            let firstInvalidInput = null;
+
+            quantityInputs.forEach(input => {
+                const rawValue = String(input.value ?? '').trim();
+                const parsedValue = Number.parseInt(rawValue, 10);
+                const isValid = rawValue !== '' && Number.isFinite(parsedValue) && parsedValue >= 1;
+
+                if (!isValid) {
+                    input.classList.add('is-invalid');
+                    input.setCustomValidity('La cantidad minima es 1.');
+                    if (!firstInvalidInput) {
+                        firstInvalidInput = input;
+                    }
+                    return;
+                }
+
+                input.classList.remove('is-invalid');
+                input.setCustomValidity('');
+            });
+
+            if (firstInvalidInput) {
+                firstInvalidInput.focus();
+                firstInvalidInput.reportValidity();
+                return false;
+            }
+
+            return true;
+        }
+
         document.getElementById('toStep2').addEventListener('click', function() {
+            if (!validateCartQuantitiesBeforeStep2()) {
+                return;
+            }
+
             document.getElementById('step1').classList.add('d-none');
             document.getElementById('step2').classList.remove('d-none');
             setSaleFlowStep(2);
