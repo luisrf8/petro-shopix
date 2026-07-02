@@ -1300,6 +1300,8 @@ async function deleteProduct(productId) {
 document.getElementById('editProductForm').addEventListener('submit', function(event) {
   event.preventDefault(); // Evitar que se recargue la página
     let formData = new FormData(this);
+    const normalizedName = (document.getElementById('editProductName')?.value || '').trim();
+    formData.set('name', normalizedName);
 
     const productId = inlineProductId;
     if (!productId) {

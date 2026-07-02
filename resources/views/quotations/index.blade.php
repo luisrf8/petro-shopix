@@ -496,36 +496,114 @@
                     {{ strtoupper((string) ($quotation->status ?? 'draft')) }}
                   </span>
                 </td>
-                <td data-label="Acciones" class="d-flex flex-wrap gap-2">
-                  <a href="{{ route('projects.module.quotations.index', ['edit' => $quotation->id]) }}" class="btn btn-outline-primary btn-sm mb-0">Editar</a>
-                  <a href="{{ route('projects.module.quotations.pdf', $quotation) }}" class="btn btn-outline-dark btn-sm mb-0" target="_blank">PDF</a>
-                  <form method="POST" action="{{ route('projects.module.quotations.toProject', $quotation) }}" class="d-flex gap-1">@csrf<input type="text" name="project_name" class="form-control form-control-sm border border-1 p-2" placeholder="Nombre proyecto" {{ $isClosedQuotation ? 'disabled' : '' }}><button class="btn btn-outline-primary btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>A proyecto</button></form>
-                  <form method="POST" action="{{ route('projects.module.quotations.toSale', $quotation) }}" class="d-flex gap-1">@csrf<input type="text" name="sale_reference" class="form-control form-control-sm border border-1 p-2" placeholder="Ref venta" required {{ $isClosedQuotation ? 'disabled' : '' }}><button class="btn btn-outline-success btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>A venta</button></form>
-                  @if($quotation->type === 'supplier_request')
-                    <form method="POST" action="{{ route('projects.module.quotations.toInventory', $quotation) }}" class="d-flex gap-1">
-                      @csrf
-                      <select name="warehouse_id" class="form-control form-control-sm border border-1 p-2" {{ $isClosedQuotation ? 'disabled' : '' }}>
-                        <option value="">Almacén automático</option>
-                        @foreach($warehouses as $warehouse)
-                          <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
-                        @endforeach
-                      </select>
-                      <button class="btn btn-outline-warning btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>A inventario</button>
-                    </form>
-                  @endif
-                  <form method="POST" action="{{ route('projects.module.quotations.invalidate', $quotation) }}" onsubmit="return confirm('¿Invalidar esta cotización?');">
-                    @csrf
-                    <button class="btn btn-outline-secondary btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>Invalidar</button>
-                  </form>
-                  <form method="POST" action="{{ route('projects.module.quotations.annul', $quotation) }}" onsubmit="return confirm('¿Anular esta cotización?');">
-                    @csrf
-                    <button class="btn btn-outline-danger btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>Anular</button>
-                  </form>
-                  <form method="POST" action="{{ route('projects.module.quotations.replace', $quotation) }}" class="d-flex gap-1" onsubmit="return confirm('¿Anular y reemplazar esta cotización con una nueva versión?');">
-                    @csrf
-                    <input type="text" name="replacement_title" class="form-control form-control-sm border border-1 p-2" placeholder="Título reemplazo" {{ $isClosedQuotation ? 'disabled' : '' }}>
-                    <button class="btn btn-outline-info btn-sm mb-0" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>Anular y reemplazar</button>
-                  </form>
+                <td data-label="Acciones">
+                  <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <a href="{{ route('projects.module.quotations.index', ['edit' => $quotation->id]) }}" class="btn btn-outline-primary btn-sm mb-0 d-inline-flex align-items-center gap-1">
+                      <i class="material-symbols-rounded text-sm">edit</i>
+                      <span>Editar</span>
+                    </a>
+                    <a href="{{ route('projects.module.quotations.pdf', $quotation) }}" class="btn btn-outline-dark btn-sm mb-0 d-inline-flex align-items-center gap-1" target="_blank">
+                      <i class="material-symbols-rounded text-sm">picture_as_pdf</i>
+                      <span>PDF</span>
+                    </a>
+                    <button
+                      type="button"
+                      class="btn btn-outline-info btn-sm mb-0 d-inline-flex align-items-center gap-1"
+                      data-bs-toggle="modal"
+                      data-bs-target="#quotationActionModal"
+                      data-action-url="{{ route('projects.module.quotations.toProject', $quotation) }}"
+                      data-action-title="Pasar a proyecto"
+                      data-action-message="Esta cotización se convertirá en proyecto."
+                      data-action-submit-label="Confirmar proyecto"
+                      data-action-submit-class="btn-info"
+                      data-input-name="project_name"
+                      data-input-label="Nombre del proyecto"
+                      data-input-placeholder="Ej: Proyecto Oficina Central"
+                      data-input-required="false"
+                      {{ $isClosedQuotation ? 'disabled' : '' }}>
+                      <i class="material-symbols-rounded text-sm">construction</i>
+                      <span>A proyecto</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-outline-success btn-sm mb-0 d-inline-flex align-items-center gap-1"
+                      data-bs-toggle="modal"
+                      data-bs-target="#quotationActionModal"
+                      data-action-url="{{ route('projects.module.quotations.toSale', $quotation) }}"
+                      data-action-title="Pasar a venta"
+                      data-action-message="Se registrará la conversión de esta cotización a venta."
+                      data-action-submit-label="Confirmar venta"
+                      data-action-submit-class="btn-success"
+                      data-input-name="sale_reference"
+                      data-input-label="Referencia de venta"
+                      data-input-placeholder="Ej: VTA-2026-001"
+                      data-input-required="true"
+                      {{ $isClosedQuotation ? 'disabled' : '' }}>
+                      <i class="material-symbols-rounded text-sm">point_of_sale</i>
+                      <span>A venta</span>
+                    </button>
+                    @if($quotation->type === 'supplier_request')
+                      <form method="POST" action="{{ route('projects.module.quotations.toInventory', $quotation) }}" class="d-flex gap-1">
+                        @csrf
+                        <select name="warehouse_id" class="form-control form-control-sm border border-1 p-2" {{ $isClosedQuotation ? 'disabled' : '' }}>
+                          <option value="">Almacén automático</option>
+                          @foreach($warehouses as $warehouse)
+                            <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                          @endforeach
+                        </select>
+                        <button class="btn btn-outline-warning btn-sm mb-0 d-inline-flex align-items-center gap-1" type="submit" {{ $isClosedQuotation ? 'disabled' : '' }}>
+                          <i class="material-symbols-rounded text-sm">inventory_2</i>
+                          <span>A inventario</span>
+                        </button>
+                      </form>
+                    @endif
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary btn-sm mb-0 d-inline-flex align-items-center gap-1"
+                      data-bs-toggle="modal"
+                      data-bs-target="#quotationActionModal"
+                      data-action-url="{{ route('projects.module.quotations.invalidate', $quotation) }}"
+                      data-action-title="Invalidar cotización"
+                      data-action-message="La cotización quedará inválida y no podrá convertirse."
+                      data-action-submit-label="Sí, invalidar"
+                      data-action-submit-class="btn-secondary"
+                      {{ $isClosedQuotation ? 'disabled' : '' }}>
+                      <i class="material-symbols-rounded text-sm">block</i>
+                      <span>Invalidar</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-outline-danger btn-sm mb-0 d-inline-flex align-items-center gap-1"
+                      data-bs-toggle="modal"
+                      data-bs-target="#quotationActionModal"
+                      data-action-url="{{ route('projects.module.quotations.annul', $quotation) }}"
+                      data-action-title="Anular cotización"
+                      data-action-message="Esta acción anula la cotización actual."
+                      data-action-submit-label="Sí, anular"
+                      data-action-submit-class="btn-danger"
+                      {{ $isClosedQuotation ? 'disabled' : '' }}>
+                      <i class="material-symbols-rounded text-sm">cancel</i>
+                      <span>Anular</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-outline-primary btn-sm mb-0 d-inline-flex align-items-center gap-1"
+                      data-bs-toggle="modal"
+                      data-bs-target="#quotationActionModal"
+                      data-action-url="{{ route('projects.module.quotations.replace', $quotation) }}"
+                      data-action-title="Anular y reemplazar"
+                      data-action-message="Se anulará esta cotización y se creará una nueva versión."
+                      data-action-submit-label="Anular y reemplazar"
+                      data-action-submit-class="btn-primary"
+                      data-input-name="replacement_title"
+                      data-input-label="Título de la nueva versión"
+                      data-input-placeholder="Ej: Cotización revisada v2"
+                      data-input-required="false"
+                      {{ $isClosedQuotation ? 'disabled' : '' }}>
+                      <i class="material-symbols-rounded text-sm">autorenew</i>
+                      <span>Anular y reemplazar</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             @empty
@@ -533,6 +611,31 @@
             @endforelse
           </tbody>
         </table>
+      </div>
+
+      <div class="modal fade" id="quotationActionModal" tabindex="-1" aria-labelledby="quotationActionModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="quotationActionModalLabel">Confirmar acción</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form method="POST" id="quotationActionForm">
+              @csrf
+              <div class="modal-body">
+                <p class="text-sm mb-3" id="quotationActionModalMessage">Confirma esta acción sobre la cotización.</p>
+                <div class="mb-2 d-none" id="quotationActionInputWrap">
+                  <label for="quotationActionInput" class="form-label" id="quotationActionInputLabel">Dato requerido</label>
+                  <input type="text" class="form-control border border-1 p-2" id="quotationActionInput" value="">
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn mb-0" id="quotationActionSubmitBtn">Confirmar</button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -624,6 +727,56 @@ document.addEventListener('DOMContentLoaded', function () {
     project: 'project',
     free: null,
   };
+
+  const quotationActionModalEl = document.getElementById('quotationActionModal');
+  const quotationActionForm = document.getElementById('quotationActionForm');
+  const quotationActionModalLabel = document.getElementById('quotationActionModalLabel');
+  const quotationActionModalMessage = document.getElementById('quotationActionModalMessage');
+  const quotationActionInputWrap = document.getElementById('quotationActionInputWrap');
+  const quotationActionInputLabel = document.getElementById('quotationActionInputLabel');
+  const quotationActionInput = document.getElementById('quotationActionInput');
+  const quotationActionSubmitBtn = document.getElementById('quotationActionSubmitBtn');
+
+  if (quotationActionModalEl && quotationActionForm) {
+    quotationActionModalEl.addEventListener('show.bs.modal', function (event) {
+      const trigger = event.relatedTarget;
+      if (!trigger) {
+        return;
+      }
+
+      const actionUrl = trigger.getAttribute('data-action-url') || '';
+      const title = trigger.getAttribute('data-action-title') || 'Confirmar acción';
+      const message = trigger.getAttribute('data-action-message') || 'Confirma esta acción sobre la cotización.';
+      const submitLabel = trigger.getAttribute('data-action-submit-label') || 'Confirmar';
+      const submitClass = trigger.getAttribute('data-action-submit-class') || 'btn-dark';
+      const inputName = trigger.getAttribute('data-input-name') || '';
+      const inputLabel = trigger.getAttribute('data-input-label') || 'Dato requerido';
+      const inputPlaceholder = trigger.getAttribute('data-input-placeholder') || '';
+      const inputRequired = String(trigger.getAttribute('data-input-required') || '').toLowerCase() === 'true';
+
+      quotationActionForm.setAttribute('action', actionUrl);
+      quotationActionModalLabel.textContent = title;
+      quotationActionModalMessage.textContent = message;
+      quotationActionSubmitBtn.textContent = submitLabel;
+      quotationActionSubmitBtn.className = `btn mb-0 ${submitClass}`;
+
+      quotationActionInput.value = '';
+      quotationActionInput.removeAttribute('name');
+      quotationActionInput.required = false;
+
+      if (inputName) {
+        quotationActionInputWrap.classList.remove('d-none');
+        quotationActionInputLabel.textContent = inputLabel;
+        quotationActionInput.placeholder = inputPlaceholder;
+        quotationActionInput.name = inputName;
+        quotationActionInput.required = inputRequired;
+      } else {
+        quotationActionInputWrap.classList.add('d-none');
+        quotationActionInputLabel.textContent = 'Dato requerido';
+        quotationActionInput.placeholder = '';
+      }
+    });
+  }
 
   const normalizeCurrencyCode = (value) => {
     const code = String(value || '').trim().toUpperCase();

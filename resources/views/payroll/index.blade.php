@@ -60,26 +60,52 @@
                             <span class="badge {{ $member->is_active ? 'bg-success' : 'bg-secondary' }}">{{ $member->is_active ? 'Activo' : 'Inactivo' }}</span>
                           @endif
                         </td>
-                        <td class="d-flex gap-2">
+                        <td>
+                          <div class="d-flex flex-wrap gap-2 align-items-center">
                           @if($member->is_active)
-                            <form method="POST" action="{{ route('projects.module.team.status', $member) }}">
-                              @csrf
-                              <input type="hidden" name="action" value="inactive">
-                              <button class="btn btn-outline-secondary btn-sm mb-0" type="submit">Inactivar</button>
-                            </form>
-                            <form method="POST" action="{{ route('projects.module.team.status', $member) }}" class="d-flex gap-1">
-                              @csrf
-                              <input type="hidden" name="action" value="terminate">
-                              <input type="text" name="termination_reason" class="form-control form-control-sm border border-1 p-2" placeholder="Motivo despido">
-                              <button class="btn btn-outline-danger btn-sm mb-0" type="submit">Despedir</button>
-                            </form>
+                            <button
+                              type="button"
+                              class="btn btn-outline-secondary btn-sm mb-0 d-inline-flex align-items-center gap-1"
+                              data-bs-toggle="modal"
+                              data-bs-target="#teamStatusActionModal"
+                              data-action-url="{{ route('projects.module.team.status', $member) }}"
+                              data-action-value="inactive"
+                              data-modal-title="Inactivar integrante"
+                              data-modal-message="Se inactivará este integrante y dejará de aparecer como activo en el equipo."
+                              data-submit-label="Confirmar inactivación"
+                              data-submit-class="btn-secondary"
+                              data-reason-label="Motivo de inactivación"
+                              data-reason-placeholder="Ej: licencia, pausa temporal, cambio de turno">
+                              <i class="material-symbols-rounded text-sm">pause_circle</i>
+                              <span>Inactivar</span>
+                            </button>
+                            <button
+                              type="button"
+                              class="btn btn-outline-danger btn-sm mb-0 d-inline-flex align-items-center gap-1"
+                              data-bs-toggle="modal"
+                              data-bs-target="#teamStatusActionModal"
+                              data-action-url="{{ route('projects.module.team.status', $member) }}"
+                              data-action-value="terminate"
+                              data-modal-title="Despedir integrante"
+                              data-modal-message="Este integrante quedará marcado como despedido."
+                              data-submit-label="Confirmar despido"
+                              data-submit-class="btn-danger"
+                              data-reason-label="Motivo de despido"
+                              data-reason-placeholder="Ej: fin de contrato, bajo desempeño, reestructuración">
+                              <i class="material-symbols-rounded text-sm">person_off</i>
+                              <span>Despedir</span>
+                            </button>
                           @else
                             <form method="POST" action="{{ route('projects.module.team.status', $member) }}">
                               @csrf
                               <input type="hidden" name="action" value="reactivate">
-                              <button class="btn btn-outline-success btn-sm mb-0" type="submit">Reactivar</button>
+                              <button class="btn btn-outline-success btn-sm mb-0 d-inline-flex align-items-center gap-1" type="submit">
+                                <i class="material-symbols-rounded text-sm">person_check</i>
+                                <span>Reactivar</span>
+                              </button>
                             </form>
                           @endif
+                          </div>
                         </td>
                       </tr>
                     @empty
@@ -321,6 +347,39 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="teamStatusActionModal" tabindex="-1" aria-labelledby="teamStatusActionModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="teamStatusActionModalLabel">Actualizar estado de integrante</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form method="POST" id="teamStatusActionForm">
+        @csrf
+        <input type="hidden" name="action" id="teamStatusActionValue" value="">
+        <div class="modal-body">
+          <p class="text-sm mb-3" id="teamStatusActionMessage">Confirma esta acción sobre el integrante.</p>
+          <div class="mb-0">
+            <label for="teamStatusActionReason" class="form-label" id="teamStatusActionReasonLabel">Motivo</label>
+            <input
+              type="text"
+              name="termination_reason"
+              id="teamStatusActionReason"
+              class="form-control border border-1 p-2"
+              placeholder="Indica el motivo"
+              maxlength="255"
+              required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn mb-0" id="teamStatusActionSubmitBtn">Confirmar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 @endsection
 
 @push('scripts')
@@ -368,9 +427,45 @@
     const payrollPaymentModal = document.getElementById('payrollPaymentModal');
     const teamMemberForm = document.getElementById('team-member-form');
     const teamMemberModal = document.getElementById('teamMemberModal');
+    const teamStatusActionModal = document.getElementById('teamStatusActionModal');
+    const teamStatusActionForm = document.getElementById('teamStatusActionForm');
+    const teamStatusActionValue = document.getElementById('teamStatusActionValue');
+    const teamStatusActionMessage = document.getElementById('teamStatusActionMessage');
+    const teamStatusActionSubmitBtn = document.getElementById('teamStatusActionSubmitBtn');
+    const teamStatusActionReason = document.getElementById('teamStatusActionReason');
+    const teamStatusActionReasonLabel = document.getElementById('teamStatusActionReasonLabel');
+    const teamStatusActionModalLabel = document.getElementById('teamStatusActionModalLabel');
 
     if (!form || !typeInput || !amountInput || !descriptionInput || !addButton || !itemsTableBody) {
       return;
+    }
+
+    if (teamStatusActionModal && teamStatusActionForm) {
+      teamStatusActionModal.addEventListener('show.bs.modal', (event) => {
+        const trigger = event.relatedTarget;
+        if (!trigger) {
+          return;
+        }
+
+        const actionUrl = trigger.getAttribute('data-action-url') || '';
+        const actionValue = trigger.getAttribute('data-action-value') || '';
+        const modalTitle = trigger.getAttribute('data-modal-title') || 'Actualizar estado de integrante';
+        const modalMessage = trigger.getAttribute('data-modal-message') || 'Confirma esta acción sobre el integrante.';
+        const submitLabel = trigger.getAttribute('data-submit-label') || 'Confirmar';
+        const submitClass = trigger.getAttribute('data-submit-class') || 'btn-dark';
+        const reasonLabel = trigger.getAttribute('data-reason-label') || 'Motivo';
+        const reasonPlaceholder = trigger.getAttribute('data-reason-placeholder') || 'Indica el motivo';
+
+        teamStatusActionForm.setAttribute('action', actionUrl);
+        teamStatusActionValue.value = actionValue;
+        teamStatusActionModalLabel.textContent = modalTitle;
+        teamStatusActionMessage.textContent = modalMessage;
+        teamStatusActionReasonLabel.textContent = reasonLabel;
+        teamStatusActionReason.placeholder = reasonPlaceholder;
+        teamStatusActionReason.value = '';
+        teamStatusActionSubmitBtn.textContent = submitLabel;
+        teamStatusActionSubmitBtn.className = `btn mb-0 ${submitClass}`;
+      });
     }
 
     const items = [];

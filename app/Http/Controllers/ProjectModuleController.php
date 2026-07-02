@@ -24,6 +24,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\ProductVariantWarehouseStock;
+use App\Support\ImageStorage;
 use App\Support\WorkflowNotifier;
 use App\Support\TenantCurrency;
 use Carbon\Carbon;
@@ -1258,7 +1259,9 @@ class ProjectModuleController extends Controller
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if((int) $quotation->tenant_id !== $tenantId, 404);
 
-        $quotation->load(['items.product', 'items.variant', 'provider']);
+        $quotation->load(['items.product.taxes', 'items.variant', 'provider']);
+        $tenant = Tenant::query()->find($tenantId);
+        $tenantLogoDataUri = $this->resolveTenantLogoDataUri($tenant);
 
         $quotationCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) ($quotation->currency_code ?? 'USD'));
         $quotationRateToBs = TenantCurrency::resolveRateToBs($tenantId, $quotationCurrencyCode);
@@ -1266,13 +1269,15 @@ class ProjectModuleController extends Controller
 
         $html = view('projects.quotation_pdf', compact(
             'quotation',
+            'tenant',
+            'tenantLogoDataUri',
             'quotationCurrencyCode',
             'quotationRateToBs',
             'usdRateToBs'
         ))->render();
 
         $options = new Options();
-        $options->set('isRemoteEnabled', true);
+        $options->set('isRemoteEnabled', false);
         $options->set('defaultFont', 'DejaVu Sans');
 
         $dompdf = new Dompdf($options);
@@ -1286,6 +1291,75 @@ class ProjectModuleController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="' . $filename . '"',
         ]);
+    }
+
+    private function resolveTenantLogoDataUri(?Tenant $tenant): ?string
+    {
+        $fallbackPath = public_path('assets/img/shopix5.png');
+        $fallbackDataUri = $this->buildDataUriFromPath($fallbackPath);
+
+        if (!$tenant || empty($tenant->logo)) {
+            return $fallbackDataUri;
+        }
+
+        $logoPath = trim((string) $tenant->logo);
+        if ($logoPath === '') {
+            return $fallbackDataUri;
+        }
+
+        try {
+            if (ImageStorage::isGooglePath($logoPath)) {
+                $googleFileId = ImageStorage::extractGoogleFileId($logoPath);
+                if ($googleFileId !== '') {
+                    $file = ImageStorage::downloadGoogleFileById($googleFileId);
+                    $content = (string) ($file['content'] ?? '');
+                    $mime = trim((string) ($file['mime_type'] ?? 'image/png'));
+
+                    if ($content !== '') {
+                        return 'data:' . ($mime !== '' ? $mime : 'image/png') . ';base64,' . base64_encode($content);
+                    }
+                }
+            }
+
+            if (Storage::disk('public')->exists($logoPath)) {
+                $content = Storage::disk('public')->get($logoPath);
+                $mime = (string) (Storage::disk('public')->mimeType($logoPath) ?: 'image/png');
+
+                if ($content !== '') {
+                    return 'data:' . $mime . ';base64,' . base64_encode($content);
+                }
+            }
+
+            $publicPath = public_path(ltrim($logoPath, '/'));
+            if (is_file($publicPath)) {
+                return $this->buildDataUriFromPath($publicPath) ?: $fallbackDataUri;
+            }
+
+            $storagePublicPath = public_path('storage/' . ltrim($logoPath, '/'));
+            if (is_file($storagePublicPath)) {
+                return $this->buildDataUriFromPath($storagePublicPath) ?: $fallbackDataUri;
+            }
+        } catch (\Throwable $exception) {
+            // Silently fallback to default logo for PDF rendering stability.
+        }
+
+        return $fallbackDataUri;
+    }
+
+    private function buildDataUriFromPath(string $path): ?string
+    {
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $content = @file_get_contents($path);
+        if ($content === false || $content === '') {
+            return null;
+        }
+
+        $mime = @mime_content_type($path) ?: 'image/png';
+
+        return 'data:' . $mime . ';base64,' . base64_encode($content);
     }
 
     private function isQuotationLockedStatus(string $status): bool
@@ -1361,21 +1435,34 @@ class ProjectModuleController extends Controller
             'termination_reason' => 'nullable|string|max:255',
         ]);
 
-        if ($validated['action'] === 'inactive') {
+        $statusAction = (string) ($validated['action'] ?? '');
+        $terminationReason = trim((string) ($validated['termination_reason'] ?? ''));
+
+        if (in_array($statusAction, ['inactive', 'terminate'], true) && $terminationReason === '') {
+            throw ValidationException::withMessages([
+                'termination_reason' => [
+                    $statusAction === 'terminate'
+                        ? 'Debes indicar el motivo del despido.'
+                        : 'Debes indicar el motivo de la inactivación.',
+                ],
+            ]);
+        }
+
+        if ($statusAction === 'inactive') {
             $teamMember->update([
                 'is_active' => false,
                 'terminated_at' => null,
-                'termination_reason' => null,
+                'termination_reason' => $terminationReason,
             ]);
 
             return back()->with('success', 'Integrante inactivado correctamente.');
         }
 
-        if ($validated['action'] === 'terminate') {
+        if ($statusAction === 'terminate') {
             $teamMember->update([
                 'is_active' => false,
                 'terminated_at' => now(),
-                'termination_reason' => trim((string) ($validated['termination_reason'] ?? 'Despido registrado.')),
+                'termination_reason' => $terminationReason,
             ]);
 
             return back()->with('success', 'Integrante marcado como despedido.');

@@ -1479,6 +1479,12 @@ class ProductController extends Controller
             ], 403);
         }
 
+        // Compatibilidad: algunos formularios antiguos envian productName en lugar de name.
+        $request->merge([
+            'name' => $request->input('name', $request->input('productName')),
+            'description' => $request->input('description', $request->input('productDescription')),
+        ]);
+
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
@@ -1509,9 +1515,13 @@ class ProductController extends Controller
             ], 422);
         }
 
+        $normalizedName = array_key_exists('name', $validated)
+            ? trim((string) $validated['name'])
+            : (string) $product->name;
+
         $product->update([
-            'name' => $validated['name'] ?? $product->name,
-            'slug' => $this->generateUniqueProductSlug((string) ($validated['name'] ?? $product->name), (int) $product->tenant_id, (int) $product->id),
+            'name' => $normalizedName,
+            'slug' => $this->generateUniqueProductSlug($normalizedName, (int) $product->tenant_id, (int) $product->id),
             'description' => array_key_exists('description', $validated) ? ($validated['description'] ?? null) : $product->description,
             'category_id' => $categoryId,
             'is_active' => array_key_exists('is_active', $validated) ? (bool) $validated['is_active'] : (bool) $product->is_active,

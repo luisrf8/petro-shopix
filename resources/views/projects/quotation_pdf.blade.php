@@ -6,47 +6,182 @@
   <style>
     body {
       font-family: DejaVu Sans, sans-serif;
-      font-size: 12px;
-      color: #222;
+      font-size: 11px;
+      color: #1f2937;
     }
-    h1 {
-      font-size: 20px;
-      margin: 0 0 6px;
+
+    .sheet {
+      width: 100%;
     }
+
     .muted {
-      color: #555;
+      color: #6b7280;
     }
+
     .header {
-      margin-bottom: 18px;
-      border-bottom: 1px solid #ddd;
-      padding-bottom: 12px;
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
     }
+
+    .header td {
+      border: none;
+      padding: 0;
+      vertical-align: top;
+    }
+
+    .logo-wrap {
+      width: 26%;
+      text-align: left;
+      padding-right: 10px;
+    }
+
+    .logo-box {
+      width: 145px;
+      height: 80px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      text-align: center;
+      vertical-align: middle;
+      overflow: hidden;
+      display: inline-block;
+      background: #fff;
+    }
+
+    .logo-box img {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      margin-top: 4px;
+    }
+
+    .company-wrap {
+      width: 46%;
+      padding-right: 10px;
+    }
+
+    .company-name {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      text-transform: uppercase;
+    }
+
+    .company-line {
+      margin: 1px 0;
+      font-size: 10px;
+    }
+
+    .doc-wrap {
+      width: 28%;
+      text-align: right;
+    }
+
+    .doc-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      margin: 0;
+    }
+
+    .doc-number {
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
     .meta {
-      margin-bottom: 14px;
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
     }
-    .meta p {
-      margin: 2px 0;
+
+    .meta td {
+      border: 1px solid #d1d5db;
+      padding: 6px 8px;
+      font-size: 10px;
     }
-    table {
+
+    .meta-label {
+      width: 20%;
+      font-weight: 700;
+      background: #f9fafb;
+    }
+
+    .meta-value {
+      width: 30%;
+    }
+
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 2px;
+    }
+
+    .items-table th,
+    .items-table td {
+      border: 1px solid #1f2937;
+      padding: 6px 6px;
+      vertical-align: middle;
+      font-size: 10px;
+    }
+
+    .items-table th {
+      background: #88a9cf;
+      color: #111827;
+      text-transform: uppercase;
+      font-size: 9px;
+      letter-spacing: 0.3px;
+      text-align: center;
+    }
+
+    .items-table .description-cell {
+      text-align: left;
+    }
+
+    .items-table .qty-cell,
+    .items-table .amount-cell,
+    .items-table .tax-cell,
+    .items-table .total-cell {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .totals {
+      margin-top: 8px;
       width: 100%;
       border-collapse: collapse;
     }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 7px;
-      vertical-align: top;
+
+    .totals td {
+      border: 1px solid #1f2937;
+      padding: 6px 8px;
+      font-size: 10px;
     }
-    th {
-      background: #f5f5f5;
-      text-align: left;
+
+    .totals-label {
+      width: 72%;
+      text-align: right;
+      font-weight: 700;
+      background: #e5ecf6;
     }
+
+    .totals-amount {
+      width: 14%;
+      text-align: right;
+      font-weight: 700;
+    }
+
     .right {
       text-align: right;
     }
-    .totals {
+
+    .notes {
       margin-top: 12px;
-      width: 44%;
-      margin-left: auto;
+      border: 1px solid #d1d5db;
+      padding: 8px;
+      font-size: 10px;
     }
   </style>
 </head>
@@ -59,6 +194,14 @@
 
     $quotationRateToBs = (float) ($quotationRateToBs ?? 0);
     $usdRateToBs = (float) ($usdRateToBs ?? 0);
+    $logoUrl = (string) ($tenantLogoDataUri ?? '');
+    $tenantRif = trim((string) ($tenant->rif ?? $tenant->slug ?? '-'));
+    $tenantPhoneCode = trim((string) ($tenant->phone_code ?? ''));
+    $tenantPhoneNumber = trim((string) ($tenant->phone_number ?? ''));
+    $tenantPhone = trim($tenantPhoneCode . ' ' . $tenantPhoneNumber);
+    if ($tenantPhone === '') {
+      $tenantPhone = '-';
+    }
 
     $toBsAmount = function (float $amount) use ($quotationCurrencyCode, $quotationRateToBs) {
       if ($quotationCurrencyCode === 'BS') {
@@ -94,90 +237,172 @@
 
       return $usdText . ' / ' . $bsText;
     };
+
+    $resolveItemTaxSummary = function ($item): string {
+      $taxes = optional(optional($item)->product)->taxes;
+      if (!$taxes || $taxes->isEmpty()) {
+        return 'Exento';
+      }
+
+      return $taxes
+        ->map(function ($tax) {
+          $name = trim((string) ($tax->name ?? $tax->code ?? 'Impuesto'));
+          $rate = is_null($tax->rate) ? null : (float) $tax->rate;
+          if (is_null($rate)) {
+            return $name;
+          }
+
+          return $name . ' ' . rtrim(rtrim(number_format($rate, 2, '.', ''), '0'), '.') . '%';
+        })
+        ->implode(', ');
+    };
+
+    $resolveItemTaxRatePercent = function ($item): float {
+      $taxes = optional(optional($item)->product)->taxes;
+      if (!$taxes || $taxes->isEmpty()) {
+        return 0.0;
+      }
+
+      return (float) $taxes->sum(function ($tax) {
+        return (float) ($tax->rate ?? 0);
+      });
+    };
+
+    $estimatedTaxTotalQuote = 0.0;
   @endphp
-  <div class="header">
-    <h1>Cotizacion #{{ $quotation->id }}</h1>
-    <div class="muted">{{ $quotation->title }}</div>
-  </div>
 
-  <div class="meta">
-    <p><strong>Tipo:</strong> {{ $quotation->type === 'supplier_request' ? 'Solicitud a proveedor' : 'Cotizacion a cliente' }}</p>
-    <p><strong>Estado:</strong> {{ strtoupper((string) $quotation->status) }}</p>
-    <p><strong>Cliente:</strong> {{ $quotation->customer_name ?: '-' }}</p>
-    <p><strong>Proveedor:</strong> {{ $quotation->provider_name ?: optional($quotation->provider)->name ?: '-' }}</p>
-    <p><strong>Valida hasta:</strong> {{ optional($quotation->valid_until)->format('d/m/Y') ?: '-' }}</p>
-    <p><strong>Moneda base de la cotización:</strong> {{ $quotationCurrencyCode }}</p>
-    <p><strong>Tasa USD - Bs:</strong> {{ $usdRateToBs > 0 ? number_format($usdRateToBs, 4) : 'N/D' }}</p>
-  </div>
-
-  <table>
-    <thead>
+  <div class="sheet">
+    <table class="header">
       <tr>
-        <th>Descripcion</th>
-        <th class="right">Cantidad</th>
-        <th class="right">Precio Unit. (USD / Bs)</th>
-        <th class="right">Desc. %</th>
-        <th class="right">Total (USD / Bs)</th>
+        <td class="logo-wrap">
+          <div class="logo-box">
+            <img src="{{ $logoUrl }}" alt="Logo tienda">
+          </div>
+        </td>
+        <td class="company-wrap">
+          <p class="company-name">{{ strtoupper((string) ($tenant->name ?? 'TIENDA')) }}</p>
+          <p class="company-line"><strong>RIF:</strong> {{ strtoupper($tenantRif) }}</p>
+          <p class="company-line"><strong>Dirección:</strong> {{ (string) ($tenant->address ?? '-') }}</p>
+          <p class="company-line"><strong>Teléfono:</strong> {{ $tenantPhone }}</p>
+          <p class="company-line"><strong>Email:</strong> {{ (string) ($tenant->email ?? '-') }}</p>
+        </td>
+        <td class="doc-wrap">
+          <p class="doc-title">COTIZACIÓN</p>
+          <p class="doc-number"><strong>#{{ $quotation->id }}</strong></p>
+          <p class="company-line"><strong>Fecha:</strong> {{ optional($quotation->created_at)->format('d/m/Y') ?: now()->format('d/m/Y') }}</p>
+          <p class="company-line"><strong>Validez:</strong> {{ optional($quotation->valid_until)->format('d/m/Y') ?: '-' }}</p>
+        </td>
       </tr>
-    </thead>
-    <tbody>
-      @forelse($quotation->items as $item)
+    </table>
+
+    <table class="meta">
+      <tr>
+        <td class="meta-label">Título</td>
+        <td class="meta-value">{{ (string) ($quotation->title ?? '-') }}</td>
+        <td class="meta-label">Tipo</td>
+        <td class="meta-value">{{ $quotation->type === 'supplier_request' ? 'Solicitud a proveedor' : 'Cotización a cliente' }}</td>
+      </tr>
+      <tr>
+        <td class="meta-label">Cliente</td>
+        <td class="meta-value">{{ $quotation->customer_name ?: '-' }}</td>
+        <td class="meta-label">Proveedor</td>
+        <td class="meta-value">{{ $quotation->provider_name ?: optional($quotation->provider)->name ?: '-' }}</td>
+      </tr>
+      <tr>
+        <td class="meta-label">Moneda</td>
+        <td class="meta-value">{{ $quotationCurrencyCode }}</td>
+        <td class="meta-label">Tasa USD-Bs</td>
+        <td class="meta-value">{{ $usdRateToBs > 0 ? number_format($usdRateToBs, 4) : 'N/D' }}</td>
+      </tr>
+    </table>
+
+    <table class="items-table">
+      <thead>
         <tr>
-          <td>
-            @php
-              $descriptionText = trim((string) ($item->description ?? ''));
-              $productLine = trim((string) ((optional($item->product)->name ?: '')) . (optional($item->variant)->size ? (' - ' . optional($item->variant)->size) : ''));
-            @endphp
-
-            {{ $descriptionText !== '' ? $descriptionText : ($productLine !== '' ? $productLine : '-') }}
-
-            @if($descriptionText !== '' && $productLine !== '' && strcasecmp($descriptionText, $productLine) !== 0)
-              <div class="muted">
-                {{ $productLine }}
-              </div>
-            @endif
-          </td>
-          <td class="right">{{ number_format((float) $item->quantity, 2) }}</td>
-          <td class="right">{{ $formatDualAmount((float) $item->unit_price) }}</td>
-          <td class="right">{{ number_format((float) $item->discount_percent, 2) }}</td>
-          <td class="right">{{ $formatDualAmount((float) $item->total) }}</td>
+          <th style="width:4%;">Item</th>
+          <th style="width:7%;">Cant.</th>
+          <th style="width:30%;">Descripción</th>
+          <th style="width:12%;">Impuesto</th>
+          <th style="width:9%;">Imp. monto</th>
+          <th style="width:10%;">Precio unit $</th>
+          <th style="width:10%;">Precio unit Bs</th>
+          <th style="width:9%;">Total $</th>
+          <th style="width:9%;">Total Bs</th>
         </tr>
-      @empty
-        <tr>
-          <td colspan="5" class="right">Sin items</td>
-        </tr>
-      @endforelse
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        @forelse($quotation->items as $index => $item)
+          @php
+            $lineTotalQuote = (float) ($item->total ?? 0);
+            $lineTaxRatePercent = $resolveItemTaxRatePercent($item);
+            $lineTaxQuote = round($lineTotalQuote * ($lineTaxRatePercent / 100), 4);
+            $estimatedTaxTotalQuote += $lineTaxQuote;
 
-  <table class="totals">
-    <tr>
-      <th></th>
-      <th class="right">USD</th>
-      <th class="right">Bs</th>
-    </tr>
-    <tr>
-      <th>Subtotal</th>
-      <td class="right">{{ is_null($toUsdAmount((float) $quotation->subtotal)) ? 'N/D' : number_format((float) $toUsdAmount((float) $quotation->subtotal), 2) }}</td>
-      <td class="right">{{ is_null($toBsAmount((float) $quotation->subtotal)) ? 'N/D' : number_format((float) $toBsAmount((float) $quotation->subtotal), 2) }}</td>
-    </tr>
-    <tr>
-      <th>Descuentos</th>
-      <td class="right">{{ is_null($toUsdAmount((float) $quotation->discount_amount)) ? 'N/D' : number_format((float) $toUsdAmount((float) $quotation->discount_amount), 2) }}</td>
-      <td class="right">{{ is_null($toBsAmount((float) $quotation->discount_amount)) ? 'N/D' : number_format((float) $toBsAmount((float) $quotation->discount_amount), 2) }}</td>
-    </tr>
-    <tr>
-      <th>Total</th>
-      <td class="right"><strong>{{ is_null($toUsdAmount((float) $quotation->total_amount)) ? 'N/D' : number_format((float) $toUsdAmount((float) $quotation->total_amount), 2) }}</strong></td>
-      <td class="right"><strong>{{ is_null($toBsAmount((float) $quotation->total_amount)) ? 'N/D' : number_format((float) $toBsAmount((float) $quotation->total_amount), 2) }}</strong></td>
-    </tr>
-  </table>
+            $lineUnitUsd = $toUsdAmount((float) $item->unit_price);
+            $lineUnitBs = $toBsAmount((float) $item->unit_price);
+            $lineTotalUsd = $toUsdAmount($lineTotalQuote);
+            $lineTotalBs = $toBsAmount($lineTotalQuote);
+          @endphp
+          <tr>
+            <td class="right">{{ $index + 1 }}</td>
+            <td class="qty-cell">{{ number_format((float) $item->quantity, 2) }}</td>
+            <td class="description-cell">
+              @php
+                $descriptionText = trim((string) ($item->description ?? ''));
+                $productLine = trim((string) ((optional($item->product)->name ?: '')) . (optional($item->variant)->size ? (' - ' . optional($item->variant)->size) : ''));
+              @endphp
+              {{ $descriptionText !== '' ? $descriptionText : ($productLine !== '' ? $productLine : '-') }}
+              @if($descriptionText !== '' && $productLine !== '' && strcasecmp($descriptionText, $productLine) !== 0)
+                <div class="muted">{{ $productLine }}</div>
+              @endif
+              @if((float) ($item->discount_percent ?? 0) > 0)
+                <div class="muted">Desc: {{ number_format((float) $item->discount_percent, 2) }}%</div>
+              @endif
+            </td>
+            <td class="tax-cell">{{ $resolveItemTaxSummary($item) }}</td>
+            <td class="amount-cell">{{ number_format($lineTaxQuote, 2) }}</td>
+            <td class="amount-cell">{{ is_null($lineUnitUsd) ? 'N/D' : number_format((float) $lineUnitUsd, 2) }}</td>
+            <td class="amount-cell">{{ is_null($lineUnitBs) ? 'N/D' : number_format((float) $lineUnitBs, 2) }}</td>
+            <td class="total-cell">{{ is_null($lineTotalUsd) ? 'N/D' : number_format((float) $lineTotalUsd, 2) }}</td>
+            <td class="total-cell">{{ is_null($lineTotalBs) ? 'N/D' : number_format((float) $lineTotalBs, 2) }}</td>
+          </tr>
+        @empty
+          <tr>
+            <td colspan="9" class="right">Sin items</td>
+          </tr>
+        @endforelse
+      </tbody>
+    </table>
 
-  @if($quotation->notes)
-    <div style="margin-top: 14px;">
-      <strong>Notas:</strong>
-      <p>{{ $quotation->notes }}</p>
-    </div>
-  @endif
+    <table class="totals">
+      <tr>
+        <td class="totals-label">SUBTOTAL</td>
+        <td class="totals-amount">{{ is_null($toUsdAmount((float) $quotation->subtotal)) ? 'N/D' : number_format((float) $toUsdAmount((float) $quotation->subtotal), 2) }}</td>
+        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->subtotal)) ? 'N/D' : number_format((float) $toBsAmount((float) $quotation->subtotal), 2) }}</td>
+      </tr>
+      <tr>
+        <td class="totals-label">DESCUENTOS</td>
+        <td class="totals-amount">{{ is_null($toUsdAmount((float) $quotation->discount_amount)) ? 'N/D' : number_format((float) $toUsdAmount((float) $quotation->discount_amount), 2) }}</td>
+        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->discount_amount)) ? 'N/D' : number_format((float) $toBsAmount((float) $quotation->discount_amount), 2) }}</td>
+      </tr>
+      <tr>
+        <td class="totals-label">IMPUESTOS (EST.)</td>
+        <td class="totals-amount">{{ is_null($toUsdAmount((float) $estimatedTaxTotalQuote)) ? 'N/D' : number_format((float) $toUsdAmount((float) $estimatedTaxTotalQuote), 2) }}</td>
+        <td class="totals-amount">{{ is_null($toBsAmount((float) $estimatedTaxTotalQuote)) ? 'N/D' : number_format((float) $toBsAmount((float) $estimatedTaxTotalQuote), 2) }}</td>
+      </tr>
+      <tr>
+        <td class="totals-label">TOTAL</td>
+        <td class="totals-amount">{{ is_null($toUsdAmount((float) $quotation->total_amount)) ? 'N/D' : number_format((float) $toUsdAmount((float) $quotation->total_amount), 2) }}</td>
+        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->total_amount)) ? 'N/D' : number_format((float) $toBsAmount((float) $quotation->total_amount), 2) }}</td>
+      </tr>
+    </table>
+
+    @if($quotation->notes)
+      <div class="notes">
+        <strong>Notas:</strong>
+        <div>{{ $quotation->notes }}</div>
+      </div>
+    @endif
+  </div>
 </body>
 </html>
