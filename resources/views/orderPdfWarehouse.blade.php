@@ -83,24 +83,24 @@
         }
 
         .order-header-left {
-            width: 64%;
-            padding-right: 8px;
+            width: 34%;
+            padding-right: 10px;
         }
 
         .order-header-right {
-            width: 36%;
+            width: 66%;
             text-align: right;
         }
 
         .order-title {
-            margin: 0 0 6px;
-            font-size: 24px;
+            margin: 0 0 4px;
+            font-size: 22px;
             font-weight: 800;
         }
 
         .order-company-name {
             margin: 0 0 4px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
         }
 
@@ -112,10 +112,10 @@
 
         .order-company-info td {
             border: none;
-            padding: 2px 0;
+            padding: 1px 0;
             width: 50%;
             vertical-align: top;
-            font-size: 13px;
+            font-size: 12px;
         }
 
         .order-company-info .label {
@@ -123,23 +123,49 @@
         }
 
         .order-logo-line {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
-            margin: 0 0 6px;
+            margin: 0 0 4px;
         }
 
         .order-logo-box {
             display: inline-block;
-            width: 150px;
-            text-align: right;
+            width: 155px;
+            text-align: left;
         }
 
         .order-logo-box img {
             display: block;
-            margin-left: auto;
-            margin-right: 0;
-            max-width: 150px;
-            max-height: 70px;
+            margin-left: 0;
+            margin-right: auto;
+            max-width: 155px;
+            max-height: 72px;
+        }
+
+        .order-summary-grid {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 4px 0 10px;
+        }
+
+        .order-summary-grid td {
+            border: none;
+            padding: 0;
+            vertical-align: top;
+            width: 50%;
+        }
+
+        .order-summary-block {
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .order-summary-block p {
+            margin: 0 0 2px;
+        }
+
+        .order-summary-block .label {
+            font-weight: 700;
         }
     </style>
 </head>
@@ -203,6 +229,14 @@
     <table class="order-header-top">
         <tr>
             <td class="order-header-left">
+                @if(!empty($imageBase64))
+                    <div class="order-logo-box">
+                        <img src="{{ $imageBase64 }}" alt="Logo">
+                    </div>
+                @endif
+            </td>
+            <td class="order-header-right">
+                <p class="order-logo-line">ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VALIDO COMO DOCUMENTO FISCAL</p>
                 <p class="order-title">ORDEN DE DESPACHO</p>
                 <p class="order-company-name">{{ $tienda->name }}</p>
                 <table class="order-company-info">
@@ -216,17 +250,28 @@
                     </tr>
                 </table>
             </td>
-            <td class="order-header-right">
-                <p class="order-logo-line">ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VALIDO COMO DOCUMENTO FISCAL</p>
-                @if(!empty($imageBase64))
-                    <div class="order-logo-box">
-                        <img src="{{ $imageBase64 }}" alt="Logo">
-                    </div>
-                @endif
-            </td>
         </tr>
     </table>
 </div>
+
+<table class="order-summary-grid">
+    <tr>
+        <td>
+            <div class="order-summary-block">
+                <p><span class="label">Cliente:</span> {{ $order->user->name }} | <span class="label">Teléfono:</span> {{ $order->user->phone_number ?? 'No registrado' }}</p>
+                <p><span class="label">Dirección:</span> {{ $order->address }}</p>
+                <p><span class="label">Moneda de la venta:</span> {{ $orderCurrencyCode }} | <span class="label">Moneda de emisión:</span> {{ $emissionCurrencyCode }}</p>
+            </div>
+        </td>
+        <td>
+            <div class="order-summary-block">
+                <p><span class="label">Detalles de la Orden Nro {{ $order->id }}</span></p>
+                <p><span class="label">Entrega:</span> {{ $order->preference }} | <span class="label">Dirección:</span> {{ $order->address }}</p>
+                <p><span class="label">Fecha:</span> {{ $order->date }} | <span class="label">Estado:</span> {{ $order->status == 0 ? 'En Proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado') }}</p>
+            </div>
+        </td>
+    </tr>
+</table>
 
 <div class="meta-box">
     <table class="meta-table">
