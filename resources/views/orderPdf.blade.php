@@ -25,13 +25,18 @@
 
         .products-watermark-wrap {
             position: relative;
-            margin-top: 4px;
+            margin-top: 0;
         }
 
         .products-watermark-wrap > h2,
         .products-watermark-wrap > .products-table {
             position: relative;
             z-index: 1;
+        }
+
+        .products-watermark-wrap > h2 {
+            margin: 0 0 3px;
+            line-height: 1.05;
         }
 
         table {
@@ -50,13 +55,13 @@
         }
 
         .order-header {
-            margin-bottom: 10px;
+            margin-bottom: 4px;
         }
 
         .order-header-top {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 6px;
+            margin-bottom: 2px;
         }
 
         .order-header-top td {
@@ -65,52 +70,37 @@
             vertical-align: top;
         }
 
-        .order-header-left {
-            width: 34%;
-            padding-right: 10px;
+        .order-header-logo {
+            width: 18%;
+            padding-right: 4px;
         }
 
-        .order-header-right {
-            width: 66%;
-            text-align: left;
+        .order-header-title {
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .order-header-qr {
+            width: 112px;
+            text-align: right;
+            vertical-align: middle;
         }
 
         .order-title {
-            margin: 0 0 1px;
+            margin: 0;
             font-size: 24px;
             font-weight: 800;
             line-height: 1.05;
         }
 
-        .order-title-qr {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 0 0 2px;
-        }
-
-        .order-title-qr td {
-            border: none;
-            padding: 0;
-            vertical-align: middle;
-        }
-
-        .order-title-qr .title-cell {
-            text-align: left;
-        }
-
-        .order-title-qr .qr-cell {
-            width: 110px;
-            text-align: right;
-        }
-
-        .order-title-qr .qr-cell img {
+        .order-header-qr img {
             width: 100px;
             height: 100px;
             display: inline-block;
         }
 
         .order-company-name {
-            margin: 0 0 2px;
+            margin: 0 0 1px;
             font-size: 16px;
             font-weight: 700;
             line-height: 1.05;
@@ -119,7 +109,7 @@
         .order-company-info {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 10px;
+            margin-bottom: 4px;
         }
 
         .order-company-info td {
@@ -137,13 +127,13 @@
         .order-logo-line {
             font-size: 11px;
             font-weight: 700;
-            margin: 0 0 1px;
+            margin: 0 0 2px;
             line-height: 1.15;
         }
 
         .order-logo-box {
             display: inline-block;
-            width: 155px;
+            width: 102px;
             text-align: left;
         }
 
@@ -151,14 +141,14 @@
             display: block;
             margin-left: 0;
             margin-right: auto;
-            max-width: 155px;
-            max-height: 72px;
+            max-width: 102px;
+            max-height: 48px;
         }
 
         .order-summary-grid {
             width: 100%;
             border-collapse: collapse;
-            margin: 4px 0 10px;
+            margin: 0 0 4px;
         }
 
         .order-summary-grid td {
@@ -266,27 +256,25 @@
 <div class="order-header">
     <table class="order-header-top">
         <tr>
-            <td class="order-header-left">
+            <td class="order-header-logo">
                 @if(!empty($imageBase64))
                     <div class="order-logo-box">
                         <img src="{{ $imageBase64 }}" alt="main_logo">
                     </div>
                 @endif
             </td>
-            <td class="order-header-right">
+            <td class="order-header-title">
+                <p class="order-title">ORDEN DE DESPACHO</p>
+            </td>
+            <td class="order-header-qr">
+                @if(!empty($qrCodeBase64))
+                    <img src="{{ $qrCodeBase64 }}" alt="Código QR">
+                @endif
+            </td>
+        </tr>
+        <tr>
+            <td colspan="3">
                 <p class="order-logo-line">ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VALIDO COMO DOCUMENTO FISCAL</p>
-                <table class="order-title-qr">
-                    <tr>
-                        <td class="title-cell">
-                            <p class="order-title">ORDEN DE DESPACHO</p>
-                        </td>
-                        <td class="qr-cell">
-                            @if(!empty($qrCodeBase64))
-                                <img src="{{ $qrCodeBase64 }}" alt="Código QR">
-                            @endif
-                        </td>
-                    </tr>
-                </table>
                 <p class="order-company-name">{{ $storeName }}</p>
                 <table class="order-company-info">
                     <tr>
