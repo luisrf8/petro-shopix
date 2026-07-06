@@ -88,14 +88,16 @@
 
         return $amountBs / $orderRateToBsSnapshot;
     };
-    $formatDualOrderAmount = function (float $amount) use ($toUsdOrderAmount, $toBsOrderAmount): string {
+    $formatUsdOrderAmount = function (float $amount) use ($toUsdOrderAmount): string {
         $usdAmount = $toUsdOrderAmount($amount);
+
+        return is_null($usdAmount) ? 'USD N/D' : ('USD ' . number_format($usdAmount, 2));
+    };
+
+    $formatBsOrderAmount = function (float $amount) use ($toBsOrderAmount): string {
         $bsAmount = $toBsOrderAmount($amount);
 
-        $usdText = is_null($usdAmount) ? 'USD N/D' : ('USD ' . number_format($usdAmount, 2));
-        $bsText = is_null($bsAmount) ? 'Bs N/D' : ('Bs ' . number_format($bsAmount, 2));
-
-        return $usdText . ' / ' . $bsText;
+        return is_null($bsAmount) ? 'Bs N/D' : ('Bs ' . number_format($bsAmount, 2));
     };
 @endphp
 <table width="100%" style="border-collapse: collapse; border: none; margin-bottom: 6px;">
@@ -141,8 +143,10 @@
                 <th>Producto</th>
                 <th>Cantidad</th>
                 <th>Variante</th>
-                <th>Sub total $ / Bs</th>
-                <th>Total $ / Bs</th>
+                <th>Sub total $</th>
+                <th>Sub total Bs</th>
+                <th>Total $</th>
+                <th>Total Bs</th>
             </tr>
         </thead>
         <tbody>
@@ -155,8 +159,10 @@
                 <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
                 <td>{{ $detalle->quantity }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
-                <td style="text-align: right;">{{ $formatDualOrderAmount($lineSubtotal) }}</td>
-                <td style="text-align: right;">{{ $formatDualOrderAmount($lineTotal) }}</td>
+                <td style="text-align: right;">{{ $formatUsdOrderAmount($lineSubtotal) }}</td>
+                <td style="text-align: right;">{{ $formatBsOrderAmount($lineSubtotal) }}</td>
+                <td style="text-align: right;">{{ $formatUsdOrderAmount($lineTotal) }}</td>
+                <td style="text-align: right;">{{ $formatBsOrderAmount($lineTotal) }}</td>
             </tr>
             @endforeach
             @if($deliveryFee > 0)
@@ -164,14 +170,18 @@
                 <td><strong>Delivery</strong></td>
                 <td>1</td>
                 <td>-</td>
-                <td style="text-align: right;">{{ $formatDualOrderAmount($deliveryFee) }}</td>
-                <td style="text-align: right;">{{ $formatDualOrderAmount($deliveryFee) }}</td>
+                <td style="text-align: right;">{{ $formatUsdOrderAmount($deliveryFee) }}</td>
+                <td style="text-align: right;">{{ $formatBsOrderAmount($deliveryFee) }}</td>
+                <td style="text-align: right;">{{ $formatUsdOrderAmount($deliveryFee) }}</td>
+                <td style="text-align: right;">{{ $formatBsOrderAmount($deliveryFee) }}</td>
             </tr>
             @endif
             <tr>
                 <td colspan="3" style="text-align: right;"><strong>Total orden</strong></td>
-                <td style="text-align: right;"><strong>{{ $formatDualOrderAmount($orderTotal) }}</strong></td>
-                <td style="text-align: right;"><strong>{{ $formatDualOrderAmount($orderTotal) }}</strong></td>
+                <td style="text-align: right;"><strong>{{ $formatUsdOrderAmount($orderTotal) }}</strong></td>
+                <td style="text-align: right;"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
+                <td style="text-align: right;"><strong>{{ $formatUsdOrderAmount($orderTotal) }}</strong></td>
+                <td style="text-align: right;"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
             </tr>
         </tbody>
     </table>

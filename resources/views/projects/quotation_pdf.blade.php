@@ -30,10 +30,32 @@
       vertical-align: top;
     }
 
-    .logo-wrap {
-      width: 26%;
+    .header-logo-row td {
+      padding-bottom: 4px;
+    }
+
+    .logo-row-cell {
       text-align: left;
-      padding-right: 10px;
+    }
+
+    .header-title-row td {
+      padding-top: 2px;
+      padding-bottom: 2px;
+    }
+
+    .header-info-row td {
+      padding-top: 2px;
+    }
+
+    .store-title-cell {
+      width: 70%;
+      text-align: left;
+      padding-right: 8px;
+    }
+
+    .quote-title-cell {
+      width: 30%;
+      text-align: right;
     }
 
     .logo-box {
@@ -55,15 +77,10 @@
       margin-top: 4px;
     }
 
-    .company-wrap {
-      width: 46%;
-      padding-right: 10px;
-    }
-
     .company-name {
       font-size: 18px;
       font-weight: 700;
-      margin: 0 0 4px;
+      margin: 0;
       text-transform: uppercase;
     }
 
@@ -72,34 +89,12 @@
       font-size: 10px;
     }
 
-    .doc-wrap {
-      width: 28%;
-      text-align: right;
-    }
-
-    .doc-title-line {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 2px;
-    }
-
-    .doc-title-line td {
-      border: none;
-      padding: 0;
-      vertical-align: baseline;
-    }
-
     .doc-title {
       font-size: 16px;
       font-weight: 700;
       letter-spacing: 0.8px;
       margin: 0;
-    }
-
-    .doc-number {
-      font-size: 16px;
-      margin-top: 0;
-      margin-left: 6px;
+      text-transform: uppercase;
     }
 
     .meta {
@@ -116,14 +111,12 @@
 
     .meta-label {
       width: 20%;
-      font-weight: 700;
       background: #f9fafb;
     }
 
     .meta-value {
       width: 30%;
     }
-
     .items-table {
       width: 100%;
       border-collapse: collapse;
@@ -147,6 +140,10 @@
       text-align: center;
     }
 
+    .items-table th.currency-head {
+      white-space: nowrap;
+    }
+
     .items-table .description-cell {
       text-align: left;
     }
@@ -157,6 +154,10 @@
     .items-table .total-cell {
       text-align: right;
       white-space: nowrap;
+    }
+
+    .items-table .tax-cell {
+      font-size: 9px;
     }
 
     .totals {
@@ -172,16 +173,23 @@
     }
 
     .totals-label {
-      width: 72%;
       text-align: right;
       font-weight: 700;
       background: #e5ecf6;
     }
 
-    .totals-amount {
-      width: 14%;
+    .totals-amount-usd,
+    .totals-amount-bs {
       text-align: right;
-      font-weight: 700;
+    }
+
+    .totals-amount-usd {
+      width: 8.5%;
+    }
+
+    .totals-amount-bs {
+      width: 11%;
+      font-size: 9px !important;
     }
 
     .right {
@@ -281,14 +289,23 @@
 
   <div class="sheet">
     <table class="header">
-      <tr>
-        <td class="logo-wrap">
+      <tr class="header-logo-row">
+        <td class="logo-row-cell" colspan="2">
           <div class="logo-box">
             <img src="{{ $logoUrl }}" alt="Logo de facturación">
           </div>
         </td>
-        <td class="company-wrap">
+      </tr>
+      <tr class="header-title-row">
+        <td class="store-title-cell">
           <p class="company-name">{{ strtoupper((string) ($tenant->name ?? 'TIENDA')) }}</p>
+        </td>
+        <td class="quote-title-cell">
+          <p class="doc-title">COTIZACIÓN #{{ $quotation->id }}</p>
+        </td>
+      </tr>
+      <tr class="header-info-row">
+        <td>
           @if($tenantRif !== '')
             <p class="company-line"><strong>RIF:</strong> {{ strtoupper($tenantRif) }}</p>
           @endif
@@ -296,15 +313,7 @@
           <p class="company-line"><strong>Teléfono:</strong> {{ $tenantPhone }}</p>
           <p class="company-line"><strong>Email:</strong> {{ (string) ($tenant->email ?? '-') }}</p>
         </td>
-        <td class="doc-wrap">
-          <table class="doc-title-line">
-            <tr>
-              <td class="right">
-                <span class="doc-title">COTIZACIÓN</span>
-                <span class="doc-number"><strong>#{{ $quotation->id }}</strong></span>
-              </td>
-            </tr>
-          </table>
+        <td class="quote-title-cell">
           <p class="company-line"><strong>Fecha:</strong> {{ optional($quotation->created_at)->format('d/m/Y') ?: now()->format('d/m/Y') }}</p>
           <p class="company-line"><strong>Validez:</strong> {{ optional($quotation->valid_until)->format('d/m/Y') ?: '-' }}</p>
         </td>
@@ -333,17 +342,28 @@
     </table>
 
     <table class="items-table">
+      <colgroup>
+        <col style="width:4%;">
+        <col style="width:7%;">
+        <col style="width:27%;">
+        <col style="width:9%;">
+        <col style="width:6%;">
+        <col style="width:9%;">
+        <col style="width:9%;">
+        <col style="width:14%;">
+        <col style="width:13%;">
+      </colgroup>
       <thead>
         <tr>
-          <th style="width:4%;">Item</th>
-          <th style="width:7%;">Cant.</th>
-          <th style="width:30%;">Descripción</th>
-          <th style="width:12%;">Impuesto</th>
-          <th style="width:9%;">Imp. monto</th>
-          <th style="width:10%;">Precio unit {{ $foreignCurrencySymbol }}</th>
-          <th style="width:10%;">Precio unit Bs</th>
-          <th style="width:9%;">Total {{ $foreignCurrencySymbol }}</th>
-          <th style="width:9%;">Total Bs</th>
+          <th>Item</th>
+          <th>Cant.</th>
+          <th>Descripción</th>
+          <th>Impuesto</th>
+          <th>Imp. monto</th>
+          <th class="currency-head">Precio unit&nbsp;{{ $foreignCurrencySymbol }}</th>
+          <th class="currency-head">Precio unit&nbsp;Bs</th>
+          <th class="currency-head">Total&nbsp;{{ $foreignCurrencySymbol }}</th>
+          <th class="currency-head">Total&nbsp;Bs</th>
         </tr>
       </thead>
       <tbody>
@@ -391,25 +411,36 @@
     </table>
 
     <table class="totals">
+      <colgroup>
+        <col style="width:4%;">
+        <col style="width:7%;">
+        <col style="width:31%;">
+        <col style="width:9%;">
+        <col style="width:8%;">
+        <col style="width:9%;">
+        <col style="width:9%;">
+        <col style="width:12%;">
+        <col style="width:11%;">
+      </colgroup>
       <tr>
-        <td class="totals-label">SUBTOTAL</td>
-        <td class="totals-amount">{{ is_null($toForeignAmount((float) $quotation->subtotal)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $quotation->subtotal), 2)) }}</td>
-        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->subtotal)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $quotation->subtotal), 2)) }}</td>
+        <td class="totals-label" colspan="7">SUBTOTAL</td>
+        <td class="totals-amount-usd">{{ is_null($toForeignAmount((float) $quotation->subtotal)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $quotation->subtotal), 2)) }}</td>
+        <td class="totals-amount-bs">{{ is_null($toBsAmount((float) $quotation->subtotal)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $quotation->subtotal), 2)) }}</td>
       </tr>
       <tr>
-        <td class="totals-label">DESCUENTOS</td>
-        <td class="totals-amount">{{ is_null($toForeignAmount((float) $quotation->discount_amount)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $quotation->discount_amount), 2)) }}</td>
-        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->discount_amount)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $quotation->discount_amount), 2)) }}</td>
+        <td class="totals-label" colspan="7">DESCUENTOS</td>
+        <td class="totals-amount-usd">{{ is_null($toForeignAmount((float) $quotation->discount_amount)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $quotation->discount_amount), 2)) }}</td>
+        <td class="totals-amount-bs">{{ is_null($toBsAmount((float) $quotation->discount_amount)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $quotation->discount_amount), 2)) }}</td>
       </tr>
       <tr>
-        <td class="totals-label">IMPUESTOS (EST.)</td>
-        <td class="totals-amount">{{ is_null($toForeignAmount((float) $estimatedTaxTotalQuote)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $estimatedTaxTotalQuote), 2)) }}</td>
-        <td class="totals-amount">{{ is_null($toBsAmount((float) $estimatedTaxTotalQuote)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $estimatedTaxTotalQuote), 2)) }}</td>
+        <td class="totals-label" colspan="7">IMPUESTOS (EST.)</td>
+        <td class="totals-amount-usd">{{ is_null($toForeignAmount((float) $estimatedTaxTotalQuote)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $estimatedTaxTotalQuote), 2)) }}</td>
+        <td class="totals-amount-bs">{{ is_null($toBsAmount((float) $estimatedTaxTotalQuote)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $estimatedTaxTotalQuote), 2)) }}</td>
       </tr>
       <tr>
-        <td class="totals-label">TOTAL</td>
-        <td class="totals-amount">{{ is_null($toForeignAmount((float) $quotation->total_amount)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $quotation->total_amount), 2)) }}</td>
-        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->total_amount)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $quotation->total_amount), 2)) }}</td>
+        <td class="totals-label" colspan="7">TOTAL</td>
+        <td class="totals-amount-usd">{{ is_null($toForeignAmount((float) $quotation->total_amount)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $quotation->total_amount), 2)) }}</td>
+        <td class="totals-amount-bs">{{ is_null($toBsAmount((float) $quotation->total_amount)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $quotation->total_amount), 2)) }}</td>
       </tr>
     </table>
 
