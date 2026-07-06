@@ -11,10 +11,7 @@
         }
 
         .non-fiscal-watermark {
-            position: absolute;
-            top: 52%;
-            left: 4%;
-            right: 4%;
+            position: relative;
             transform: rotate(-28deg);
             font-size: 30px;
             font-weight: 800;
@@ -23,6 +20,8 @@
             letter-spacing: 2px;
             z-index: 0;
             pointer-events: none;
+            line-height: 1.1;
+            margin: 34px 0 -72px;
         }
 
         .products-watermark-wrap {
