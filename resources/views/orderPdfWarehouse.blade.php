@@ -109,6 +109,33 @@
             line-height: 1.05;
         }
 
+        .order-title-qr {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 0 2px;
+        }
+
+        .order-title-qr td {
+            border: none;
+            padding: 0;
+            vertical-align: middle;
+        }
+
+        .order-title-qr .title-cell {
+            text-align: left;
+        }
+
+        .order-title-qr .qr-cell {
+            width: 110px;
+            text-align: right;
+        }
+
+        .order-title-qr .qr-cell img {
+            width: 100px;
+            height: 100px;
+            display: inline-block;
+        }
+
         .order-company-name {
             margin: 0 0 2px;
             font-size: 16px;
@@ -276,7 +303,18 @@
             </td>
             <td class="order-header-right">
                 <p class="order-logo-line">ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VALIDO COMO DOCUMENTO FISCAL</p>
-                <p class="order-title">ORDEN DE DESPACHO</p>
+                <table class="order-title-qr">
+                    <tr>
+                        <td class="title-cell">
+                            <p class="order-title">ORDEN DE DESPACHO</p>
+                        </td>
+                        <td class="qr-cell">
+                            @if(!empty($qrCodeBase64))
+                                <img src="{{ $qrCodeBase64 }}" alt="Código QR">
+                            @endif
+                        </td>
+                    </tr>
+                </table>
                 <p class="order-company-name">{{ $storeName }}</p>
                 <table class="order-company-info">
                     <tr>
@@ -411,12 +449,6 @@
         </td>
     </tr>
 </table>
-
-@if(!empty($qrCodeBase64))
-    <div style="margin-top: 18px; text-align: center;">
-        <img src="{{ $qrCodeBase64 }}" alt="Código QR" style="width: 90px; height: 90px;">
-    </div>
-@endif
 
 </body>
 </html>
