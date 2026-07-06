@@ -89,19 +89,21 @@
 
         .order-header-right {
             width: 66%;
-            text-align: right;
+            text-align: left;
         }
 
         .order-title {
-            margin: 0 0 4px;
+            margin: 0 0 1px;
             font-size: 22px;
             font-weight: 800;
+            line-height: 1.05;
         }
 
         .order-company-name {
-            margin: 0 0 4px;
+            margin: 0 0 2px;
             font-size: 16px;
             font-weight: 700;
+            line-height: 1.05;
         }
 
         .order-company-info {
@@ -125,7 +127,8 @@
         .order-logo-line {
             font-size: 11px;
             font-weight: 700;
-            margin: 0 0 4px;
+            margin: 0 0 1px;
+            line-height: 1.15;
         }
 
         .order-logo-box {
@@ -166,6 +169,25 @@
 
         .order-summary-block .label {
             font-weight: 700;
+        }
+
+        .products-table th,
+        .products-table td {
+            font-size: 11px;
+            padding: 6px 5px;
+        }
+
+        .products-table th {
+            white-space: nowrap;
+        }
+
+        .products-table .qty-cell {
+            text-align: center;
+        }
+
+        .products-table .amount-cell {
+            text-align: right;
+            white-space: nowrap;
         }
     </style>
 </head>
@@ -215,13 +237,13 @@
     $formatUsdOrderAmount = function (float $amount) use ($toUsdOrderAmount): string {
         $usdAmount = $toUsdOrderAmount($amount);
 
-        return is_null($usdAmount) ? 'USD N/D' : ('USD ' . number_format($usdAmount, 2));
+        return number_format((float) ($usdAmount ?? 0), 2, '.', ',');
     };
 
     $formatBsOrderAmount = function (float $amount) use ($toBsOrderAmount): string {
         $bsAmount = $toBsOrderAmount($amount);
 
-        return is_null($bsAmount) ? 'Bs N/D' : ('Bs ' . number_format($bsAmount, 2));
+        return number_format((float) ($bsAmount ?? 0), 2, '.', ',');
     };
 @endphp
 
@@ -298,15 +320,24 @@
 </div>
 
 <h3 class="section-title">Detalle de productos</h3>
-<table>
+<table class="products-table">
+    <colgroup>
+        <col style="width: 19%;">
+        <col style="width: 8%;">
+        <col style="width: 17%;">
+        <col style="width: 14%;">
+        <col style="width: 14%;">
+        <col style="width: 14%;">
+        <col style="width: 14%;">
+    </colgroup>
     <thead>
         <tr>
             <th>Producto</th>
             <th>Cantidad</th>
             <th>Variante</th>
-            <th>Sub total $</th>
+            <th>Sub total USD</th>
             <th>Sub total Bs</th>
-            <th>Total $</th>
+            <th>Total USD</th>
             <th>Total Bs</th>
         </tr>
     </thead>
@@ -318,31 +349,31 @@
             @endphp
             <tr>
                 <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
-                <td>{{ $detalle->quantity }}</td>
+                <td class="qty-cell">{{ (int) round((float) $detalle->quantity) }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
-                <td style="text-align: right;">{{ $formatUsdOrderAmount($lineSubtotal) }}</td>
-                <td style="text-align: right;">{{ $formatBsOrderAmount($lineSubtotal) }}</td>
-                <td style="text-align: right;">{{ $formatUsdOrderAmount($lineTotal) }}</td>
-                <td style="text-align: right;">{{ $formatBsOrderAmount($lineTotal) }}</td>
+                <td class="amount-cell">{{ $formatUsdOrderAmount($lineSubtotal) }}</td>
+                <td class="amount-cell">{{ $formatBsOrderAmount($lineSubtotal) }}</td>
+                <td class="amount-cell">{{ $formatUsdOrderAmount($lineTotal) }}</td>
+                <td class="amount-cell">{{ $formatBsOrderAmount($lineTotal) }}</td>
             </tr>
         @endforeach
         @if($deliveryFee > 0)
             <tr>
                 <td><strong>Delivery</strong></td>
-                <td>1</td>
+                <td class="qty-cell">1</td>
                 <td>-</td>
-                <td style="text-align: right;">{{ $formatUsdOrderAmount($deliveryFee) }}</td>
-                <td style="text-align: right;">{{ $formatBsOrderAmount($deliveryFee) }}</td>
-                <td style="text-align: right;">{{ $formatUsdOrderAmount($deliveryFee) }}</td>
-                <td style="text-align: right;">{{ $formatBsOrderAmount($deliveryFee) }}</td>
+                <td class="amount-cell">{{ $formatUsdOrderAmount($deliveryFee) }}</td>
+                <td class="amount-cell">{{ $formatBsOrderAmount($deliveryFee) }}</td>
+                <td class="amount-cell">{{ $formatUsdOrderAmount($deliveryFee) }}</td>
+                <td class="amount-cell">{{ $formatBsOrderAmount($deliveryFee) }}</td>
             </tr>
         @endif
         <tr>
             <td colspan="3" style="text-align: right;"><strong>Total orden</strong></td>
-            <td style="text-align: right;"><strong>{{ $formatUsdOrderAmount($orderTotal) }}</strong></td>
-            <td style="text-align: right;"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
-            <td style="text-align: right;"><strong>{{ $formatUsdOrderAmount($orderTotal) }}</strong></td>
-            <td style="text-align: right;"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
+            <td class="amount-cell"><strong>{{ $formatUsdOrderAmount($orderTotal) }}</strong></td>
+            <td class="amount-cell"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
+            <td class="amount-cell"><strong>{{ $formatUsdOrderAmount($orderTotal) }}</strong></td>
+            <td class="amount-cell"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
         </tr>
     </tbody>
 </table>

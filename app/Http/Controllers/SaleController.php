@@ -581,8 +581,6 @@ class SaleController extends Controller
     //   GENERAR PDF SI HAY PAGOS APROBADOS
     // =====================================
         if ($approvedPayments->isNotEmpty()) {
-            $serverIp = request()->getHost();
-
             $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
 
             // Totales
@@ -591,7 +589,7 @@ class SaleController extends Controller
             $totalPagado = $order->payments->sum('amount');
             $totalGeneral = $totalOrden + $totalTaxes;
             // Generar QR
-            $qrUrl = "http://{$serverIp}:8000/publicOrder/{$order->id}";
+            $qrUrl = url('/publicOrder/' . $order->id);
             $qrCode = QrCode::create($qrUrl)
                 ->setEncoding(new Encoding('UTF-8'))
                 ->setSize(250)
@@ -831,8 +829,7 @@ class SaleController extends Controller
         $totalOrden = (float) $order->gross_total;
         $totalPagado = $order->payments->sum('amount');
 
-        $serverIp = request()->getHost();
-        $qrUrl = "http://{$serverIp}:8000/publicOrder/{$order->id}";
+        $qrUrl = url('/publicOrder/' . $order->id);
 
         $qrCode = QrCode::create($qrUrl)
             ->setEncoding(new Encoding('UTF-8'))
@@ -1795,7 +1792,6 @@ class SaleController extends Controller
         $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
         $pdfCurrencyContext = $this->buildPdfCurrencyContext($order, $orderCurrencyCode);
 
-        $serverIp = request()->getHost();
         $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
 
         $totalOrden = (float) $order->gross_total;
@@ -1805,7 +1801,7 @@ class SaleController extends Controller
         $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $order->tenant_id)->first();
         $tienda = $order->tenant;
 
-        $qrUrl = "http://{$serverIp}:8000/publicOrder/{$order->id}";
+        $qrUrl = url('/publicOrder/' . $order->id);
         $qrCode = QrCode::create($qrUrl)
             ->setEncoding(new Encoding('UTF-8'))
             ->setSize(250)
@@ -1882,7 +1878,6 @@ class SaleController extends Controller
             return $this->downloadElectronicInvoicePdf($request, $order, (string) $request->query('disposition', 'attachment'));
         }
 
-        $serverIp = request()->getHost();
         $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
 
         $totalOrden = (float) $order->gross_total;
@@ -1893,7 +1888,7 @@ class SaleController extends Controller
         $tienda = $order->tenant;
         $pdfCurrencyContext = $this->buildPdfCurrencyContext($order, $emissionCurrencyCode);
 
-        $qrUrl = "http://{$serverIp}:8000/publicOrder/{$order->id}";
+        $qrUrl = url('/publicOrder/' . $order->id);
         $qrCode = QrCode::create($qrUrl)
             ->setEncoding(new Encoding('UTF-8'))
             ->setSize(250)
@@ -2275,8 +2270,6 @@ class SaleController extends Controller
     
         // Si el nuevo estado es 1, generar el PDF y enviar el correo
         if ($order->status == 1) {
-            $serverIp = request()->getHost(); // Obtiene la IP o dominio del servidor
-
             // Cargar el logo de facturación y convertirlo a base64
             $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
     
@@ -2285,7 +2278,7 @@ class SaleController extends Controller
             $totalPagado = $order->payments->sum('amount');
     
             // Generar el código QR correctamente con Endroid QR Code
-            $qrUrl = "http://{$serverIp}:8000/publicOrder/{$order->id}";
+            $qrUrl = url('/publicOrder/' . $order->id);
             
             $qrCode = QrCode::create($qrUrl)
                 ->setEncoding(new Encoding('UTF-8'))
