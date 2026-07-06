@@ -2063,6 +2063,7 @@ class TenantController extends Controller
             $validated = $request->validate([
                 'name'            => 'nullable|string|max:255',
                 'slug'            => 'nullable|string|max:255|unique:tenants,slug,' . $tenant->id,
+                'email'           => 'nullable|email|max:255',
                 'rif'             => 'nullable|string|max:20',
                 'external_url'    => 'nullable|string|max:255',
                 'slogan'          => 'nullable|string|max:255',
@@ -2269,6 +2270,7 @@ class TenantController extends Controller
             $tenantUpdatePayload = [
                 'name'            => $validated['name'] ?? $tenant->name,
                 'slug'            => isset($validated['slug']) ? Str::slug($validated['slug']) : $tenant->slug,
+                'email'           => array_key_exists('email', $validated) ? (trim((string) $validated['email']) ?: null) : $tenant->email,
                 'rif'             => array_key_exists('rif', $validated) ? (strtoupper(trim((string) $validated['rif'])) ?: null) : $tenant->rif,
                 'external_url'    => array_key_exists('external_url', $validated) ? $normalizedExternalUrl : $tenant->external_url,
                 'slogan'          => $validated['slogan'] ?? $tenant->slogan,

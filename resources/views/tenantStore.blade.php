@@ -496,6 +496,18 @@
                                     </div>
                                 </div>
 
+                                <div class="mb-3">
+                                    <label for="email" class="form-label fw-bold">Correo de la tienda</label>
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        id="email"
+                                        class="form-control p-2 border border-radius-lg"
+                                        value="{{ old('email', $tenant->email ?? '') }}"
+                                        placeholder="tienda@dominio.com">
+                                    <small class="text-muted d-block mt-1">Este correo se mostrará en ordenes de despacho, cotizaciones y facturas.</small>
+                                </div>
+
                                 @php
                                     $workingDays = collect($tenant->working_days ?? [])->map(fn ($day) => strtolower((string) $day))->all();
                                     $weekDays = [

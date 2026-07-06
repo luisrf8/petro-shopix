@@ -11,18 +11,29 @@
         }
 
         .non-fiscal-watermark {
-            position: fixed;
-            top: 38%;
-            left: 8%;
-            right: 8%;
+            position: absolute;
+            top: 52%;
+            left: 4%;
+            right: 4%;
             transform: rotate(-28deg);
             font-size: 30px;
             font-weight: 800;
             text-align: center;
-            color: rgba(160, 0, 0, 0.18);
+            color: rgba(160, 0, 0, 0.30);
             letter-spacing: 2px;
             z-index: 0;
             pointer-events: none;
+        }
+
+        .products-watermark-wrap {
+            position: relative;
+            margin-top: 4px;
+        }
+
+        .products-watermark-wrap > .section-title,
+        .products-watermark-wrap > .products-table {
+            position: relative;
+            z-index: 1;
         }
 
         table {
@@ -192,9 +203,16 @@
     </style>
 </head>
 <body>
-<div class="non-fiscal-watermark">DOCUMENTO INTERNO - NO FISCAL - SIN VALIDEZ TRIBUTARIA</div>
 @php
-    $orderCurrencyCode = strtoupper(trim((string) ($orderCurrencyCode ?? $order->sale_currency_code ?? ($tienda->base_currency ?? 'USD'))));
+    $storeData = $tienda ?? $order->tenant;
+    $storeName = optional($storeData)->name ?? '-';
+    $storeRif = optional($storeData)->rif ?: '-';
+    $storePhone = optional($storeData)->phone_number ?? 'No registrado';
+    $storeEmail = optional($storeData)->email ?? 'No registrado';
+    $storeCountry = optional($storeData)->country ?? '';
+    $storeState = optional($storeData)->state ?? '';
+    $storeCity = optional($storeData)->city ?? '';
+    $orderCurrencyCode = strtoupper(trim((string) ($orderCurrencyCode ?? $order->sale_currency_code ?? (optional($storeData)->base_currency ?? 'USD'))));
     $orderCurrencyCode = in_array($orderCurrencyCode, ['USD', 'EUR', 'VES'], true) ? $orderCurrencyCode : 'USD';
     $emissionCurrencyCode = strtoupper(trim((string) ($emissionCurrencyCode ?? $orderCurrencyCode)));
     $emissionCurrencyCode = in_array($emissionCurrencyCode, ['USD', 'EUR', 'VES'], true) ? $emissionCurrencyCode : $orderCurrencyCode;
@@ -260,15 +278,15 @@
             <td class="order-header-right">
                 <p class="order-logo-line">ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VALIDO COMO DOCUMENTO FISCAL</p>
                 <p class="order-title">ORDEN DE DESPACHO</p>
-                <p class="order-company-name">{{ $tienda->name }}</p>
+                <p class="order-company-name">{{ $storeName }}</p>
                 <table class="order-company-info">
                     <tr>
-                        <td><span class="label">RIF:</span> {{ $tienda->rif ?: '-' }}</td>
-                        <td><span class="label">Dirección:</span> {{ trim(($tienda->country ?? '') . ' ' . ($tienda->state ?? '') . ' ' . ($tienda->city ?? '')) }}</td>
+                        <td><span class="label">RIF:</span> {{ $storeRif }}</td>
+                        <td><span class="label">Dirección:</span> {{ trim(($storeCountry ?? '') . ' ' . ($storeState ?? '') . ' ' . ($storeCity ?? '')) }}</td>
                     </tr>
                     <tr>
-                        <td><span class="label">Teléfono:</span> {{ $tienda->phone_number ?? 'No registrado' }}</td>
-                        <td><span class="label">Email:</span> {{ $tienda->email ?? 'No registrado' }}</td>
+                        <td><span class="label">Teléfono:</span> {{ $storePhone }}</td>
+                        <td><span class="label">Email:</span> {{ $storeEmail }}</td>
                     </tr>
                 </table>
             </td>
@@ -319,6 +337,8 @@
     </table>
 </div>
 
+<div class="products-watermark-wrap">
+<div class="non-fiscal-watermark">DOCUMENTO INTERNO - NO FISCAL - SIN VALIDEZ TRIBUTARIA</div>
 <h3 class="section-title">Detalle de productos</h3>
 <table class="products-table">
     <colgroup>
@@ -377,6 +397,7 @@
         </tr>
     </tbody>
 </table>
+</div>
 
 <table class="sign-table" style="margin-top: 24px;">
     <tr>

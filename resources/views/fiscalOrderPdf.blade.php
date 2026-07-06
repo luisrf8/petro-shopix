@@ -31,7 +31,11 @@
 </head>
 <body>
 @php
-    $orderCurrencyCode = strtoupper(trim((string) ($orderCurrencyCode ?? $order->sale_currency_code ?? ($order->tenant->base_currency ?? 'USD'))));
+    $storeData = $order->tenant;
+    $storeName = optional($storeData)->name ?? '-';
+    $storeEmail = optional($storeData)->email ?? 'No registrado';
+    $storeRif = optional($storeData)->rif ?? '-';
+    $orderCurrencyCode = strtoupper(trim((string) ($orderCurrencyCode ?? $order->sale_currency_code ?? (optional($storeData)->base_currency ?? 'USD'))));
     $orderCurrencyCode = in_array($orderCurrencyCode, ['USD', 'EUR', 'VES'], true) ? $orderCurrencyCode : 'USD';
     $emissionCurrencyCode = strtoupper(trim((string) ($emissionCurrencyCode ?? $orderCurrencyCode)));
     $emissionCurrencyCode = in_array($emissionCurrencyCode, ['USD', 'EUR', 'VES'], true) ? $emissionCurrencyCode : $orderCurrencyCode;
@@ -66,6 +70,8 @@
 
 
     <h2>Factura Nro {{ $order->id }}</h2>
+    <p><strong>Tienda:</strong> {{ $storeName }} | <strong>Email:</strong> {{ $storeEmail }}</p>
+    <p><strong>RIF:</strong> {{ $storeRif }}</p>
     <p><strong>Cliente:</strong> {{ $order->user->name }} | <strong>Teléfono:</strong> {{ $order->user->phone_number ?? 'No registrado' }}</p>
     <p><strong>Dirección:</strong> {{ $order->address }}</p>
     <p><strong>Moneda de la venta:</strong> {{ $orderCurrencyCode }} | <strong>Moneda de emisión:</strong> {{ $emissionCurrencyCode }}</p>
