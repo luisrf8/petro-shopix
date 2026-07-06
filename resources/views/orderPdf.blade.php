@@ -98,17 +98,26 @@
         return $usdText . ' / ' . $bsText;
     };
 @endphp
-<table width="100%" style="border-collapse: collapse; border: none;">
+<table width="100%" style="border-collapse: collapse; border: none; margin-bottom: 6px;">
+    <tr>
+        <td style="text-align: center; padding: 0; border: none;">
+            @if(!empty($imageBase64))
+                <img src="{{ $imageBase64 }}" alt="main_logo" style="width: 130px; height: 130px">
+            @endif
+        </td>
+    </tr>
+</table>
+
+<table width="100%" style="border-collapse: collapse; border: none; margin-bottom: 10px;">
     <tr>
         <td style="text-align: left; padding: 0; border: none;">
-            <p><strong>ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VÁLIDO COMO DOCUMENTO FISCAL</strong></p>
-            <h1>ORDEN DE DESPACHO SHOPIX</h1>
+            <p><strong>ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VALIDO COMO DOCUMENTO FISCAL</strong></p>
+            <h1>ORDEN DE DESPACHO</h1>
             <p><strong>{{ $tienda->name }}</strong></p>
-            <p>RIF: {{ $tienda->rif }} J-00000005 </p>
-            <p>Dirección de la empresa: {{ $tienda->country_name ?? $tienda->countryName() ?? $tienda->country }} {{ $tienda->state_name ?? $tienda->stateName() ?? $tienda->state }} {{ $tienda->city_name ?? $tienda->cityName() ?? $tienda->city }}</p>
-        </td>
-        <td style="text-align: right; padding: 0; border: none;">
-            <img src="{{ $imageBase64 }}" alt="main_logo" style="width: 150px; height: 150px">
+            @if(!empty($tienda->rif))
+                <p>RIF: {{ $tienda->rif }}</p>
+            @endif
+            <p>Direccion de la empresa: {{ $tienda->country_name ?? $tienda->countryName() ?? $tienda->country }} {{ $tienda->state_name ?? $tienda->stateName() ?? $tienda->state }} {{ $tienda->city_name ?? $tienda->cityName() ?? $tienda->city }}</p>
         </td>
     </tr>
 </table>
@@ -132,44 +141,37 @@
                 <th>Producto</th>
                 <th>Cantidad</th>
                 <th>Variante</th>
-                    {{--
-
-                <th>Precio Unitario</th>
-                <th>Subtotal</th>
-                    --}}
+                <th>Sub total $ / Bs</th>
+                <th>Total $ / Bs</th>
             </tr>
         </thead>
         <tbody>
             @foreach($order->details as $detalle)
+            @php
+                $lineSubtotal = (float) ($detalle->line_subtotal_before_discount ?? ($detalle->price * $detalle->quantity));
+                $lineTotal = (float) ($detalle->amount ?? 0);
+            @endphp
             <tr>
                 <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
                 <td>{{ $detalle->quantity }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
-                    {{--
-
-                <td>${{ number_format($detalle->price, 2) }}</td>
-                <td>${{ number_format($detalle->amount, 2) }}</td>
-                    --}}
+                <td style="text-align: right;">{{ $formatDualOrderAmount($lineSubtotal) }}</td>
+                <td style="text-align: right;">{{ $formatDualOrderAmount($lineTotal) }}</td>
             </tr>
             @endforeach
-        </tbody>
-    </table>
-
-    <table style="margin-top: 12px; width: 55%; margin-left: auto;">
-        <tbody>
-            <tr>
-                <td><strong>Subtotal productos</strong></td>
-                <td style="text-align: right;">{{ $formatDualOrderAmount($itemsSubtotal) }}</td>
-            </tr>
             @if($deliveryFee > 0)
-                <tr>
-                    <td><strong>Delivery</strong></td>
-                    <td style="text-align: right;">{{ $formatDualOrderAmount($deliveryFee) }}</td>
-                </tr>
+            <tr>
+                <td><strong>Delivery</strong></td>
+                <td>1</td>
+                <td>-</td>
+                <td style="text-align: right;">{{ $formatDualOrderAmount($deliveryFee) }}</td>
+                <td style="text-align: right;">{{ $formatDualOrderAmount($deliveryFee) }}</td>
+            </tr>
             @endif
             <tr>
-                <td><strong>Total orden</strong></td>
-                <td style="text-align: right;">{{ $formatDualOrderAmount($orderTotal) }}</td>
+                <td colspan="3" style="text-align: right;"><strong>Total orden</strong></td>
+                <td style="text-align: right;"><strong>{{ $formatDualOrderAmount($orderTotal) }}</strong></td>
+                <td style="text-align: right;"><strong>{{ $formatDualOrderAmount($orderTotal) }}</strong></td>
             </tr>
         </tbody>
     </table>

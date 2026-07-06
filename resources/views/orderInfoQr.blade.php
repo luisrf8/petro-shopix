@@ -323,11 +323,11 @@
                     <div class="quick-actions justify-content-lg-end">
                         <button type="button" id="public-order-back" class="btn btn-outline-secondary mb-0">Volver</button>
                         @if((bool) ($order->tenant->electronic_invoicing_enabled ?? false))
-                            <a id="publicDownloadInvoiceBtn" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" class="btn btn-dark mb-0">Factura PDF</a>
+                            <a id="publicDownloadInvoiceBtn" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" class="btn btn-dark mb-0" target="_blank" rel="noopener">Factura PDF</a>
                         @else
                             <button type="button" class="btn btn-dark mb-0" disabled title="La facturación digital no está activa en esta tienda">Factura PDF</button>
                         @endif
-                        <a id="publicDownloadDeliveryBtn" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" class="btn btn-outline-dark mb-0">Orden de entrega</a>
+                        <a id="publicDownloadDeliveryBtn" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" class="btn btn-outline-dark mb-0" target="_blank" rel="noopener">Orden de entrega</a>
                         @if($storeWhatsappUrl)
                             <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
                         @endif

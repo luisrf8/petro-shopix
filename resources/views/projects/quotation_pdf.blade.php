@@ -97,8 +97,9 @@
     }
 
     .doc-number {
-      font-size: 12px;
+      font-size: 16px;
       margin-top: 0;
+      margin-left: 6px;
     }
 
     .meta {
@@ -206,6 +207,9 @@
     $usdRateToBs = (float) ($usdRateToBs ?? 0);
     $logoUrl = (string) ($billingLogoDataUri ?? '');
     $tenantRif = trim((string) ($tenant->rif ?? ''));
+    $foreignCurrencyCode = in_array($quotationCurrencyCode, ['USD', 'EUR'], true) ? $quotationCurrencyCode : 'USD';
+    $foreignCurrencySymbol = $foreignCurrencyCode === 'EUR' ? '€' : '$';
+
     $tenantPhoneCode = trim((string) ($tenant->phone_code ?? ''));
     $tenantPhoneNumber = trim((string) ($tenant->phone_number ?? ''));
     $tenantPhone = trim($tenantPhoneCode . ' ' . $tenantPhoneNumber);
@@ -225,27 +229,21 @@
       return $amount * $quotationRateToBs;
     };
 
-    $toUsdAmount = function (float $amount) use ($quotationCurrencyCode, $usdRateToBs, $toBsAmount) {
-      if ($quotationCurrencyCode === 'USD') {
+    $toForeignAmount = function (float $amount) use ($quotationCurrencyCode, $foreignCurrencyCode, $quotationRateToBs, $usdRateToBs, $toBsAmount) {
+      if ($quotationCurrencyCode === $foreignCurrencyCode) {
         return $amount;
       }
 
       $amountBs = $toBsAmount($amount);
-      if (is_null($amountBs) || $usdRateToBs <= 0) {
+      if (is_null($amountBs)) {
         return null;
       }
 
-      return $amountBs / $usdRateToBs;
-    };
+      if ($foreignCurrencyCode === 'USD') {
+        return $usdRateToBs > 0 ? ($amountBs / $usdRateToBs) : null;
+      }
 
-    $formatDualAmount = function (float $amount) use ($toUsdAmount, $toBsAmount) {
-      $usdAmount = $toUsdAmount($amount);
-      $bsAmount = $toBsAmount($amount);
-
-      $usdText = is_null($usdAmount) ? 'N/D' : (number_format($usdAmount, 2) . ' $');
-      $bsText = is_null($bsAmount) ? 'N/D' : ('Bs ' . number_format($bsAmount, 2));
-
-      return $usdText . ' / ' . $bsText;
+      return $quotationRateToBs > 0 ? ($amountBs / $quotationRateToBs) : null;
     };
 
     $resolveItemTaxSummary = function ($item): string {
@@ -342,9 +340,9 @@
           <th style="width:30%;">Descripción</th>
           <th style="width:12%;">Impuesto</th>
           <th style="width:9%;">Imp. monto</th>
-          <th style="width:10%;">Precio unit $</th>
+          <th style="width:10%;">Precio unit {{ $foreignCurrencySymbol }}</th>
           <th style="width:10%;">Precio unit Bs</th>
-          <th style="width:9%;">Total $</th>
+          <th style="width:9%;">Total {{ $foreignCurrencySymbol }}</th>
           <th style="width:9%;">Total Bs</th>
         </tr>
       </thead>
@@ -356,9 +354,9 @@
             $lineTaxQuote = round($lineTotalQuote * ($lineTaxRatePercent / 100), 4);
             $estimatedTaxTotalQuote += $lineTaxQuote;
 
-            $lineUnitUsd = $toUsdAmount((float) $item->unit_price);
+            $lineUnitForeign = $toForeignAmount((float) $item->unit_price);
             $lineUnitBs = $toBsAmount((float) $item->unit_price);
-            $lineTotalUsd = $toUsdAmount($lineTotalQuote);
+            $lineTotalForeign = $toForeignAmount($lineTotalQuote);
             $lineTotalBs = $toBsAmount($lineTotalQuote);
           @endphp
           <tr>
@@ -379,10 +377,10 @@
             </td>
             <td class="tax-cell">{{ $resolveItemTaxSummary($item) }}</td>
             <td class="amount-cell">{{ number_format($lineTaxQuote, 2) }}</td>
-            <td class="amount-cell">{{ is_null($lineUnitUsd) ? 'N/D' : number_format((float) $lineUnitUsd, 2) }}</td>
-            <td class="amount-cell">{{ is_null($lineUnitBs) ? 'N/D' : number_format((float) $lineUnitBs, 2) }}</td>
-            <td class="total-cell">{{ is_null($lineTotalUsd) ? 'N/D' : number_format((float) $lineTotalUsd, 2) }}</td>
-            <td class="total-cell">{{ is_null($lineTotalBs) ? 'N/D' : number_format((float) $lineTotalBs, 2) }}</td>
+            <td class="amount-cell">{{ is_null($lineUnitForeign) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $lineUnitForeign, 2)) }}</td>
+            <td class="amount-cell">{{ is_null($lineUnitBs) ? 'N/D' : ('Bs ' . number_format((float) $lineUnitBs, 2)) }}</td>
+            <td class="total-cell">{{ is_null($lineTotalForeign) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $lineTotalForeign, 2)) }}</td>
+            <td class="total-cell">{{ is_null($lineTotalBs) ? 'N/D' : ('Bs ' . number_format((float) $lineTotalBs, 2)) }}</td>
           </tr>
         @empty
           <tr>
@@ -395,23 +393,23 @@
     <table class="totals">
       <tr>
         <td class="totals-label">SUBTOTAL</td>
-        <td class="totals-amount">{{ is_null($toUsdAmount((float) $quotation->subtotal)) ? 'N/D' : number_format((float) $toUsdAmount((float) $quotation->subtotal), 2) }}</td>
-        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->subtotal)) ? 'N/D' : number_format((float) $toBsAmount((float) $quotation->subtotal), 2) }}</td>
+        <td class="totals-amount">{{ is_null($toForeignAmount((float) $quotation->subtotal)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $quotation->subtotal), 2)) }}</td>
+        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->subtotal)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $quotation->subtotal), 2)) }}</td>
       </tr>
       <tr>
         <td class="totals-label">DESCUENTOS</td>
-        <td class="totals-amount">{{ is_null($toUsdAmount((float) $quotation->discount_amount)) ? 'N/D' : number_format((float) $toUsdAmount((float) $quotation->discount_amount), 2) }}</td>
-        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->discount_amount)) ? 'N/D' : number_format((float) $toBsAmount((float) $quotation->discount_amount), 2) }}</td>
+        <td class="totals-amount">{{ is_null($toForeignAmount((float) $quotation->discount_amount)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $quotation->discount_amount), 2)) }}</td>
+        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->discount_amount)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $quotation->discount_amount), 2)) }}</td>
       </tr>
       <tr>
         <td class="totals-label">IMPUESTOS (EST.)</td>
-        <td class="totals-amount">{{ is_null($toUsdAmount((float) $estimatedTaxTotalQuote)) ? 'N/D' : number_format((float) $toUsdAmount((float) $estimatedTaxTotalQuote), 2) }}</td>
-        <td class="totals-amount">{{ is_null($toBsAmount((float) $estimatedTaxTotalQuote)) ? 'N/D' : number_format((float) $toBsAmount((float) $estimatedTaxTotalQuote), 2) }}</td>
+        <td class="totals-amount">{{ is_null($toForeignAmount((float) $estimatedTaxTotalQuote)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $estimatedTaxTotalQuote), 2)) }}</td>
+        <td class="totals-amount">{{ is_null($toBsAmount((float) $estimatedTaxTotalQuote)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $estimatedTaxTotalQuote), 2)) }}</td>
       </tr>
       <tr>
         <td class="totals-label">TOTAL</td>
-        <td class="totals-amount">{{ is_null($toUsdAmount((float) $quotation->total_amount)) ? 'N/D' : number_format((float) $toUsdAmount((float) $quotation->total_amount), 2) }}</td>
-        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->total_amount)) ? 'N/D' : number_format((float) $toBsAmount((float) $quotation->total_amount), 2) }}</td>
+        <td class="totals-amount">{{ is_null($toForeignAmount((float) $quotation->total_amount)) ? 'N/D' : ($foreignCurrencySymbol . ' ' . number_format((float) $toForeignAmount((float) $quotation->total_amount), 2)) }}</td>
+        <td class="totals-amount">{{ is_null($toBsAmount((float) $quotation->total_amount)) ? 'N/D' : ('Bs ' . number_format((float) $toBsAmount((float) $quotation->total_amount), 2)) }}</td>
       </tr>
     </table>
 

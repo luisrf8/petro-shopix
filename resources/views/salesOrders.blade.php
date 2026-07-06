@@ -122,6 +122,7 @@
                         <th># Factura</th>
                         <th>Fecha</th>
                         <th>Usuario</th>
+                        <th>Realizada por</th>
                         <th>Entrega</th>
                         <th># Productos</th>
                         <th>Documento</th>
@@ -140,6 +141,7 @@
                           $documentLabel = $documentMode === 'electronic_invoice' ? 'Factura digital' : 'Orden de entrega';
                           $statusLabel = $order->status == 0 ? 'En Proceso' : ($order->status == 1 ? 'Aprobado' : ($order->status == 2 ? 'Negado' : ''));
                           $userLabel = $order->user ? $order->user->name : 'Usuario no asignado';
+                          $salesRepLabel = $order->salesRepresentative ? $order->salesRepresentative->name : 'No registrado';
                           $deliveryLabel = (string) ($order->preference ?? '');
                         @endphp
                         <tr>
@@ -163,6 +165,7 @@
                           </td>
                           <td>{{ $order->date }}</td>
                           <td>{{ $order->user ? $order->user->name : 'Usuario no asignado' }}</td>
+                          <td>{{ $salesRepLabel }}</td>
                           <td class="text-center">
                             <span class="badge badge-sm  {{ $order->preference == 'Tienda' ? 'bg-gradient-secondary' : 'bg-gradient-info' }}">{{ $order->preference }}
                             </span>

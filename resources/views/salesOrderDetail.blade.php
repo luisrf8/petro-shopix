@@ -248,6 +248,7 @@
               <div class="order-meta-copy">
                 @unless($isDeliveryOnlyView)
                 {{ $order->user->name }} · {{ $order->user->phone_number ?? 'Sin teléfono' }}<br>
+                Venta realizada por: {{ $order->salesRepresentative->name ?? 'No registrado' }}<br>
                 @endunless
                 {{ $order->preference ?: 'Entrega no definida' }} · {{ $order->address ?: 'Sin dirección registrada' }}
                 @if($isStoreDelivery)
@@ -273,12 +274,12 @@
                 </div>
                 @if($canDownloadInvoicePdf && $isDigitalInvoicingEnabled)
                   @if(!$hasAnnulledInvoice)
-                  <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-dark mb-0">Factura PDF</a>
+                  <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-dark mb-0" target="_blank" rel="noopener">Factura PDF</a>
                   @else
-                  <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-danger mb-0">Factura anulada</a>
+                  <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-danger mb-0" target="_blank" rel="noopener">Factura anulada</a>
                   @endif
                 @endif
-                <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-dark mb-0">Orden de entrega</a>
+                <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-dark mb-0" target="_blank" rel="noopener">Orden de entrega</a>
                 @endif
                 @if($canRegisterReturn)
                   <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">Registrar Devolución</button>
@@ -614,6 +615,7 @@
               <div class="order-summary-value">{{ $isDeliveryOnlyView ? ($deliveryMeta['receiver_name'] ?: ($order->user->name ?? 'Sin nombre')) : $order->user->name }}</div>
               @unless($isDeliveryOnlyView)
               <p class="order-meta-copy mb-3">{{ $order->user->email ?? 'Sin correo' }} · {{ $order->user->phone_number ?? 'Sin teléfono' }}</p>
+              <p class="order-meta-copy mb-3"><strong>Venta realizada por:</strong> {{ $order->salesRepresentative->name ?? 'No registrado' }}</p>
               @else
               <p class="order-meta-copy mb-3">{{ $deliveryMeta['receiver_phone'] ?: 'Sin teléfono registrado' }}</p>
               @endunless

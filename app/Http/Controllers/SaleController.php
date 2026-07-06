@@ -1035,6 +1035,7 @@ class SaleController extends Controller
         $tenant = Tenant::find($user->tenant_id);
         $salesOrders = SalesOrder::with([
             'user', 
+            'salesRepresentative',
             'details', 
             'details.variant', 
             'payments',
@@ -1112,7 +1113,7 @@ class SaleController extends Controller
                 ->with('warning', 'El plan actual no permite gestionar pedidos pendientes de delivery.');
         }
 
-        $salesOrders = SalesOrder::with(['user', 'details', 'details.variant', 'payments', 'electronicDocuments', 'returns.items'])
+        $salesOrders = SalesOrder::with(['user', 'salesRepresentative', 'details', 'details.variant', 'payments', 'electronicDocuments', 'returns.items'])
             ->where('tenant_id', $user->tenant_id)
             ->where('deliver_status', 0)
             ->where(function ($query) {
@@ -1429,6 +1430,7 @@ class SaleController extends Controller
     {
         $order = SalesOrder::with([
             'user',
+            'salesRepresentative',
             'tenant',
             'assignedDeliveryUser',
             'details',

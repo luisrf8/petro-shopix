@@ -45,7 +45,11 @@ class ProjectModuleController extends Controller
             $tenantId = (int) (auth()->user()->tenant_id ?? 0);
             $tenant = $tenantId > 0 ? Tenant::query()->find($tenantId) : null;
 
-            if (!$tenant || !(bool) ($tenant->offers_projects ?? true)) {
+            if (!$tenant) {
+                return redirect()->route('dashboard')->with('warning', 'Este tenant no tiene habilitado el modulo de proyectos.');
+            }
+
+            if (!(bool) ($tenant->offers_projects ?? true) && !$request->routeIs('projects.module.quotations.*')) {
                 return redirect()->route('dashboard')->with('warning', 'Este tenant no tiene habilitado el modulo de proyectos.');
             }
 

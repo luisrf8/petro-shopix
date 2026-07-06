@@ -592,6 +592,31 @@
       const vapidPublicKey = @json(config('webpush.vapid.public_key'));
       const defaultNotificationIcon = @json($tenantLogo ?? asset('assets/img/shopix5.png'));
       let serviceWorkerRegistrationPromise = null;
+      const processedNotificationIds = new Set();
+      let feedPrimed = false;
+      let notificationPollIntervalId = null;
+
+      function isAlreadyProcessedNotification(notification) {
+        const id = notification?.id;
+        return !!(id && processedNotificationIds.has(String(id)));
+      }
+
+      function markNotificationAsProcessed(notification) {
+        const id = notification?.id;
+        if (!id) {
+          return;
+        }
+
+        processedNotificationIds.add(String(id));
+
+        if (processedNotificationIds.size > 400) {
+          const iterator = processedNotificationIds.values();
+          const firstValue = iterator.next();
+          if (!firstValue.done) {
+            processedNotificationIds.delete(firstValue.value);
+          }
+        }
+      }
 
       function updateBadge(unread) {
         if (!badges.length) return;
@@ -964,6 +989,11 @@
 
         const channel = pusher.subscribe(`private-App.Models.User.${userId}`);
         const handleIncoming = (notification) => {
+          if (isAlreadyProcessedNotification(notification)) {
+            return;
+          }
+
+          markNotificationAsProcessed(notification);
           const title = notification.title || 'Notificación';
           const message = notification.message || '';
           updateBadge();
@@ -979,17 +1009,51 @@
         pusher.connection.bind('error', () => {});
       }
 
-      async function loadInitialUnreadCount() {
+      async function syncNotificationsFromFeed(showNewToasts = false) {
         try {
           const response = await fetch('/notifications/feed', { headers: { 'Accept': 'application/json' } });
-          if (!response.ok) return;
+          if (!response.ok) {
+            return;
+          }
 
           const payload = await response.json();
-          if (!payload.success) return;
+          if (!payload.success) {
+            return;
+          }
 
           updateBadge(payload.unread_count || 0);
+
+          const notifications = Array.isArray(payload.notifications) ? payload.notifications : [];
+
+          if (!feedPrimed) {
+            notifications.forEach((notification) => markNotificationAsProcessed(notification));
+            feedPrimed = true;
+            return;
+          }
+
+          const newNotifications = notifications
+            .filter((notification) => !isAlreadyProcessedNotification(notification))
+            .reverse();
+
+          newNotifications.forEach((notification) => {
+            markNotificationAsProcessed(notification);
+            window.dispatchEvent(new CustomEvent('shopix:backoffice-notification', {
+              detail: notification,
+            }));
+
+            if (showNewToasts) {
+              const title = notification.title || 'Notificación';
+              const message = notification.message || '';
+              showToast(title, message);
+              showBrowserNotification(notification).catch(() => {});
+            }
+          });
         } catch (error) {
         }
+      }
+
+      async function loadInitialUnreadCount() {
+        await syncNotificationsFromFeed(false);
       }
 
       window.addEventListener('beforeinstallprompt', (event) => {
@@ -1005,6 +1069,12 @@
 
       loadInitialUnreadCount();
       bindNotificationChannel();
+
+      if (!notificationPollIntervalId) {
+        notificationPollIntervalId = window.setInterval(() => {
+          syncNotificationsFromFeed(true);
+        }, 30000);
+      }
 
       try {
         ensureServiceWorkerRegistration().catch(() => {});
@@ -1028,6 +1098,10 @@
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible' && shouldForceIosPushRefresh()) {
           syncBrowserPushSubscription({ forceRefresh: true }).catch(() => {});
+        }
+
+        if (document.visibilityState === 'visible') {
+          syncNotificationsFromFeed(true);
         }
       });
     })();

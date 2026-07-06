@@ -121,18 +121,26 @@
     };
 @endphp
 
-<table class="header-table">
+<table class="header-table" style="margin-bottom: 8px;">
     <tr>
-        <td style="width: 70%; vertical-align: top;">
-            <h2 style="margin: 0;">{{ $tienda->name }}</h2>
-            <div>RIF: {{ $tienda->rif ?? 'No registrado' }}</div>
-            <div>Dirección: {{ trim(($tienda->country ?? '') . ' ' . ($tienda->state ?? '') . ' ' . ($tienda->city ?? '')) }}</div>
-            <div><strong>ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VÁLIDO COMO DOCUMENTO FISCAL</strong></div>
-        </td>
-        <td style="width: 30%; text-align: right; vertical-align: top;">
+        <td style="text-align: center;">
             @if(!empty($imageBase64))
                 <img src="{{ $imageBase64 }}" alt="Logo" style="width: 120px; height: 120px;">
             @endif
+        </td>
+    </tr>
+</table>
+
+<table class="header-table" style="margin-bottom: 10px;">
+    <tr>
+        <td style="width: 100%; vertical-align: top;">
+            <h2 style="margin: 0 0 4px;">ORDEN DE DESPACHO</h2>
+            <div><strong>{{ $tienda->name }}</strong></div>
+            @if(!empty($tienda->rif))
+                <div>RIF: {{ $tienda->rif }}</div>
+            @endif
+            <div>Direccion: {{ trim(($tienda->country ?? '') . ' ' . ($tienda->state ?? '') . ' ' . ($tienda->city ?? '')) }}</div>
+            <div><strong>ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VALIDO COMO DOCUMENTO FISCAL</strong></div>
         </td>
     </tr>
 </table>
@@ -168,34 +176,37 @@
             <th>Producto</th>
             <th>Cantidad</th>
             <th>Variante</th>
+            <th>Sub total $ / Bs</th>
+            <th>Total $ / Bs</th>
         </tr>
     </thead>
     <tbody>
         @foreach($order->details as $detalle)
+            @php
+                $lineSubtotal = (float) ($detalle->line_subtotal_before_discount ?? ($detalle->price * $detalle->quantity));
+                $lineTotal = (float) ($detalle->amount ?? 0);
+            @endphp
             <tr>
                 <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
                 <td>{{ $detalle->quantity }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
+                <td style="text-align: right;">{{ $formatDualOrderAmount($lineSubtotal) }}</td>
+                <td style="text-align: right;">{{ $formatDualOrderAmount($lineTotal) }}</td>
             </tr>
         @endforeach
-    </tbody>
-</table>
-
-<table style="margin-top: 12px; width: 55%; margin-left: auto;">
-    <tbody>
-        <tr>
-            <td><strong>Subtotal productos</strong></td>
-            <td style="text-align: right;">{{ $formatDualOrderAmount($itemsSubtotal) }}</td>
-        </tr>
         @if($deliveryFee > 0)
             <tr>
                 <td><strong>Delivery</strong></td>
+                <td>1</td>
+                <td>-</td>
+                <td style="text-align: right;">{{ $formatDualOrderAmount($deliveryFee) }}</td>
                 <td style="text-align: right;">{{ $formatDualOrderAmount($deliveryFee) }}</td>
             </tr>
         @endif
         <tr>
-            <td><strong>Total orden</strong></td>
-            <td style="text-align: right;">{{ $formatDualOrderAmount($orderTotal) }}</td>
+            <td colspan="3" style="text-align: right;"><strong>Total orden</strong></td>
+            <td style="text-align: right;"><strong>{{ $formatDualOrderAmount($orderTotal) }}</strong></td>
+            <td style="text-align: right;"><strong>{{ $formatDualOrderAmount($orderTotal) }}</strong></td>
         </tr>
     </tbody>
 </table>

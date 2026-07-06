@@ -3968,12 +3968,7 @@ function updateQuantity(id, newQty) {
                         const salePdfUrl = data.nota_entrega_pdf_url || data.pdf_url;
 
                         if (salePdfUrl) {
-                const link = document.createElement('a');
-                            link.href = salePdfUrl;
-                link.download = '';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                window.open(salePdfUrl, '_blank', 'noopener');
             }
 
             if (data.hka_dispatch_guide_download_url) {
