@@ -360,7 +360,7 @@
     <p><strong>Total Pagado:</strong> ${{ number_format($totalPagado, 2) }}</p>
      --}}
 
-    <img src="{{ $qrCodeBase64 }}" alt="Código QR">
+    <img src="{{ $qrCodeBase64 }}" alt="Código QR" style="width: 90px; height: 90px;">
 
 </body>
 </html>

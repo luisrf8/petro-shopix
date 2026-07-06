@@ -394,7 +394,7 @@
 
 @if(!empty($qrCodeBase64))
     <div style="margin-top: 18px; text-align: center;">
-        <img src="{{ $qrCodeBase64 }}" alt="Código QR" style="width: 110px; height: 110px;">
+        <img src="{{ $qrCodeBase64 }}" alt="Código QR" style="width: 90px; height: 90px;">
     </div>
 @endif
 
