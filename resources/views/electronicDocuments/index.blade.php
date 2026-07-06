@@ -30,6 +30,12 @@
     overflow-x: auto;
     padding-bottom: 0.35rem;
     -webkit-overflow-scrolling: touch;
+    cursor: grab;
+  }
+
+  .electronic-documents-table-wrap.is-dragging {
+    cursor: grabbing;
+    user-select: none;
   }
 
   .electronic-documents-table {
@@ -296,6 +302,52 @@
       button.textContent = 'Error';
     });
   });
+
+  (function () {
+    var wrappers = document.querySelectorAll('.electronic-documents-table-wrap');
+
+    wrappers.forEach(function (wrap) {
+      if (wrap.dataset.dragScrollBound === '1') {
+        return;
+      }
+      wrap.dataset.dragScrollBound = '1';
+
+      var isDragging = false;
+      var startX = 0;
+      var startScrollLeft = 0;
+
+      wrap.addEventListener('mousedown', function (event) {
+        if (event.button !== 0) {
+          return;
+        }
+
+        isDragging = true;
+        startX = event.pageX;
+        startScrollLeft = wrap.scrollLeft;
+        wrap.classList.add('is-dragging');
+      });
+
+      wrap.addEventListener('mouseleave', function () {
+        isDragging = false;
+        wrap.classList.remove('is-dragging');
+      });
+
+      wrap.addEventListener('mouseup', function () {
+        isDragging = false;
+        wrap.classList.remove('is-dragging');
+      });
+
+      wrap.addEventListener('mousemove', function (event) {
+        if (!isDragging) {
+          return;
+        }
+
+        event.preventDefault();
+        var delta = event.pageX - startX;
+        wrap.scrollLeft = startScrollLeft - delta;
+      });
+    });
+  })();
 </script>
               <th>Fecha</th>
               <th>Hora</th>

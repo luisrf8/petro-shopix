@@ -17,6 +17,7 @@ class Project extends Model
         'name',
         'description',
         'phase',
+        'is_public_landing',
         'starts_at',
         'development_at',
         'ends_at',
@@ -28,6 +29,7 @@ class Project extends Model
     ];
 
     protected $casts = [
+        'is_public_landing' => 'boolean',
         'starts_at' => 'date',
         'development_at' => 'date',
         'ends_at' => 'date',

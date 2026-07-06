@@ -37,6 +37,8 @@
     $baseCurrencySymbol = (string) ($baseCurrencySymbol ?? ($baseCurrencyCode === 'EUR' ? '€' : '$'));
     $showBsPrices = (bool) ($showBsPrices ?? ($tenant->show_bs_prices_in_storefront ?? false));
     $storefrontBsRate = (float) ($storefrontBsRate ?? 0);
+    $projectQuoteOnlyMode = (bool) ($projectQuoteOnlyMode ?? false);
+    $cartEnabledForStorefront = (bool) ($cartEnabled ?? false) && !$projectQuoteOnlyMode;
     $tenantExternalUrl = trim((string) ($tenant->external_url ?? ''));
     if ($tenantExternalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($tenantExternalUrl), ['http://', 'https://'])) {
       $tenantExternalUrl = 'https://' . $tenantExternalUrl;
@@ -56,6 +58,11 @@
         $mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' . urlencode(implode(', ', $addressParts));
       }
     }
+
+      $whatsappNumber = preg_replace('/\D+/', '', (string) (($tenant->phone_code ?? '') . ($tenant->phone_number ?? '')));
+      $projectWhatsappUrl = $whatsappNumber !== ''
+        ? 'https://wa.me/' . $whatsappNumber . '?text=' . urlencode('Hola, quiero cotizar un proyecto relacionado con el producto ' . $product->name . ' que vi en su landing de Shopix.')
+        : null;
 
     [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
     [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
@@ -1077,16 +1084,18 @@
           @endif
         </a>
 
-        <button type="button"
-                class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center tenant-icon-btn d-lg-none ms-auto me-2"
-                aria-label="Carrito"
-                title="Carrito"
-                data-bs-toggle="offcanvas"
-                data-bs-target="#tenantCartOffcanvas"
-                aria-controls="tenantCartOffcanvas">
-          <i class="bi bi-cart3"></i>
-          <span class="badge rounded-pill bg-dark tenant-cart-count">0</span>
-        </button>
+        @if($cartEnabledForStorefront)
+          <button type="button"
+                  class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center tenant-icon-btn d-lg-none ms-auto me-2"
+                  aria-label="Carrito"
+                  title="Carrito"
+                  data-bs-toggle="offcanvas"
+                  data-bs-target="#tenantCartOffcanvas"
+                  aria-controls="tenantCartOffcanvas">
+            <i class="bi bi-cart3"></i>
+            <span class="badge rounded-pill bg-dark tenant-cart-count">0</span>
+          </button>
+        @endif
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#landingNavbar" aria-controls="landingNavbar" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
@@ -1116,7 +1125,9 @@
                 <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer"><i class="bi bi-geo-alt"></i> Ver dirección</a>
               </li>
             @endif
-            @include('partials.tenant-cart-nav')
+            @if($cartEnabledForStorefront)
+              @include('partials.tenant-cart-nav')
+            @endif
             <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}"><i class="bi bi-arrow-left"></i> Volver</a>
             </li>
@@ -1232,6 +1243,11 @@
               <div class="variant-header">
                 <h5 class="fw-semibold mb-0 d-none d-md-block">Selecciona una variante</h5>
               </div>
+              @if($projectQuoteOnlyMode)
+                <div class="alert alert-light border mb-3">
+                  <strong>Cotizacion guiada.</strong> Este producto se atiende como parte de un proyecto. Selecciona la variante y te llevamos a WhatsApp para iniciar el presupuesto.
+                </div>
+              @endif
               <div id="selected-variant-indicator" class="variant-preview-pill d-none">
                 <i class="bi bi-stars"></i>
                 <span>Seleccionado: <strong id="selected-variant-label">-</strong></span>
@@ -1288,7 +1304,7 @@
               </div>
             </div>
 
-            @if($cartEnabled)
+            @if($cartEnabledForStorefront)
               <div class="detail-actions">
                 <button
                   id="add-to-cart-button"
@@ -1302,10 +1318,10 @@
               <div class="detail-actions">
                 <button
                   id="whatsapp-button"
-                  class="btn btn-success btn-lg"
+                  class="btn {{ $projectQuoteOnlyMode ? 'btn-dark' : 'btn-success' }} btn-lg"
                   disabled
                 >
-                  <i class="bi bi-whatsapp me-2"></i> Comunicarme por WhatsApp por este producto
+                  <i class="bi bi-whatsapp me-2"></i> {{ $projectQuoteOnlyMode ? 'Solicitar cotizacion por WhatsApp' : 'Comunicarme por WhatsApp por este producto' }}
                 </button>
               </div>
             @endif
@@ -1318,7 +1334,9 @@
     <p>© 2025 {{ $tenant->name }} - SHOPIX. Todos los derechos reservados.</p>
   </footer>
 
-  @include('partials.tenant-cart-offcanvas')
+  @if($cartEnabledForStorefront)
+    @include('partials.tenant-cart-offcanvas')
+  @endif
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -1574,7 +1592,8 @@
             updateGalleryUi(0);
         }
         const variantButtons = document.querySelectorAll('.variant-button:not([disabled])');
-        const cartEnabled = @json((bool) ($cartEnabled ?? false));
+        const cartEnabled = @json((bool) ($cartEnabledForStorefront ?? false));
+        const projectQuoteOnlyMode = @json((bool) ($projectQuoteOnlyMode ?? false));
         const addToCartButton = document.getElementById('add-to-cart-button');
         const openCartButton = document.getElementById('open-cart-button');
         const whatsappButton = document.getElementById('whatsapp-button');
@@ -1709,7 +1728,9 @@
               return;
             }
 
-            const message = `Hola, vengo de tu tienda virtual de Shopix y estoy interesado en el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio de *${selectedVariant.price} ${baseCurrencySymbol}*. ¿Podrían darme más información?`;
+            const message = projectQuoteOnlyMode
+              ? `Hola, vengo de tu landing de Shopix y quiero cotizar un proyecto relacionado con el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio referencial de *${selectedVariant.price} ${baseCurrencySymbol}*. ¿Podemos iniciar el presupuesto?`
+              : `Hola, vengo de tu tienda virtual de Shopix y estoy interesado en el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio de *${selectedVariant.price} ${baseCurrencySymbol}*. ¿Podrían darme más información?`;
             const whatsappLink = `https://wa.me/${fullPhoneNumber}?text=${encodeURIComponent(message)}`;
             window.open(whatsappLink, '_blank');
           });

@@ -39,6 +39,20 @@ use Illuminate\Validation\ValidationException;
 
 class ProjectModuleController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+            $tenant = $tenantId > 0 ? Tenant::query()->find($tenantId) : null;
+
+            if (!$tenant || !(bool) ($tenant->offers_projects ?? true)) {
+                return redirect()->route('dashboard')->with('warning', 'Este tenant no tiene habilitado el modulo de proyectos.');
+            }
+
+            return $next($request);
+        });
+    }
+
     public function index()
     {
         return redirect()->route('projects.module.projects.index');
@@ -159,8 +173,12 @@ class ProjectModuleController extends Controller
             ->where('tenant_id', $tenantId)
             ->with([
                 'quotation',
-                'tasks' => fn ($query) => $query->with('responsibleMember')->latest('id')->take(20),
+                'tasks' => fn ($query) => $query->with('responsibleMember')->latest('id')->take(8),
                 'assignments.teamMember',
+            ])
+            ->withCount([
+                'tasks as tasks_total_count',
+                'tasks as tasks_done_count' => fn ($query) => $query->where('status', 'done'),
             ])
             ->latest('id')
             ->take(30)
@@ -204,6 +222,22 @@ class ProjectModuleController extends Controller
             ->get(['id', 'full_name']);
 
         $assetsByType = $project->assets->groupBy('asset_type');
+        $phaseGallery = collect(['inicio', 'desarrollo', 'fin'])
+            ->mapWithKeys(function (string $phase) use ($project) {
+                $phaseAssets = $project->assets
+                    ->filter(fn (ProjectAsset $asset) => (string) ($asset->phase ?: 'inicio') === $phase)
+                    ->sortByDesc(fn (ProjectAsset $asset) => $asset->happened_at ?? $asset->created_at)
+                    ->values();
+
+                return [
+                    $phase => [
+                        'label' => $this->projectPhaseLabel($phase),
+                        'media' => $phaseAssets->filter(fn (ProjectAsset $asset) => $this->isProjectMediaAsset($asset))->values(),
+                        'documents' => $phaseAssets->filter(fn (ProjectAsset $asset) => $this->isProjectDocumentAsset($asset))->values(),
+                        'entries' => $phaseAssets,
+                    ],
+                ];
+            });
 
         $totalPaid = (float) $project->assets
             ->where('asset_type', 'payment')
@@ -238,6 +272,7 @@ class ProjectModuleController extends Controller
             'totalSpent' => $totalSpent,
             'profitabilityAmount' => $profitabilityAmount,
             'profitabilityPercent' => $profitabilityPercent,
+            'phaseGallery' => $phaseGallery,
         ]);
     }
 
@@ -248,13 +283,14 @@ class ProjectModuleController extends Controller
 
         $validated = $request->validate([
             'asset_type' => 'required|in:reference_image,process_image,task_image,final_image,documentation,expense,payment',
+            'phase' => 'nullable|in:inicio,desarrollo,fin',
             'task_id' => 'nullable|exists:pm_project_tasks,id',
             'title' => 'nullable|string|max:255',
             'notes' => 'nullable|string|max:4000',
             'amount' => 'nullable|numeric|min:0',
             'currency_code' => 'nullable|string|in:USD,EUR,BS,VES',
             'happened_at' => 'nullable|date',
-            'asset_file' => 'nullable|file|mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx|max:10240',
+            'asset_file' => 'nullable|file|mimes:jpg,jpeg,png,webp,mp4,webm,mov,pdf,doc,docx,xls,xlsx|max:51200',
         ]);
 
         if (!empty($validated['task_id'])) {
@@ -271,6 +307,7 @@ class ProjectModuleController extends Controller
             'tenant_id' => $tenantId,
             'project_id' => $project->id,
             'task_id' => $validated['task_id'] ?? null,
+            'phase' => $validated['phase'] ?? $project->phase,
             'asset_type' => $validated['asset_type'],
             'title' => $validated['title'] ?? null,
             'notes' => $validated['notes'] ?? null,
@@ -389,6 +426,7 @@ class ProjectModuleController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:4000',
             'phase' => 'required|in:inicio,desarrollo,fin',
+            'is_public_landing' => 'nullable|boolean',
             'starts_at' => 'nullable|date',
             'ends_at' => 'nullable|date',
             'budget_amount' => 'nullable|numeric|min:0',
@@ -407,6 +445,7 @@ class ProjectModuleController extends Controller
             'name' => trim((string) $validated['name']),
             'description' => $validated['description'] ?? null,
             'phase' => $validated['phase'],
+            'is_public_landing' => (bool) ($validated['is_public_landing'] ?? true),
             'starts_at' => $validated['starts_at'] ?? null,
             'ends_at' => $validated['ends_at'] ?? null,
             'budget_amount' => (float) ($validated['budget_amount'] ?? 0),
@@ -528,9 +567,19 @@ class ProjectModuleController extends Controller
             'phase' => 'required|in:inicio,desarrollo,fin',
         ]);
 
-        $project->update([
+        $payload = [
             'phase' => $validated['phase'],
-        ]);
+        ];
+
+        if ($validated['phase'] === 'desarrollo' && !$project->development_at) {
+            $payload['development_at'] = now()->toDateString();
+        }
+
+        if ($validated['phase'] === 'fin' && !$project->ends_at) {
+            $payload['ends_at'] = now()->toDateString();
+        }
+
+        $project->update($payload);
 
         return back()->with('success', 'Fase del proyecto actualizada correctamente.');
     }
@@ -546,6 +595,48 @@ class ProjectModuleController extends Controller
         ]);
 
         return back()->with('success', 'Proyecto marcado como terminado.');
+    }
+
+    public function updateProjectVisibility(Request $request, Project $project)
+    {
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        abort_if((int) $project->tenant_id !== $tenantId, 404);
+
+        $validated = $request->validate([
+            'is_public_landing' => 'nullable|boolean',
+        ]);
+
+        $project->update([
+            'is_public_landing' => (bool) ($validated['is_public_landing'] ?? false),
+        ]);
+
+        return back()->with('success', 'Visibilidad publica del proyecto actualizada.');
+    }
+
+    protected function projectPhaseLabel(string $phase): string
+    {
+        return match ($phase) {
+            'inicio' => 'Inicio',
+            'desarrollo' => 'Desarrollo',
+            'fin' => 'Finalizacion',
+            default => ucfirst($phase),
+        };
+    }
+
+    protected function isProjectMediaAsset(ProjectAsset $asset): bool
+    {
+        $extension = strtolower(pathinfo((string) ($asset->file_path ?? ''), PATHINFO_EXTENSION));
+
+        return in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'mp4', 'webm', 'mov'], true);
+    }
+
+    protected function isProjectDocumentAsset(ProjectAsset $asset): bool
+    {
+        if (!$asset->file_path) {
+            return false;
+        }
+
+        return !$this->isProjectMediaAsset($asset);
     }
 
     public function storeQuotation(Request $request)

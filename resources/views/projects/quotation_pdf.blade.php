@@ -77,6 +77,18 @@
       text-align: right;
     }
 
+    .doc-title-line {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 2px;
+    }
+
+    .doc-title-line td {
+      border: none;
+      padding: 0;
+      vertical-align: baseline;
+    }
+
     .doc-title {
       font-size: 16px;
       font-weight: 700;
@@ -86,7 +98,7 @@
 
     .doc-number {
       font-size: 12px;
-      margin-top: 4px;
+      margin-top: 0;
     }
 
     .meta {
@@ -193,7 +205,7 @@
     $quotationRateToBs = (float) ($quotationRateToBs ?? 0);
     $usdRateToBs = (float) ($usdRateToBs ?? 0);
     $logoUrl = (string) ($billingLogoDataUri ?? '');
-    $tenantRif = trim((string) ($tenant->rif ?? $tenant->slug ?? '-'));
+    $tenantRif = trim((string) ($tenant->rif ?? ''));
     $tenantPhoneCode = trim((string) ($tenant->phone_code ?? ''));
     $tenantPhoneNumber = trim((string) ($tenant->phone_number ?? ''));
     $tenantPhone = trim($tenantPhoneCode . ' ' . $tenantPhoneNumber);
@@ -279,14 +291,22 @@
         </td>
         <td class="company-wrap">
           <p class="company-name">{{ strtoupper((string) ($tenant->name ?? 'TIENDA')) }}</p>
-          <p class="company-line"><strong>RIF:</strong> {{ strtoupper($tenantRif) }}</p>
+          @if($tenantRif !== '')
+            <p class="company-line"><strong>RIF:</strong> {{ strtoupper($tenantRif) }}</p>
+          @endif
           <p class="company-line"><strong>Dirección:</strong> {{ (string) ($tenant->address ?? '-') }}</p>
           <p class="company-line"><strong>Teléfono:</strong> {{ $tenantPhone }}</p>
           <p class="company-line"><strong>Email:</strong> {{ (string) ($tenant->email ?? '-') }}</p>
         </td>
         <td class="doc-wrap">
-          <p class="doc-title">COTIZACIÓN</p>
-          <p class="doc-number"><strong>#{{ $quotation->id }}</strong></p>
+          <table class="doc-title-line">
+            <tr>
+              <td class="right">
+                <span class="doc-title">COTIZACIÓN</span>
+                <span class="doc-number"><strong>#{{ $quotation->id }}</strong></span>
+              </td>
+            </tr>
+          </table>
           <p class="company-line"><strong>Fecha:</strong> {{ optional($quotation->created_at)->format('d/m/Y') ?: now()->format('d/m/Y') }}</p>
           <p class="company-line"><strong>Validez:</strong> {{ optional($quotation->valid_until)->format('d/m/Y') ?: '-' }}</p>
         </td>

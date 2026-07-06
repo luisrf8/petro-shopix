@@ -141,7 +141,8 @@
       $canSeePaidPendingDeliveries = $isOwner || $isAdmin || $isSeller || $isWarehouse || $isDelivery;
       $canSeeTenantElectronicDocuments = $isOwner || $isAdmin || $isSeller;
       $canSeeCustomers = $isOwner || $isAdmin || $isSeller;
-      $canSeeSellerCommissions = $isOwner || $isAdmin || $isSeller;
+      $canSeeSellerCommissions = $isOwner || $isAdmin;
+      $canSeeSellerCommissionProgress = $isSeller;
       $canSeeAccountsReceivable = $isOwner || $isAdmin;
       $canInventoryEntries = $isOwner || $isAdmin || $isWarehouse;
       $canSeeWarehouses = $isOwner || $isAdmin || $isSeller || $isWarehouse;
@@ -190,6 +191,7 @@
 
         $tenantBusinessType = strtolower((string) ($tenant->business_type ?? ''));
         $isServiceStore = in_array($tenantBusinessType, ['servicio', 'service', 'services'], true);
+        $tenantOffersProjects = (bool) ($tenant->offers_projects ?? true);
         $canSeeAppointments = $isOwner || $isAdmin || $isSeller;
 
         $showCatalogSection = ($planCanDashboard)
@@ -201,6 +203,7 @@
         $showSalesSection = ($canSell && $planCanSales)
           || ($canSeeAppointments && $planCanAppointments && $isServiceStore)
           || ($canSeeCustomers && $planCanCustomers)
+          || ($canSeeSellerCommissionProgress && $planCanSales)
           || ($canSeeSellerCommissions && $planCanSales)
           || ($canSeeAccountsReceivable && $planCanAccountsReceivable)
           || ($canSeePaidPendingDeliveries && $planCanPaidPendingDeliveries)
@@ -257,7 +260,7 @@
         </li>
       @endif
       @if($canSeeCategories || $canSeeProducts || $canManageStore)
-        @if($planCanDashboard)
+        @if($planCanDashboard && !$isSeller)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/dashboard">
               <i class="material-symbols-rounded opacity-5">dashboard</i>
@@ -332,7 +335,7 @@
           </li>
         @endif
 
-        @if($canSell && $planCanSales)
+        @if($canSell && $planCanSales && !$isSeller && $tenantOffersProjects)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/proyectos">
               <i class="material-symbols-rounded opacity-5">assignment</i>
@@ -349,6 +352,15 @@
             <a class="nav-link text-dark" href="/nomina">
               <i class="material-symbols-rounded opacity-5">badge</i>
               <span class="nav-link-text ms-1">Nómina</span>
+            </a>
+          </li>
+        @endif
+
+        @if($canSeeSellerCommissionProgress && $planCanSales)
+          <li class="nav-item">
+            <a class="nav-link text-dark" href="{{ route('seller-commissions.progress') }}">
+              <i class="material-symbols-rounded opacity-5">monitoring</i>
+              <span class="nav-link-text ms-1">Administrador ventas</span>
             </a>
           </li>
         @endif

@@ -4685,6 +4685,9 @@
             <div class="col-12 col-md-4">
               <label class="form-label small mb-1">Monto</label>
               <input type="text" inputmode="decimal" autocomplete="off" class="form-control pro-payment-amount" placeholder="0.00">
+              <div class="d-flex justify-content-end mt-1">
+                <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 pro-fill-remaining-amount">Llenar restante</button>
+              </div>
             </div>
             <div class="${referenceColumnClass} pro-payment-reference-group">
               <label class="form-label small mb-1">Referencia *</label>
@@ -4886,6 +4889,34 @@
       }
 
       return roundProMoney(amount);
+    }
+
+    function fromBaseToMethodAmount(method, amountBase) {
+      if (!amountBase || amountBase <= 0) return 0;
+
+      const methodCurrencyCode = normalizePaymentCurrencyCode(method?.currency?.code || method?.currency?.name || '');
+      const normalizedBaseCurrency = normalizePaymentCurrencyCode(proBaseCurrency || 'USD');
+
+      if (methodCurrencyCode === normalizedBaseCurrency) {
+        return roundProMoney(amountBase);
+      }
+
+      if (isBsCurrency(method)) {
+        if (!proBaseRate || proBaseRate <= 0) return 0;
+        return roundProMoney(amountBase * proBaseRate);
+      }
+
+      if (methodCurrencyCode === 'USD' && normalizedBaseCurrency === 'EUR') {
+        if (proDollarRate <= 0 || proEuroRate <= 0) return 0;
+        return roundProMoney((amountBase * proEuroRate) / proDollarRate);
+      }
+
+      if (methodCurrencyCode === 'EUR' && normalizedBaseCurrency === 'USD') {
+        if (proEuroRate <= 0 || proDollarRate <= 0) return 0;
+        return roundProMoney((amountBase * proDollarRate) / proEuroRate);
+      }
+
+      return roundProMoney(amountBase);
     }
 
     function renderMethodDetailsHtml(method) {
@@ -5275,6 +5306,61 @@
       }
 
       paymentRowsContainer.onclick = (event) => {
+        const fillRemainingButton = event.target.closest('.pro-fill-remaining-amount');
+        if (fillRemainingButton) {
+          const row = event.target.closest('[data-pro-payment-row]');
+          if (!row) {
+            return;
+          }
+
+          const amountInput = row.querySelector('.pro-payment-amount');
+          const methodId = Number(row.querySelector('.pro-payment-method')?.value || 0);
+          const method = getMethodById(methodId);
+
+          if (!amountInput || !method) {
+            showTenantToast('Pago', 'Selecciona un método de pago válido para completar el monto.');
+            return;
+          }
+
+          const paymentRows = Array.from(document.querySelectorAll('[data-pro-payment-row]'));
+          const proDeliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+          const proDeliveryContext = getTenantDeliveryContext(proDeliveryType, proShippingDistanceInput, false);
+          const totalBaseWithoutIgtf = getCheckoutProItemsSubtotalBase(getCart()) + Number(proDeliveryContext.fee || 0);
+          const igtfTotals = calculateProIgtfTotals(paymentRows, totalBaseWithoutIgtf);
+          const totalOrderBase = roundProMoney(igtfTotals.totalWithIgtf);
+
+          const paidBaseWithoutCurrent = roundProMoney(paymentRows.reduce((sum, currentRow) => {
+            if (currentRow === row) {
+              return sum;
+            }
+
+            const currentMethodId = Number(currentRow.querySelector('.pro-payment-method')?.value || 0);
+            const currentMethod = getMethodById(currentMethodId);
+            const currentAmountRaw = parseProPaymentAmountValue(currentRow.querySelector('.pro-payment-amount')?.value || 0);
+
+            return sum + toBaseFromMethodAmount(currentMethod, currentAmountRaw);
+          }, 0));
+
+          const remainingBase = roundProMoney(Math.max(totalOrderBase - paidBaseWithoutCurrent, 0));
+          if (remainingBase <= 0) {
+            amountInput.value = '';
+            syncProPaymentAmountInput(amountInput, false);
+            updateProPaymentSummary();
+            return;
+          }
+
+          const amountForMethod = fromBaseToMethodAmount(method, remainingBase);
+          if (amountForMethod <= 0) {
+            showTenantToast('Pago', 'No se pudo calcular el restante para este método con las tasas actuales.');
+            return;
+          }
+
+          amountInput.value = formatProPaymentAmountValue(amountForMethod);
+          syncProPaymentAmountInput(amountInput, false);
+          updateProPaymentSummary();
+          return;
+        }
+
         const removeBtn = event.target.closest('.pro-remove-payment-row');
         if (!removeBtn) return;
         const row = event.target.closest('[data-pro-payment-row]');

@@ -63,9 +63,11 @@
       : '';
     $whatsapp = preg_replace('/\D/', '', (string) ($tenant->phone_code . $tenant->phone_number));
     $whatsappUrl = !empty($whatsapp) ? 'https://api.whatsapp.com/send?phone=' . $whatsapp : null;
+    $projectWhatsappBaseUrl = !empty($whatsapp) ? 'https://api.whatsapp.com/send?phone=' . $whatsapp : null;
     $serviceLabel = !empty($tenant->business_type) && \Illuminate\Support\Str::lower((string) $tenant->business_type) === 'servicio'
       ? 'Servicio'
       : 'Tienda';
+    $tenantOffersProjects = (bool) ($tenant->offers_projects ?? true);
     $heroSummary = !empty($tenant->description)
       ? \Illuminate\Support\Str::limit((string) $tenant->description, 96)
       : ($serviceLabel === 'Servicio' ? 'Agenda, consulta y compra desde tu móvil.' : 'Explora, elige y compra desde tu móvil.');
@@ -74,6 +76,7 @@
       : ($serviceLabel === 'Servicio' ? 'Atención por agenda' : 'Horario no publicado');
     $mapsUrl = null;
     $defaultWhatsappMessage = 'Hola, vengo de tu tienda virtual de Shopix';
+    $projectWhatsappMessage = 'Hola, vi la landing de proyectos en Shopix y quiero solicitar una cotización personalizada.';
     $tenantExternalUrl = trim((string) ($tenant->external_url ?? ''));
     if ($tenantExternalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($tenantExternalUrl), ['http://', 'https://'])) {
       $tenantExternalUrl = 'https://' . $tenantExternalUrl;
@@ -94,6 +97,20 @@
     if (!empty($whatsappUrl)) {
       $whatsappUrl .= '&text=' . urlencode($defaultWhatsappMessage);
     }
+    $projectWhatsappUrl = !empty($projectWhatsappBaseUrl)
+      ? $projectWhatsappBaseUrl . '&text=' . urlencode($projectWhatsappMessage)
+      : null;
+    $tenantBackgroundUrl = !empty($tenant->background_image)
+      ? (
+        \App\Support\ImageStorage::url($tenant->background_image)
+        ?? asset('assets/img/shopix5.png')
+      )
+      : null;
+    $tenantBackgroundExt = strtolower(pathinfo((string) ($tenant->background_image ?? ''), PATHINFO_EXTENSION));
+    $tenantBackgroundMediaType = strtolower(trim((string) ($tenant->background_media_type ?? 'image')));
+    $heroHasVideoBackground = !empty($tenantBackgroundUrl)
+      && ($tenantBackgroundMediaType === 'video' || in_array($tenantBackgroundExt, ['mp4', 'webm', 'mov'], true));
+    $heroHasImageBackground = !empty($tenantBackgroundUrl) && !$heroHasVideoBackground;
 
     [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
     [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
@@ -228,6 +245,15 @@
       left: 0;
       width: 100%;
       height: 100%;
+      z-index: 1;
+    }
+
+    .hero-background-video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
       z-index: 0;
     }
 
@@ -240,7 +266,8 @@
     }
 
     .hero .container {
-      z-index: 1;
+      position: relative;
+      z-index: 2;
       padding-top: 5.5rem;
     }
 
@@ -1036,6 +1063,183 @@
       line-height: 1.3;
     }
 
+    .project-solutions-section,
+    .project-live-section {
+      background: #f8fafc;
+    }
+
+    .project-section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.75rem;
+    }
+
+    .project-section-kicker {
+      font-size: 0.73rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--tenant-primary);
+      font-weight: 800;
+      margin-bottom: 0.45rem;
+    }
+
+    .project-pill-tabs {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .project-pill-tab {
+      appearance: none;
+      border: 1px solid rgba(15, 23, 42, 0.1);
+      border-radius: 999px;
+      padding: 0.45rem 0.85rem;
+      background: #ffffff;
+      color: #334155;
+      font-size: 0.78rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .project-pill-tab.is-active {
+      background: var(--tenant-primary);
+      color: #ffffff;
+      border-color: var(--tenant-primary);
+    }
+
+    .project-showcase-card,
+    .project-progress-card {
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      border-radius: 18px;
+      overflow: hidden;
+      background: #ffffff;
+      box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+      height: 100%;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .project-showcase-card:hover,
+    .project-progress-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 24px 50px rgba(15, 23, 42, 0.12);
+    }
+
+    .project-showcase-media,
+    .project-progress-media {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      display: block;
+      background: linear-gradient(135deg, rgba(var(--tenant-primary-rgb), 0.15), rgba(var(--tenant-accent-rgb), 0.15));
+    }
+
+    .project-card-body {
+      padding: 1.15rem;
+    }
+
+    .project-card-title {
+      color: #1e293b;
+      font-weight: 800;
+      font-size: 1.28rem;
+      margin-bottom: 0.55rem;
+    }
+
+    .project-card-text {
+      color: #64748b;
+      margin-bottom: 0.85rem;
+    }
+
+    .project-card-link {
+      appearance: none;
+      border: none;
+      background: transparent;
+      padding: 0;
+      color: var(--tenant-primary);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .project-phase-badge {
+      position: absolute;
+      right: 0.9rem;
+      top: 0.9rem;
+      background: rgba(255, 214, 109, 0.96);
+      color: #7c5800;
+      border-radius: 999px;
+      padding: 0.28rem 0.7rem;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .project-progress-shell {
+      margin-top: 1rem;
+    }
+
+    .project-progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #1e3a8a;
+      margin-bottom: 0.45rem;
+    }
+
+    .project-progress-bar {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      overflow: hidden;
+      margin-bottom: 0.55rem;
+    }
+
+    .project-progress-bar > span {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--tenant-primary), var(--tenant-accent));
+    }
+
+    .project-progress-steps {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      color: #64748b;
+      font-size: 0.72rem;
+    }
+
+    .project-cta-box {
+      max-width: 820px;
+      margin: 2.5rem auto 0;
+      background: #ffffff;
+      border: 1px solid rgba(15, 23, 42, 0.12);
+      border-radius: 22px;
+      padding: 2.1rem 1.6rem;
+      text-align: center;
+      box-shadow: 0 22px 50px rgba(15, 23, 42, 0.08);
+    }
+
+    .project-cta-actions {
+      display: inline-flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-top: 1.2rem;
+    }
+
+    .project-cta-actions .btn {
+      min-width: 220px;
+      border-radius: 12px;
+      font-weight: 700;
+      padding: 0.75rem 1rem;
+    }
+
     @media (max-width: 991.98px) {
       .landing-header {
         background: transparent;
@@ -1064,6 +1268,20 @@
 
       .catalog-appointments-nav {
         justify-self: start;
+      }
+
+      .project-section-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .project-cta-actions {
+        display: flex;
+      }
+
+      .project-cta-actions .btn {
+        min-width: 0;
+        width: 100%;
       }
 
       .filter-chip-card {
@@ -1219,8 +1437,8 @@
 
   <!-- HERO -->
   <section id="top" class="hero" style="
-      @if(isset($tenant->background_image) && $tenant->background_image)
-        background-image: url('{{ \App\Support\ImageStorage::url($tenant->background_image) ?? asset('assets/img/shopix5.png') }}');
+      @if($heroHasImageBackground)
+        background-image: url('{{ $tenantBackgroundUrl }}');
       @else
         background-image: linear-gradient(135deg, {{ $tenantColorPrimary }}, {{ $tenantColorSecondary }}, {{ $tenantColorAccent }});
       @endif
@@ -1230,7 +1448,13 @@
       overflow: hidden;
   ">
 
-    <div class="hero-overlay {{ isset($tenant->background_image) && $tenant->background_image ? 'hero-overlay-image' : 'hero-overlay-color' }}"></div>
+    @if($heroHasVideoBackground)
+      <video class="hero-background-video" autoplay muted loop playsinline preload="metadata" aria-hidden="true">
+        <source src="{{ $tenantBackgroundUrl }}">
+      </video>
+    @endif
+
+    <div class="hero-overlay {{ ($heroHasImageBackground || $heroHasVideoBackground) ? 'hero-overlay-image' : 'hero-overlay-color' }}"></div>
     <div class="container text-center">
       @php
           $businessTypeLabel = !empty($tenant->business_type)
@@ -1259,7 +1483,12 @@
           @endif
         </div>
         <div class="hero-actions">
-          <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-light px-4">Explorar</a>
+          @if($tenantOffersProjects && !empty($projectWhatsappUrl))
+            <a href="{{ $projectWhatsappUrl }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-light px-4">Solicitar cotización</a>
+          @else
+            <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-light px-4">Explorar</a>
+          @endif
+          <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn hero-action-secondary px-4">Ver catálogo</a>
           @if(!empty($tenantExternalUrl))
             <a href="{{ $tenantExternalUrl }}" target="_blank" rel="noopener noreferrer" class="btn hero-action-secondary px-4">Sitio oficial</a>
           @endif
@@ -1273,6 +1502,53 @@
       </div>
     </div>
   </section>
+
+  @if($tenantOffersProjects)
+  <section class="py-5 project-solutions-section">
+    <div class="container">
+      <div class="project-section-head">
+        <div>
+          <div class="project-section-kicker">Soluciones a medida</div>
+          <h2 class="section-title text-start mb-2">Categorías y especialidades que ofrece {{ $tenant->name }}</h2>
+          <p class="text-muted mb-0">Explora el tipo de solución que maneja la tienda y luego solicita tu cotización por WhatsApp.</p>
+        </div>
+        <div class="project-pill-tabs">
+          <button type="button" class="project-pill-tab is-active" data-project-category="all">Todos</button>
+          @foreach($categories->take(4) as $category)
+            <button type="button" class="project-pill-tab" data-project-category="{{ $category->id }}">{{ $category->name }}</button>
+          @endforeach
+        </div>
+      </div>
+
+      <div class="row g-4">
+        @foreach($categories as $category)
+          @php
+            $featuredCategoryProduct = $category->products->first();
+            $featuredCategoryImage = $featuredCategoryProduct && isset($featuredCategoryProduct->images[0])
+              ? (\App\Support\ImageStorage::url($featuredCategoryProduct->images[0]->path) ?? asset('assets/img/shopix5.png'))
+              : null;
+          @endphp
+          <div class="col-12 col-md-6 col-xl-4 project-showcase-item" data-project-category-card="{{ $category->id }}">
+            <article class="project-showcase-card">
+              @if($featuredCategoryImage)
+                <img src="{{ $featuredCategoryImage }}" alt="{{ $category->name }}" class="project-showcase-media">
+              @else
+                <div class="project-showcase-media d-flex align-items-center justify-content-center">
+                  <i class="bi bi-grid text-muted fs-1"></i>
+                </div>
+              @endif
+              <div class="project-card-body">
+                <h3 class="project-card-title">{{ $category->name }}</h3>
+                <p class="project-card-text">{{ \Illuminate\Support\Str::limit($category->description ?: 'Especialidad disponible dentro de la oferta comercial de esta tienda.', 120) }}</p>
+                <button type="button" class="project-card-link project-category-trigger" data-project-category-trigger="{{ $category->id }}">Filtrar en catalogo <i class="bi bi-arrow-right"></i></button>
+              </div>
+            </article>
+          </div>
+        @endforeach
+      </div>
+    </div>
+  </section>
+  @endif
 
   <!-- PRODUCTOS -->
   <section id="productos" class="py-5 section-muted">
@@ -1425,7 +1701,11 @@
                       @endif
                       <div class="d-flex gap-2 align-items-center">
                         <input type="number" min="1" value="1" class="form-control form-control-sm" id="tenant-pack-qty-{{ $package->id }}" style="max-width: 90px;">
-                        <button type="button" class="btn btn-dark btn-sm js-add-tenant-package" data-package-id="{{ $package->id }}">Agregar paquete</button>
+                        @if($tenantOffersProjects && !empty($projectWhatsappBaseUrl))
+                          <a href="{{ $projectWhatsappBaseUrl . '&text=' . urlencode('Hola, quiero cotizar el paquete ' . $package->name . ' que vi en la landing de Shopix.') }}" target="_blank" rel="noopener noreferrer" class="btn btn-dark btn-sm">Cotizar paquete</a>
+                        @else
+                          <button type="button" class="btn btn-dark btn-sm js-add-tenant-package" data-package-id="{{ $package->id }}">Agregar paquete</button>
+                        @endif
                       </div>
                     </div>
                   </div>
@@ -1486,6 +1766,83 @@
       </div>
     </div>
   </section>
+
+  @if($tenantOffersProjects)
+  <section class="py-5 project-live-section">
+    <div class="container">
+      <div class="project-section-head">
+        <div>
+          <div class="project-section-kicker">Proyectos en curso</div>
+          <h2 class="section-title text-start mb-2">Proyectos que se están realizando</h2>
+          <p class="text-muted mb-0">Visibilidad del avance por fases para que los clientes entiendan cómo se ejecuta cada solución.</p>
+        </div>
+      </div>
+
+      <div class="row g-4">
+        @forelse($activeProjects as $project)
+          @php
+            $projectAssets = $project->assets ?? collect();
+            $projectPreviewAsset = $projectAssets->first(function ($asset) {
+              $ext = strtolower(pathinfo((string) ($asset->file_path ?? ''), PATHINFO_EXTENSION));
+              return in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true);
+            });
+            $projectPreviewImage = $projectPreviewAsset && !empty($projectPreviewAsset->file_path)
+              ? asset('storage/' . ltrim((string) $projectPreviewAsset->file_path, '/'))
+              : null;
+            $projectProgress = (int) (($project->tasks_total_count ?? 0) > 0 ? round((($project->tasks_done_count ?? 0) / max(1, $project->tasks_total_count)) * 100) : 0);
+            $phaseMap = ['inicio' => 'Inicio', 'desarrollo' => 'Desarrollo', 'fin' => 'Final'];
+            $projectPhaseLabel = $phaseMap[strtolower((string) $project->phase)] ?? strtoupper((string) $project->phase);
+          @endphp
+          <div class="col-12 col-md-6 col-xl-4">
+            <article class="project-progress-card position-relative">
+              <span class="project-phase-badge">{{ $projectPhaseLabel }}</span>
+              @if($projectPreviewImage)
+                <img src="{{ $projectPreviewImage }}" alt="{{ $project->name }}" class="project-progress-media">
+              @else
+                <div class="project-progress-media d-flex align-items-center justify-content-center">
+                  <i class="bi bi-building text-muted fs-1"></i>
+                </div>
+              @endif
+              <div class="project-card-body">
+                <h3 class="project-card-title">{{ $project->name }}</h3>
+                <p class="project-card-text">{{ \Illuminate\Support\Str::limit($project->description ?: 'Proyecto activo en ejecución dentro del portafolio de la tienda.', 120) }}</p>
+
+                <div class="project-progress-shell">
+                  <div class="project-progress-meta">
+                    <span>Progreso del proyecto</span>
+                    <span>{{ $projectProgress }}% completado</span>
+                  </div>
+                  <div class="project-progress-bar"><span style="width: {{ $projectProgress }}%;"></span></div>
+                  <div class="project-progress-steps">
+                    <span>Inicio</span>
+                    <span>Desarrollo</span>
+                    <span>Final</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+        @empty
+          <div class="col-12">
+            <div class="empty-state">Todavía no hay proyectos públicos en ejecución para mostrar.</div>
+          </div>
+        @endforelse
+      </div>
+
+      <div class="project-cta-box">
+        <div class="project-section-kicker">Siguiente paso</div>
+        <h3 class="mb-3">¿Tiene un proyecto en mente?</h3>
+        <p class="text-muted mb-0">Nuestros asesores técnicos están listos para analizar sus requerimientos. La solicitud inicial se gestiona por WhatsApp y luego el equipo administrativo prepara la cotización formal y el proyecto asociado.</p>
+        @if(!empty($projectWhatsappBaseUrl))
+          <div class="project-cta-actions">
+            <a href="{{ $projectWhatsappBaseUrl . '&text=' . urlencode('Hola, quiero solicitar un presupuesto personalizado para un proyecto.') }}" target="_blank" rel="noopener noreferrer" class="btn btn-dark">Solicitar Presupuesto Personalizado</a>
+            <a href="{{ $projectWhatsappBaseUrl . '&text=' . urlencode('Hola, quiero hablar con ventas sobre un proyecto.') }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary">Contactar con Ventas</a>
+          </div>
+        @endif
+      </div>
+    </div>
+  </section>
+  @endif
   <!-- CONTACTO / UBICACIÓN -->
   <section id="contacto" class="py-5 section-soft">
     <div class="container">
@@ -1512,9 +1869,9 @@
             </div>
           </div>
           <div class="contact-actions">
-            @if(!empty($whatsappUrl))
-              <a href="{{ $whatsappUrl }}" target="_blank" class="contact-btn contact-btn-primary">
-                <i class="bi bi-whatsapp"></i> Escríbenos por WhatsApp
+            @if(!empty($whatsappUrl) || !empty($projectWhatsappUrl))
+              <a href="{{ $tenantOffersProjects && !empty($projectWhatsappUrl) ? $projectWhatsappUrl : $whatsappUrl }}" target="_blank" class="contact-btn contact-btn-primary">
+                <i class="bi bi-whatsapp"></i> {{ $tenantOffersProjects ? 'Solicitar cotización por WhatsApp' : 'Escríbenos por WhatsApp' }}
               </a>
             @endif
             @if(!empty($mapsUrl))
@@ -1632,6 +1989,9 @@
 
     // Filtrado de productos por categoría
     const categoryLinks = document.querySelectorAll('.category-link[data-id]');
+    const projectCategoryTabs = document.querySelectorAll('[data-project-category]');
+    const projectCategoryCards = document.querySelectorAll('[data-project-category-card]');
+    const projectCategoryTriggers = document.querySelectorAll('[data-project-category-trigger]');
     const products = document.querySelectorAll('.product-item');
     const packageItems = document.querySelectorAll('.package-item');
     const searchInput = document.getElementById('product-search');
@@ -1672,6 +2032,17 @@
         if (link.tagName === 'BUTTON') {
           link.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         }
+      });
+
+      projectCategoryTabs.forEach(tab => {
+        tab.classList.toggle('is-active', tab.dataset.projectCategory === categoryId);
+      });
+    }
+
+    function filterProjectCategoryCards(categoryId) {
+      projectCategoryCards.forEach(card => {
+        const shouldShow = categoryId === 'all' || card.dataset.projectCategoryCard === categoryId;
+        card.style.display = shouldShow ? '' : 'none';
       });
     }
 
@@ -1733,11 +2104,33 @@
       });
     });
 
+    projectCategoryTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const categoryId = tab.dataset.projectCategory || 'all';
+        setActiveCategory(categoryId);
+        filterProjectCategoryCards(categoryId);
+        applyCatalogFilters();
+      });
+    });
+
+    projectCategoryTriggers.forEach(trigger => {
+      trigger.addEventListener('click', () => {
+        const categoryId = trigger.dataset.projectCategoryTrigger || 'all';
+        setActiveCategory(categoryId);
+        filterProjectCategoryCards(categoryId);
+        applyCatalogFilters();
+
+        const targetSection = document.getElementById('productos');
+        targetSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
     if (searchInput) {
       searchInput.addEventListener('input', applyCatalogFilters);
     }
 
     setActiveCategory('all');
+    filterProjectCategoryCards('all');
     applyCatalogFilters();
   </script>
 </body>

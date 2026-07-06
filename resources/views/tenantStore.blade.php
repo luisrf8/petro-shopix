@@ -552,6 +552,25 @@
                                     </div>
                                     <small class="text-muted d-block mt-1">Cuando está activo, la agenda asigna automáticamente el primer horario disponible para cada profesional.</small>
                                 </div>
+
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold d-block">Módulo de proyectos</label>
+                                    <input type="hidden" name="offers_projects" value="0">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
+                                            id="offers_projects"
+                                            name="offers_projects"
+                                            value="1"
+                                            {{ (bool) ($tenant->offers_projects ?? true) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="offers_projects">
+                                            Este tenant ofrece proyectos
+                                        </label>
+                                    </div>
+                                    <small class="text-muted d-block mt-1">Controla si la tienda puede ver Proyectos, Cotizaciones y Nómina del módulo.</small>
+                                </div>
                                 <div class="mb-3">
                                     <label class="form-label">Eslogan</label>
                                     <input type="text" class="form-control p-2 border border-radius-lg" name="slogan" value="{{ $tenant->slogan ?? '' }}">
@@ -572,6 +591,17 @@
                                         value="{{ old('external_url', $tenant->external_url ?? '') }}"
                                         placeholder="https://mitienda.com">
                                     <small class="text-muted d-block mt-1">Si la completas, el directorio de Shopix redireccionara hacia esta URL.</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">RIF de la tienda (opcional)</label>
+                                    <input
+                                        type="text"
+                                        class="form-control p-2 border border-radius-lg"
+                                        name="rif"
+                                        value="{{ old('rif', $tenant->rif ?? '') }}"
+                                        placeholder="J-12345678-9">
+                                    <small class="text-muted d-block mt-1">Se mostrará en las cotizaciones y documentos PDF solo si está registrado.</small>
                                 </div>
 
                                 @unless($freePlanOperationalLock)
@@ -806,13 +836,25 @@
                                     <small class="text-muted">Este logo se usa en facturas, cotizaciones y documentos PDF. El logo principal de la tienda se mantiene aparte.</small>
                                 </div>
                                 <div class="mb-4">
+                                    @php
+                                        $tenantBackgroundUrl = \App\Support\ImageStorage::url($tenant->background_image) ?? asset('assets/img/shopix5.png');
+                                        $tenantBackgroundExt = strtolower(pathinfo((string) ($tenant->background_image ?? ''), PATHINFO_EXTENSION));
+                                        $tenantBackgroundMediaType = strtolower((string) ($tenant->background_media_type ?? 'image'));
+                                        $tenantHasBackgroundVideo = !empty($tenant->background_image) && ($tenantBackgroundMediaType === 'video' || in_array($tenantBackgroundExt, ['mp4', 'webm', 'mov'], true));
+                                    @endphp
                                     <div class="d-flex align-items-center gap-3 flex-wrap">
-                                        <img id="bg-preview" src="{{ \App\Support\ImageStorage::url($tenant->background_image) ?? asset('assets/img/shopix5.png') }}" class="logo-preview rounded p-2 bg-white shadow-sm">
+                                        <img id="bg-preview" src="{{ $tenantHasBackgroundVideo ? asset('assets/img/shopix5.png') : $tenantBackgroundUrl }}" class="logo-preview rounded p-2 bg-white shadow-sm {{ $tenantHasBackgroundVideo ? 'd-none' : '' }}">
+                                        <video id="bg-preview-video" class="logo-preview rounded p-2 bg-white shadow-sm {{ $tenantHasBackgroundVideo ? '' : 'd-none' }}" controls muted loop playsinline>
+                                            @if($tenantHasBackgroundVideo)
+                                                <source src="{{ $tenantBackgroundUrl }}">
+                                            @endif
+                                        </video>
                                     </div>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Imagen de fondo (PNG, JPG, JPEG o SVG) (1920x1080)</label>
-                                    <input type="file" name="background_image" id="background_image" class="form-control form-control-lg border border-radius-lg" accept=".png,.jpg,.jpeg,.webp,.svg">
+                                    <label class="form-label">Fondo del banner (imagen o video)</label>
+                                    <input type="file" name="background_image" id="background_image" class="form-control form-control-lg border border-radius-lg" accept=".png,.jpg,.jpeg,.webp,.mp4,.webm,.mov">
+                                    <small class="text-muted">Formatos permitidos: PNG, JPG, JPEG, WEBP, MP4, WEBM o MOV.</small>
                                 </div>
                                 <div class="mb-3">
                                     <button type="button" class="btn btn-outline-dark w-100" id="openBackgroundAiModalBtn">
@@ -1563,6 +1605,7 @@
 
         setWorkingDays(Array.isArray(tenant.working_days) ? tenant.working_days : []);
         setFormCheckboxValue('#appointments_first_come_enabled', tenant.appointments_first_come_enabled);
+        setFormCheckboxValue('#offers_projects', tenant.offers_projects ?? true);
         setFormCheckboxValue('#special_taxpayer', tenant.special_taxpayer);
         setFormCheckboxValue('#delivery_enabled', tenant.delivery_enabled);
         setFormCheckboxValue('#restrict_delivery_city_to_tenant', tenant.restrict_delivery_city_to_tenant);
@@ -1789,6 +1832,7 @@
     async function optimizeTenantInputFile(inputId, previewId) {
         const input = document.getElementById(inputId);
         const preview = document.getElementById(previewId);
+        const videoPreview = document.getElementById('bg-preview-video');
         const selectedFile = input?.files?.[0];
         if (!input || !preview || !selectedFile) {
             return;
@@ -1805,6 +1849,12 @@
 
             preview.src = URL.createObjectURL(optimized.file);
             preview.classList.remove('d-none');
+            if (previewId === 'bg-preview' && videoPreview) {
+                videoPreview.pause();
+                videoPreview.removeAttribute('src');
+                videoPreview.load();
+                videoPreview.classList.add('d-none');
+            }
 
             if (optimized.changed) {
                 let message = `Imagen optimizada automaticamente: ${formatTenantSize(originalSize)} -> ${formatTenantSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
@@ -1821,6 +1871,12 @@
         } catch (error) {
             preview.src = URL.createObjectURL(selectedFile);
             preview.classList.remove('d-none');
+            if (previewId === 'bg-preview' && videoPreview) {
+                videoPreview.pause();
+                videoPreview.removeAttribute('src');
+                videoPreview.load();
+                videoPreview.classList.add('d-none');
+            }
             showTenantToast('No se pudo optimizar la imagen seleccionada.', 'warning');
         }
     }
@@ -2110,6 +2166,7 @@ function initMap() {
     const billingLogoPreview = document.getElementById("billing-logo-preview");
     const backgroundInput = document.getElementById("background_image");
     const backgroundPreview = document.getElementById("bg-preview");
+    const backgroundVideoPreview = document.getElementById("bg-preview-video");
     const openLogoAiModalBtn = document.getElementById('openLogoAiModalBtn');
     const openBackgroundAiModalBtn = document.getElementById('openBackgroundAiModalBtn');
     const storeSlugInput = document.getElementById('storeSlugInput');
@@ -2503,7 +2560,35 @@ function initMap() {
             if (!event.target.files?.length) {
                 backgroundPreview.src = '#';
                 backgroundPreview.classList.add('d-none');
+                if (backgroundVideoPreview) {
+                    backgroundVideoPreview.pause();
+                    backgroundVideoPreview.removeAttribute('src');
+                    backgroundVideoPreview.load();
+                    backgroundVideoPreview.classList.add('d-none');
+                }
                 return;
+            }
+
+            const selectedBackgroundFile = event.target.files[0];
+            const isVideoBackground = (selectedBackgroundFile?.type || '').startsWith('video/');
+
+            if (isVideoBackground) {
+                backgroundPreview.classList.add('d-none');
+                if (backgroundVideoPreview) {
+                    backgroundVideoPreview.src = URL.createObjectURL(selectedBackgroundFile);
+                    backgroundVideoPreview.classList.remove('d-none');
+                    backgroundVideoPreview.load();
+                }
+
+                showTenantToast('Video de fondo listo para subir.', 'info');
+                return;
+            }
+
+            if (backgroundVideoPreview) {
+                backgroundVideoPreview.pause();
+                backgroundVideoPreview.removeAttribute('src');
+                backgroundVideoPreview.load();
+                backgroundVideoPreview.classList.add('d-none');
             }
 
             await optimizeTenantInputFile('background_image', 'bg-preview');

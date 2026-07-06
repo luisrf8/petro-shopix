@@ -258,7 +258,7 @@ class ReportController extends Controller
         [$startDate, $endDate] = $this->resolveDateRange($request);
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
 
-        $orders = SalesOrder::with(['user', 'details', 'payments'])
+        $orders = SalesOrder::with(['user', 'details', 'payments', 'salesRepresentative.role'])
             ->where('tenant_id', $user->tenant_id)
             ->whereDate('date', '>=', $startDate->toDateString())
             ->whereDate('date', '<=', $endDate->toDateString())
@@ -267,8 +267,21 @@ class ReportController extends Controller
             ->get();
 
         $orders->transform(function ($order) use ($currency, $user) {
-            $order->report_total_amount = TenantCurrency::convertAmount((float) $order->gross_total, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
-            $order->report_total_paid = TenantCurrency::convertAmount((float) $order->payments->where('status', 1)->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $grossTotal = (float) $order->gross_total;
+            $totalPaid = (float) $order->payments->where('status', 1)->sum('amount');
+            $rateToBs = $this->resolveSalesOrderRateToBsForReport($order, (int) $user->tenant_id);
+            $salesRepresentative = $order->salesRepresentative;
+            $salesRepresentativeRole = $salesRepresentative
+                ? User::displayRoleName((string) optional($salesRepresentative->role)->name)
+                : null;
+
+            $order->report_total_amount = TenantCurrency::convertAmount($grossTotal, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $order->report_total_paid = TenantCurrency::convertAmount($totalPaid, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+            $order->report_total_amount_bs = round($grossTotal * $rateToBs, 2);
+            $order->report_total_paid_bs = round($totalPaid * $rateToBs, 2);
+            $order->report_sales_user = $salesRepresentative
+                ? trim((string) $salesRepresentative->name) . ' (' . ($salesRepresentativeRole ?: 'Sin rol') . ')'
+                : 'Sin vendedor asignado';
             return $order;
         });
 
@@ -295,7 +308,7 @@ class ReportController extends Controller
         [$startDate, $endDate] = $this->resolveDateRange($request);
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
 
-        $orders = SalesOrder::with(['user', 'details', 'payments'])
+        $orders = SalesOrder::with(['user', 'details', 'payments', 'salesRepresentative.role'])
             ->where('tenant_id', $user->tenant_id)
             ->whereDate('date', '>=', $startDate->toDateString())
             ->whereDate('date', '<=', $endDate->toDateString())
@@ -308,22 +321,54 @@ class ReportController extends Controller
                 ? 'En Proceso'
                 : ($order->status == 1 ? 'Aprobado' : ($order->status == 2 ? 'Negado' : 'N/A'));
 
+            $grossTotal = (float) $order->gross_total;
+            $totalPaid = (float) $order->payments->where('status', 1)->sum('amount');
+            $rateToBs = $this->resolveSalesOrderRateToBsForReport($order, (int) $user->tenant_id);
+            $salesRepresentative = $order->salesRepresentative;
+            $salesRepresentativeRole = $salesRepresentative
+                ? User::displayRoleName((string) optional($salesRepresentative->role)->name)
+                : null;
+            $salesUserLabel = $salesRepresentative
+                ? trim((string) $salesRepresentative->name) . ' (' . ($salesRepresentativeRole ?: 'Sin rol') . ')'
+                : 'Sin vendedor asignado';
+
             return [
                 (string) $order->id,
                 (string) $order->date,
                 (string) ($order->user->name ?? 'N/A'),
                 $status,
                 (string) $order->details->sum('quantity'),
-                number_format(TenantCurrency::convertAmount((float) $order->gross_total, $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
-                number_format(TenantCurrency::convertAmount((float) $order->payments->where('status', 1)->sum('amount'), $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
+                number_format(TenantCurrency::convertAmount($grossTotal, $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
+                number_format(TenantCurrency::convertAmount($totalPaid, $currency['base_code'], $currency['code'], (int) $user->tenant_id), 2, '.', ''),
+                number_format(round($grossTotal * $rateToBs, 2), 2, '.', ''),
+                number_format(round($totalPaid * $rateToBs, 2), 2, '.', ''),
+                (string) $salesUserLabel,
             ];
         })->all();
 
         return $this->downloadCsv(
             'reporte_gestion_ventas',
-            ['Orden_ID', 'Fecha', 'Cliente', 'Estado', 'Items', 'Total_' . $currency['code'], 'Cobrado_' . $currency['code']],
+            ['Orden_ID', 'Fecha', 'Cliente', 'Estado', 'Items', 'Total_' . $currency['code'], 'Cobrado_' . $currency['code'], 'Total_BS', 'Cobrado_BS', 'Vendedor_(Rol)'],
             $csvRows
         );
+    }
+
+    private function resolveSalesOrderRateToBsForReport(SalesOrder $order, int $tenantId): float
+    {
+        $saleCurrencyCode = TenantCurrency::normalizeCurrencyCode((string) ($order->sale_currency_code ?? 'USD'));
+
+        if (in_array($saleCurrencyCode, ['BS', 'VES'], true)) {
+            return 1.0;
+        }
+
+        $storedRate = (float) ($order->sale_rate_to_bs ?? 0);
+        if ($storedRate > 0) {
+            return $storedRate;
+        }
+
+        $resolvedRate = (float) TenantCurrency::resolveRateToBs($tenantId, $saleCurrencyCode);
+
+        return $resolvedRate > 0 ? $resolvedRate : 1.0;
     }
 
     public function appointmentsWorkflowPdf(Request $request)

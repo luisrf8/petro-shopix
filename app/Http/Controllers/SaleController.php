@@ -1708,6 +1708,13 @@ class SaleController extends Controller
         $isWarehouseOnly = ($authUser?->hasStoreRole('warehouse') ?? false)
             && !($authUser?->hasStoreRole('owner', 'admin', 'seller') ?? false);
 
+        if ($request->routeIs('public.order.pdf')
+            && $type === 'invoice'
+            && !(bool) ($order->tenant?->electronic_invoicing_enabled ?? false)
+        ) {
+            abort(404);
+        }
+
         if ($isWarehouseOnly && $type === 'invoice') {
             abort(403, 'El rol Almacenista solo puede descargar la orden de entrega.');
         }

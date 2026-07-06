@@ -322,23 +322,18 @@
                 <div class="col-lg-5">
                     <div class="quick-actions justify-content-lg-end">
                         <button type="button" id="public-order-back" class="btn btn-outline-secondary mb-0">Volver</button>
-                        <a id="publicDownloadInvoiceBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-dark mb-0">Factura PDF</a>
-                        <a id="publicDownloadDeliveryBtn" data-base-url="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}" class="btn btn-outline-dark mb-0">Orden de entrega</a>
+                        @if((bool) ($order->tenant->electronic_invoicing_enabled ?? false))
+                            <a id="publicDownloadInvoiceBtn" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" class="btn btn-dark mb-0">Factura PDF</a>
+                        @else
+                            <button type="button" class="btn btn-dark mb-0" disabled title="La facturación digital no está activa en esta tienda">Factura PDF</button>
+                        @endif
+                        <a id="publicDownloadDeliveryBtn" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" class="btn btn-outline-dark mb-0">Orden de entrega</a>
                         @if($storeWhatsappUrl)
                             <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
                         @endif
                         @if($customerWhatsappUrl)
                             <a id="public-order-customer-whatsapp" href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0" data-order-user-id="{{ $order->user->id }}">WhatsApp cliente</a>
                         @endif
-                    </div>
-                    <div class="d-flex align-items-center gap-2 mt-3 justify-content-lg-end flex-wrap">
-                        <label for="public-order-download-currency" class="mb-0 text-sm fw-semibold">Moneda de emisión</label>
-                        <select id="public-order-download-currency" class="form-select form-select-sm border border-1 p-2" style="min-width: 190px; max-width: 220px;">
-                            <option value="{{ $orderCurrencyCode ?? 'USD' }}">{{ $orderCurrencyCode ?? 'USD' }} (venta)</option>
-                            @if(($orderCurrencyCode ?? 'USD') !== 'VES')
-                                <option value="VES">VES / Bolívares</option>
-                            @endif
-                        </select>
                     </div>
                 </div>
             </div>
@@ -534,28 +529,6 @@
 
                 window.location.href = '/';
             });
-
-            (() => {
-                const currencySelect = document.getElementById('public-order-download-currency');
-                const invoiceBtn = document.getElementById('publicDownloadInvoiceBtn');
-                const deliveryBtn = document.getElementById('publicDownloadDeliveryBtn');
-
-                if (!currencySelect || !invoiceBtn || !deliveryBtn) {
-                    return;
-                }
-
-                const syncDownloadUrls = () => {
-                    const currencyCode = encodeURIComponent(currencySelect.value || '{{ $orderCurrencyCode ?? 'USD' }}');
-                    const invoiceBase = invoiceBtn.dataset.baseUrl || invoiceBtn.getAttribute('href') || '';
-                    const deliveryBase = deliveryBtn.dataset.baseUrl || deliveryBtn.getAttribute('href') || '';
-
-                    invoiceBtn.href = `${invoiceBase}?currency_code=${currencyCode}`;
-                    deliveryBtn.href = `${deliveryBase}?currency_code=${currencyCode}`;
-                };
-
-                currencySelect.addEventListener('change', syncDownloadUrls);
-                syncDownloadUrls();
-            })();
 
             (() => {
                 const customerWhatsappBtn = document.getElementById('public-order-customer-whatsapp');

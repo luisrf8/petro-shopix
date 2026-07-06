@@ -33,6 +33,9 @@
                 <th class="num">Items</th>
                 <th class="num">Total ({{ $summary['currency_code'] ?? 'USD' }})</th>
                 <th class="num">Cobrado ({{ $summary['currency_code'] ?? 'USD' }})</th>
+                <th class="num">Total (BS)</th>
+                <th class="num">Cobrado (BS)</th>
+                <th>Vendedor (Rol)</th>
             </tr>
         </thead>
         <tbody>
@@ -47,10 +50,13 @@
                     <td class="num">{{ number_format($order->details->sum('quantity')) }}</td>
                     <td class="num">{{ number_format((float) ($order->report_total_amount ?? 0), 2) }}</td>
                     <td class="num">{{ number_format((float) ($order->report_total_paid ?? 0), 2) }}</td>
+                    <td class="num">{{ number_format((float) ($order->report_total_amount_bs ?? 0), 2) }}</td>
+                    <td class="num">{{ number_format((float) ($order->report_total_paid_bs ?? 0), 2) }}</td>
+                    <td>{{ $order->report_sales_user ?? 'Sin vendedor asignado' }}</td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7">No hay ventas en el rango seleccionado.</td>
+                    <td colspan="10">No hay ventas en el rango seleccionado.</td>
                 </tr>
             @endforelse
         </tbody>

@@ -271,6 +271,21 @@
         max-height: none !important;
         overflow: visible !important;
       }
+
+      .shopix-drag-scroll {
+        cursor: grab;
+      }
+
+      .shopix-drag-scroll.is-dragging {
+        cursor: grabbing;
+        user-select: none;
+      }
+
+      .shopix-drag-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+      }
     </style>
     @stack('styles')
 </head>
@@ -1097,6 +1112,133 @@
 
           return response;
         };
+      })();
+
+      (function () {
+        const DRAG_ATTR = 'data-shopix-drag-scroll-bound';
+
+        function hasHorizontalOverflow(element) {
+          return (element.scrollWidth - element.clientWidth) > 2;
+        }
+
+        function findScrollableContainer(table) {
+          let current = table.parentElement;
+
+          while (current && current !== document.body) {
+            const style = window.getComputedStyle(current);
+            const overflowX = (style.overflowX || '').toLowerCase();
+
+            if ((overflowX === 'auto' || overflowX === 'scroll') && hasHorizontalOverflow(current)) {
+              return current;
+            }
+
+            current = current.parentElement;
+          }
+
+          return null;
+        }
+
+        function ensureWrapper(table) {
+          const existingContainer = findScrollableContainer(table);
+          if (existingContainer) {
+            return existingContainer;
+          }
+
+          const parent = table.parentElement;
+          if (!parent) {
+            return null;
+          }
+
+          const wrap = document.createElement('div');
+          wrap.className = 'shopix-drag-table-wrap';
+          parent.insertBefore(wrap, table);
+          wrap.appendChild(table);
+
+          return wrap;
+        }
+
+        function bindDragToContainer(container) {
+          if (!container || container.getAttribute(DRAG_ATTR) === '1') {
+            return;
+          }
+
+          container.setAttribute(DRAG_ATTR, '1');
+          container.classList.add('shopix-drag-scroll');
+
+          let dragging = false;
+          let startX = 0;
+          let startScrollLeft = 0;
+
+          container.addEventListener('mousedown', function (event) {
+            if (event.button !== 0) {
+              return;
+            }
+
+            if (!hasHorizontalOverflow(container)) {
+              return;
+            }
+
+            dragging = true;
+            startX = event.pageX;
+            startScrollLeft = container.scrollLeft;
+            container.classList.add('is-dragging');
+          });
+
+          container.addEventListener('mouseleave', function () {
+            dragging = false;
+            container.classList.remove('is-dragging');
+          });
+
+          container.addEventListener('mouseup', function () {
+            dragging = false;
+            container.classList.remove('is-dragging');
+          });
+
+          container.addEventListener('mousemove', function (event) {
+            if (!dragging) {
+              return;
+            }
+
+            event.preventDefault();
+            const delta = event.pageX - startX;
+            container.scrollLeft = startScrollLeft - delta;
+          });
+        }
+
+        function bindTables(root) {
+          const scope = root || document;
+          const tables = scope.querySelectorAll('table');
+
+          tables.forEach(function (table) {
+            const container = ensureWrapper(table);
+            bindDragToContainer(container);
+          });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+          bindTables(document);
+
+          const observer = new MutationObserver(function (mutations) {
+            mutations.forEach(function (mutation) {
+              mutation.addedNodes.forEach(function (node) {
+                if (!(node instanceof HTMLElement)) {
+                  return;
+                }
+
+                if (node.matches('table')) {
+                  bindTables(node.parentElement || document);
+                  return;
+                }
+
+                if (node.querySelector('table')) {
+                  bindTables(node);
+                }
+              });
+            });
+          });
+
+          observer.observe(document.body, { childList: true, subtree: true });
+        });
       })();
     </script>
     @stack('scripts')

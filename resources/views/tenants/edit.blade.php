@@ -175,6 +175,10 @@
                     <input type="email" name="email" class="form-control border border-1 p-2" value="{{ old('email', $tenant->email) }}">
                   </div>
                   <div class="col-md-6">
+                    <label class="form-label">RIF de la tienda (opcional)</label>
+                    <input type="text" name="rif" class="form-control border border-1 p-2" value="{{ old('rif', $tenant->rif) }}" placeholder="J-12345678-9">
+                  </div>
+                  <div class="col-md-6">
                     <label class="form-label">URL propia (opcional)</label>
                     <input type="text" name="external_url" class="form-control border border-1 p-2" value="{{ old('external_url', $tenant->external_url) }}" placeholder="https://mitienda.com">
                   </div>
@@ -381,6 +385,13 @@
                   <select name="electronic_invoicing_enabled" class="form-select border border-1 p-2">
                     <option value="1" {{ (string) old('electronic_invoicing_enabled', (int) ($tenant->electronic_invoicing_enabled ?? false)) === '1' ? 'selected' : '' }}>Activa</option>
                     <option value="0" {{ (string) old('electronic_invoicing_enabled', (int) ($tenant->electronic_invoicing_enabled ?? false)) === '0' ? 'selected' : '' }}>Inactiva</option>
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Módulo de proyectos</label>
+                  <select name="offers_projects" class="form-select border border-1 p-2">
+                    <option value="1" {{ (string) old('offers_projects', (int) ($tenant->offers_projects ?? true)) === '1' ? 'selected' : '' }}>Activo</option>
+                    <option value="0" {{ (string) old('offers_projects', (int) ($tenant->offers_projects ?? true)) === '0' ? 'selected' : '' }}>Inactivo</option>
                   </select>
                 </div>
                 <div class="mb-3">

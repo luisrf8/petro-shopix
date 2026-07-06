@@ -14,6 +14,7 @@ use App\Models\TenantPlanPayment;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\MaterialPackage;
+use App\Models\Project;
 use App\Models\Role;
 use App\Models\Country;
 use App\Models\State;
@@ -41,6 +42,7 @@ use App\Services\ShopixSetupImportService;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -474,6 +476,7 @@ class TenantController extends Controller
             'opening_time' => preg_match('/^\d{2}:\d{2}/', (string) ($tenantInput['opening_time'] ?? '')) ? substr((string) $tenantInput['opening_time'], 0, 5) : null,
             'closing_time' => preg_match('/^\d{2}:\d{2}/', (string) ($tenantInput['closing_time'] ?? '')) ? substr((string) $tenantInput['closing_time'], 0, 5) : null,
             'appointments_first_come_enabled' => filter_var($tenantInput['appointments_first_come_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'offers_projects' => filter_var($tenantInput['offers_projects'] ?? true, FILTER_VALIDATE_BOOLEAN),
             'special_taxpayer' => filter_var($tenantInput['special_taxpayer'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'delivery_enabled' => filter_var($tenantInput['delivery_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'delivery_fee_mode' => in_array((string) ($tenantInput['delivery_fee_mode'] ?? ''), ['free', 'fixed', 'distance'], true)
@@ -1285,8 +1288,15 @@ class TenantController extends Controller
         // Cargar categorías y productos del tenant
         $categories = Category::where('tenant_id', $tenant->id)
             ->where('is_active', true)
+            ->with(['products' => function ($query) {
+                $query->where('is_active', true)
+                    ->with('images')
+                    ->latest('id');
+            }])
+            ->limit(6)
             ->get();
         $productItems = Product::where('tenant_id', $tenant->id)
+            ->where('is_active', true)
             ->with('images')
             ->limit(9)
             ->get();
@@ -1313,8 +1323,26 @@ class TenantController extends Controller
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
         $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
         $storefrontBsRate = $this->resolveStorefrontBsRate($tenant);
+        $activeProjects = collect();
 
-        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate'));
+        if ((bool) ($tenant->offers_projects ?? true)) {
+            $activeProjects = Project::query()
+                ->where('tenant_id', $tenant->id)
+                ->where('is_public_landing', true)
+                ->where('phase', '!=', 'fin')
+                ->with([
+                    'assets' => fn ($query) => $query->latest('happened_at')->latest('id'),
+                ])
+                ->withCount([
+                    'tasks as tasks_total_count',
+                    'tasks as tasks_done_count' => fn ($query) => $query->where('status', 'done'),
+                ])
+                ->latest('id')
+                ->limit(6)
+                ->get();
+        }
+
+        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate', 'activeProjects'));
     }
 
     public function store(Request $request)
@@ -1325,6 +1353,7 @@ class TenantController extends Controller
             'name'            => 'required|string|max:255',
             'slug'            => 'required|string|max:255',
             'email'           => 'required|email|unique:tenants,email',
+            'rif'             => 'nullable|string|max:20',
             'external_url'    => 'nullable|string|max:255',
             'logo'            => 'nullable|image|mimes:png,svg,webp|max:2048',
             'billing_logo'    => 'nullable|image|mimes:png,svg,webp|max:2048',
@@ -1400,6 +1429,7 @@ class TenantController extends Controller
                 'name'            => $validated['name'],
                 'slug'            => $normalizedSlug,
                 'email'           => $validated['email'],
+                'rif'             => strtoupper(trim((string) ($validated['rif'] ?? ''))) ?: null,
                 'external_url'    => $normalizedExternalUrl,
                 'logo'            => $logoPath,
                 'billing_logo'    => $billingLogoPath,
@@ -1531,10 +1561,11 @@ class TenantController extends Controller
             'name'                  => 'required|string|max:255',
             'slug'                  => 'required|string|max:255',
             'email'                 => 'required|email|unique:tenants,email',
+            'rif'                   => 'nullable|string|max:20',
             'external_url'          => 'nullable|string|max:255',
             'logo'                  => 'nullable|image|mimes:png,svg,webp|max:2048',
             'billing_logo'          => 'nullable|image|mimes:png,svg,webp|max:2048',
-            'background_image'      => 'nullable|image|mimes:png,jpg,jpeg,webp|max:4096',
+            'background_image'      => 'nullable|file|mimes:png,jpg,jpeg,webp,mp4,webm,mov|max:30720',
             'color_primary'         => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
             'color_secondary'       => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
             'color_accent'          => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
@@ -1603,14 +1634,18 @@ class TenantController extends Controller
             }
 
             $backgroundPath = null;
+            $backgroundMediaType = 'image';
             if ($request->hasFile('background_image')) {
-                $backgroundPath = ImageStorage::storeUploadedImageAsWebp($request->file('background_image'), 'tenants/backgrounds');
+                $backgroundUpload = $this->storeTenantBackgroundMedia($request->file('background_image'));
+                $backgroundPath = $backgroundUpload['path'];
+                $backgroundMediaType = $backgroundUpload['type'];
             }
 
             $tenantData = [
                 'name'            => $validated['name'],
                 'slug'            => $normalizedSlug,
                 'email'           => $validated['email'],
+                'rif'             => strtoupper(trim((string) ($validated['rif'] ?? ''))) ?: null,
                 'external_url'    => $normalizedExternalUrl,
                 'logo'            => $logoPath,
                 'billing_logo'    => $billingLogoPath,
@@ -1633,6 +1668,7 @@ class TenantController extends Controller
                 'latitude'        => $validated['latitude'] ?? null,
                 'longitude'       => $validated['longitude'] ?? null,
                 'background_image'=> $backgroundPath,
+                'background_media_type' => $backgroundMediaType,
             ];
 
             $tenant = Tenant::create($this->filterDataByExistingColumns('tenants', $tenantData));
@@ -1723,6 +1759,7 @@ class TenantController extends Controller
             'name'  => 'sometimes|string|max:255',
             'slug'  => 'sometimes|string|max:255|unique:tenants,slug,' . $tenant->id,
             'email' => 'nullable|email|unique:tenants,email,' . $tenant->id,
+            'rif' => 'nullable|string|max:20',
             'external_url' => 'sometimes|nullable|string|max:255',
             'logo'  => 'nullable|string',
             'billing_logo'  => 'nullable|string',
@@ -1757,6 +1794,7 @@ class TenantController extends Controller
             'plan_id' => 'nullable|exists:plans,id',
             'is_active' => 'nullable|boolean',
             'electronic_invoicing_enabled' => 'nullable|boolean',
+            'offers_projects' => 'nullable|boolean',
             'special_taxpayer' => 'nullable|boolean',
             'printer_tax_change_enabled' => 'nullable|boolean',
             'printer_tax_change_reference' => 'nullable|string|max:255',
@@ -1875,6 +1913,7 @@ class TenantController extends Controller
             'name' => $validated['name'] ?? $tenant->name,
             'slug' => array_key_exists('slug', $validated) ? Str::slug((string) $validated['slug']) : $tenant->slug,
             'email' => $validated['email'] ?? $tenant->email,
+            'rif' => array_key_exists('rif', $validated) ? (strtoupper(trim((string) $validated['rif'])) ?: null) : $tenant->rif,
             'external_url' => array_key_exists('external_url', $validated) ? $normalizedExternalUrl : $tenant->external_url,
             'logo' => $validated['logo'] ?? $tenant->logo,
             'billing_logo' => $validated['billing_logo'] ?? $tenant->billing_logo,
@@ -1911,6 +1950,7 @@ class TenantController extends Controller
             'facebook' => $validated['facebook'] ?? $tenant->facebook,
             'is_active' => $validated['is_active'] ?? $tenant->is_active,
             'electronic_invoicing_enabled' => $validated['electronic_invoicing_enabled'] ?? $tenant->electronic_invoicing_enabled,
+            'offers_projects' => $validated['offers_projects'] ?? $tenant->offers_projects,
             'special_taxpayer' => $validated['special_taxpayer'] ?? $tenant->special_taxpayer,
             'printer_tax_change_enabled' => $validated['printer_tax_change_enabled'] ?? $tenant->printer_tax_change_enabled,
             'printer_tax_change_reference' => $validated['printer_tax_change_reference'] ?? $tenant->printer_tax_change_reference,
@@ -2041,12 +2081,13 @@ class TenantController extends Controller
                 'working_days'    => 'nullable|array',
                 'working_days.*'  => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
                 'appointments_first_come_enabled' => 'nullable|boolean',
+                'offers_projects' => 'nullable|boolean',
                 'opening_time'    => 'nullable|date_format:H:i',
                 'closing_time'    => 'nullable|date_format:H:i',
                 'address'         => 'nullable|string|max:255',
                 'latitude'        => 'nullable|numeric',
                 'longitude'       => 'nullable|numeric',
-                'background_image'       => 'nullable|image|mimes:png,jpg,jpeg,webp|max:2048',
+                'background_image'       => 'nullable|file|mimes:png,jpg,jpeg,webp,mp4,webm,mov|max:30720',
                 'tiktok'         => 'nullable|string|max:255',
                 'instagram'         => 'nullable|string|max:255',
                 'facebook'         => 'nullable|string|max:255',
@@ -2218,10 +2259,10 @@ class TenantController extends Controller
                     ImageStorage::delete($tenant->background_image);
                 }
 
-                // Guardar nueva imagen
-                $backgroundPath = ImageStorage::storeUploadedImageAsWebp($request->file('background_image'), 'tenants/backgrounds');
+                $backgroundUpload = $this->storeTenantBackgroundMedia($request->file('background_image'));
 
-                $tenant->background_image = $backgroundPath;
+                $tenant->background_image = $backgroundUpload['path'];
+                $tenant->background_media_type = $backgroundUpload['type'];
             }
             // Actualizar campos
             $tenantUpdatePayload = [
@@ -2244,6 +2285,7 @@ class TenantController extends Controller
                     ? $this->normalizeWorkingDays($validated['working_days'] ?? null)
                     : $tenant->working_days,
                 'appointments_first_come_enabled' => (bool) ($validated['appointments_first_come_enabled'] ?? false),
+                'offers_projects' => (bool) ($validated['offers_projects'] ?? true),
                 'opening_time'    => $validated['opening_time'] ?? $tenant->opening_time,
                 'closing_time'    => $validated['closing_time'] ?? $tenant->closing_time,
                 'address'         => $validated['address'] ?? $tenant->address,
@@ -2263,6 +2305,7 @@ class TenantController extends Controller
                 'delivery_notifications_enabled' => $validated['delivery_notifications_enabled'] ?? $tenant->delivery_notifications_enabled,
                 'billing_logo'    => $tenant->billing_logo,
                 'background_image'=> $tenant->background_image, // 👈 clave
+                'background_media_type' => $tenant->background_media_type ?: 'image',
             ];
 
             if (Schema::hasColumn('tenants', 'show_bs_prices_in_storefront')) {
@@ -2407,13 +2450,14 @@ class TenantController extends Controller
         $product->load(['category', 'variants.images', 'images']);
 
         $cartEnabled = $this->tenantHasProPlan($tenant);
+        $projectQuoteOnlyMode = (bool) ($tenant->offers_projects ?? true);
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
         $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
         $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
         $storefrontBsRate = $this->resolveStorefrontBsRate($tenant);
 
-        return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate'));
+        return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'projectQuoteOnlyMode', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate'));
     }
 
     public function publicTenantPaymentMethods(Tenant $tenant)
@@ -3715,6 +3759,25 @@ class TenantController extends Controller
         }
 
         return filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
+    }
+
+    private function storeTenantBackgroundMedia(UploadedFile $file): array
+    {
+        $mimeType = Str::lower((string) ($file->getClientMimeType() ?: $file->getMimeType() ?: ''));
+        $extension = Str::lower((string) $file->getClientOriginalExtension());
+        $videoExtensions = ['mp4', 'webm', 'mov'];
+
+        if (Str::startsWith($mimeType, 'video/') || in_array($extension, $videoExtensions, true)) {
+            return [
+                'path' => ImageStorage::storeUploadedFile($file, 'tenants/backgrounds'),
+                'type' => 'video',
+            ];
+        }
+
+        return [
+            'path' => ImageStorage::storeUploadedImageAsWebp($file, 'tenants/backgrounds'),
+            'type' => 'image',
+        ];
     }
 
     private function normalizeEconomicActivity(?string $value, ?string $businessType = null): ?string

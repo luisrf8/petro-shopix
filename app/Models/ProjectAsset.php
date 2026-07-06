@@ -15,6 +15,7 @@ class ProjectAsset extends Model
         'tenant_id',
         'project_id',
         'task_id',
+        'phase',
         'asset_type',
         'title',
         'notes',
