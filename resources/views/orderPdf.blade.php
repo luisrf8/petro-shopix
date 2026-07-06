@@ -39,9 +39,80 @@
             background-color: #f2f2f2;
         }
 
-        img {
+        .order-header {
+            margin-bottom: 10px;
+        }
+
+        .order-header-top {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 6px;
+        }
+
+        .order-header-top td {
+            border: none;
+            padding: 0;
+            vertical-align: top;
+        }
+
+        .order-header-left {
+            width: 64%;
+            padding-right: 8px;
+        }
+
+        .order-header-right {
+            width: 36%;
+            text-align: right;
+        }
+
+        .order-title {
+            margin: 0 0 6px;
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .order-company-name {
+            margin: 0 0 4px;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .order-company-info {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+
+        .order-company-info td {
+            border: none;
+            padding: 2px 0;
+            width: 50%;
+            vertical-align: top;
+            font-size: 13px;
+        }
+
+        .order-company-info .label {
+            font-weight: 700;
+        }
+
+        .order-logo-line {
+            font-size: 12px;
+            font-weight: 700;
+            margin: 0 0 6px;
+        }
+
+        .order-logo-box {
+            display: inline-block;
+            width: 150px;
+            text-align: right;
+        }
+
+        .order-logo-box img {
             display: block;
-            margin: 10px auto;
+            margin-left: auto;
+            margin-right: 0;
+            max-width: 150px;
+            max-height: 70px;
         }
     </style>
 </head>
@@ -100,29 +171,34 @@
         return is_null($bsAmount) ? 'Bs N/D' : ('Bs ' . number_format($bsAmount, 2));
     };
 @endphp
-<table width="100%" style="border-collapse: collapse; border: none; margin-bottom: 6px;">
-    <tr>
-        <td style="text-align: center; padding: 0; border: none;">
-            @if(!empty($imageBase64))
-                <img src="{{ $imageBase64 }}" alt="main_logo" style="width: 130px; height: 130px">
-            @endif
-        </td>
-    </tr>
-</table>
-
-<table width="100%" style="border-collapse: collapse; border: none; margin-bottom: 10px;">
-    <tr>
-        <td style="text-align: left; padding: 0; border: none;">
-            <p><strong>ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VALIDO COMO DOCUMENTO FISCAL</strong></p>
-            <h1>ORDEN DE DESPACHO</h1>
-            <p><strong>{{ $tienda->name }}</strong></p>
-            @if(!empty($tienda->rif))
-                <p>RIF: {{ $tienda->rif }}</p>
-            @endif
-            <p>Direccion de la empresa: {{ $tienda->country_name ?? $tienda->countryName() ?? $tienda->country }} {{ $tienda->state_name ?? $tienda->stateName() ?? $tienda->state }} {{ $tienda->city_name ?? $tienda->cityName() ?? $tienda->city }}</p>
-        </td>
-    </tr>
-</table>
+<div class="order-header">
+    <table class="order-header-top">
+        <tr>
+            <td class="order-header-left">
+                <p class="order-title">ORDEN DE DESPACHO</p>
+                <p class="order-company-name">{{ $tienda->name }}</p>
+                <table class="order-company-info">
+                    <tr>
+                        <td><span class="label">RIF:</span> {{ $tienda->rif ?: '-' }}</td>
+                        <td><span class="label">Dirección:</span> {{ $tienda->country_name ?? $tienda->countryName() ?? $tienda->country }} {{ $tienda->state_name ?? $tienda->stateName() ?? $tienda->state }} {{ $tienda->city_name ?? $tienda->cityName() ?? $tienda->city }}</td>
+                    </tr>
+                    <tr>
+                        <td><span class="label">Teléfono:</span> {{ $tienda->phone_number ?? 'No registrado' }}</td>
+                        <td><span class="label">Email:</span> {{ $tienda->email ?? 'No registrado' }}</td>
+                    </tr>
+                </table>
+            </td>
+            <td class="order-header-right">
+                <p class="order-logo-line">ESTE DOCUMENTO NO SUSTITUYE LA FACTURA FISCAL. NO VALIDO COMO DOCUMENTO FISCAL</p>
+                @if(!empty($imageBase64))
+                    <div class="order-logo-box">
+                        <img src="{{ $imageBase64 }}" alt="main_logo">
+                    </div>
+                @endif
+            </td>
+        </tr>
+    </table>
+</div>
 
     <p><strong>Cliente:</strong> {{ $order->user->name }} | <strong>Teléfono:</strong> {{ $order->user->phone_number ?? 'No registrado' }}</p>
     <p><strong>Dirección:</strong> {{ $order->address }}</p>

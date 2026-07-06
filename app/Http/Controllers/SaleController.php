@@ -555,6 +555,24 @@ class SaleController extends Controller
 
         $this->syncSellerCommissionForOrder($order);
 
+        $creatorName = trim((string) (auth()->user()->name ?? ''));
+        $salesRepresentativeName = trim((string) ($order->salesRepresentative->name ?? ''));
+        $createdByLabel = $creatorName !== '' ? $creatorName : ($salesRepresentativeName !== '' ? $salesRepresentativeName : 'usuario interno');
+
+        WorkflowNotifier::notifyTenantRoles((int) $order->tenant_id, ['owner', 'administrador', 'admin', 'vendedor'], [
+            'title' => 'Nueva venta registrada',
+            'message' => 'Se registró la venta #' . $order->id . ' desde la vista administrativa por ' . $createdByLabel . '.',
+            'type' => 'sale-created',
+            'tenant_id' => $order->tenant_id,
+            'order_id' => $order->id,
+            'action' => 'sale_created_from_admin',
+            'meta' => [
+                'source' => 'admin_sales_view',
+                'creator_name' => $creatorName,
+                'sales_representative_name' => $salesRepresentativeName,
+            ],
+        ]);
+
         if ($markSaleCompleted) {
             $this->attemptElectronicEmission($order);
         }
