@@ -2,6 +2,11 @@
 
 @section('title', 'Crear Producto')
 
+@php
+    $createProductVariantUnitOptions = \App\Models\ProductVariant::UNIT_TYPE_OPTIONS;
+    $createProductVariantQuantityModeOptions = \App\Models\ProductVariant::QUANTITY_INPUT_MODE_OPTIONS;
+@endphp
+
 @section('content')
 <style>
     .product-builder {
@@ -332,6 +337,8 @@
     const PRODUCT_SAFE_TOTAL_UPLOAD_BYTES = 8 * 1024 * 1024;
     const createProductEndpoint = @json(route('products.createWeb'));
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
+    const createProductVariantUnitOptions = @json($createProductVariantUnitOptions);
+    const createProductVariantQuantityModeOptions = @json($createProductVariantQuantityModeOptions);
     let createProductAiHistory = [];
     let createProductAiLatestResult = null;
     let createProductAiTarget = null;
@@ -414,6 +421,13 @@
     function parseCreateProductInteger(value, minimum = 0) {
         const amount = Number(value);
         return Number.isInteger(amount) && amount >= minimum ? amount : null;
+    }
+
+    function parseCreateProductStockAmount(value, minimum = 0) {
+        const amount = window.shopixParseDecimalInput
+            ? window.shopixParseDecimalInput(value)
+            : Number(String(value ?? '').replace(',', '.'));
+        return Number.isFinite(amount) && amount >= minimum ? Math.round(amount * 100) / 100 : null;
     }
 
     async function optimizeProductImage(file) {
@@ -537,6 +551,13 @@
         wrapper.classList.remove('d-none');
         downloadBtn.disabled = false;
         useBtn.disabled = false;
+    }
+
+    function buildCreateProductOptionTags(options, selectedValue = '') {
+        return Object.entries(options || {}).map(([value, label]) => {
+            const selected = String(selectedValue || '') === String(value) ? 'selected' : '';
+            return `<option value="${value}" ${selected}>${label}</option>`;
+        }).join('');
     }
 
     async function dataUrlFromRemoteImage(url) {
@@ -787,8 +808,24 @@
                     <input type="number" class="form-control" name="variantDiscount[]" min="0" max="100" step="0.01" value="0" data-decimal-friendly="true">
                 </div>
                 <div class="col-lg-2 col-md-6">
+                    <label class="form-label mb-1">Unidad</label>
+                    <select class="form-select" name="variantUnitType[]">
+                        ${buildCreateProductOptionTags(createProductVariantUnitOptions, 'unidad')}
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label mb-1">Cantidad</label>
+                    <select class="form-select" name="variantQuantityMode[]">
+                        ${buildCreateProductOptionTags(createProductVariantQuantityModeOptions, 'integer')}
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label mb-1">Venta mínima</label>
+                    <input type="number" class="form-control" name="variantMinSaleQuantity[]" min="0.01" step="0.01" value="1.00" data-decimal-friendly="true">
+                </div>
+                <div class="col-lg-1 col-md-6">
                     <label class="form-label mb-1">Stock</label>
-                    <input type="number" class="form-control" name="variantStock[]" min="0" step="1" required>
+                    <input type="number" class="form-control" name="variantStock[]" min="0" step="0.01" required data-decimal-friendly="true">
                 </div>
                 <div class="col-lg-2 col-md-6">
                     <label class="form-label mb-1">Código de barras</label>
@@ -962,15 +999,21 @@
             const name = row.querySelector('input[name="variantName[]"]').value.trim();
             const price = parsePositiveCreateProductAmount(row.querySelector('input[name="variantPrice[]"]').value);
             const discount = row.querySelector('input[name="variantDiscount[]"]').value;
-            const stock = parseCreateProductInteger(row.querySelector('input[name="variantStock[]"]').value, 0);
+            const stock = parseCreateProductStockAmount(row.querySelector('input[name="variantStock[]"]').value, 0);
             const barcode = row.querySelector('input[name="variantBarcode[]"]').value;
-            if (name && price !== null && stock !== null) {
+            const unit_type = row.querySelector('select[name="variantUnitType[]"]')?.value || 'unidad';
+            const quantity_input_mode = row.querySelector('select[name="variantQuantityMode[]"]')?.value || 'integer';
+            const min_sale_quantity = parseCreateProductStockAmount(row.querySelector('input[name="variantMinSaleQuantity[]"]')?.value, 0.01);
+            if (name && price !== null && stock !== null && min_sale_quantity !== null) {
                 variants.push({
                     name,
                     price,
                     discount_percentage: discount || 0,
                     stock,
                     barcode,
+                    unit_type,
+                    quantity_input_mode,
+                    min_sale_quantity,
                 });
 
                 const imageInput = row.querySelector('.variant-image-input');

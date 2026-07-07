@@ -353,6 +353,12 @@
                         </li>
 
                         <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="restrictions-tab" data-bs-toggle="tab" data-bs-target="#restrictionsTab" type="button" role="tab">
+                                Restricciones
+                            </button>
+                        </li>
+
+                        <li class="nav-item" role="presentation">
                             <button class="nav-link" id="design-tab" data-bs-toggle="tab" data-bs-target="#design" type="button" role="tab">
                                 Identidad
                             </button>
@@ -546,43 +552,6 @@
                                     <small class="text-muted d-block mt-2">Este horario define cuándo opera la tienda. Los turnos de cada vendedor/profesional se aplican sobre esta base.</small>
                                 </div>
 
-                                <div class="mb-4" id="serviceAppointmentConfigFields" style="display: {{ $isServiceBusinessType ? 'block' : 'none' }};">
-                                    <label class="form-label fw-bold d-block">Configuración de agenda de citas</label>
-                                    <input type="hidden" name="appointments_first_come_enabled" value="0">
-                                    <div class="form-check form-switch">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            role="switch"
-                                            id="appointments_first_come_enabled"
-                                            name="appointments_first_come_enabled"
-                                            value="1"
-                                            {{ (bool) ($tenant->appointments_first_come_enabled ?? false) ? 'checked' : '' }}>
-                                        <label class="form-check-label" for="appointments_first_come_enabled">
-                                            Activar modo por orden de llegada
-                                        </label>
-                                    </div>
-                                    <small class="text-muted d-block mt-1">Cuando está activo, la agenda asigna automáticamente el primer horario disponible para cada profesional.</small>
-                                </div>
-
-                                <div class="mb-4">
-                                    <label class="form-label fw-bold d-block">Módulo de proyectos</label>
-                                    <input type="hidden" name="offers_projects" value="0">
-                                    <div class="form-check form-switch">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            role="switch"
-                                            id="offers_projects"
-                                            name="offers_projects"
-                                            value="1"
-                                            {{ (bool) ($tenant->offers_projects ?? true) ? 'checked' : '' }}>
-                                        <label class="form-check-label" for="offers_projects">
-                                            Este tenant ofrece proyectos
-                                        </label>
-                                    </div>
-                                    <small class="text-muted d-block mt-1">Controla si la tienda puede ver Proyectos, Cotizaciones y Nómina del módulo.</small>
-                                </div>
                                 <div class="mb-3">
                                     <label class="form-label">Eslogan</label>
                                     <input type="text" class="form-control p-2 border border-radius-lg" name="slogan" value="{{ $tenant->slogan ?? '' }}">
@@ -616,90 +585,12 @@
                                     <small class="text-muted d-block mt-1">Se mostrará en las cotizaciones y documentos PDF solo si está registrado.</small>
                                 </div>
 
-                                @unless($freePlanOperationalLock)
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold d-block">Contribuyente especial</label>
-                                    <input type="hidden" name="special_taxpayer" value="0">
-                                    <div class="form-check form-switch">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            role="switch"
-                                            id="special_taxpayer"
-                                            name="special_taxpayer"
-                                            value="1"
-                                            {{ (bool) ($tenant->special_taxpayer ?? false) ? 'checked' : '' }}>
-                                        <label class="form-check-label" for="special_taxpayer">
-                                            La tienda es contribuyente especial
-                                        </label>
-                                    </div>
-                                    <small class="text-muted">Si está activo, el sistema podrá aplicar IGTF en cobros elegibles en divisas/moneda extranjera.</small>
-                                </div>
-                                @endunless
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold d-block">Habilitación de imprenta para cambio de alícuotas</label>
-                                    <input type="hidden" name="printer_tax_change_enabled" value="0">
-                                    <div class="form-check form-switch">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            role="switch"
-                                            id="printer_tax_change_enabled"
-                                            name="printer_tax_change_enabled"
-                                            value="1"
-                                            {{ (bool) ($tenant->printer_tax_change_enabled ?? false) ? 'checked' : '' }}>
-                                        <label class="form-check-label" for="printer_tax_change_enabled">
-                                            Permitir cambios de alícuotas en productos existentes
-                                        </label>
-                                    </div>
-                                    <small class="text-muted">Úsalo solo cuando la imprenta autorice el cambio fiscal.</small>
-                                </div>
-
                                 <div class="mb-3">
                                     <label class="form-label">Referencia de habilitación de imprenta</label>
                                     <input type="text" class="form-control p-2 border border-radius-lg" name="printer_tax_change_reference" value="{{ $tenant->printer_tax_change_reference ?? '' }}" placeholder="Providencia, ticket o referencia de aprobación">
                                 </div>
 
                                 @unless($freePlanOperationalLock)
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold d-block">Restricción de envíos por ciudad</label>
-                                    <input type="hidden" name="restrict_delivery_city_to_tenant" value="0">
-                                    <div class="form-check form-switch">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            role="switch"
-                                            id="restrict_delivery_city_to_tenant"
-                                            name="restrict_delivery_city_to_tenant"
-                                            value="1"
-                                            {{ (bool) ($tenant->restrict_delivery_city_to_tenant ?? true) ? 'checked' : '' }}>
-                                        <label class="form-check-label" for="restrict_delivery_city_to_tenant">
-                                            Permitir envíos solo en la ciudad de la tienda
-                                        </label>
-                                    </div>
-                                    <small class="text-muted">Si se desactiva, la tienda puede registrar envíos a cualquier ciudad.</small>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold d-block">Activar delivery de la tienda</label>
-                                    <input type="hidden" name="delivery_enabled" value="0">
-                                    <div class="form-check form-switch">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            role="switch"
-                                            id="delivery_enabled"
-                                            name="delivery_enabled"
-                                            value="1"
-                                            {{ (bool) ($tenant->delivery_enabled ?? false) ? 'checked' : '' }}>
-                                        <label class="form-check-label" for="delivery_enabled">
-                                            Permitir pedidos con delivery
-                                        </label>
-                                    </div>
-                                    <small class="text-muted">Si está apagado, la tienda solo permitirá retiro en tienda.</small>
-                                </div>
-
                                 <div class="mb-3">
                                     <label class="form-label">Modelo de cobro del delivery</label>
                                     <select name="delivery_fee_mode" class="form-control p-2 border border-radius-lg">
@@ -719,44 +610,165 @@
                                         <input type="number" step="0.01" min="0" class="form-control p-2 border border-radius-lg" name="delivery_fee_per_km" value="{{ number_format((float) ($tenant->delivery_fee_per_km ?? 0), 2, '.', '') }}" placeholder="0.00" data-decimal-friendly="true">
                                     </div>
                                 </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold d-block">Notificaciones operativas de delivery</label>
-                                    <input type="hidden" name="delivery_notifications_enabled" value="0">
-                                    <div class="form-check form-switch">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            role="switch"
-                                            id="delivery_notifications_enabled"
-                                            name="delivery_notifications_enabled"
-                                            value="1"
-                                            {{ (bool) ($tenant->delivery_notifications_enabled ?? true) ? 'checked' : '' }}>
-                                        <label class="form-check-label" for="delivery_notifications_enabled">
-                                            Avisar al equipo de almacén y delivery cuando un pedido quede listo
-                                        </label>
-                                    </div>
-                                    <small class="text-muted">Úsalo junto al rol <strong>delivery</strong> para despachos y reparto.</small>
-                                </div>
-
                                 @endunless
+                            </div>
 
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold d-block">Mostrar precios en Bs en la tienda</label>
-                                    <div class="form-check form-switch">
-                                        <input
-                                            class="form-check-input"
-                                            type="checkbox"
-                                            role="switch"
-                                            id="show_bs_prices_in_storefront"
-                                            name="show_bs_prices_in_storefront"
-                                            value="1"
-                                            {{ (bool) ($tenant->show_bs_prices_in_storefront ?? false) ? 'checked' : '' }}>
-                                        <label class="form-check-label" for="show_bs_prices_in_storefront">
-                                            Mostrar un precio pequeño en bolívares según la tasa BCV de esta tienda
-                                        </label>
+                            <div class="tab-pane fade" id="restrictionsTab" role="tabpanel">
+                                <div class="mb-4 p-3" id="tenantRestrictionsSection">
+                                    <div class="mb-3" id="serviceAppointmentConfigFields" style="display: {{ $isServiceBusinessType ? 'block' : 'none' }};">
+                                        <label class="form-label fw-bold d-block">Configuración de agenda de citas</label>
+                                        <input type="hidden" name="appointments_first_come_enabled" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="appointments_first_come_enabled"
+                                                name="appointments_first_come_enabled"
+                                                value="1"
+                                                {{ (bool) ($tenant->appointments_first_come_enabled ?? false) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="appointments_first_come_enabled">
+                                                Activar modo por orden de llegada
+                                            </label>
+                                        </div>
+                                        <small class="text-muted d-block mt-1">Cuando está activo, la agenda asigna automáticamente el primer horario disponible para cada profesional.</small>
                                     </div>
-                                    <small class="text-muted">El precio base seguirá siendo la moneda madre; Bs se mostrará como referencia adicional.</small>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold d-block">Módulo de proyectos</label>
+                                        <input type="hidden" name="offers_projects" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="offers_projects"
+                                                name="offers_projects"
+                                                value="1"
+                                                {{ (bool) ($tenant->offers_projects ?? true) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="offers_projects">
+                                                Este tenant ofrece proyectos
+                                            </label>
+                                        </div>
+                                        <small class="text-muted d-block mt-1">Controla si la tienda puede ver el módulo de Proyectos.</small>
+                                    </div>
+
+                                    @unless($freePlanOperationalLock)
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold d-block">Contribuyente especial</label>
+                                        <input type="hidden" name="special_taxpayer" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="special_taxpayer"
+                                                name="special_taxpayer"
+                                                value="1"
+                                                {{ (bool) ($tenant->special_taxpayer ?? false) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="special_taxpayer">
+                                                La tienda es contribuyente especial
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">Si está activo, el sistema podrá aplicar IGTF en cobros elegibles en divisas/moneda extranjera.</small>
+                                    </div>
+                                    @endunless
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold d-block">Habilitación de imprenta para cambio de alícuotas</label>
+                                        <input type="hidden" name="printer_tax_change_enabled" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="printer_tax_change_enabled"
+                                                name="printer_tax_change_enabled"
+                                                value="1"
+                                                {{ (bool) ($tenant->printer_tax_change_enabled ?? false) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="printer_tax_change_enabled">
+                                                Permitir cambios de alícuotas en productos existentes
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">Úsalo solo cuando la imprenta autorice el cambio fiscal.</small>
+                                    </div>
+
+                                    @unless($freePlanOperationalLock)
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold d-block">Restricción de envíos por ciudad</label>
+                                        <input type="hidden" name="restrict_delivery_city_to_tenant" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="restrict_delivery_city_to_tenant"
+                                                name="restrict_delivery_city_to_tenant"
+                                                value="1"
+                                                {{ (bool) ($tenant->restrict_delivery_city_to_tenant ?? true) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="restrict_delivery_city_to_tenant">
+                                                Permitir envíos solo en la ciudad de la tienda
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">Si se desactiva, la tienda puede registrar envíos a cualquier ciudad.</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold d-block">Activar delivery de la tienda</label>
+                                        <input type="hidden" name="delivery_enabled" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="delivery_enabled"
+                                                name="delivery_enabled"
+                                                value="1"
+                                                {{ (bool) ($tenant->delivery_enabled ?? false) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="delivery_enabled">
+                                                Permitir pedidos con delivery
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">Si está apagado, la tienda solo permitirá retiro en tienda.</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold d-block">Notificaciones operativas de delivery</label>
+                                        <input type="hidden" name="delivery_notifications_enabled" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="delivery_notifications_enabled"
+                                                name="delivery_notifications_enabled"
+                                                value="1"
+                                                {{ (bool) ($tenant->delivery_notifications_enabled ?? true) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="delivery_notifications_enabled">
+                                                Avisar al equipo de almacén y delivery cuando un pedido quede listo
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">Úsalo junto al rol <strong>delivery</strong> para despachos y reparto.</small>
+                                    </div>
+                                    @endunless
+
+                                    <div class="mb-0">
+                                        <label class="form-label fw-bold d-block">Mostrar precios en Bs en la tienda</label>
+                                        <div class="form-check form-switch">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="show_bs_prices_in_storefront"
+                                                name="show_bs_prices_in_storefront"
+                                                value="1"
+                                                {{ (bool) ($tenant->show_bs_prices_in_storefront ?? false) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="show_bs_prices_in_storefront">
+                                                Mostrar un precio pequeño en bolívares según la tasa BCV de esta tienda
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">El precio base seguirá siendo la moneda madre; Bs se mostrará como referencia adicional.</small>
+                                    </div>
                                 </div>
                             </div>
 
@@ -986,6 +998,11 @@
 
                             {{-- TAB 5: Usuarios --}}
                             <div class="tab-pane fade" id="users" role="tabpanel">
+                                @php
+                                    $tenantUsersActor = auth()->user();
+                                    $tenantUsersActorRole = \App\Models\User::canonicalRoleName(optional($tenantUsersActor->role)->name);
+                                    $canManageTenantUsers = in_array($tenantUsersActorRole, ['owner', 'admin'], true);
+                                @endphp
                                 <h5 class="mt-2">Usuarios de la tienda</h5>
                                 @if($isFreePlanTenant ?? false)
                                     <div class="alert alert-secondary border mb-4">
@@ -1020,13 +1037,66 @@
                                             <div class="modal-body">
                                                 <ul class="list-group">
                                                     @forelse($tenant->users as $user)
+                                                        @php
+                                                            $tenantUserRole = \App\Models\User::canonicalRoleName(optional($user->role)->name);
+                                                            $adminCannotManageThisUser = $tenantUsersActorRole === 'admin' && $tenantUserRole === 'admin';
+                                                        @endphp
                                                         <li class="list-group-item d-flex justify-content-between align-items-center">
                                                             <div>
                                                                 <strong>{{ $user->name }}</strong>
                                                                 <small class="d-block text-muted">{{ $user->email }}</small>
                                                                 <small class="d-block text-muted">{{ ($roleDefinitions[\App\Models\User::canonicalRoleName(optional($user->role)->name)]['description'] ?? 'Usuario operativo de la tienda.') }}</small>
+                                                                @if($canManageTenantUsers)
+                                                                    <div class="d-flex flex-wrap gap-2 mt-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            class="btn btn-outline-dark btn-sm mb-0 tenantChangePasswordBtn"
+                                                                            data-user-id="{{ $user->id }}"
+                                                                            data-user-name="{{ $user->name }}"
+                                                                            data-user-email="{{ $user->email }}"
+                                                                            data-role-id="{{ $user->role_id }}"
+                                                                            data-bs-toggle="collapse"
+                                                                            data-bs-target="#tenantPasswordForm-{{ $user->id }}"
+                                                                            aria-expanded="false"
+                                                                            aria-controls="tenantPasswordForm-{{ $user->id }}"
+                                                                            {{ $adminCannotManageThisUser ? 'disabled' : '' }}>
+                                                                            Cambiar contraseña
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            class="btn btn-outline-secondary btn-sm mb-0 tenantToggleStatusBtn"
+                                                                            data-user-id="{{ $user->id }}"
+                                                                            data-user-name="{{ $user->name }}"
+                                                                            data-user-active="{{ (int) $user->is_active }}"
+                                                                            {{ $adminCannotManageThisUser ? 'disabled' : '' }}>
+                                                                            {{ (bool) $user->is_active ? 'Inactivar' : 'Activar' }}
+                                                                        </button>
+                                                                    </div>
+                                                                    <div id="tenantPasswordForm-{{ $user->id }}" class="tenantPasswordForm collapse mt-2" data-user-id="{{ $user->id }}">
+                                                                        <div class="row g-2 align-items-end">
+                                                                            <div class="col-12 col-md-6">
+                                                                                <label class="form-label mb-1">Nueva contraseña</label>
+                                                                                <input type="password" class="form-control form-control-sm tenantPasswordInput" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+                                                                            </div>
+                                                                            <div class="col-12 col-md-6">
+                                                                                <label class="form-label mb-1">Confirmar contraseña</label>
+                                                                                <input type="password" class="form-control form-control-sm tenantPasswordConfirmInput" placeholder="Repite la contraseña" autocomplete="new-password">
+                                                                            </div>
+                                                                            <div class="col-12 d-flex gap-2">
+                                                                                <button type="button" class="btn btn-dark btn-sm mb-0 tenantPasswordSaveBtn">Guardar contraseña</button>
+                                                                                <button type="button" class="btn btn-outline-secondary btn-sm mb-0 tenantPasswordCancelBtn">Cancelar</button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    @if($adminCannotManageThisUser)
+                                                                        <small class="d-block text-muted mt-1">No puedes modificar ni inactivar a otro admin.</small>
+                                                                    @endif
+                                                                @endif
                                                             </div>
-                                                            <span class="badge bg-dark text-white">{{ \App\Models\User::displayRoleName(optional($user->role)->name) }}</span>
+                                                            <div class="d-flex flex-column align-items-end gap-1">
+                                                                <span class="badge bg-dark text-white">{{ \App\Models\User::displayRoleName(optional($user->role)->name) }}</span>
+                                                                <span class="badge {{ (bool) $user->is_active ? 'bg-success' : 'bg-secondary' }} text-white">{{ (bool) $user->is_active ? 'Activo' : 'Inactivo' }}</span>
+                                                            </div>
                                                         </li>
                                                     @empty
                                                         <li class="list-group-item text-center text-muted">No hay usuarios registrados.</li>
@@ -1089,7 +1159,7 @@
                     <h5 class="mb-0">Vista previa</h5>
 
                     {{-- Botón para minimizar --}}
-                    <button id="toggleIframe" class="btn btn-outline-dark btn-sm">
+                    <button id="toggleIframe" type="button" class="btn btn-outline-dark btn-sm" aria-expanded="true">
                         Minimizar
                     </button>
                 </div>
@@ -2690,30 +2760,243 @@ function initMap() {
                 }
             });
         }
-/* Botón para ocultar/mostrar el iframe */
-document.getElementById('toggleIframe').addEventListener('click', function () {
-    const content = document.getElementById('iframeContent');
-    const container = document.getElementById('iframeContainer');
-    const leftColumn = document.getElementById('leftColumn');
+/* Botón para ocultar/mostrar la vista previa */
+const toggleIframeButton = document.getElementById('toggleIframe');
+const iframeContent = document.getElementById('iframeContent');
+const iframeContainer = document.getElementById('iframeContainer');
+const leftColumn = document.getElementById('leftColumn');
 
-    if (content.style.display === "none") {
-        // Mostrar de nuevo
-        content.style.display = "block";
-        container.classList.remove('col-md-12');
-        container.classList.add('col-md-6');
-        leftColumn.classList.remove('col-md-12');
-        leftColumn.classList.add('col-md-6');
-        this.textContent = "Minimizar";
-    } else {
-        // Ocultar iframe
-        content.style.display = "none";
-        container.classList.remove('col-md-6');
-        container.classList.add('col-md-12');
-        leftColumn.classList.remove('col-md-6');
-        leftColumn.classList.add('col-md-12');
-        this.textContent = "Mostrar Vista Previa";
+window.toggleTenantPreview = function () {
+    if (!toggleIframeButton || !iframeContent || !iframeContainer || !leftColumn) {
+        return;
     }
-});
+
+    const isHidden = iframeContent.classList.toggle('d-none');
+    iframeContent.style.height = isHidden ? '0' : '600px';
+
+    iframeContainer.classList.toggle('col-md-6', !isHidden);
+    iframeContainer.classList.toggle('col-md-3', isHidden);
+    leftColumn.classList.toggle('col-md-6', !isHidden);
+    leftColumn.classList.toggle('col-md-9', isHidden);
+
+    toggleIframeButton.textContent = isHidden ? 'Mostrar vista previa' : 'Minimizar';
+    toggleIframeButton.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+};
+
+if (toggleIframeButton) {
+    toggleIframeButton.addEventListener('click', function (event) {
+        event.preventDefault();
+        window.toggleTenantPreview();
+    });
+}
+
+const tenantUserUpdateEndpointTemplate = "{{ route('tenant.users.update', ['id' => '__ID__']) }}";
+const tenantUserToggleEndpointTemplate = "{{ route('tenant.users.toggleStatus', ['id' => '__ID__']) }}";
+
+function setTenantActionButtonLoading(button, isLoading, loadingText, defaultText) {
+    if (!button) {
+        return;
+    }
+
+    if (!button.dataset.defaultText) {
+        button.dataset.defaultText = defaultText || button.textContent.trim();
+    }
+
+    if (isLoading) {
+        button.disabled = true;
+        button.dataset.loading = '1';
+        button.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${loadingText}`;
+        return;
+    }
+
+    button.disabled = false;
+    button.dataset.loading = '0';
+    button.textContent = button.dataset.defaultText;
+}
+
+if (!window.__tenantUsersModalActionsBound) {
+    window.__tenantUsersModalActionsBound = true;
+
+    document.addEventListener('click', async (event) => {
+        const cancelButton = event.target.closest('.tenantPasswordCancelBtn');
+        if (cancelButton) {
+            event.preventDefault();
+
+            const formNode = cancelButton.closest('.tenantPasswordForm');
+            if (!formNode) {
+                return;
+            }
+
+            formNode.querySelectorAll('input').forEach((input) => {
+                input.value = '';
+            });
+
+            if (window.bootstrap?.Collapse) {
+                const collapse = window.bootstrap.Collapse.getOrCreateInstance(formNode, { toggle: false });
+                collapse.hide();
+            } else {
+                formNode.classList.remove('show');
+            }
+            return;
+        }
+
+        const saveButton = event.target.closest('.tenantPasswordSaveBtn');
+        if (saveButton) {
+            event.preventDefault();
+
+            if (saveButton.dataset.loading === '1') {
+                return;
+            }
+
+            const formNode = saveButton.closest('.tenantPasswordForm');
+            if (!formNode) {
+                return;
+            }
+
+            const cardItem = saveButton.closest('.list-group-item');
+            const userId = formNode.dataset.userId;
+            const userName = cardItem?.querySelector('strong')?.textContent?.trim() || 'usuario';
+            const userEmail = cardItem?.querySelector('small')?.textContent?.trim() || '';
+            const roleId = cardItem?.querySelector('.tenantChangePasswordBtn')?.dataset.roleId || '';
+            const passwordInput = formNode.querySelector('.tenantPasswordInput');
+            const passwordConfirmInput = formNode.querySelector('.tenantPasswordConfirmInput');
+            const newPassword = String(passwordInput?.value || '').trim();
+            const confirmPassword = String(passwordConfirmInput?.value || '').trim();
+
+            if (newPassword.length < 8) {
+                showTenantToast('La contraseña debe tener al menos 8 caracteres.', 'warning');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                showTenantToast('La confirmación de contraseña no coincide.', 'warning');
+                return;
+            }
+
+            const payload = new FormData();
+            payload.append('_token', getTenantCsrfToken());
+            payload.append('name', userName);
+            payload.append('email', userEmail);
+            payload.append('role_id', roleId);
+            payload.append('password', newPassword);
+            payload.append('password_confirmation', confirmPassword);
+
+            setTenantActionButtonLoading(saveButton, true, 'Guardando...', 'Guardar contraseña');
+
+            try {
+                const updateUrl = tenantUserUpdateEndpointTemplate.replace('__ID__', encodeURIComponent(String(userId || '')));
+                const response = await fetch(updateUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': getTenantCsrfToken(),
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin',
+                    body: payload
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    showTenantToast(data.message || 'No se pudo cambiar la contraseña del usuario.', 'error');
+                    return;
+                }
+
+                showTenantToast('Contraseña actualizada correctamente.', 'success');
+                if (passwordInput) passwordInput.value = '';
+                if (passwordConfirmInput) passwordConfirmInput.value = '';
+                if (window.bootstrap?.Collapse) {
+                    const collapse = window.bootstrap.Collapse.getOrCreateInstance(formNode, { toggle: false });
+                    collapse.hide();
+                } else {
+                    formNode.classList.remove('show');
+                }
+            } catch (error) {
+                showTenantToast('No se pudo conectar con el servidor para actualizar la contraseña.', 'error');
+            } finally {
+                setTenantActionButtonLoading(saveButton, false, 'Guardando...', 'Guardar contraseña');
+            }
+
+            return;
+        }
+
+        const toggleButton = event.target.closest('.tenantToggleStatusBtn');
+        if (toggleButton) {
+            event.preventDefault();
+
+            if (toggleButton.dataset.loading === '1') {
+                return;
+            }
+
+            const userId = toggleButton.dataset.userId;
+            const userName = toggleButton.dataset.userName || 'usuario';
+            const isCurrentlyActive = Number(toggleButton.dataset.userActive || 0) === 1;
+
+            let actionReason = '';
+            if (isCurrentlyActive) {
+                if (typeof window.shopixRequestActionReason === 'function') {
+                    actionReason = window.shopixRequestActionReason(`Indica el motivo para inactivar a ${userName}.`) || '';
+                } else {
+                    const rawReason = window.prompt(`Motivo para inactivar a ${userName}:`, '');
+                    if (rawReason === null) {
+                        return;
+                    }
+                    actionReason = String(rawReason || '').trim();
+                }
+
+                if (actionReason.trim() === '') {
+                    showTenantToast('Debes indicar un motivo para inactivar al usuario.', 'warning');
+                    return;
+                }
+            }
+
+            const payload = new FormData();
+            payload.append('_token', getTenantCsrfToken());
+            if (isCurrentlyActive) {
+                payload.append('action_reason', actionReason);
+            }
+
+            setTenantActionButtonLoading(
+                toggleButton,
+                true,
+                isCurrentlyActive ? 'Inactivando...' : 'Activando...',
+                isCurrentlyActive ? 'Inactivar' : 'Activar'
+            );
+
+            try {
+                const toggleUrl = tenantUserToggleEndpointTemplate.replace('__ID__', encodeURIComponent(String(userId || '')));
+                const response = await fetch(toggleUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': getTenantCsrfToken(),
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin',
+                    body: payload
+                });
+
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    showTenantToast(data.message || 'No se pudo actualizar el estado del usuario.', 'error');
+                    return;
+                }
+
+                showTenantToast('Estado del usuario actualizado correctamente.', 'success');
+                window.location.reload();
+            } catch (error) {
+                showTenantToast('No se pudo conectar con el servidor para cambiar el estado.', 'error');
+            } finally {
+                setTenantActionButtonLoading(
+                    toggleButton,
+                    false,
+                    isCurrentlyActive ? 'Inactivando...' : 'Activando...',
+                    isCurrentlyActive ? 'Inactivar' : 'Activar'
+                );
+            }
+        }
+    });
+}
 // Abrir modal y cargar datos del usuario
 document.querySelectorAll('.editUserBtn').forEach(btn => {
     btn.addEventListener('click', () => {

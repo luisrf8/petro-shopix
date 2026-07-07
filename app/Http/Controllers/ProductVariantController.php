@@ -44,8 +44,11 @@ class ProductVariantController extends Controller
             'variants.*.size' => 'required|string|max:255',
             'variants.*.price' => 'required|numeric|gt:0',
             'variants.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'variants.*.stock' => 'required|integer|min:0',
+            'variants.*.stock' => 'required|numeric|min:0',
             'variants.*.barcode' => 'nullable|string|max:100',
+            'variants.*.unit_type' => 'nullable|string|max:50',
+            'variants.*.quantity_input_mode' => 'nullable|string|in:integer,decimal',
+            'variants.*.min_sale_quantity' => 'nullable|numeric|gt:0',
             'variant_images.*' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
         ]);
 
@@ -54,14 +57,18 @@ class ProductVariantController extends Controller
         foreach ($request->variants as $index => $variant) {
             $barcode = $this->sanitizeVariantCode($variant['barcode'] ?? null);
             $this->assertVariantCodeAvailable($barcode);
+            $quantityInputMode = ProductVariant::normalizeQuantityInputMode($variant['quantity_input_mode'] ?? null);
 
             $createdVariant = ProductVariant::create([
                 'product_id' => $request->product_id,
                 'size' => trim((string) $variant['size']),
                 'price' => $variant['price'],
                 'discount_percentage' => (float) ($variant['discount_percentage'] ?? 0),
-                'stock' => $variant['stock'],
+                'stock' => round((float) $variant['stock'], 2),
                 'barcode' => $barcode,
+                'unit_type' => ProductVariant::normalizeUnitType($variant['unit_type'] ?? null),
+                'quantity_input_mode' => $quantityInputMode,
+                'min_sale_quantity' => ProductVariant::normalizeMinSaleQuantity($variant['min_sale_quantity'] ?? null, $quantityInputMode),
             ]);
 
             if (empty($createdVariant->qr_code)) {
@@ -104,27 +111,37 @@ class ProductVariantController extends Controller
             'discount_percentage' => (float) ($productVariant->discount_percentage ?? 0),
             'stock' => (int) $productVariant->stock,
             'barcode' => (string) ($productVariant->barcode ?? ''),
+            'unit_type' => (string) ($productVariant->unit_type ?? 'unidad'),
+            'quantity_input_mode' => (string) ($productVariant->quantity_input_mode ?? 'integer'),
+            'min_sale_quantity' => (float) ($productVariant->min_sale_quantity ?? 1),
         ];
 
         $request->validate([
             'size' => 'required|string|max:255',
             'price' => 'required|numeric|gt:0',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'stock' => 'required|integer|min:0',
+            'stock' => 'required|numeric|min:0',
             'barcode' => 'nullable|string|max:100',
+            'unit_type' => 'nullable|string|max:50',
+            'quantity_input_mode' => 'nullable|string|in:integer,decimal',
+            'min_sale_quantity' => 'nullable|numeric|gt:0',
             'image' => 'nullable|file|mimes:jpeg,png,jpg,gif,svg,webp|max:5120',
         ]);
 
         $barcode = $this->sanitizeVariantCode($request->input('barcode'));
         $this->assertVariantCodeAvailable($barcode, (int) $productVariant->id);
+        $quantityInputMode = ProductVariant::normalizeQuantityInputMode($request->input('quantity_input_mode'));
     
         // Actualizar la variante con los datos proporcionados
         $productVariant->update([
             'size' => trim((string) $request->input('size')),
             'price' => $request->input('price'),
             'discount_percentage' => $request->input('discount_percentage', 0),
-            'stock' => $request->input('stock'),
+            'stock' => round((float) $request->input('stock'), 2),
             'barcode' => $barcode,
+            'unit_type' => ProductVariant::normalizeUnitType($request->input('unit_type')),
+            'quantity_input_mode' => $quantityInputMode,
+            'min_sale_quantity' => ProductVariant::normalizeMinSaleQuantity($request->input('min_sale_quantity'), $quantityInputMode),
         ]);
 
         $productVariant->refresh();
@@ -147,6 +164,9 @@ class ProductVariantController extends Controller
                     'discount_percentage' => (float) ($productVariant->discount_percentage ?? 0),
                     'stock' => (int) $productVariant->stock,
                     'barcode' => (string) ($productVariant->barcode ?? ''),
+                    'unit_type' => (string) ($productVariant->unit_type ?? 'unidad'),
+                    'quantity_input_mode' => (string) ($productVariant->quantity_input_mode ?? 'integer'),
+                    'min_sale_quantity' => (float) ($productVariant->min_sale_quantity ?? 1),
                 ],
             ]
         );

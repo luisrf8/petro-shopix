@@ -81,7 +81,20 @@
 
   .header-session-user {
     min-width: 0;
-    max-width: 320px;
+    flex: 0 1 460px;
+    max-width: min(48vw, 460px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .header-session-user .header-session-user-inner {
+    min-width: 0;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    justify-content: center;
+    text-align: center;
   }
 
   .header-session-user .session-name {
@@ -102,6 +115,30 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     display: block;
+    min-width: 0;
+  }
+
+  .header-session-user .session-name {
+    max-width: 150px;
+  }
+
+  .header-session-user .session-meta-email {
+    max-width: 170px;
+  }
+
+  .header-session-user .session-meta-role {
+    max-width: 120px;
+  }
+
+  .header-session-user .session-sep {
+    flex: 0 0 auto;
+    color: #9ca3af;
+    font-size: 0.68rem;
+    line-height: 1;
+  }
+
+  .header-icon-item {
+    flex: 0 0 auto;
   }
 
   .header-notification-optin {
@@ -188,16 +225,36 @@
     }
 
     .header-session-user {
-      max-width: 130px;
+      max-width: 150px;
       margin-right: 0.5rem !important;
+      justify-content: flex-end;
     }
 
     .header-session-user .session-meta {
       display: none;
     }
 
+    .header-session-user .session-sep {
+      display: none;
+    }
+
     .header-session-user .session-name {
       font-size: 0.72rem;
+      max-width: 100%;
+    }
+  }
+
+  @media (max-width: 1250px) {
+    .header-session-user .session-meta-role,
+    .header-session-user .session-sep-role {
+      display: none;
+    }
+  }
+
+  @media (max-width: 1140px) {
+    .header-session-user .session-meta-email,
+    .header-session-user .session-sep-email {
+      display: none;
     }
   }
 </style>
@@ -241,14 +298,16 @@
           </div> -->
           <ul class="navbar-nav ms-auto pe-md-3 d-flex align-items-center justify-content-end">
             <li class="nav-item d-flex align-items-center me-3 header-session-user">
-              <div class="d-flex text-end align-items-center gap-1">
-                <i class="material-symbols-rounded">account_circle</i>
-                <span class="session-name session-text">{{ $authUserName }}</span> / 
-                <span class="session-meta session-text">{{ $authUserEmail }}</span> / 
-                <span class="session-meta session-text">Rol: {{ $authUserRole }}</span>
+              <div class="d-flex text-end align-items-center gap-1 header-session-user-inner">
+                <i class="material-symbols-rounded flex-shrink-0">account_circle</i>
+                <span class="session-name session-text">{{ $authUserName }}</span>
+                <span class="session-sep session-sep-email">/</span>
+                <span class="session-meta session-text session-meta-email">{{ $authUserEmail }}</span>
+                <span class="session-sep session-sep-role">/</span>
+                <span class="session-meta session-text session-meta-role">Rol: {{ $authUserRole }}</span>
               </div>
             </li>
-            <li class="nav-item d-flex align-items-center me-2">
+            <li class="nav-item d-flex align-items-center me-2 header-icon-item">
               <a href="{{ route('notifications.index') }}" class="nav-link text-body p-0 position-relative" aria-label="Notificaciones" title="Notificaciones">
                 <i class="material-symbols-rounded">notifications</i>
                 @if($headerUnreadNotificationsCount > 0)
@@ -258,7 +317,7 @@
                 @endif
               </a>
             </li>
-            <li class="nav-item d-flex align-items-center">
+            <li class="nav-item d-flex align-items-center header-icon-item">
               <form method="POST" action="{{ route('logout') }}" class="m-0 p-0">
                 @csrf
                 <button

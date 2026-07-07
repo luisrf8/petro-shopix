@@ -262,8 +262,11 @@ class ProductController extends Controller
             'variants.*.name' => 'required|string|max:255',
             'variants.*.price' => 'required|numeric|gt:0',
             'variants.*.discount_percentage' => 'nullable|numeric|min:0|max:100',
-            'variants.*.stock' => 'required|integer|min:0',
+            'variants.*.stock' => 'required|numeric|min:0',
             'variants.*.barcode' => 'nullable|string|max:100',
+            'variants.*.unit_type' => 'nullable|string|max:50',
+            'variants.*.quantity_input_mode' => 'nullable|string|in:integer,decimal',
+            'variants.*.min_sale_quantity' => 'nullable|numeric|gt:0',
         ]);
 
         $normalizedBarcodes = [];
@@ -351,13 +354,18 @@ class ProductController extends Controller
                         $variantName = 'Unica';
                     }
 
+                    $quantityInputMode = ProductVariant::normalizeQuantityInputMode($variant['quantity_input_mode'] ?? null);
+
                     $productVariant = ProductVariant::create([
                         'product_id' => $product->id,
                         'size' => $variantName,
                         'price' => $variant['price'],
                         'discount_percentage' => max(0, min(100, (float) ($variant['discount_percentage'] ?? 0))),
-                        'stock' => $variant['stock'],
+                        'stock' => round((float) $variant['stock'], 2),
                         'barcode' => $this->sanitizeVariantCode($variant['barcode'] ?? null),
+                        'unit_type' => ProductVariant::normalizeUnitType($variant['unit_type'] ?? null),
+                        'quantity_input_mode' => $quantityInputMode,
+                        'min_sale_quantity' => ProductVariant::normalizeMinSaleQuantity($variant['min_sale_quantity'] ?? null, $quantityInputMode),
                     ]);
 
                     $this->ensureVariantCodes($productVariant);
@@ -1519,10 +1527,14 @@ class ProductController extends Controller
             ? trim((string) $validated['name'])
             : (string) $product->name;
 
+        $normalizedDescription = array_key_exists('description', $validated)
+            ? trim((string) ($validated['description'] ?? ''))
+            : (string) ($product->description ?? '');
+
         $product->update([
             'name' => $normalizedName,
             'slug' => $this->generateUniqueProductSlug($normalizedName, (int) $product->tenant_id, (int) $product->id),
-            'description' => array_key_exists('description', $validated) ? ($validated['description'] ?? null) : $product->description,
+            'description' => $normalizedDescription,
             'category_id' => $categoryId,
             'is_active' => array_key_exists('is_active', $validated) ? (bool) $validated['is_active'] : (bool) $product->is_active,
             'is_consumable' => array_key_exists('is_consumable', $validated) ? (bool) $validated['is_consumable'] : (bool) $product->is_consumable,

@@ -119,6 +119,7 @@ Route::get('/dollarRate', [PaymentMethodController::class, 'getDollarRate']);
 Route::get('/payment-methods', [SaleController::class, 'getPaymentMethods']);
 Route::post('/sales/get-variants', [SaleController::class, 'getVariants']);
 Route::post('/create-sale', [SaleController::class, 'store']);
+Route::post('/payment/order/{orderId}/create', [SaleController::class, 'createPaymentEntry']);
 Route::post('/payment/{id}/status/update', [SaleController::class, 'paymentToggleStatus']);
 Route::post('/payment/{id}/update', [SaleController::class, 'updatePaymentEntry']);
 Route::delete('/payment/{id}', [SaleController::class, 'deletePaymentEntry']);

@@ -1,5 +1,10 @@
 @extends('layouts.app')
 
+@php
+  $categoriesUserRole = \App\Models\User::canonicalRoleName(optional(auth()->user()->role)->name);
+  $categoriesIsSellerRole = in_array($categoriesUserRole, ['vendor', 'vendedor', 'seller'], true);
+@endphp
+
 @section('content')
     <style>
       .ai-chat-box {
@@ -128,11 +133,13 @@
             <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
               <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
                 <h6 class="text-white text-capitalize ps-3">CATEGORÍAS</h6>
-                <div class="py-1 px-3 text-end " data-bs-toggle="modal" data-bs-target="#createCategoryModal">
-                  <label class="text-white">
-                    + Agregar Categoría
-                  </label>
-                </div>
+                @if(!$categoriesIsSellerRole)
+                  <div class="py-1 px-3 text-end " data-bs-toggle="modal" data-bs-target="#createCategoryModal">
+                    <label class="text-white">
+                      + Agregar Categoría
+                    </label>
+                  </div>
+                @endif
               </div>
             </div>
             <div class="card-body px-0 pb-2">
@@ -144,9 +151,11 @@
                       <th>Descripción</th>
                       <th>Estado</th>
                       <th>Productos Disponibles</th>
-                      <th>Agregar producto</th>
-                      <th>Editar</th>
-                      <th>Activar / Inactivar</th>
+                      @if(!$categoriesIsSellerRole)
+                        <th>Agregar producto</th>
+                        <th>Editar</th>
+                        <th>Activar / Inactivar</th>
+                      @endif
                     </tr>
                   </thead>
                   <tbody class="text-center">
@@ -167,33 +176,35 @@
                           </span>
                         </td>
                         <td>{{ $category->total_available_items ?? 0 }}</td>
-                        <td class="align-middle">
-                          <a
-                            href="{{ route('createProductItem', ['category_id' => $category->id]) }}"
-                            class="text-secondary font-weight-bold text-xs toggle-status-btn">
-                            Agregar producto
-                          </a>
-                        </td>
-                        <td class="align-middle">
-                          <a href="javascript:;"
-                            class="text-secondary font-weight-bold text-xs btn-edit-user d-flex align-items-center justify-content-center"
-                            data-bs-toggle="modal"
-                            data-bs-target="#editCategoryModal"
-                            data-category-id="{{ $category->id }}"
-                            data-name="{{ $category->name }}"
-                            data-description="{{ $category->description }}"
-                            data-image="{{ $category->image ? (\App\Support\ImageStorage::url($category->image) ?? '') : '' }}">
-                            Editar
-                          </a>
-                        </td>
-                        <td class="align-middle">
-                          <a href="javascript:;"
-                          class="text-secondary font-weight-bold text-xs toggle-status-btn" 
-                          data-id="{{ $category->id }}" 
-                          data-status="{{ $category->is_active ? 'active' : 'inactive' }}">
-                            {{ $category->is_active ? 'Inactivar' : 'Activar' }}
-                          </a>
-                        </td>
+                        @if(!$categoriesIsSellerRole)
+                          <td class="align-middle">
+                            <a
+                              href="{{ route('createProductItem', ['category_id' => $category->id]) }}"
+                              class="text-secondary font-weight-bold text-xs toggle-status-btn">
+                              Agregar producto
+                            </a>
+                          </td>
+                          <td class="align-middle">
+                            <a href="javascript:;"
+                              class="text-secondary font-weight-bold text-xs btn-edit-user d-flex align-items-center justify-content-center"
+                              data-bs-toggle="modal"
+                              data-bs-target="#editCategoryModal"
+                              data-category-id="{{ $category->id }}"
+                              data-name="{{ $category->name }}"
+                              data-description="{{ $category->description }}"
+                              data-image="{{ $category->image ? (\App\Support\ImageStorage::url($category->image) ?? '') : '' }}">
+                              Editar
+                            </a>
+                          </td>
+                          <td class="align-middle">
+                            <a href="javascript:;"
+                            class="text-secondary font-weight-bold text-xs toggle-status-btn" 
+                            data-id="{{ $category->id }}" 
+                            data-status="{{ $category->is_active ? 'active' : 'inactive' }}">
+                              {{ $category->is_active ? 'Inactivar' : 'Activar' }}
+                            </a>
+                          </td>
+                        @endif
                       </tr>
                     @endforeach
                   </tbody>

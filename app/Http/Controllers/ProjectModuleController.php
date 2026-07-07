@@ -49,7 +49,7 @@ class ProjectModuleController extends Controller
                 return redirect()->route('dashboard')->with('warning', 'Este tenant no tiene habilitado el modulo de proyectos.');
             }
 
-            if (!(bool) ($tenant->offers_projects ?? true) && !$request->routeIs('projects.module.quotations.*')) {
+            if (!(bool) ($tenant->offers_projects ?? true) && $request->routeIs('projects.module.projects.*')) {
                 return redirect()->route('dashboard')->with('warning', 'Este tenant no tiene habilitado el modulo de proyectos.');
             }
 
@@ -341,17 +341,66 @@ class ProjectModuleController extends Controller
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if($tenantId <= 0, 403);
         $editingQuotationId = (int) request()->query('edit', 0);
+        $requestedTab = (string) request()->query('tab', '');
+        $activeQuotationTab = $requestedTab === 'history'
+            ? 'history'
+            : ($editingQuotationId > 0 ? 'create' : 'create');
+        $isSeller = (bool) (auth()->user()?->hasStoreRole('seller') ?? false);
 
         $tenant = Tenant::query()->find($tenantId);
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $dollarRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'USD');
         $euroRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'EUR');
 
-        $quotations = ProjectQuotation::query()
+        $quotationFilters = [
+            'q' => trim((string) request()->query('q', '')),
+            'type' => (string) request()->query('filter_type', 'all'),
+            'status' => (string) request()->query('filter_status', 'all'),
+            'conversion' => (string) request()->query('filter_conversion', 'all'),
+        ];
+
+        $allowedTypes = ['customer', 'supplier_request'];
+        $allowedStatuses = ['draft', 'sent', 'approved', 'rejected', 'invalidated', 'annulled', 'replaced'];
+        $allowedConversions = ['project', 'sale', 'inventory_entry', 'pending'];
+
+        $quotationsQuery = ProjectQuotation::query()
             ->where('tenant_id', $tenantId)
-            ->with(['items', 'provider', 'convertedProject', 'customer', 'convertedPurchaseOrder'])
+            ->with(['items', 'provider', 'convertedProject', 'customer', 'convertedPurchaseOrder']);
+
+        if ($quotationFilters['q'] !== '') {
+            $search = $quotationFilters['q'];
+            $quotationsQuery->where(function ($query) use ($search) {
+                $query
+                    ->where('title', 'like', '%' . $search . '%')
+                    ->orWhere('customer_name', 'like', '%' . $search . '%')
+                    ->orWhere('provider_name', 'like', '%' . $search . '%')
+                    ->orWhere('converted_sale_reference', 'like', '%' . $search . '%');
+
+                if (is_numeric($search)) {
+                    $query->orWhere('id', (int) $search);
+                }
+            });
+        }
+
+        if (in_array($quotationFilters['type'], $allowedTypes, true)) {
+            $quotationsQuery->where('type', $quotationFilters['type']);
+        }
+
+        if (in_array($quotationFilters['status'], $allowedStatuses, true)) {
+            $quotationsQuery->where('status', $quotationFilters['status']);
+        }
+
+        if (in_array($quotationFilters['conversion'], $allowedConversions, true)) {
+            if ($quotationFilters['conversion'] === 'pending') {
+                $quotationsQuery->whereNull('conversion_target');
+            } else {
+                $quotationsQuery->where('conversion_target', $quotationFilters['conversion']);
+            }
+        }
+
+        $quotations = $quotationsQuery
             ->latest('id')
-            ->take(40)
+            ->take(80)
             ->get();
 
         $editingQuotation = $editingQuotationId > 0
@@ -417,7 +466,10 @@ class ProjectModuleController extends Controller
             'projects',
             'baseCurrencyCode',
             'dollarRateToBs',
-            'euroRateToBs'
+            'euroRateToBs',
+            'activeQuotationTab',
+            'isSeller',
+            'quotationFilters'
         ));
     }
 
@@ -1014,6 +1066,10 @@ class ProjectModuleController extends Controller
     {
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if((int) $quotation->tenant_id !== $tenantId, 404);
+
+        if ((bool) (auth()->user()?->hasStoreRole('seller') ?? false)) {
+            return back()->with('warning', 'El rol vendedor no puede convertir cotizaciones a proyecto.');
+        }
 
         if ($this->isQuotationLockedStatus((string) $quotation->status)) {
             return back()->with('warning', 'La cotización está cerrada y no puede convertirse a proyecto.');

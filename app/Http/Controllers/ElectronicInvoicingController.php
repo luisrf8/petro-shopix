@@ -43,7 +43,9 @@ class ElectronicInvoicingController extends Controller
 
     private function renderIndex(Request $request, bool $isSuperAdmin)
     {
+        $authUser = auth()->user();
         $authTenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $isSeller = (bool) ($authUser?->hasStoreRole('seller') ?? false);
 
         $tenantId = (int) $request->query('tenant_id', 0);
         if (!$isSuperAdmin) {
@@ -66,6 +68,9 @@ class ElectronicInvoicingController extends Controller
             ])
             ->when($tenantId > 0, fn ($q) => $q->where('tenant_id', $tenantId))
             ->when(!$isSuperAdmin, fn ($q) => $q->where('tenant_id', $authTenantId))
+            ->when($isSeller, fn ($q) => $q->whereHas('salesOrder', function ($salesOrderQuery) use ($authUser) {
+                $salesOrderQuery->where('sales_rep_user_id', (int) ($authUser->id ?? 0));
+            }))
             ->when($serie !== '', fn ($q) => $q->where('serie', 'like', '%' . $serie . '%'))
             ->when($code !== '', fn ($q) => $q->where('codigo', 'like', '%' . $code . '%'))
             ->when($fromDate !== '', fn ($q) => $q->whereDate('created_at', '>=', $fromDate))
@@ -104,6 +109,9 @@ class ElectronicInvoicingController extends Controller
             ])
             ->when($tenantId > 0, fn ($q) => $q->where('tenant_id', $tenantId))
             ->when(!$isSuperAdmin, fn ($q) => $q->where('tenant_id', $authTenantId))
+            ->when($isSeller, fn ($q) => $q->whereHas('salesOrder', function ($salesOrderQuery) use ($authUser) {
+                $salesOrderQuery->where('sales_rep_user_id', (int) ($authUser->id ?? 0));
+            }))
             ->when($fromDate !== '', fn ($q) => $q->whereDate('created_at', '>=', $fromDate))
             ->when($toDate !== '', fn ($q) => $q->whereDate('created_at', '<=', $toDate))
             ->orderByDesc('id')
@@ -449,8 +457,14 @@ class ElectronicInvoicingController extends Controller
 
     private function authorizeOrderAccess(SalesOrder $order): void
     {
+        $authUser = auth()->user();
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if((int) $order->tenant_id !== $tenantId, 404);
+
+        $isSeller = (bool) ($authUser?->hasStoreRole('seller') ?? false);
+        if ($isSeller && (int) ($order->sales_rep_user_id ?? 0) !== (int) ($authUser->id ?? 0)) {
+            abort(404);
+        }
 
         if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
             abort(422, 'Esta venta está configurada como orden de entrega. Cambia el tipo de documento para operar facturación digital.');

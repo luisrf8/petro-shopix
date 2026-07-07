@@ -2,6 +2,13 @@
 
 @section('title', 'Categorías')
 
+@php
+  $productItemUserRole = \App\Models\User::canonicalRoleName(optional(auth()->user()->role)->name);
+  $productItemIsSellerRole = in_array($productItemUserRole, ['vendor', 'vendedor', 'seller'], true);
+  $productVariantUnitOptions = \App\Models\ProductVariant::UNIT_TYPE_OPTIONS;
+  $productVariantQuantityModeOptions = \App\Models\ProductVariant::QUANTITY_INPUT_MODE_OPTIONS;
+@endphp
+
 @section('content')
     <style>
       .ai-chat-box {
@@ -123,9 +130,11 @@
 
                       {{-- Imagen principal y botones --}}
                       <div class="position-relative product-main-image" style="width: 25rem; height: 25rem;">
-                        <p class="text-info position-absolute top-0 end-0 m-2 d-flex flex-column align-items-end" style="gap: 0.5rem;">
-                          <button class="btn btn-danger btn-sm" onclick="confirmRemoveImage(currentImageId)">Eliminar imagen</button>
-                        </p>
+                        @if(!$productItemIsSellerRole)
+                          <p class="text-info position-absolute top-0 end-0 m-2 d-flex flex-column align-items-end" style="gap: 0.5rem;">
+                            <button class="btn btn-danger btn-sm" onclick="confirmRemoveImage(currentImageId)">Eliminar imagen</button>
+                          </p>
+                        @endif
                         <div class="icon icon-shape icon-xl shadow bg-transparent text-center border border-1 border-dark text-dark border-radius-lg w-100 h-100">
                           @if(isset($product->images) && count($product->images) > 0)
                             <img 
@@ -190,62 +199,66 @@
                       <p class="mb-2"><strong>Descuento del producto:</strong> {{ number_format((float) ($product->discount_percentage ?? 0), 2) }}%</p>
                       <p class="mb-2"><strong>Tipo:</strong> {{ $product->is_consumable ? 'Consumible interno' : 'Producto vendible' }}</p>
                       <div class="d-flex flex-wrap gap-2 mb-3">
-                        <button type="button" class="btn btn-outline-dark btn-sm" id="generateProductCodesBtn">Generar códigos de todas las variantes</button>
-                        <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#addImageModal">Agregar imagen +</button>
-                        <button class="btn btn-dark btn-sm" onclick="deleteProduct({{ $product->id }})">Eliminar</button>
+                        @if(!$productItemIsSellerRole)
+                          <button type="button" class="btn btn-outline-dark btn-sm" id="generateProductCodesBtn">Generar códigos de todas las variantes</button>
+                          <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#addImageModal">Agregar imagen +</button>
+                          <button class="btn btn-dark btn-sm" onclick="deleteProduct({{ $product->id }})">Eliminar</button>
+                        @endif
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div class="card mt-3">
-                <div class="card-body">
-                  <h5 class="mb-3">Editar producto</h5>
-                  <form id="editProductForm" enctype="multipart/form-data" class="row g-3">
-                    @csrf
-                    <div class="col-md-6">
-                      <label for="editProductName" class="form-label">Nombre</label>
-                      <input type="text" class="form-control border" id="editProductName" name="name" value="{{ old('name', $product->name) }}" required>
-                    </div>
-                    <div class="col-md-6">
-                      <label for="productCategory" class="form-label">Categoría</label>
-                      <select class="form-control border" id="productCategory" name="category" required>
-                        @foreach($categories as $category)
-                          <option value="{{ $category->id }}" {{ $category->id == old('category', $product->category_id) ? 'selected' : '' }}>
-                            {{ $category->name }}
-                          </option>
-                        @endforeach
-                      </select>
-                    </div>
-                    <div class="col-12">
-                      <label for="editProductDescription" class="form-label">Descripción</label>
-                      <textarea class="form-control border" id="editProductDescription" name="description" rows="2">{{ old('description', $product->description) }}</textarea>
-                    </div>
-                    <div class="col-md-4">
-                      <label for="productStatus" class="form-label">Estado</label>
-                      <select class="form-control border" id="productStatus" name="is_active" required>
-                        <option value="1" {{ $product->is_active ? 'selected' : '' }}>Activo</option>
-                        <option value="0" {{ !$product->is_active ? 'selected' : '' }}>Inactivo</option>
-                      </select>
-                    </div>
-                    <div class="col-md-4">
-                      <label for="productDiscountPercentage" class="form-label">Descuento (%)</label>
-                      <input type="number" class="form-control border" id="productDiscountPercentage" name="discount_percentage" min="0" max="100" step="0.01" value="{{ number_format((float) ($product->discount_percentage ?? 0), 2, '.', '') }}" data-decimal-friendly="true">
-                    </div>
-                    <div class="col-md-4">
-                      <label for="productConsumableToggle" class="form-label">Disponibilidad</label>
-                      <select class="form-control border" id="productConsumableToggle" name="is_consumable" required>
-                        <option value="0" {{ !$product->is_consumable ? 'selected' : '' }}>Disponible para venta</option>
-                        <option value="1" {{ $product->is_consumable ? 'selected' : '' }}>Consumible interno</option>
-                      </select>
-                    </div>
-                    <div class="col-md-12 d-flex align-items-end">
-                      <button type="submit" class="btn btn-dark w-100" id="saveChangesBtn">Guardar Cambios</button>
-                    </div>
-                  </form>
+              @if(!$productItemIsSellerRole)
+                <div class="card mt-3">
+                  <div class="card-body">
+                    <h5 class="mb-3">Editar producto</h5>
+                    <form id="editProductForm" enctype="multipart/form-data" class="row g-3">
+                      @csrf
+                      <div class="col-md-6">
+                        <label for="editProductName" class="form-label">Nombre</label>
+                        <input type="text" class="form-control border" id="editProductName" name="name" value="{{ old('name', $product->name) }}" required>
+                      </div>
+                      <div class="col-md-6">
+                        <label for="productCategory" class="form-label">Categoría</label>
+                        <select class="form-control border" id="productCategory" name="category" required>
+                          @foreach($categories as $category)
+                            <option value="{{ $category->id }}" {{ $category->id == old('category', $product->category_id) ? 'selected' : '' }}>
+                              {{ $category->name }}
+                            </option>
+                          @endforeach
+                        </select>
+                      </div>
+                      <div class="col-12">
+                        <label for="editProductDescription" class="form-label">Descripción</label>
+                        <textarea class="form-control border" id="editProductDescription" name="description" rows="2">{{ old('description', $product->description) }}</textarea>
+                      </div>
+                      <div class="col-md-4">
+                        <label for="productStatus" class="form-label">Estado</label>
+                        <select class="form-control border" id="productStatus" name="is_active" required>
+                          <option value="1" {{ $product->is_active ? 'selected' : '' }}>Activo</option>
+                          <option value="0" {{ !$product->is_active ? 'selected' : '' }}>Inactivo</option>
+                        </select>
+                      </div>
+                      <div class="col-md-4">
+                        <label for="productDiscountPercentage" class="form-label">Descuento (%)</label>
+                        <input type="number" class="form-control border" id="productDiscountPercentage" name="discount_percentage" min="0" max="100" step="0.01" value="{{ number_format((float) ($product->discount_percentage ?? 0), 2, '.', '') }}" data-decimal-friendly="true">
+                      </div>
+                      <div class="col-md-4">
+                        <label for="productConsumableToggle" class="form-label">Disponibilidad</label>
+                        <select class="form-control border" id="productConsumableToggle" name="is_consumable" required>
+                          <option value="0" {{ !$product->is_consumable ? 'selected' : '' }}>Disponible para venta</option>
+                          <option value="1" {{ $product->is_consumable ? 'selected' : '' }}>Consumible interno</option>
+                        </select>
+                      </div>
+                      <div class="col-md-12 d-flex align-items-end">
+                        <button type="submit" class="btn btn-dark w-100" id="saveChangesBtn">Guardar Cambios</button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
-              </div>
+              @endif
 
               <div class="card mt-3">
                 <div class="card-body">
@@ -277,7 +290,9 @@
                     <div class="tab-pane fade show active" id="variants-tab-pane" role="tabpanel" aria-labelledby="variants-tab" tabindex="0">
                       <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="mb-0">Variantes</h5>
-                        <button type="button" class="btn btn-outline-dark btn-sm" id="addVariantBtn">Agregar Variante</button>
+                        @if(!$productItemIsSellerRole)
+                          <button type="button" class="btn btn-outline-dark btn-sm" id="addVariantBtn">Agregar Variante</button>
+                        @endif
                       </div>
 
                       <div id="variantEditorList" class="d-flex flex-column gap-3">
@@ -290,29 +305,51 @@
                       @endphp
                       <div class="border rounded p-3" data-existing-variant-row="{{ $variant->id }}">
                         <div class="row g-2 align-items-end">
-                          <div class="col-lg-2 col-md-6">
+                          <div class="col-lg-3 col-md-6">
                             <label class="form-label">Variante</label>
-                            <input type="text" class="form-control border" data-existing-size value="{{ $variant->size }}">
+                            <input type="text" class="form-control border" data-existing-size value="{{ $variant->size }}" {{ $productItemIsSellerRole ? 'readonly' : '' }}>
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Precio base</label>
-                            <input type="number" class="form-control border" data-existing-price min="0.01" step="0.01" value="{{ number_format((float) $variant->price, 2, '.', '') }}" data-decimal-friendly="true">
+                            <input type="number" class="form-control border" data-existing-price min="0.01" step="0.01" value="{{ number_format((float) $variant->price, 2, '.', '') }}" data-decimal-friendly="true" {{ $productItemIsSellerRole ? 'readonly' : '' }}>
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Desc. variante %</label>
-                            <input type="number" class="form-control border" data-existing-discount min="0" max="100" step="0.01" value="{{ number_format((float) ($variant->discount_percentage ?? 0), 2, '.', '') }}" data-decimal-friendly="true">
+                            <input type="number" class="form-control border" data-existing-discount min="0" max="100" step="0.01" value="{{ number_format((float) ($variant->discount_percentage ?? 0), 2, '.', '') }}" data-decimal-friendly="true" {{ $productItemIsSellerRole ? 'readonly' : '' }}>
                           </div>
                           <div class="col-lg-2 col-md-6">
+                            <label class="form-label">Unidad</label>
+                            <select class="form-control border" data-existing-unit-type {{ $productItemIsSellerRole ? 'disabled' : '' }}>
+                              @foreach($productVariantUnitOptions as $unitValue => $unitLabel)
+                                <option value="{{ $unitValue }}" {{ ($variant->unit_type ?? 'unidad') === $unitValue ? 'selected' : '' }}>{{ $unitLabel }}</option>
+                              @endforeach
+                            </select>
+                          </div>
+                          <div class="col-lg-2 col-md-6">
+                            <label class="form-label">Cantidad</label>
+                            <select class="form-control border" data-existing-quantity-mode {{ $productItemIsSellerRole ? 'disabled' : '' }}>
+                              @foreach($productVariantQuantityModeOptions as $modeValue => $modeLabel)
+                                <option value="{{ $modeValue }}" {{ ($variant->quantity_input_mode ?? 'integer') === $modeValue ? 'selected' : '' }}>{{ $modeLabel }}</option>
+                              @endforeach
+                            </select>
+                          </div>
+                          <div class="col-lg-2 col-md-6">
+                            <label class="form-label">Venta mínima</label>
+                            <input type="number" class="form-control border" data-existing-min-sale-quantity min="0.01" step="0.01" value="{{ number_format((float) ($variant->min_sale_quantity ?? 1), 2, '.', '') }}" data-decimal-friendly="true" {{ $productItemIsSellerRole ? 'readonly' : '' }}>
+                          </div>
+                          <div class="col-lg-1 col-md-6">
                             <label class="form-label">Stock</label>
-                            <input type="number" class="form-control border" data-existing-stock min="0" step="1" value="{{ $variant->stock }}">
+                            <input type="number" class="form-control border" data-existing-stock min="0" step="0.01" value="{{ number_format((float) $variant->stock, 2, '.', '') }}" data-decimal-friendly="true" {{ $productItemIsSellerRole ? 'readonly' : '' }}>
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Código barras</label>
-                            <input type="text" class="form-control border" data-existing-barcode value="{{ $variant->barcode ?: '' }}" data-variant-barcode-input="{{ $variant->id }}">
+                            <input type="text" class="form-control border" data-existing-barcode value="{{ $variant->barcode ?: '' }}" data-variant-barcode-input="{{ $variant->id }}" {{ $productItemIsSellerRole ? 'readonly' : '' }}>
                           </div>
                           <div class="col-lg-2 col-md-6">
                             <label class="form-label">Imagen variante</label>
-                            <input type="file" class="form-control border existing-variant-image-input" data-existing-image="{{ $variant->id }}" accept="image/*">
+                            @if(!$productItemIsSellerRole)
+                              <input type="file" class="form-control border existing-variant-image-input" data-existing-image="{{ $variant->id }}" accept="image/*">
+                            @endif
                           </div>
                         </div>
 
@@ -329,14 +366,16 @@
                             >
                             <small class="text-muted">Precio final: {{ number_format($effectivePrice, 2) }} $</small>
                           </div>
-                          <div class="d-flex flex-wrap gap-2">
-                            <button type="button" class="btn btn-outline-dark btn-sm open-existing-variant-ai-btn" data-variant-id="{{ $variant->id }}">IA imagen</button>
-                            <button type="button" class="btn btn-dark btn-sm save-existing-variant-btn" data-variant-id="{{ $variant->id }}">Guardar variante</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm generate-variant-codes-btn" data-variant-id="{{ $variant->id }}">Generar códigos</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm open-qr-modal-btn" data-qr-title="QR variante {{ $variant->size }}" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="showVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Ver QR</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm download-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="downloadVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Descargar QR</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm print-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" id="printVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Imprimir QR</button>
-                          </div>
+                          @if(!$productItemIsSellerRole)
+                            <div class="d-flex flex-wrap gap-2">
+                              <button type="button" class="btn btn-outline-dark btn-sm open-existing-variant-ai-btn" data-variant-id="{{ $variant->id }}">IA imagen</button>
+                              <button type="button" class="btn btn-dark btn-sm save-existing-variant-btn" data-variant-id="{{ $variant->id }}">Guardar variante</button>
+                              <button type="button" class="btn btn-outline-secondary btn-sm generate-variant-codes-btn" data-variant-id="{{ $variant->id }}">Generar códigos</button>
+                              <button type="button" class="btn btn-outline-secondary btn-sm open-qr-modal-btn" data-qr-title="QR variante {{ $variant->size }}" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="showVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Ver QR</button>
+                              <button type="button" class="btn btn-outline-secondary btn-sm download-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="downloadVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Descargar QR</button>
+                              <button type="button" class="btn btn-outline-secondary btn-sm print-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" id="printVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Imprimir QR</button>
+                            </div>
+                          @endif
                         </div>
 
                         <div class="small text-muted mt-2">
@@ -347,9 +386,11 @@
                     @endforeach
                       </div>
 
-                      <div id="newVariantContainer" class="d-flex flex-column gap-3 mt-3"></div>
+                      @if(!$productItemIsSellerRole)
+                        <div id="newVariantContainer" class="d-flex flex-column gap-3 mt-3"></div>
 
-                      <button type="button" class="btn btn-dark mt-3" id="saveVariantsBtn">Guardar variantes nuevas</button>
+                        <button type="button" class="btn btn-dark mt-3" id="saveVariantsBtn">Guardar variantes nuevas</button>
+                      @endif
                     </div>
 
                     <div class="tab-pane fade" id="warehouse-stock-tab-pane" role="tabpanel" aria-labelledby="warehouse-stock-tab" tabindex="0">
@@ -496,6 +537,16 @@
 
 
 <script>
+    const productVariantUnitOptions = @json($productVariantUnitOptions);
+    const productVariantQuantityModeOptions = @json($productVariantQuantityModeOptions);
+
+    function buildVariantOptionTags(options, selectedValue = '') {
+      return Object.entries(options || {}).map(([value, label]) => {
+        const selected = String(selectedValue || '') === String(value) ? 'selected' : '';
+        return `<option value="${value}" ${selected}>${label}</option>`;
+      }).join('');
+    }
+
     const tenantAiImageEndpoint = @json(route('tenant.ai-image'));
     const PRODUCT_ITEM_SAFE_IMAGE_BYTES = 1.2 * 1024 * 1024;
     let productAiModalInstance = null;
@@ -568,6 +619,12 @@
     function parseProductInteger(value, minimum = 0) {
       const amount = Number(value);
       return Number.isInteger(amount) && amount >= minimum ? amount : null;
+    }
+    function parseProductStockAmount(value, minimum = 0) {
+      const amount = window.shopixParseDecimalInput
+        ? window.shopixParseDecimalInput(value)
+        : Number(String(value ?? '').replace(',', '.'));
+      return Number.isFinite(amount) && amount >= minimum ? Math.round(amount * 100) / 100 : null;
     }
 
     function loadProductImageElement(file) {
@@ -967,6 +1024,7 @@
   });
   const productCardForActions = document.querySelector('.card[data-product-id]');
   const inlineProductId = productCardForActions?.getAttribute('data-product-id');
+  const productUpdateEndpointTemplate = "{{ route('products.updateWeb', ['id' => '__ID__']) }}";
 
   function createNewVariantRow() {
     const container = document.getElementById('newVariantContainer');
@@ -989,6 +1047,22 @@
           <input type="number" class="form-control" data-new-discount min="0" max="100" step="0.01" value="0" data-decimal-friendly="true">
         </div>
         <div class="col-lg-2 col-md-6">
+          <label class="form-label">Unidad</label>
+          <select class="form-control" data-new-unit-type>
+            ${buildVariantOptionTags(productVariantUnitOptions, 'unidad')}
+          </select>
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label">Venta mínima</label>
+          <input type="number" class="form-control" data-new-min-sale-quantity min="0.01" step="0.01" value="1.00" data-decimal-friendly="true">
+        </div>
+        <div class="col-lg-2 col-md-6">
+          <label class="form-label">Cantidad</label>
+          <select class="form-control" data-new-quantity-mode>
+            ${buildVariantOptionTags(productVariantQuantityModeOptions, 'integer')}
+          </select>
+        </div>
+        <div class="col-lg-1 col-md-6">
           <label class="form-label">Stock</label>
           <input type="number" class="form-control" data-new-stock min="0" step="1">
         </div>
@@ -1095,11 +1169,14 @@
       const size = row.querySelector('[data-new-size]')?.value?.trim();
       const price = parsePositiveProductAmount(row.querySelector('[data-new-price]')?.value);
       const discount_percentage = row.querySelector('[data-new-discount]')?.value;
-      const stock = parseProductInteger(row.querySelector('[data-new-stock]')?.value, 0);
+      const stock = parseProductStockAmount(row.querySelector('[data-new-stock]')?.value, 0);
       const barcode = row.querySelector('[data-new-barcode]')?.value?.trim();
+      const unit_type = row.querySelector('[data-new-unit-type]')?.value || 'unidad';
+      const quantity_input_mode = row.querySelector('[data-new-quantity-mode]')?.value || 'integer';
+      const min_sale_quantity = parseProductStockAmount(row.querySelector('[data-new-min-sale-quantity]')?.value, 0.01);
 
-      if (size && price !== null && stock !== null) {
-        variants.push({ size, price, discount_percentage: discount_percentage || 0, stock, barcode });
+      if (size && price !== null && stock !== null && min_sale_quantity !== null) {
+        variants.push({ size, price, discount_percentage: discount_percentage || 0, stock, barcode, unit_type, quantity_input_mode, min_sale_quantity });
         const imageInput = row.querySelector('.new-variant-image');
         if (imageInput?.files?.[0]) {
           formData.append(`variant_images[${index}]`, imageInput.files[0]);
@@ -1180,7 +1257,7 @@
       const formData = new FormData();
       const size = row.querySelector('[data-existing-size]')?.value?.trim() || '';
       const price = parsePositiveProductAmount(row.querySelector('[data-existing-price]')?.value);
-      const stock = parseProductInteger(row.querySelector('[data-existing-stock]')?.value, 0);
+      const stock = parseProductStockAmount(row.querySelector('[data-existing-stock]')?.value, 0);
 
       if (!size) {
         alert('La variante debe tener un nombre.');
@@ -1202,6 +1279,9 @@
       formData.append('discount_percentage', row.querySelector('[data-existing-discount]')?.value || '0');
       formData.append('stock', String(stock));
       formData.append('barcode', row.querySelector('[data-existing-barcode]')?.value || '');
+      formData.append('unit_type', row.querySelector('[data-existing-unit-type]')?.value || 'unidad');
+      formData.append('quantity_input_mode', row.querySelector('[data-existing-quantity-mode]')?.value || 'integer');
+      formData.append('min_sale_quantity', row.querySelector('[data-existing-min-sale-quantity]')?.value || '1');
 
       const imageInput = row.querySelector('.existing-variant-image-input');
       if (imageInput?.files?.[0]) {
@@ -1297,7 +1377,7 @@ async function deleteProduct(productId) {
   }
 }
 
-document.getElementById('editProductForm').addEventListener('submit', function(event) {
+document.getElementById('editProductForm')?.addEventListener('submit', function(event) {
   event.preventDefault(); // Evitar que se recargue la página
     let formData = new FormData(this);
     const normalizedName = (document.getElementById('editProductName')?.value || '').trim();
@@ -1309,7 +1389,9 @@ document.getElementById('editProductForm').addEventListener('submit', function(e
       return;
     }
 
-    fetch(`/api/products/${productId}`, {
+    const updateUrl = productUpdateEndpointTemplate.replace('__ID__', encodeURIComponent(String(productId)));
+
+    fetch(updateUrl, {
         method: 'POST',
         headers: {
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',

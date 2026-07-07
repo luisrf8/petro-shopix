@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Models\Payment;
+use App\Models\SalesOrder;
 use App\Models\User;
 use App\Notifications\WorkflowStatusNotification;
 use Illuminate\Support\Carbon;
@@ -70,6 +72,10 @@ class WorkflowNotifier
 
     private static function dispatchNotification(User $user, array $payload): void
     {
+        if (!self::shouldDispatchToUser($user, $payload)) {
+            return;
+        }
+
         try {
             $user->notify(new WorkflowStatusNotification($payload));
         } catch (\Throwable $exception) {
@@ -137,5 +143,99 @@ class WorkflowNotifier
 
             return false;
         }
+    }
+
+    private static function shouldDispatchToUser(User $user, array $payload): bool
+    {
+        // Restricción: un vendedor solo recibe notificaciones asociadas a su propio contexto.
+        if (!(bool) $user->hasStoreRole('seller')) {
+            return true;
+        }
+
+        $sellerId = (int) ($user->id ?? 0);
+        if ($sellerId <= 0) {
+            return false;
+        }
+
+        $relatedOrderId = self::extractRelatedOrderId($payload);
+        if ($relatedOrderId > 0) {
+            return self::orderIsRelatedToSeller($relatedOrderId, $sellerId);
+        }
+
+        // Si no existe forma de vincular la notificación al vendedor autenticado, no se envía.
+        return self::payloadContainsSellerReference($payload, $sellerId);
+    }
+
+    private static function extractRelatedOrderId(array $payload): int
+    {
+        $orderId = (int) ($payload['order_id'] ?? 0);
+        if ($orderId > 0) {
+            return $orderId;
+        }
+
+        $meta = is_array($payload['meta'] ?? null) ? $payload['meta'] : [];
+        $metaOrderId = (int) ($meta['order_id'] ?? 0);
+        if ($metaOrderId > 0) {
+            return $metaOrderId;
+        }
+
+        $paymentId = (int) ($payload['payment_id'] ?? 0);
+        if ($paymentId <= 0) {
+            $paymentId = (int) ($meta['payment_id'] ?? 0);
+        }
+
+        if ($paymentId > 0) {
+            return (int) Payment::query()->whereKey($paymentId)->value('sales_order_id');
+        }
+
+        return 0;
+    }
+
+    private static function orderIsRelatedToSeller(int $orderId, int $sellerId): bool
+    {
+        $order = SalesOrder::query()
+            ->select(['id', 'sales_rep_user_id'])
+            ->whereKey($orderId)
+            ->first();
+
+        if (!$order) {
+            return false;
+        }
+
+        return (int) ($order->sales_rep_user_id ?? 0) === $sellerId;
+    }
+
+    private static function payloadContainsSellerReference(array $payload, int $sellerId): bool
+    {
+        $directKeys = [
+            'user_id',
+            'target_user_id',
+            'sales_rep_user_id',
+            'assigned_user_id',
+            'assigned_by_user_id',
+            'actor_user_id',
+            'delivery_user_id',
+            'customer_user_id',
+        ];
+
+        foreach ($directKeys as $key) {
+            if ((int) ($payload[$key] ?? 0) === $sellerId) {
+                return true;
+            }
+        }
+
+        $meta = is_array($payload['meta'] ?? null) ? $payload['meta'] : [];
+        foreach ($directKeys as $key) {
+            if ((int) ($meta[$key] ?? 0) === $sellerId) {
+                return true;
+            }
+        }
+
+        $relatedIds = $meta['related_user_ids'] ?? null;
+        if (is_array($relatedIds)) {
+            return collect($relatedIds)->map(fn ($id) => (int) $id)->contains($sellerId);
+        }
+
+        return false;
     }
 }

@@ -3,6 +3,8 @@
 @section('title', 'Categorías')
 
 @php
+  $productsUserRole = \App\Models\User::canonicalRoleName(optional(auth()->user()->role)->name);
+  $productsIsSellerRole = in_array($productsUserRole, ['vendor', 'vendedor', 'seller'], true);
   $productsToolbarTenant = ($productsToolbarTenantId = (int) (auth()->user()->tenant_id ?? 0)) > 0
     ? \App\Models\Tenant::find($productsToolbarTenantId)
     : null;
@@ -319,24 +321,26 @@
               <input type="text" id="searchProduct" class="w-100 form-control border border-1 p-2 bg-white" placeholder="Buscar producto...">
             </div>
             <div class="px-3 products-primary-actions align-items-center">
-              <a class="btn btn-dark mb-0 admin-mobile-action-trigger" href="/createProduct">
-                <i class="material-symbols-rounded">add_box</i>
-                <span>Agregar Producto</span>
-              </a>
-              <a class="btn btn-outline-dark mb-0 admin-mobile-action-trigger" href="javascript:;" data-bs-toggle="modal" data-bs-target="#importCatalogModal">
-                <i class="material-symbols-rounded">upload_file</i>
-                <span>Importar Catálogo</span>
-              </a>
-              @unless($productsToolbarFreePlan)
-                <a class="btn btn-outline-dark mb-0 admin-mobile-action-trigger" href="/purchase">
-                  <i class="material-symbols-rounded">shopping_bag</i>
-                  <span>Generar Compra</span>
+              @if(!$productsIsSellerRole)
+                <a class="btn btn-dark mb-0 admin-mobile-action-trigger" href="/createProduct">
+                  <i class="material-symbols-rounded">add_box</i>
+                  <span>Agregar Producto</span>
                 </a>
-                <button type="button" id="generateReport" class="btn btn-dark mb-0 admin-mobile-action-trigger" data-bs-toggle="modal" data-bs-target="#productsReportModal">
-                  <i class="material-symbols-rounded">assessment</i>
-                  Generar Reporte
-                </button>
-              @endunless
+                <a class="btn btn-outline-dark mb-0 admin-mobile-action-trigger" href="javascript:;" data-bs-toggle="modal" data-bs-target="#importCatalogModal">
+                  <i class="material-symbols-rounded">upload_file</i>
+                  <span>Importar Catálogo</span>
+                </a>
+                @unless($productsToolbarFreePlan)
+                  <a class="btn btn-outline-dark mb-0 admin-mobile-action-trigger" href="/purchase">
+                    <i class="material-symbols-rounded">shopping_bag</i>
+                    <span>Generar Compra</span>
+                  </a>
+                  <button type="button" id="generateReport" class="btn btn-dark mb-0 admin-mobile-action-trigger" data-bs-toggle="modal" data-bs-target="#productsReportModal">
+                    <i class="material-symbols-rounded">assessment</i>
+                    Generar Reporte
+                  </button>
+                @endunless
+              @endif
             </div>
           </div>
     <!-- Modal para crear producto -->
@@ -503,9 +507,11 @@
               <div class="product-main-clean">
                 <div class="product-head-clean">
                   <h6 class="product-title-clean text-truncate mb-0">{{ $product->name }}</h6>
-                  <a href="{{ route('productItem', $product->id) }}" class="edit-link-clean">
-                    <i class="material-symbols-rounded text-sm">edit</i>Editar
-                  </a>
+                  @if(!$productsIsSellerRole)
+                    <a href="{{ route('productItem', $product->id) }}" class="edit-link-clean">
+                      <i class="material-symbols-rounded text-sm">edit</i>Editar
+                    </a>
+                  @endif
                 </div>
                 <p class="product-desc-clean">{{ $product->description ?: 'Sin descripción' }}</p>
 

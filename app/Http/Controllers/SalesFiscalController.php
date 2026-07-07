@@ -465,7 +465,14 @@ class SalesFiscalController extends Controller
 
     private function authorizeOrderAccess(SalesOrder $order): void
     {
-        abort_if((int) ($order->tenant_id ?? 0) !== (int) (auth()->user()->tenant_id ?? 0), 404);
+        $authUser = auth()->user();
+
+        abort_if((int) ($order->tenant_id ?? 0) !== (int) ($authUser->tenant_id ?? 0), 404);
+
+        $isSeller = (bool) ($authUser?->hasStoreRole('seller') ?? false);
+        if ($isSeller && (int) ($order->sales_rep_user_id ?? 0) !== (int) ($authUser->id ?? 0)) {
+            abort(404);
+        }
     }
 
     private function resolveManualAdjustmentBreakdown(float $amount, ?float $taxRate, float $affectedIgtfAmount): array

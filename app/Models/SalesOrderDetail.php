@@ -14,6 +14,16 @@ class SalesOrderDetail extends Model
         'tax_rate', 'tax_amount'
     ];
 
+    protected $casts = [
+        'quantity' => 'float',
+        'price' => 'float',
+        'amount' => 'float',
+        'line_subtotal_before_discount' => 'float',
+        'line_discount_amount' => 'float',
+        'tax_rate' => 'float',
+        'tax_amount' => 'float',
+    ];
+
     // En el modelo SalesOrderDetail
     public function variant()
     {

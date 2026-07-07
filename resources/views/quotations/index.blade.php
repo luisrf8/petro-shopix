@@ -90,6 +90,13 @@
     background: #fef2f2;
   }
 
+  .quotations-history-filters {
+    border: 1px solid var(--q-border);
+    border-radius: 14px;
+    background: var(--q-soft);
+    padding: 0.75rem;
+  }
+
   @media (max-width: 991.98px) {
     .quotation-page-shell {
       padding-left: 0.35rem;
@@ -192,6 +199,15 @@
       box-shadow: 0 14px 24px -18px rgba(15, 23, 42, 0.5);
     }
 
+    .quotations-history-wrap {
+      overflow-x: hidden !important;
+    }
+
+    .quotations-history-table {
+      width: 100%;
+      table-layout: fixed;
+    }
+
     .quotations-history-table thead {
       display: none;
     }
@@ -206,40 +222,106 @@
     }
 
     .quotations-history-table tbody td {
-      display: flex;
-      justify-content: space-between;
-      gap: 0.75rem;
+      display: block;
       border: 0;
       padding: 0.35rem 0;
-      text-align: right;
+      text-align: left;
+      overflow: visible;
+      white-space: normal;
+      word-break: break-word;
     }
 
     .quotations-history-table tbody td::before {
       content: attr(data-label);
+      display: block;
       font-weight: 700;
       color: #475569;
       text-align: left;
-      flex: 0 0 auto;
+      margin-bottom: 0.18rem;
     }
 
     .quotations-history-table tbody td:last-child {
       display: block;
       text-align: left;
-      padding-top: 0.6rem;
+      padding-top: 0.45rem;
+      overflow: visible;
     }
 
     .quotations-history-table tbody td:last-child::before {
       display: none;
     }
 
-    .quotations-history-table tbody td:last-child .btn,
-    .quotations-history-table tbody td:last-child form {
+    .quotations-history-table tbody td:last-child .d-flex {
+      display: grid !important;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.4rem !important;
+      align-items: stretch;
       width: 100%;
-      margin-bottom: 0.45rem;
+      max-width: 100%;
+    }
+
+    .quotations-history-table tbody td:last-child .d-flex > * {
+      min-width: 0;
     }
 
     .quotations-history-table tbody td:last-child .btn {
       justify-content: center;
+      min-height: 36px;
+      padding: 0.3rem 0.45rem;
+      width: 100%;
+      margin-bottom: 0;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      line-height: 1;
+    }
+
+    .quotations-history-table tbody td:last-child .btn span {
+      display: none;
+    }
+
+    .quotations-history-table tbody td:last-child .btn .material-symbols-rounded {
+      margin: 0 !important;
+      font-size: 18px;
+    }
+
+    .quotations-history-table tbody td:last-child .btn.d-inline-flex {
+      gap: 0 !important;
+    }
+
+    .quotations-history-table tbody td:last-child .d-flex > form {
+      grid-column: 1 / -1;
+      display: grid !important;
+      grid-template-columns: 1fr auto;
+      gap: 0.35rem !important;
+      width: 100%;
+      margin-bottom: 0;
+    }
+
+    .quotations-history-table tbody td:last-child .d-flex > form .form-control {
+      min-width: 0;
+      font-size: 0.76rem;
+      padding: 0.3rem 0.45rem;
+      height: 36px;
+    }
+
+    .quotations-history-table tbody td:last-child .d-flex > form .btn {
+      width: 42px;
+      min-width: 42px;
+      padding: 0;
+    }
+
+    .quotations-history-filters .row > [class*="col-"] {
+      width: 100%;
+    }
+
+    .quotations-history-filters .btn {
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 575.98px) {
+    .quotations-history-table tbody td:last-child .d-flex {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
 </style>
@@ -249,6 +331,10 @@
 <div class="container-fluid py-2 quotation-page-shell">
   @if(session('success'))
     <div class="alert alert-success text-white bg-gradient-success" role="alert">{{ session('success') }}</div>
+  @endif
+
+  @if(session('warning'))
+    <div class="alert alert-warning text-white bg-gradient-warning" role="alert">{{ session('warning') }}</div>
   @endif
 
   @if($errors->any())
@@ -346,6 +432,12 @@
     })->values()->all();
   @endphp
 
+  @php
+    $activeQuotationTab = in_array(($activeQuotationTab ?? 'create'), ['create', 'history'], true)
+      ? $activeQuotationTab
+      : 'create';
+  @endphp
+
   <div class="card my-4">
     <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
       <div class="bg-gradient-dark shadow-dark border-radius-lg pt-3 pb-3">
@@ -354,6 +446,29 @@
     </div>
 
     <div class="card-body">
+      <ul class="nav nav-pills bg-gray-100 p-1 border-radius-lg mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+          <a
+            class="nav-link mb-0 px-3 py-2 {{ $activeQuotationTab === 'create' ? 'active' : '' }}"
+            href="{{ route('projects.module.quotations.index', array_filter(['tab' => 'create', 'edit' => $isEditing ? $editingQuotation->id : null])) }}"
+            role="tab"
+            aria-selected="{{ $activeQuotationTab === 'create' ? 'true' : 'false' }}">
+            Crear cotización
+          </a>
+        </li>
+        <li class="nav-item" role="presentation">
+          <a
+            class="nav-link mb-0 px-3 py-2 {{ $activeQuotationTab === 'history' ? 'active' : '' }}"
+            href="{{ route('projects.module.quotations.index', ['tab' => 'history']) }}"
+            role="tab"
+            aria-selected="{{ $activeQuotationTab === 'history' ? 'true' : 'false' }}">
+            Historial
+          </a>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+      <div class="tab-pane fade {{ $activeQuotationTab === 'create' ? 'show active' : '' }}" id="quotations-create-pane" role="tabpanel">
       <div class="card border mb-4">
         <div class="card-header pb-0 d-flex justify-content-between align-items-center">
           <h6 class="mb-0">{{ $isEditing ? 'Editar cotización #' . $editingQuotation->id : 'Crear cotización PDF' }}</h6>
@@ -367,6 +482,8 @@
             @if($isEditing)
               @method('PUT')
             @endif
+
+            <input type="hidden" name="tab" value="create">
 
             <div class="col-md-3">
               <label class="form-label">Tipo cliente/proveedor</label>
@@ -474,7 +591,65 @@
         </div>
       </div>
 
-      <div class="table-responsive">
+      </div>
+
+      <div class="tab-pane fade {{ $activeQuotationTab === 'history' ? 'show active' : '' }}" id="quotations-history-pane" role="tabpanel">
+
+      @php
+        $quotationFilters = $quotationFilters ?? [
+          'q' => '',
+          'type' => 'all',
+          'status' => 'all',
+          'conversion' => 'all',
+        ];
+      @endphp
+
+      <form method="GET" action="{{ route('projects.module.quotations.index') }}" class="quotations-history-filters mb-3">
+        <input type="hidden" name="tab" value="history">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label mb-1">Buscar</label>
+            <input type="text" name="q" class="form-control border border-1 p-2" placeholder="ID, título, cliente o referencia" value="{{ $quotationFilters['q'] }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label mb-1">Tipo</label>
+            <select name="filter_type" class="form-control border border-1 p-2">
+              <option value="all" {{ $quotationFilters['type'] === 'all' ? 'selected' : '' }}>Todos</option>
+              <option value="customer" {{ $quotationFilters['type'] === 'customer' ? 'selected' : '' }}>Cliente</option>
+              <option value="supplier_request" {{ $quotationFilters['type'] === 'supplier_request' ? 'selected' : '' }}>Proveedor</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label mb-1">Estado</label>
+            <select name="filter_status" class="form-control border border-1 p-2">
+              <option value="all" {{ $quotationFilters['status'] === 'all' ? 'selected' : '' }}>Todos</option>
+              <option value="draft" {{ $quotationFilters['status'] === 'draft' ? 'selected' : '' }}>Borrador</option>
+              <option value="sent" {{ $quotationFilters['status'] === 'sent' ? 'selected' : '' }}>Enviada</option>
+              <option value="approved" {{ $quotationFilters['status'] === 'approved' ? 'selected' : '' }}>Aprobada</option>
+              <option value="rejected" {{ $quotationFilters['status'] === 'rejected' ? 'selected' : '' }}>Rechazada</option>
+              <option value="invalidated" {{ $quotationFilters['status'] === 'invalidated' ? 'selected' : '' }}>Invalidada</option>
+              <option value="annulled" {{ $quotationFilters['status'] === 'annulled' ? 'selected' : '' }}>Anulada</option>
+              <option value="replaced" {{ $quotationFilters['status'] === 'replaced' ? 'selected' : '' }}>Reemplazada</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label mb-1">Control</label>
+            <select name="filter_conversion" class="form-control border border-1 p-2">
+              <option value="all" {{ $quotationFilters['conversion'] === 'all' ? 'selected' : '' }}>Todos</option>
+              <option value="pending" {{ $quotationFilters['conversion'] === 'pending' ? 'selected' : '' }}>Pendiente</option>
+              <option value="project" {{ $quotationFilters['conversion'] === 'project' ? 'selected' : '' }}>Proyecto</option>
+              <option value="sale" {{ $quotationFilters['conversion'] === 'sale' ? 'selected' : '' }}>Venta</option>
+              <option value="inventory_entry" {{ $quotationFilters['conversion'] === 'inventory_entry' ? 'selected' : '' }}>Entrada</option>
+            </select>
+          </div>
+          <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-dark mb-0">Filtrar</button>
+            <a href="{{ route('projects.module.quotations.index', ['tab' => 'history']) }}" class="btn btn-outline-secondary mb-0">Limpiar</a>
+          </div>
+        </div>
+      </form>
+
+      <div class="table-responsive quotations-history-wrap">
         <table class="table table-sm align-items-center mb-0 quotations-history-table">
           <thead><tr><th>#</th><th>Tipo</th><th>Categoría</th><th>Título</th><th>Total</th><th>Control</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>
@@ -514,24 +689,26 @@
                       <i class="material-symbols-rounded text-sm">picture_as_pdf</i>
                       <span>PDF</span>
                     </a>
-                    <button
-                      type="button"
-                      class="btn btn-outline-info btn-sm mb-0 d-inline-flex align-items-center gap-1"
-                      data-bs-toggle="modal"
-                      data-bs-target="#quotationActionModal"
-                      data-action-url="{{ route('projects.module.quotations.toProject', $quotation) }}"
-                      data-action-title="Pasar a proyecto"
-                      data-action-message="Esta cotización se convertirá en proyecto."
-                      data-action-submit-label="Confirmar proyecto"
-                      data-action-submit-class="btn-info"
-                      data-input-name="project_name"
-                      data-input-label="Nombre del proyecto"
-                      data-input-placeholder="Ej: Proyecto Oficina Central"
-                      data-input-required="false"
-                      {{ $isClosedQuotation ? 'disabled' : '' }}>
-                      <i class="material-symbols-rounded text-sm">construction</i>
-                      <span>A proyecto</span>
-                    </button>
+                    @if(!($isSeller ?? false))
+                      <button
+                        type="button"
+                        class="btn btn-outline-info btn-sm mb-0 d-inline-flex align-items-center gap-1"
+                        data-bs-toggle="modal"
+                        data-bs-target="#quotationActionModal"
+                        data-action-url="{{ route('projects.module.quotations.toProject', $quotation) }}"
+                        data-action-title="Pasar a proyecto"
+                        data-action-message="Esta cotización se convertirá en proyecto."
+                        data-action-submit-label="Confirmar proyecto"
+                        data-action-submit-class="btn-info"
+                        data-input-name="project_name"
+                        data-input-label="Nombre del proyecto"
+                        data-input-placeholder="Ej: Proyecto Oficina Central"
+                        data-input-required="false"
+                        {{ $isClosedQuotation ? 'disabled' : '' }}>
+                        <i class="material-symbols-rounded text-sm">construction</i>
+                        <span>A proyecto</span>
+                      </button>
+                    @endif
                     <button
                       type="button"
                       class="btn btn-outline-success btn-sm mb-0 d-inline-flex align-items-center gap-1"
@@ -619,6 +796,9 @@
             @endforelse
           </tbody>
         </table>
+      </div>
+
+      </div>
       </div>
 
       <div class="modal fade" id="quotationActionModal" tabindex="-1" aria-labelledby="quotationActionModalLabel" aria-hidden="true">

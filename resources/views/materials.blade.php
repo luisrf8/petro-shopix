@@ -2,9 +2,16 @@
 
 @section('title', 'Lista de Materiales')
 
+@php
+  $materialsUserRole = \App\Models\User::canonicalRoleName(optional(auth()->user()->role)->name);
+  $materialsIsSellerRole = in_array($materialsUserRole, ['vendor', 'vendedor', 'seller'], true);
+  $materialVariantUnitOptions = \App\Models\ProductVariant::UNIT_TYPE_OPTIONS;
+@endphp
+
 @section('content')
 <div class="container-fluid py-2">
   <div class="row mt-4">
+    @if(!$materialsIsSellerRole)
     <div class="col-12">
       <div class="card mb-4">
         <div class="card-header p-3">
@@ -65,6 +72,7 @@
         </div>
       </div>
     </div>
+    @endif
 
     <div class="col-12">
       <div class="card">
@@ -84,7 +92,9 @@
                     <th>Paquete</th>
                     <th>Estado</th>
                     <th>Materiales</th>
-                    <th>Acción</th>
+                    @if(!$materialsIsSellerRole)
+                      <th>Acción</th>
+                    @endif
                   </tr>
                 </thead>
                 <tbody>
@@ -126,7 +136,7 @@
                             <li class="text-sm d-flex align-items-center gap-2">
                               <img src="{{ $itemImage }}" alt="{{ $item->variant?->product?->name ?? 'Producto' }}" style="width:28px; height:28px; object-fit:cover; border-radius:6px; border:1px solid #e2e8f0;">
                               <span>
-                                {{ $item->variant?->product?->name ?? 'Producto' }} - {{ $item->variant?->size ?? 'Variante' }} (x{{ rtrim(rtrim(number_format($item->quantity, 2, '.', ''), '0'), '.') }})
+                                {{ $item->variant?->product?->name ?? 'Producto' }} - {{ $item->variant?->size ?? 'Variante' }} ({{ rtrim(rtrim(number_format($item->quantity, 2, '.', ''), '0'), '.') }} {{ $materialVariantUnitOptions[$item->variant?->unit_type ?? 'unidad'] ?? ucfirst((string) ($item->variant?->unit_type ?? 'unidad')) }})
                                 @if(($item->selection_mode ?? 'variant') === 'product')
                                   <span class="badge bg-info ms-1">Flexible</span>
                                 @else
@@ -137,23 +147,25 @@
                           @endforeach
                         </ul>
                       </td>
-                      <td>
-                        <div class="d-flex gap-2 flex-wrap">
-                          <button
-                            type="button"
-                            class="btn btn-sm btn-outline-info mb-0 edit-package-btn"
-                            data-package-id="{{ $package->id }}">
-                            Editar
-                          </button>
-
-                          <form method="POST" action="{{ route('materials.toggleStatus', $package->id) }}" @if($package->is_active) data-requires-action-reason="true" data-reason-field="action_reason" data-reason-prompt="Indica el motivo para desactivar este paquete." @endif>
-                            @csrf
-                            <button class="btn btn-sm btn-outline-secondary mb-0" type="submit">
-                              {{ $package->is_active ? 'Desactivar' : 'Activar' }}
+                      @if(!$materialsIsSellerRole)
+                        <td>
+                          <div class="d-flex gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              class="btn btn-sm btn-outline-info mb-0 edit-package-btn"
+                              data-package-id="{{ $package->id }}">
+                              Editar
                             </button>
-                          </form>
-                        </div>
-                      </td>
+
+                            <form method="POST" action="{{ route('materials.toggleStatus', $package->id) }}" @if($package->is_active) data-requires-action-reason="true" data-reason-field="action_reason" data-reason-prompt="Indica el motivo para desactivar este paquete." @endif>
+                              @csrf
+                              <button class="btn btn-sm btn-outline-secondary mb-0" type="submit">
+                                {{ $package->is_active ? 'Desactivar' : 'Activar' }}
+                              </button>
+                            </form>
+                          </div>
+                        </td>
+                      @endif
                     </tr>
                   @endforeach
                 </tbody>
@@ -166,6 +178,7 @@
   </div>
 </div>
 
+@if(!$materialsIsSellerRole)
 <div class="modal fade" id="editMaterialPackageModal" tabindex="-1" aria-labelledby="editMaterialPackageModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -213,6 +226,7 @@
     </div>
   </div>
 </div>
+@endif
 @endsection
 
 @push('styles')
@@ -287,6 +301,9 @@
             size: @json($variant->size),
             stock: @json($variant->stock),
             image: @json((isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'))),
+            unit_type: @json($variant->unit_type ?? 'unidad'),
+            unit_label: @json($materialVariantUnitOptions[$variant->unit_type ?? 'unidad'] ?? ucfirst((string) ($variant->unit_type ?? 'unidad'))),
+            quantity_input_mode: @json($variant->quantity_input_mode ?? 'integer'),
           },
         @endforeach
       @endforeach
@@ -294,10 +311,22 @@
 
     const productMeta = {
       @foreach($productItems as $product)
+        @php
+          $productUnitTypes = $product->variants->pluck('unit_type')->map(fn ($value) => $value ?: 'unidad')->unique()->values();
+          $productQuantityModes = $product->variants->pluck('quantity_input_mode')->map(fn ($value) => $value ?: 'integer')->unique()->values();
+          $productUnitValue = $productUnitTypes->count() === 1 ? (string) $productUnitTypes->first() : 'mixed';
+          $productUnitLabel = $productUnitTypes->count() === 1
+            ? ($materialVariantUnitOptions[$productUnitValue] ?? ucfirst($productUnitValue))
+            : 'Segun variante';
+          $productQuantityMode = $productQuantityModes->count() === 1 ? (string) $productQuantityModes->first() : 'decimal';
+        @endphp
         "{{ $product->id }}": {
           name: @json($product->name),
           stock: @json((float) $product->variants->sum('stock')),
           image: @json((isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'))),
+          unit_type: @json($productUnitValue),
+          unit_label: @json($productUnitLabel),
+          quantity_input_mode: @json($productQuantityMode),
         },
       @endforeach
     };
@@ -377,11 +406,13 @@
         if (!meta) {
           image.src = fallbackImage;
           label.textContent = 'Selecciona una variante fija para este material';
+          configureQuantityInput(rowElement, null);
           return;
         }
 
         image.src = meta.image || fallbackImage;
         label.textContent = `${meta.name || 'Producto'} - ${meta.size || 'Variante'} (Stock: ${meta.stock ?? 0})`;
+        configureQuantityInput(rowElement, meta);
         return;
       }
 
@@ -397,11 +428,46 @@
       if (!meta) {
         image.src = fallbackImage;
         label.textContent = 'Selecciona un producto flexible para definir sabores en la venta';
+        configureQuantityInput(rowElement, null);
         return;
       }
 
       image.src = meta.image || fallbackImage;
       label.textContent = `${meta.name || 'Producto'} (Stock total: ${meta.stock ?? 0})`;
+      configureQuantityInput(rowElement, meta);
+    }
+
+    function configureQuantityInput(rowElement, meta) {
+      const quantityInput = rowElement?.querySelector('.js-material-quantity-input');
+      const quantityLabel = rowElement?.querySelector('.js-material-quantity-label');
+      const quantityHint = rowElement?.querySelector('.js-material-quantity-hint');
+      if (!quantityInput || !quantityLabel || !quantityHint) {
+        return;
+      }
+
+      const unitLabel = meta?.unit_label || 'Unidad';
+      const quantityMode = String(meta?.quantity_input_mode || 'integer');
+      quantityLabel.textContent = `Cantidad (${unitLabel})`;
+
+      if (quantityMode === 'decimal') {
+        quantityInput.setAttribute('inputmode', 'decimal');
+        quantityInput.setAttribute('pattern', '^[0-9]+(\\.[0-9]+)?$');
+        quantityInput.placeholder = '1.50';
+        quantityInput.dataset.decimalFriendly = 'true';
+        quantityHint.textContent = `Esta variante acepta cantidades decimales en ${unitLabel.toLowerCase()}.`;
+        return;
+      }
+
+      quantityInput.setAttribute('inputmode', 'numeric');
+      quantityInput.setAttribute('pattern', '^[0-9]+$');
+      quantityInput.placeholder = '1';
+      quantityInput.removeAttribute('data-decimal-friendly');
+      quantityHint.textContent = `Esta variante solo acepta cantidades enteras en ${unitLabel.toLowerCase()}.`;
+
+      const numericValue = Number(quantityInput.value || 0);
+      if (quantityInput.value !== '' && Number.isFinite(numericValue)) {
+        quantityInput.value = String(Math.max(0, Math.round(numericValue)));
+      }
     }
 
     function buildRowHtml(index, seed = {}) {
@@ -447,8 +513,9 @@
             <p class="text-xs text-muted mb-0 mt-1 js-material-item-label">Selecciona una variante fija para este material</p>
           </div>
           <div class="col-8 col-md-3">
-            <label class="form-label mb-1">Cantidad</label>
-            <input type="text" name="items[${index}][quantity]" class="form-control border border-1 p-2 bg-white" inputmode="decimal" pattern="^[0-9]+(\.[0-9]+)?$" placeholder="1" value="${selectedQuantity}" required>
+            <label class="form-label mb-1 js-material-quantity-label">Cantidad (Unidad)</label>
+            <input type="text" name="items[${index}][quantity]" class="form-control border border-1 p-2 bg-white js-material-quantity-input" inputmode="decimal" pattern="^[0-9]+(\.[0-9]+)?$" placeholder="1" value="${selectedQuantity}" required>
+            <div class="text-xs text-muted mt-1 js-material-quantity-hint">Selecciona una variante para ajustar la unidad y el tipo de cantidad.</div>
           </div>
           <div class="col-4 col-md-1">
             <button type="button" class="btn btn-outline-danger w-100 remove-row">X</button>

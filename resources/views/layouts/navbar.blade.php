@@ -342,12 +342,18 @@
               <span class="nav-link-text ms-1">Proyectos</span>
             </a>
           </li>
+        @endif
+
+        @if($canSell && $planCanSales)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/cotizaciones">
               <i class="material-symbols-rounded opacity-5">description</i>
               <span class="nav-link-text ms-1">Cotizaciones</span>
             </a>
           </li>
+        @endif
+
+        @if($canSell && $planCanSales && !$isSeller)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/nomina">
               <i class="material-symbols-rounded opacity-5">badge</i>

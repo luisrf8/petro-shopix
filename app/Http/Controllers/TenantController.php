@@ -1963,6 +1963,7 @@ class TenantController extends Controller
             'show_bs_prices_in_storefront' => $validated['show_bs_prices_in_storefront'] ?? $tenant->show_bs_prices_in_storefront,
         ];
 
+        $tenantData = $this->filterTenantPayloadToExistingColumns($tenantData);
         $tenant->fill($tenantData);
         $tenantHasChanges = $tenant->isDirty();
 
@@ -2134,6 +2135,11 @@ class TenantController extends Controller
                 $validated['delivery_notifications_enabled'] = false;
             }
 
+            $appointmentsFirstComeEnabled = $request->boolean('appointments_first_come_enabled');
+            $offersProjectsEnabled = $request->has('offers_projects')
+                ? $request->boolean('offers_projects')
+                : (bool) ($tenant->offers_projects ?? true);
+
             $newUserInput = $request->input('new_user', []);
             $shouldCreateNewUser = false;
             if (is_array($newUserInput)) {
@@ -2288,8 +2294,8 @@ class TenantController extends Controller
                 'working_days'    => array_key_exists('working_days', $validated)
                     ? $this->normalizeWorkingDays($validated['working_days'] ?? null)
                     : $tenant->working_days,
-                'appointments_first_come_enabled' => (bool) ($validated['appointments_first_come_enabled'] ?? false),
-                'offers_projects' => (bool) ($validated['offers_projects'] ?? true),
+                'appointments_first_come_enabled' => $appointmentsFirstComeEnabled,
+                'offers_projects' => $offersProjectsEnabled,
                 'opening_time'    => $validated['opening_time'] ?? $tenant->opening_time,
                 'closing_time'    => $validated['closing_time'] ?? $tenant->closing_time,
                 'address'         => $validated['address'] ?? $tenant->address,
@@ -2316,6 +2322,7 @@ class TenantController extends Controller
                 $tenantUpdatePayload['show_bs_prices_in_storefront'] = $request->boolean('show_bs_prices_in_storefront');
             }
 
+            $tenantUpdatePayload = $this->filterTenantPayloadToExistingColumns($tenantUpdatePayload);
             $tenant->update($tenantUpdatePayload);
 
             if ($shouldCreateNewUser) {
@@ -2355,6 +2362,13 @@ class TenantController extends Controller
 
             throw $e;
         } catch (\Exception $e) {
+            Log::error('Error al actualizar tenant desde tenant.update', [
+                'tenant_id' => (int) ($tenant->id ?? 0),
+                'user_id' => (int) (auth()->id() ?? 0),
+                'offers_projects_input' => $request->input('offers_projects'),
+                'error' => $e->getMessage(),
+            ]);
+
             if ($expectsJson) {
                 return response()->json([
                     'success' => false,
@@ -3301,6 +3315,21 @@ class TenantController extends Controller
             ->all();
 
         return empty($normalized) ? null : $normalized;
+    }
+
+    private function filterTenantPayloadToExistingColumns(array $payload): array
+    {
+        static $tenantColumns = null;
+
+        if (!is_array($tenantColumns)) {
+            $tenantColumns = array_flip(Schema::getColumnListing('tenants'));
+        }
+
+        return array_filter(
+            $payload,
+            fn ($value, $key) => isset($tenantColumns[$key]),
+            ARRAY_FILTER_USE_BOTH
+        );
     }
 
     private function applyImportedSetupPayload(?string $payloadJson, Tenant $tenant): array

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Support\ActionReason;
+use Symfony\Component\HttpFoundation\Response;
 
 class UserController extends Controller
 {
@@ -95,12 +96,24 @@ class UserController extends Controller
         $expectsJson = $request->expectsJson() || $request->wantsJson();
 
         $user = User::findOrFail($id);
+        $actor = auth()->user();
+
+        if (!$actor) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        $passwordChangeRequested = trim((string) $request->input('password', '')) !== '';
+        $guardResponse = $this->guardTenantUserMutation($actor, $user, $passwordChangeRequested, false);
+        if ($guardResponse) {
+            return $guardResponse;
+        }
     
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $id,
             'role_id' => 'required|exists:roles,id',
             'tenant_id' => 'nullable|exists:tenants,id',
+            'password' => 'nullable|string|min:8|confirmed',
         ]);
     
         if ($validator->fails()) {
@@ -119,7 +132,9 @@ class UserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'role_id' => $request->role_id,
-            'tenant_id' => $request->filled('tenant_id') ? (int) $request->tenant_id : null,
+            'tenant_id' => $request->has('tenant_id')
+                ? ($request->filled('tenant_id') ? (int) $request->tenant_id : null)
+                : $user->tenant_id,
             'password' => $request->password ? Hash::make($request->password) : $user->password,
         ]);
         return response()->json(['status' => 'success'], 200);
@@ -133,6 +148,17 @@ class UserController extends Controller
         DB::raw("SET @user_id = " . auth()->id());
 
         $user = User::findOrFail($id);
+        $actor = auth()->user();
+
+        if (!$actor) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        $guardResponse = $this->guardTenantUserMutation($actor, $user, false, true);
+        if ($guardResponse) {
+            return $guardResponse;
+        }
+
         $reason = null;
         if ((bool) $user->is_active) {
             $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para inactivar el usuario.');
@@ -150,5 +176,34 @@ class UserController extends Controller
 
         return response()->json(['status' => 'success', 'new_status' => $user->is_active], 200);
     
+    }
+
+    private function guardTenantUserMutation(User $actor, User $target, bool $passwordChangeRequested, bool $toggleStatusRequested)
+    {
+        $actorRole = User::canonicalRoleName(optional($actor->role)->name);
+        $targetRole = User::canonicalRoleName(optional($target->role)->name);
+        $isSuperUser = (int) ($actor->role_id ?? 0) === 4 || $actorRole === 'super_user';
+
+        if (!$isSuperUser) {
+            if ((int) ($actor->tenant_id ?? 0) <= 0 || (int) ($target->tenant_id ?? 0) <= 0 || (int) $actor->tenant_id !== (int) $target->tenant_id) {
+                return response()->json([
+                    'message' => 'No tienes permisos para gestionar usuarios de otro tenant.',
+                ], Response::HTTP_FORBIDDEN);
+            }
+
+            if (!in_array($actorRole, ['owner', 'admin'], true)) {
+                return response()->json([
+                    'message' => 'Solo owner o admin pueden gestionar usuarios del tenant.',
+                ], Response::HTTP_FORBIDDEN);
+            }
+
+            if ($actorRole === 'admin' && $targetRole === 'admin' && ($passwordChangeRequested || $toggleStatusRequested)) {
+                return response()->json([
+                    'message' => 'Un admin no puede cambiar la contraseña ni inactivar a otro admin.',
+                ], Response::HTTP_FORBIDDEN);
+            }
+        }
+
+        return null;
     }
 }

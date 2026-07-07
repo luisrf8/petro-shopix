@@ -204,6 +204,7 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
 
     Route::get('/products', [ProductController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.index');
     Route::post('/create-product', [ProductController::class, 'create'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.createWeb');
+    Route::post('/products/{id}/update', [ProductController::class, 'update'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.updateWeb');
     Route::post('/products/import-catalog', [ProductController::class, 'importCatalog'])->middleware('role.name:owner,admin,administrador')->name('products.importCatalogWeb');
     Route::post('/products/{product}/generate-codes', [ProductController::class, 'generateCodes'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.generateCodesWeb');
     Route::get('/products/{category}', [ProductController::class, 'showByCategory'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('products.byCategory');
@@ -364,9 +365,9 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
 
     // Lista de materiales / paquetes
     Route::get('/materials', [MaterialPackageController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('materials.index');
-    Route::post('/materials', [MaterialPackageController::class, 'store'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('materials.store');
-    Route::put('/materials/{id}', [MaterialPackageController::class, 'update'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('materials.update');
-    Route::post('/materials/{id}/toggle-status', [MaterialPackageController::class, 'toggleStatus'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('materials.toggleStatus');
+    Route::post('/materials', [MaterialPackageController::class, 'store'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('materials.store');
+    Route::put('/materials/{id}', [MaterialPackageController::class, 'update'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('materials.update');
+    Route::post('/materials/{id}/toggle-status', [MaterialPackageController::class, 'toggleStatus'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('materials.toggleStatus');
     Route::post('/materials/{id}/generate-codes', [MaterialPackageController::class, 'generateCodes'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('materials.generateCodes');
 
     // Tenants
@@ -375,6 +376,8 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/create-tenant', [TenantController::class, 'createIndex'])->middleware('role.name:4')->name('createTenant');
     Route::get('/tenant-store', [TenantController::class, 'getTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.store');
     Route::post('/tenant-update', [TenantController::class, 'updateTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.update');
+    Route::post('/tenant-store/users/{id}/update', [UserController::class, 'update'])->middleware('role.name:owner,admin,administrador')->name('tenant.users.update');
+    Route::post('/tenant-store/users/{id}/toggle-status', [UserController::class, 'toggleStatus'])->middleware('role.name:owner,admin,administrador')->name('tenant.users.toggleStatus');
     Route::post('/tenant-import-setup-docx', [TenantController::class, 'importSetupDocument'])->middleware('role.name:4')->name('tenant.importSetupDocx');
     Route::post('/tenant-store/plan-payment-request', [TenantController::class, 'submitPlanPaymentRequest'])->middleware('role.name:owner')->name('tenant.planPayment.request');
     Route::post('/tenants/{tenant}/plan-payments/{payment}/approve', [TenantController::class, 'approvePlanPayment'])->middleware('role.name:4')->name('tenant.planPayment.approve');

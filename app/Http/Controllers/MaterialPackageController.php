@@ -275,11 +275,35 @@ class MaterialPackageController extends Controller
                     }
                 }
 
+                $resolvedVariant = ProductVariant::query()
+                    ->whereKey($variantId)
+                    ->whereHas('product', function ($query) use ($tenantId) {
+                        $query->where('tenant_id', $tenantId);
+                    })
+                    ->first();
+
+                if (!$resolvedVariant) {
+                    throw ValidationException::withMessages([
+                        "items.$index.variant_id" => 'La variante seleccionada no pertenece a esta tienda.',
+                    ]);
+                }
+
+                $quantity = (float) $row['quantity'];
+                $quantityInputMode = ProductVariant::normalizeQuantityInputMode($resolvedVariant->quantity_input_mode ?? null);
+
+                if ($quantityInputMode === 'integer' && abs($quantity - round($quantity)) > 0.00001) {
+                    throw ValidationException::withMessages([
+                        "items.$index.quantity" => 'La cantidad de este material debe ser un numero entero segun la variante seleccionada.',
+                    ]);
+                }
+
                 return [
                     'product_id' => $productId,
                     'variant_id' => $variantId,
-                    'quantity' => (float) $row['quantity'],
+                    'quantity' => $quantityInputMode === 'integer' ? (float) round($quantity) : $quantity,
                     'selection_mode' => $selectionMode,
+                    'unit_type' => ProductVariant::normalizeUnitType($resolvedVariant->unit_type ?? null),
+                    'quantity_input_mode' => $quantityInputMode,
                 ];
             })
             ->groupBy(function ($row) {

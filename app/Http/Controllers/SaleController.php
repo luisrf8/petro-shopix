@@ -280,10 +280,6 @@ class SaleController extends Controller
 
         // Preparar renglones y validar descuentos/stock antes de persistir
         foreach ($itemsSelected as $item) {
-            if (in_array($deliveryType, ['delivery', 'shipping'], true) && (int) ($item['quantity'] ?? 0) > 1) {
-                return response()->json(['error' => 'Las ventas con delivery/envío solo permiten cantidades al detal (1 unidad por ítem).'], 422);
-            }
-
             $productVariant = ProductVariant::with('product')->find($item['id']);
             if (!$productVariant) {
                 return response()->json(['error' => 'Variante no encontrada: ' . $item['id']], 400);
@@ -293,11 +289,35 @@ class SaleController extends Controller
                 return response()->json(['error' => 'Los productos consumibles no están disponibles para venta directa.'], 422);
             }
 
-            if ($productVariant->stock < $item['quantity']) {
+            $rawQuantity = (float) ($item['quantity'] ?? 0);
+            $quantityInputMode = ProductVariant::normalizeQuantityInputMode($productVariant->quantity_input_mode ?? null);
+            $minSaleQuantity = ProductVariant::normalizeMinSaleQuantity($productVariant->min_sale_quantity ?? 1, $quantityInputMode);
+            $quantity = $quantityInputMode === 'decimal'
+                ? round($rawQuantity, 2)
+                : (float) round($rawQuantity);
+
+            if ($quantityInputMode === 'integer' && abs($rawQuantity - round($rawQuantity)) > 0.00001) {
+                return response()->json(['error' => 'La variante ' . $productVariant->size . ' solo permite cantidades enteras.'], 422);
+            }
+
+            if ($quantityInputMode === 'decimal' && abs($rawQuantity - round($rawQuantity, 2)) > 0.00001) {
+                return response()->json(['error' => 'La variante ' . $productVariant->size . ' solo permite hasta 2 decimales en la cantidad.'], 422);
+            }
+
+            if ($quantity < $minSaleQuantity) {
+                return response()->json([
+                    'error' => 'La variante ' . $productVariant->size . ' tiene una venta minima de ' . number_format($minSaleQuantity, 2, '.', '') . '.',
+                ], 422);
+            }
+
+            if (in_array($deliveryType, ['delivery', 'shipping'], true) && abs($quantity - 1.0) > 0.00001) {
+                return response()->json(['error' => 'Las ventas con delivery/envío solo permiten cantidad exacta de 1 por ítem.'], 422);
+            }
+
+            if ($productVariant->stock < $quantity) {
                 return response()->json(['error' => 'Stock insuficiente para el producto: ' . $item['id']], 400);
             }
 
-            $quantity = (int) ($item['quantity'] ?? 0);
             if ($quantity <= 0) {
                 return response()->json(['error' => 'Cantidad inválida para el producto: ' . $item['id']], 422);
             }
@@ -322,6 +342,7 @@ class SaleController extends Controller
                 'item' => $item,
                 'product_variant' => $productVariant,
                 'quantity' => $quantity,
+                'quantity_input_mode' => $quantityInputMode,
                 'taxes' => is_array($item['taxes'] ?? null) ? $item['taxes'] : [],
                 'line_subtotal_before_discount' => $lineSubtotalBeforeDiscount,
                 'line_subtotal_after_line_discount' => $lineSubtotalAfterLineDiscount,
@@ -1048,7 +1069,9 @@ class SaleController extends Controller
     {
         $user = auth()->user();
         $tenant = Tenant::find($user->tenant_id);
-        $salesOrders = SalesOrder::with([
+        $isSeller = (bool) ($user?->hasStoreRole('seller') ?? false);
+
+        $salesOrdersQuery = SalesOrder::with([
             'user', 
             'salesRepresentative',
             'details', 
@@ -1056,7 +1079,15 @@ class SaleController extends Controller
             'payments',
             'electronicDocuments',
             'returns.items',
-        ])->where('tenant_id', $user->tenant_id)->orderBy('id', 'desc')->get();
+        ])->where('tenant_id', $user->tenant_id);
+
+        if ($isSeller) {
+            $salesOrdersQuery->where('sales_rep_user_id', (int) $user->id);
+        }
+
+        $salesOrders = $salesOrdersQuery
+            ->orderBy('id', 'desc')
+            ->get();
 
         foreach ($salesOrders as $order) {
             $order->total_items = $order->details->sum('quantity');
@@ -1065,7 +1096,6 @@ class SaleController extends Controller
             $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
         }
 
-        $isSeller = $user?->hasStoreRole('seller') ?? false;
         $isWarehouse = $user?->hasStoreRole('warehouse') ?? false;
         $isDelivery = $user?->hasStoreRole('delivery') ?? false;
         $canApprovePayments = !($isWarehouse || $isDelivery);
@@ -1318,6 +1348,16 @@ class SaleController extends Controller
 
     public function viewOrdersReport(Request $request)
     {
+        $user = auth()->user();
+        $isSeller = (bool) ($user?->hasStoreRole('seller') ?? false);
+
+        if ($isSeller) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No autorizado para generar reportes.',
+            ], 403);
+        }
+
         $range = $request->input('range', 'monthly');
         $today = Carbon::today();
 
@@ -1349,6 +1389,7 @@ class SaleController extends Controller
             'details.variant',
             'payments'
         ])
+        ->where('tenant_id', (int) ($user->tenant_id ?? 0))
         ->whereDate('created_at', '>=', $startDate)
         ->orderBy('id', 'desc')
         ->get();
@@ -1443,6 +1484,7 @@ class SaleController extends Controller
 
     public function showByOrder($id)
     {
+        $authUser = auth()->user();
         $order = SalesOrder::with([
             'user',
             'salesRepresentative',
@@ -1464,6 +1506,14 @@ class SaleController extends Controller
         if (!$order) {
             abort(404);
         }
+
+        abort_if((int) ($order->tenant_id ?? 0) !== (int) ($authUser->tenant_id ?? 0), 404);
+
+        $isSeller = (bool) ($authUser?->hasStoreRole('seller') ?? false);
+        if ($isSeller && (int) ($order->sales_rep_user_id ?? 0) !== (int) ($authUser->id ?? 0)) {
+            abort(404);
+        }
+
         // Calcular el total de la orden
         $totalOrden = (float) $order->gross_total;
         // Calcular el total pagado
@@ -1503,6 +1553,13 @@ class SaleController extends Controller
             ->first();
 
         $appointmentPaymentMethods = collect();
+        $paymentMethods = PaymentMethod::query()
+            ->with('currency')
+            ->where('tenant_id', (int) $order->tenant_id)
+            ->active()
+            ->orderBy('name')
+            ->get();
+
         if ($linkedAppointment) {
             $appointmentPaymentMethods = PaymentMethod::query()
                 ->with('currency')
@@ -1521,8 +1578,156 @@ class SaleController extends Controller
             'deliveryMeta',
             'deliveryUsers',
             'linkedAppointment',
-            'appointmentPaymentMethods'
+            'appointmentPaymentMethods',
+            'paymentMethods'
         ));
+    }
+
+    public function createPaymentEntry($orderId, Request $request)
+    {
+        $user = auth()->user();
+        if (!$user?->hasStoreRole('owner', 'admin', 'seller')) {
+            return response()->json(['success' => false, 'message' => 'No autorizado para registrar pagos.'], 403);
+        }
+
+        $order = SalesOrder::query()->with(['tenant'])->findOrFail($orderId);
+        if ((int) ($order->tenant_id ?? 0) !== (int) ($user->tenant_id ?? 0)) {
+            return response()->json(['success' => false, 'message' => 'No autorizado para esta orden.'], 403);
+        }
+
+        if ((bool) ($user?->hasStoreRole('seller') ?? false)
+            && (int) ($order->sales_rep_user_id ?? 0) !== (int) ($user->id ?? 0)) {
+            return response()->json(['success' => false, 'message' => 'No autorizado para esta orden.'], 403);
+        }
+
+        $validated = $request->validate([
+            'payment_method_id' => 'required|integer|exists:payment_methods,id',
+            'amount' => 'required|numeric|min:0.01',
+            'currency' => 'nullable|string|max:10',
+            'reference' => 'nullable|string|max:255',
+            'proof_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+        ]);
+
+        $paymentMethod = PaymentMethod::query()
+            ->with('currency')
+            ->where('tenant_id', (int) $order->tenant_id)
+            ->active()
+            ->find($validated['payment_method_id']);
+
+        if (!$paymentMethod) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El método de pago seleccionado está inactivo o no pertenece a esta tienda.',
+            ], 422);
+        }
+
+        $reference = trim((string) ($validated['reference'] ?? ''));
+        if ($paymentMethod->usesReference() && $reference === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Este método de pago requiere referencia.',
+            ], 422);
+        }
+
+        if ($paymentMethod->requiresProofImage() && !$request->hasFile('proof_image')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Este método de pago requiere comprobante.',
+            ], 422);
+        }
+
+        $amountOriginal = round((float) ($validated['amount'] ?? 0), 2);
+        $currencyCode = strtoupper(trim((string) ($paymentMethod->currency->code ?? 'USD')));
+        $requestedCurrencyCode = strtoupper(trim((string) ($validated['currency'] ?? $currencyCode)));
+        if ($requestedCurrencyCode !== '' && $requestedCurrencyCode !== $currencyCode) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La moneda seleccionada no coincide con el método de pago.',
+            ], 422);
+        }
+
+        $tenantBaseCurrency = TenantCurrency::resolveBaseCurrencyCode($order->tenant);
+        $rateToBs = (float) ($order->sale_rate_to_bs ?? $order->change_rate_to_bs ?? 0);
+
+        if ($tenantBaseCurrency === 'BS') {
+            $rateToBs = 1.0;
+        }
+
+        if ($rateToBs <= 0) {
+            $rateToBs = (float) TenantCurrency::resolveRateToBs((int) $order->tenant_id, $tenantBaseCurrency);
+            if ($tenantBaseCurrency === 'BS') {
+                $rateToBs = 1.0;
+            }
+        }
+
+        $amountBase = $amountOriginal;
+        $exchangeRateToBase = 1.0;
+
+        if ($currencyCode === 'BS' && $tenantBaseCurrency !== 'BS') {
+            if ($rateToBs <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay tasa de cambio configurada para convertir pagos en Bs.',
+                ], 422);
+            }
+
+            $amountBase = round($amountOriginal / $rateToBs, 2);
+            $exchangeRateToBase = $rateToBs;
+        } elseif ($currencyCode !== 'BS' && $tenantBaseCurrency === 'BS') {
+            if ($rateToBs <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay tasa de cambio configurada para convertir pagos en moneda extranjera.',
+                ], 422);
+            }
+
+            $amountBase = round($amountOriginal * $rateToBs, 2);
+            $exchangeRateToBase = $rateToBs;
+        }
+
+        $totalOrden = (float) ($order->gross_total ?? 0);
+        $totalPagadoActual = (float) $order->payments()->sum('amount');
+        $pendingBeforeCreate = max(0, $totalOrden - $totalPagadoActual);
+
+        if ($amountBase - $pendingBeforeCreate > 0.00001) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El monto ingresado supera el saldo pendiente de la orden.',
+            ], 422);
+        }
+
+        $payment = Payment::create([
+            'sales_order_id' => (int) $order->id,
+            'payment_method' => (int) $paymentMethod->id,
+            'amount' => $amountBase,
+            'amount_original' => $amountOriginal,
+            'amount_base' => $amountBase,
+            'exchange_rate_to_base' => $exchangeRateToBase > 0 ? $exchangeRateToBase : null,
+            'applies_igtf' => false,
+            'currency' => $currencyCode,
+            'reference' => $reference !== '' ? $reference : null,
+            'status' => 0,
+        ]);
+
+        if ($request->hasFile('proof_image')) {
+            $proofPath = ImageStorage::storeUploadedImageAsWebp(
+                $request->file('proof_image'),
+                'payment_images'
+            );
+
+            PaymentImage::create([
+                'payment_id' => $payment->id,
+                'image_path' => $proofPath,
+            ]);
+        }
+
+        $order->loadMissing(['payments', 'details', 'returns.items', 'salesRepresentative']);
+        $this->syncSellerCommissionForOrder($order);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pago registrado correctamente. Queda en estado En Proceso hasta su aprobación.',
+        ]);
     }
 
     public function assignDeliveryUser(SalesOrder $order, Request $request)

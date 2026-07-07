@@ -115,6 +115,11 @@
           : ((int) $order->deliver_status === 2 ? 'Cancelado' : 'En proceso'));
       $approvalLabel = $order->status == 0 ? 'En proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado');
       $paymentBalance = max(0, (float) $totalOrden - (float) $totalPagado);
+      $availablePaymentCurrencies = collect($paymentMethods ?? collect())
+        ->map(fn ($method) => strtoupper(trim((string) ($method->currency->code ?? ''))))
+        ->filter(fn ($code) => $code !== '')
+        ->unique()
+        ->values();
       $paymentStepTone = $totalPagado >= $totalOrden && $totalOrden > 0 ? 'success' : ($totalPagado > 0 ? 'pending' : 'danger');
       $assignedDeliveryName = trim((string) ($order->assignedDeliveryUser->name ?? ''));
       $assignedDeliveryPhone = trim((string) ($order->assignedDeliveryUser->phone_number ?? ''));
@@ -443,7 +448,12 @@
           <summary>Pagos registrados</summary>
           <div class="card order-surface-card">
             <div class="card-header">
-              <h6 class="mb-0">Pagos Registrados</h6>
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h6 class="mb-0">Pagos Registrados</h6>
+                @if($canApprovePayments && (float) $paymentBalance > 0)
+                  <button type="button" class="btn btn-sm btn-dark mb-0" id="openCreatePaymentEntryModalBtn">Agregar pago</button>
+                @endif
+              </div>
             </div>
             <div class="card-body">
               <div class="table-responsive order-table-wrapper">
@@ -462,7 +472,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    @foreach($order->payments as $payment)
+                    @forelse($order->payments as $payment)
                     @php
                       $paymentCurrencyCode = strtoupper(trim((string) ($payment->currency ?? '')));
                       $paymentSymbol = $resolveCurrencySymbol($paymentCurrencyCode);
@@ -535,7 +545,11 @@
                         @endif
                       </td>
                     </tr>
-                    @endforeach
+                    @empty
+                    <tr>
+                      <td colspan="9" class="text-center text-muted py-4">Aún no hay pagos registrados para esta orden.</td>
+                    </tr>
+                    @endforelse
                   </tbody>
                 </table>
               </div>
@@ -543,6 +557,10 @@
                 <div class="order-total-line">
                   <span class="order-total-label">Total Pagado</span>
                   <span class="amount-chip amount-chip-strong">{{ $formatDualAmount((float) $totalPagado, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span>
+                </div>
+                <div class="order-total-line">
+                  <span class="order-total-label">Monto pendiente</span>
+                  <span class="amount-chip amount-chip-strong">{{ $formatDualAmount((float) $paymentBalance, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span>
                 </div>
                 @if($order->has_returns)
                   <div class="order-total-line">
@@ -1677,6 +1695,80 @@
         </div>
       </div>
 
+      <div class="modal fade" id="createPaymentEntryModal" tabindex="-1" aria-labelledby="createPaymentEntryModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="createPaymentEntryModalLabel">Agregar pago</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+              <form id="createPaymentEntryForm">
+                <div class="mb-3 border rounded p-2 bg-light">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-sm text-muted">Cuánto debo</span>
+                    <strong id="createPaymentDebtLabel">{{ number_format((float) $paymentBalance, 2, '.', '') }} {{ $orderCurrencyCode ?? 'USD' }}</strong>
+                  </div>
+                  <div class="d-flex justify-content-between align-items-center mt-1">
+                    <span class="text-sm text-muted">Cuánto estoy pagando</span>
+                    <strong id="createPaymentPayingLabel">0.00 {{ $orderCurrencyCode ?? 'USD' }}</strong>
+                  </div>
+                  <div class="d-flex justify-content-between align-items-center mt-1">
+                    <span class="text-sm text-muted">Monto restante</span>
+                    <strong id="createPaymentRemainingLabel">{{ number_format((float) $paymentBalance, 2, '.', '') }} {{ $orderCurrencyCode ?? 'USD' }}</strong>
+                  </div>
+                  <small id="createPaymentDualHint" class="text-muted d-block mt-1">{{ $formatDualAmount((float) $paymentBalance, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</small>
+                </div>
+                <div class="mb-3">
+                  <label for="createPaymentEntryCurrency" class="form-label">Moneda para pagar</label>
+                  <select id="createPaymentEntryCurrency" class="form-control border border-1 p-2" required>
+                    @foreach($availablePaymentCurrencies as $currencyCode)
+                      <option value="{{ $currencyCode }}" {{ $loop->first ? 'selected' : '' }}>{{ $currencyCode }}</option>
+                    @endforeach
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label for="createPaymentEntryMethod" class="form-label">Método de pago</label>
+                  <select id="createPaymentEntryMethod" class="form-control border border-1 p-2" required>
+                    <option value="">Selecciona un método</option>
+                    @foreach(($paymentMethods ?? collect()) as $method)
+                      <option
+                        value="{{ $method->id }}"
+                        data-currency-code="{{ strtoupper(trim((string) ($method->currency->code ?? ''))) }}"
+                        data-has-reference="{{ $method->usesReference() ? '1' : '0' }}"
+                        data-requires-proof="{{ $method->requiresProofImage() ? '1' : '0' }}"
+                      >
+                        {{ $method->name }}{{ !empty($method->currency?->code) ? ' · ' . strtoupper((string) $method->currency->code) : '' }}
+                      </option>
+                    @endforeach
+                  </select>
+                </div>
+                <div class="mb-3">
+                  <label for="createPaymentEntryAmount" class="form-label">Monto</label>
+                  <input type="number" id="createPaymentEntryAmount" class="form-control border border-1 p-2" min="0.01" step="0.01" required>
+                  <div class="d-flex justify-content-end mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-dark mb-0" id="fillRemainingPaymentAmountBtn">Colocar monto restante</button>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label for="createPaymentEntryReference" class="form-label">Referencia</label>
+                  <input type="text" id="createPaymentEntryReference" class="form-control border border-1 p-2" maxlength="255" placeholder="Opcional">
+                </div>
+                <div class="mb-3">
+                  <label for="createPaymentEntryProof" class="form-label">Comprobante (imagen)</label>
+                  <input type="file" id="createPaymentEntryProof" class="form-control border border-1 p-2" accept="image/jpeg,image/png,image/jpg,image/webp">
+                  <small id="createPaymentEntryHint" class="text-muted d-block mt-1">Si el método lo requiere, adjunta referencia y comprobante.</small>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary mb-0" data-bs-dismiss="modal">Cancelar</button>
+              <button type="button" class="btn btn-dark mb-0" id="saveCreatePaymentEntryBtn">Guardar pago</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Modal para realizar devoluciones -->
       @if($canRegisterReturn)
       <div class="modal fade" id="returnModal" tabindex="-1" aria-labelledby="returnModalLabel" aria-hidden="true">
@@ -2257,6 +2349,298 @@ function openEditPaymentEntryModal(triggerButton) {
   modalInstance.show();
 }
 
+function openCreatePaymentEntryModal() {
+  const modalElement = document.getElementById('createPaymentEntryModal');
+  const pendingInOrderCurrency = Number({{ \Illuminate\Support\Js::from((float) $paymentBalance) }} || 0);
+  const currencySelect = document.getElementById('createPaymentEntryCurrency');
+  const methodSelect = document.getElementById('createPaymentEntryMethod');
+  const amountInput = document.getElementById('createPaymentEntryAmount');
+  const referenceInput = document.getElementById('createPaymentEntryReference');
+  const proofInput = document.getElementById('createPaymentEntryProof');
+
+  if (!modalElement || pendingInOrderCurrency <= 0) {
+    if (pendingInOrderCurrency <= 0) {
+      alert('Esta orden ya está completamente pagada.');
+    }
+    return;
+  }
+
+  if (currencySelect && currencySelect.options.length > 0) {
+    currencySelect.selectedIndex = 0;
+  }
+  if (methodSelect) {
+    methodSelect.value = '';
+  }
+  if (amountInput) {
+    amountInput.value = '';
+  }
+  if (referenceInput) {
+    referenceInput.value = '';
+  }
+  if (proofInput) {
+    proofInput.value = '';
+  }
+
+  syncCreatePaymentMethodFilter();
+  syncCreatePaymentSummary();
+  syncCreatePaymentEntryHint();
+  bootstrap.Modal.getOrCreateInstance(modalElement).show();
+}
+
+function getCreatePaymentCurrencyRateSnapshot() {
+  const orderCurrencyCode = String({{ \Illuminate\Support\Js::from($orderCurrencyCode ?? 'USD') }} || 'USD').toUpperCase();
+  const rateToBs = Number({{ \Illuminate\Support\Js::from((float) ($orderRateToBsSnapshot ?? 1)) }} || 0);
+
+  return {
+    orderCurrencyCode,
+    rateToBs: Number.isFinite(rateToBs) && rateToBs > 0 ? rateToBs : 1,
+  };
+}
+
+function convertCreatePaymentAmountToOrderCurrency(amount, fromCurrency) {
+  const { orderCurrencyCode, rateToBs } = getCreatePaymentCurrencyRateSnapshot();
+  const source = String(fromCurrency || '').toUpperCase();
+  if (!Number.isFinite(amount)) {
+    return 0;
+  }
+
+  if (source === orderCurrencyCode) {
+    return amount;
+  }
+
+  if (source === 'BS' && orderCurrencyCode === 'USD') {
+    return amount / rateToBs;
+  }
+
+  if (source === 'USD' && orderCurrencyCode === 'BS') {
+    return amount * rateToBs;
+  }
+
+  return amount;
+}
+
+function convertCreatePaymentAmountFromOrderCurrency(amount, toCurrency) {
+  const { orderCurrencyCode, rateToBs } = getCreatePaymentCurrencyRateSnapshot();
+  const target = String(toCurrency || '').toUpperCase();
+  if (!Number.isFinite(amount)) {
+    return 0;
+  }
+
+  if (target === orderCurrencyCode) {
+    return amount;
+  }
+
+  if (target === 'BS' && orderCurrencyCode === 'USD') {
+    return amount * rateToBs;
+  }
+
+  if (target === 'USD' && orderCurrencyCode === 'BS') {
+    return amount / rateToBs;
+  }
+
+  return amount;
+}
+
+function syncCreatePaymentMethodFilter() {
+  const currencySelect = document.getElementById('createPaymentEntryCurrency');
+  const methodSelect = document.getElementById('createPaymentEntryMethod');
+  if (!currencySelect || !methodSelect) {
+    return;
+  }
+
+  const selectedCurrency = String(currencySelect.value || '').toUpperCase();
+  const currentValue = String(methodSelect.value || '');
+  let hasCurrentOption = false;
+
+  Array.from(methodSelect.options).forEach((option) => {
+    if (!option.value) {
+      option.hidden = false;
+      option.disabled = false;
+      return;
+    }
+
+    const optionCurrency = String(option.dataset.currencyCode || '').toUpperCase();
+    const visible = optionCurrency === selectedCurrency;
+    option.hidden = !visible;
+    option.disabled = !visible;
+
+    if (visible && option.value === currentValue) {
+      hasCurrentOption = true;
+    }
+  });
+
+  if (!hasCurrentOption) {
+    methodSelect.value = '';
+  }
+
+  syncCreatePaymentEntryHint();
+}
+
+function syncCreatePaymentSummary() {
+  const currencySelect = document.getElementById('createPaymentEntryCurrency');
+  const amountInput = document.getElementById('createPaymentEntryAmount');
+  const debtLabel = document.getElementById('createPaymentDebtLabel');
+  const payingLabel = document.getElementById('createPaymentPayingLabel');
+  const remainingLabel = document.getElementById('createPaymentRemainingLabel');
+  const dualHint = document.getElementById('createPaymentDualHint');
+
+  if (!currencySelect || !debtLabel || !payingLabel || !remainingLabel) {
+    return;
+  }
+
+  const selectedCurrency = String(currencySelect.value || '').toUpperCase();
+  const pendingInOrderCurrency = Number({{ \Illuminate\Support\Js::from((float) $paymentBalance) }} || 0);
+  const payingInSelected = Number(amountInput?.value || 0);
+  const payingInOrder = convertCreatePaymentAmountToOrderCurrency(payingInSelected, selectedCurrency);
+  const debtInSelected = convertCreatePaymentAmountFromOrderCurrency(pendingInOrderCurrency, selectedCurrency);
+  const remainingInOrder = Math.max(0, pendingInOrderCurrency - Math.max(0, payingInOrder));
+  const remainingInSelected = convertCreatePaymentAmountFromOrderCurrency(remainingInOrder, selectedCurrency);
+
+  debtLabel.textContent = `${debtInSelected.toFixed(2)} ${selectedCurrency}`;
+  payingLabel.textContent = `${Math.max(0, payingInSelected).toFixed(2)} ${selectedCurrency}`;
+  remainingLabel.textContent = `${Math.max(0, remainingInSelected).toFixed(2)} ${selectedCurrency}`;
+
+  if (dualHint) {
+    dualHint.textContent = `Pendiente en moneda de la orden: ${pendingInOrderCurrency.toFixed(2)} ${getCreatePaymentCurrencyRateSnapshot().orderCurrencyCode} | Restante: ${remainingInOrder.toFixed(2)} ${getCreatePaymentCurrencyRateSnapshot().orderCurrencyCode}`;
+  }
+}
+
+function fillCreatePaymentRemainingAmount() {
+  const currencySelect = document.getElementById('createPaymentEntryCurrency');
+  const amountInput = document.getElementById('createPaymentEntryAmount');
+  if (!currencySelect || !amountInput) {
+    return;
+  }
+
+  const selectedCurrency = String(currencySelect.value || '').toUpperCase();
+  const pendingInOrderCurrency = Number({{ \Illuminate\Support\Js::from((float) $paymentBalance) }} || 0);
+  const amountToFill = convertCreatePaymentAmountFromOrderCurrency(pendingInOrderCurrency, selectedCurrency);
+  amountInput.value = amountToFill > 0 ? amountToFill.toFixed(2) : '0.00';
+  syncCreatePaymentSummary();
+}
+
+function syncCreatePaymentEntryHint() {
+  const methodSelect = document.getElementById('createPaymentEntryMethod');
+  const hint = document.getElementById('createPaymentEntryHint');
+  if (!methodSelect || !hint) {
+    return;
+  }
+
+  const selectedOption = methodSelect.selectedOptions?.[0] || null;
+  const requiresReference = String(selectedOption?.dataset?.hasReference || '0') === '1';
+  const requiresProof = String(selectedOption?.dataset?.requiresProof || '0') === '1';
+
+  if (!selectedOption || !selectedOption.value) {
+    hint.textContent = 'Si el método lo requiere, adjunta referencia y comprobante.';
+    return;
+  }
+
+  if (requiresReference && requiresProof) {
+    hint.textContent = 'Este método requiere referencia y comprobante.';
+    return;
+  }
+
+  if (requiresReference) {
+    hint.textContent = 'Este método requiere referencia.';
+    return;
+  }
+
+  if (requiresProof) {
+    hint.textContent = 'Este método requiere comprobante.';
+    return;
+  }
+
+  hint.textContent = 'Puedes adjuntar comprobante opcionalmente.';
+}
+
+function saveCreatePaymentEntry() {
+  const currencySelect = document.getElementById('createPaymentEntryCurrency');
+  const methodSelect = document.getElementById('createPaymentEntryMethod');
+  const amountInput = document.getElementById('createPaymentEntryAmount');
+  const referenceInput = document.getElementById('createPaymentEntryReference');
+  const proofInput = document.getElementById('createPaymentEntryProof');
+  const saveButton = document.getElementById('saveCreatePaymentEntryBtn');
+
+  const paymentMethodId = Number(methodSelect?.value || 0);
+  const selectedCurrency = String(currencySelect?.value || '').toUpperCase();
+  const amount = Number(amountInput?.value || 0);
+  const reference = String(referenceInput?.value || '').trim();
+  const proofFile = proofInput?.files?.[0] || null;
+
+  const selectedOption = methodSelect?.selectedOptions?.[0] || null;
+  const requiresReference = String(selectedOption?.dataset?.hasReference || '0') === '1';
+  const requiresProof = String(selectedOption?.dataset?.requiresProof || '0') === '1';
+
+  if (paymentMethodId <= 0) {
+    alert('Selecciona un método de pago.');
+    return;
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert('Ingresa un monto válido mayor a 0.');
+    return;
+  }
+
+  const pendingInOrderCurrency = Number({{ \Illuminate\Support\Js::from((float) $paymentBalance) }} || 0);
+  const payingInOrderCurrency = convertCreatePaymentAmountToOrderCurrency(amount, selectedCurrency);
+  if (payingInOrderCurrency - pendingInOrderCurrency > 0.00001) {
+    alert('El monto a pagar no puede superar el saldo pendiente.');
+    return;
+  }
+
+  if (requiresReference && reference === '') {
+    alert('Este método de pago requiere referencia.');
+    return;
+  }
+
+  if (requiresProof && !proofFile) {
+    alert('Este método de pago requiere comprobante.');
+    return;
+  }
+
+  const payload = new FormData();
+  payload.append('payment_method_id', String(paymentMethodId));
+  payload.append('amount', amount.toFixed(2));
+  payload.append('currency', selectedCurrency);
+  payload.append('reference', reference);
+  if (proofFile) {
+    payload.append('proof_image', proofFile);
+  }
+
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = 'Guardando...';
+  }
+
+  fetch(`/api/payment/order/{{ $order->id }}/create`, {
+    method: 'POST',
+    headers: {
+      'X-CSRF-TOKEN': '{{ csrf_token() }}',
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: payload,
+  })
+    .then(async response => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'No se pudo registrar el pago.');
+      }
+
+      alert(data.message || 'Pago registrado correctamente.');
+      location.reload();
+    })
+    .catch(error => {
+      alert(String(error?.message || 'No se pudo registrar el pago.'));
+    })
+    .finally(() => {
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.textContent = 'Guardar pago';
+      }
+    });
+}
+
 function savePaymentEntryChanges() {
   const paymentId = Number(document.getElementById('editPaymentEntryId')?.value || 0);
   const amount = Number(document.getElementById('editPaymentEntryAmount')?.value || 0);
@@ -2359,6 +2743,8 @@ window.updatePaymentStatus = updatePaymentStatus;
 window.openEditPaymentEntryModal = openEditPaymentEntryModal;
 window.savePaymentEntryChanges = savePaymentEntryChanges;
 window.deletePaymentEntry = deletePaymentEntry;
+window.openCreatePaymentEntryModal = openCreatePaymentEntryModal;
+window.saveCreatePaymentEntry = saveCreatePaymentEntry;
 
 function submitLinkedAppointmentWorkflowAction() {
   const workflowCard = document.getElementById('linked-appointment-workflow');
@@ -2636,6 +3022,40 @@ document.addEventListener('DOMContentLoaded', () => {
   const savePaymentEntryChangesBtn = document.getElementById('savePaymentEntryChangesBtn');
   if (savePaymentEntryChangesBtn) {
     savePaymentEntryChangesBtn.addEventListener('click', savePaymentEntryChanges);
+  }
+
+  const openCreatePaymentEntryModalBtn = document.getElementById('openCreatePaymentEntryModalBtn');
+  if (openCreatePaymentEntryModalBtn) {
+    openCreatePaymentEntryModalBtn.addEventListener('click', openCreatePaymentEntryModal);
+  }
+
+  const saveCreatePaymentEntryBtn = document.getElementById('saveCreatePaymentEntryBtn');
+  if (saveCreatePaymentEntryBtn) {
+    saveCreatePaymentEntryBtn.addEventListener('click', saveCreatePaymentEntry);
+  }
+
+  const createPaymentEntryMethod = document.getElementById('createPaymentEntryMethod');
+  if (createPaymentEntryMethod) {
+    createPaymentEntryMethod.addEventListener('change', syncCreatePaymentEntryHint);
+  }
+
+  const createPaymentEntryCurrency = document.getElementById('createPaymentEntryCurrency');
+  if (createPaymentEntryCurrency) {
+    createPaymentEntryCurrency.addEventListener('change', () => {
+      syncCreatePaymentMethodFilter();
+      syncCreatePaymentSummary();
+    });
+  }
+
+  const createPaymentEntryAmount = document.getElementById('createPaymentEntryAmount');
+  if (createPaymentEntryAmount) {
+    createPaymentEntryAmount.addEventListener('input', syncCreatePaymentSummary);
+    createPaymentEntryAmount.addEventListener('change', syncCreatePaymentSummary);
+  }
+
+  const fillRemainingPaymentAmountBtn = document.getElementById('fillRemainingPaymentAmountBtn');
+  if (fillRemainingPaymentAmountBtn) {
+    fillRemainingPaymentAmountBtn.addEventListener('click', fillCreatePaymentRemainingAmount);
   }
 
   const appointmentAmountInput = document.getElementById('appointment-paid-amount');

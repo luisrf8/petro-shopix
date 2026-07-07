@@ -854,6 +854,9 @@
                                                     data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}" data-stock="{{ $variant->stock }}"
                                                     data-product-name="{{ $item->name }}"
                                                     data-size="{{ $variant->size }}"
+                                                    data-unit-type="{{ $variant->unit_type ?? 'unidad' }}"
+                                                    data-quantity-input-mode="{{ $variant->quantity_input_mode ?? 'integer' }}"
+                                                    data-min-sale-quantity="{{ number_format((float) ($variant->min_sale_quantity ?? 1), 2, '.', '') }}"
                                                     data-image-src="{{ $variantCardImage }}"
                                                     data-taxes="{{ $item->taxes }}">
                                                     <span>
@@ -1477,6 +1480,9 @@
                             'selection_mode' => $item->selection_mode ?? 'variant',
                             'variant_size' => $item->variant->size ?? '',
                             'variant_stock' => (float) ($item->variant->stock ?? 0),
+                            'unit_type' => (string) ($item->variant->unit_type ?? 'unidad'),
+                            'quantity_input_mode' => (string) ($item->variant->quantity_input_mode ?? 'integer'),
+                            'min_sale_quantity' => (float) ($item->variant->min_sale_quantity ?? 1),
                             'variant_price' => (float) $effectivePrice,
                             'product_name' => $item->variant->product->name ?? 'Producto',
                             'image_src' => $itemVariantImagePath
@@ -1491,6 +1497,9 @@
                                     'variant_id' => (int) $item->product_variant_id,
                                     'variant_size' => (string) ($item->variant->size ?? ''),
                                     'variant_stock' => (float) ($item->variant->stock ?? 0),
+                                    'unit_type' => (string) ($item->variant->unit_type ?? 'unidad'),
+                                    'quantity_input_mode' => (string) ($item->variant->quantity_input_mode ?? 'integer'),
+                                    'min_sale_quantity' => (float) ($item->variant->min_sale_quantity ?? 1),
                                     'variant_price' => (float) $effectivePrice,
                                     'product_name' => $item->variant->product->name ?? 'Producto',
                                     'image_src' => $itemVariantImagePath
@@ -1763,12 +1772,22 @@
                         return;
                     }
 
+                    const choiceMinSale = normalizeSaleQuantity(choice.min_sale_quantity || 1, choice.quantity_input_mode || 'integer')
+                        || (String(choice.quantity_input_mode || 'integer') === 'decimal' ? 1.00 : 1);
+                    if (qty < choiceMinSale) {
+                        alert(`La cantidad minima para ${choice.product_name} ${choice.variant_size || ''} es ${formatSaleQuantity(choiceMinSale, choice.quantity_input_mode)}.`);
+                        return;
+                    }
+
                     selectedRows.push({
                         variant_id: Number(choice.variant_id),
                         qty,
                         stock: Number(choice.variant_stock || 0),
                         product_name: choice.product_name,
                         variant_size: choice.variant_size,
+                        unit_type: choice.unit_type || 'unidad',
+                        quantity_input_mode: choice.quantity_input_mode || 'integer',
+                        min_sale_quantity: Number(choice.min_sale_quantity || 1),
                         variant_price: Number(choice.variant_price || 0),
                         image_src: choice.image_src || null,
                         taxes: Array.isArray(choice.taxes) ? choice.taxes : [],
@@ -1816,6 +1835,9 @@
                         price,
                         stock: Number(row.stock || 0),
                         quantity: row.qty,
+                        quantity_input_mode: row.quantity_input_mode || 'integer',
+                        unit_type: row.unit_type || 'unidad',
+                        min_sale_quantity: row.min_sale_quantity || 1,
                         line_discount_percentage: combinedLineDiscount,
                         imageSrc: row.image_src || null,
                         taxes: row.taxes || [],
@@ -1884,6 +1906,9 @@
                         price,
                         stock: Number(component.variant_stock || 999999),
                         quantity: componentQty,
+                        quantity_input_mode: component.quantity_input_mode || 'integer',
+                        unit_type: component.unit_type || 'unidad',
+                        min_sale_quantity: component.min_sale_quantity || 1,
                         line_discount_percentage: combinedLineDiscount,
                         imageSrc: component.image_src || null,
                         taxes,
@@ -1979,16 +2004,67 @@
                 }, 120);
             }
         }
+
+        function normalizeSaleQuantity(rawValue, quantityInputMode = 'integer') {
+            const mode = String(quantityInputMode || 'integer').toLowerCase() === 'decimal' ? 'decimal' : 'integer';
+            const parsedValue = Number.parseFloat(String(rawValue ?? '').replace(',', '.'));
+            if (!Number.isFinite(parsedValue)) {
+                return null;
+            }
+
+            if (mode === 'decimal') {
+                const rounded = Math.round(parsedValue * 100) / 100;
+                return rounded > 0 ? rounded : null;
+            }
+
+            if (Math.abs(parsedValue - Math.round(parsedValue)) > 0.00001) {
+                return null;
+            }
+
+            const rounded = Math.round(parsedValue);
+            return rounded > 0 ? rounded : null;
+        }
+
+        function formatSaleQuantity(value, quantityInputMode = 'integer') {
+            const mode = String(quantityInputMode || 'integer').toLowerCase() === 'decimal' ? 'decimal' : 'integer';
+            const numericValue = Number(value || 0);
+            if (!Number.isFinite(numericValue)) {
+                return mode === 'decimal' ? '1.00' : '1';
+            }
+
+            return mode === 'decimal'
+                ? numericValue.toFixed(2)
+                : String(Math.round(numericValue));
+        }
+
+        function configureSaleQuantityInput(input, item) {
+            if (!input || !item) {
+                return;
+            }
+
+            const isDecimal = String(item.quantity_input_mode || 'integer') === 'decimal';
+            const minSaleQuantity = normalizeSaleQuantity(item.min_sale_quantity ?? 1, item.quantity_input_mode) || (isDecimal ? 1.00 : 1);
+            input.step = isDecimal ? '0.01' : '1';
+            input.min = isDecimal ? minSaleQuantity.toFixed(2) : String(Math.round(minSaleQuantity));
+            input.max = String(item.stock ?? '');
+            input.inputMode = isDecimal ? 'decimal' : 'numeric';
+            input.value = formatSaleQuantity(item.quantity, item.quantity_input_mode);
+        }
+
         function handleCheckboxChange(e) {
             const checkbox = e.target;
             const id = checkbox.value;
             const productName = checkbox.getAttribute('data-product-name');
             const productSize = checkbox.getAttribute('data-size');
-            const stock = parseInt(checkbox.getAttribute('data-stock')) || 0;
+            const stock = parseFloat(checkbox.getAttribute('data-stock')) || 0;
             const price = parseFloat(checkbox.getAttribute('data-price')) || 0;
+            const quantityInputMode = checkbox.getAttribute('data-quantity-input-mode') || 'integer';
+            const unitType = checkbox.getAttribute('data-unit-type') || 'unidad';
+            const minSaleQuantity = normalizeSaleQuantity(checkbox.getAttribute('data-min-sale-quantity') || '1', quantityInputMode) || (quantityInputMode === 'decimal' ? 1.00 : 1);
             const taxesString = checkbox.getAttribute('data-taxes');
             const imageSrc = checkbox.getAttribute('data-image-src') || '';
-            const selectedQty = Math.max(1, parseInt(checkbox.dataset.selectedQty || '1', 10) || 1);
+            const selectedQtyRaw = normalizeSaleQuantity(checkbox.dataset.selectedQty || String(minSaleQuantity), quantityInputMode);
+            const selectedQty = selectedQtyRaw !== null && selectedQtyRaw >= minSaleQuantity ? selectedQtyRaw : minSaleQuantity;
             delete checkbox.dataset.selectedQty;
 
             // Convertir a JSON
@@ -2014,6 +2090,9 @@
                     price,
                     stock,
                     quantity: selectedQty,
+                    quantity_input_mode: quantityInputMode,
+                    unit_type: unitType,
+                    min_sale_quantity: minSaleQuantity,
                     line_discount_percentage: 0,
                     imageSrc,
                     taxes,
@@ -2117,20 +2196,33 @@ function updateQuantity(id, newQty) {
     const item = selectedItems.find(item => item.id === id);
     if (!item) return;
 
-    newQty = parseInt(newQty) || 1;
-    if (newQty < 1) newQty = 1;
-    if (newQty > item.stock) newQty = item.stock;
+    const normalizedQuantity = normalizeSaleQuantity(newQty, item.quantity_input_mode);
+    if (normalizedQuantity === null) {
+        return false;
+    }
+
+    let safeQuantity = normalizedQuantity;
+    const minSaleQuantity = normalizeSaleQuantity(item.min_sale_quantity ?? 1, item.quantity_input_mode)
+        || (String(item.quantity_input_mode || 'integer') === 'decimal' ? 1.00 : 1);
+    if (safeQuantity > Number(item.stock || 0)) safeQuantity = Number(item.stock || 0);
+    if (safeQuantity < minSaleQuantity) safeQuantity = minSaleQuantity;
+    if (String(item.quantity_input_mode || 'integer') === 'decimal') {
+        safeQuantity = Math.round(safeQuantity * 100) / 100;
+    } else {
+        safeQuantity = Math.round(safeQuantity);
+    }
 
     // Restar el subtotal y los impuestos anteriores
     subTotalAmount -= (item.price * item.quantity);
 
     // Actualizar cantidad
-    item.quantity = newQty;
+    item.quantity = safeQuantity;
 
     // Sumar precio base nuevo
     subTotalAmount += (item.price * item.quantity);
 
     renderCart();
+    return true;
 }
 
 
@@ -2184,40 +2276,49 @@ function updateQuantity(id, newQty) {
 
                 const quantityInput = document.createElement('input');
                 quantityInput.type = 'number';
-                quantityInput.min = '1';
-                quantityInput.max = item.stock;
-                quantityInput.value = item.quantity;
                 quantityInput.className = 'form-control qty-edit';
                 quantityInput.style.width = '80px';
                 quantityInput.style.height = 'fit-content';
                 quantityInput.style.padding = '0.25rem 0.5rem';
                 quantityInput.style.border = '1px solid #ced4da';
+                configureSaleQuantityInput(quantityInput, item);
                 const commitQuantityChange = () => {
                     const rawValue = String(quantityInput.value ?? '').trim();
+                    const minSaleText = formatSaleQuantity(item.min_sale_quantity || 1, item.quantity_input_mode);
                     if (rawValue === '') {
                         return;
                     }
 
-                    updateQuantity(item.id, Number.parseInt(rawValue, 10));
+                    const updated = updateQuantity(item.id, rawValue);
+                    if (updated) {
+                        quantityInput.classList.remove('is-invalid');
+                        quantityInput.setCustomValidity('');
+                        quantityInput.value = formatSaleQuantity(item.quantity, item.quantity_input_mode);
+                        return;
+                    }
+
+                    quantityInput.classList.add('is-invalid');
+                    quantityInput.setCustomValidity(`La cantidad minima es ${minSaleText}.`);
                 };
 
                 quantityInput.addEventListener('change', commitQuantityChange);
                 quantityInput.addEventListener('blur', () => {
                     const rawValue = String(quantityInput.value ?? '').trim();
+                    const minSaleText = formatSaleQuantity(item.min_sale_quantity || 1, item.quantity_input_mode);
                     if (rawValue === '') {
                         quantityInput.classList.add('is-invalid');
-                        quantityInput.setCustomValidity('La cantidad minima es 1.');
+                        quantityInput.setCustomValidity(`La cantidad minima es ${minSaleText}.`);
                         return;
                     }
 
-                    quantityInput.classList.remove('is-invalid');
-                    quantityInput.setCustomValidity('');
                     commitQuantityChange();
                 });
                 quantityInput.addEventListener('input', () => {
                     const rawValue = String(quantityInput.value ?? '').trim();
-                    const parsedValue = Number.parseInt(rawValue, 10);
-                    const isValid = rawValue !== '' && Number.isFinite(parsedValue) && parsedValue >= 1;
+                    const parsedValue = normalizeSaleQuantity(rawValue, item.quantity_input_mode);
+                    const minSale = normalizeSaleQuantity(item.min_sale_quantity || 1, item.quantity_input_mode)
+                        || (String(item.quantity_input_mode || 'integer') === 'decimal' ? 1.00 : 1);
+                    const isValid = rawValue !== '' && parsedValue !== null && parsedValue >= minSale;
 
                     if (isValid) {
                         quantityInput.classList.remove('is-invalid');
@@ -2396,7 +2497,8 @@ function updateQuantity(id, newQty) {
         function addVariantFromProductCard(variantId, qtyInputId) {
             const checkbox = document.getElementById(`variant_${variantId}`);
             const qtyInput = document.getElementById(qtyInputId);
-            const qty = Math.max(1, parseInt(qtyInput?.value || '1', 10) || 1);
+            const quantityMode = checkbox?.getAttribute('data-quantity-input-mode') || 'integer';
+            const qty = normalizeSaleQuantity(qtyInput?.value || '1', quantityMode) || (quantityMode === 'decimal' ? 1.00 : 1);
 
             if (!checkbox) {
                 return;
@@ -2651,7 +2753,9 @@ function updateQuantity(id, newQty) {
                         } else {
                             const existing = selectedItems.find(item => String(item.id) === String(variant.id));
                             if (existing) {
-                                existing.quantity = Number(existing.quantity || 0) + 1;
+                                const increment = normalizeSaleQuantity(existing.min_sale_quantity || 1, existing.quantity_input_mode)
+                                    || (String(existing.quantity_input_mode || 'integer') === 'decimal' ? 1.00 : 1);
+                                existing.quantity = Number(existing.quantity || 0) + increment;
                                 recalcSubtotals();
                                 renderCart();
                             }
@@ -2668,15 +2772,22 @@ function updateQuantity(id, newQty) {
 
                     const existing = selectedItems.find(item => String(item.id) === String(variant.id));
                     if (existing) {
-                        existing.quantity = Number(existing.quantity || 0) + 1;
+                        const increment = normalizeSaleQuantity(existing.min_sale_quantity || 1, existing.quantity_input_mode)
+                            || (String(existing.quantity_input_mode || 'integer') === 'decimal' ? 1.00 : 1);
+                        existing.quantity = Number(existing.quantity || 0) + increment;
                     } else {
+                        const minSaleQuantity = normalizeSaleQuantity(variant.min_sale_quantity || 1, variant.quantity_input_mode || 'integer')
+                            || (String(variant.quantity_input_mode || 'integer') === 'decimal' ? 1.00 : 1);
                         selectedItems.push({
                             id: String(variant.id),
                             productName: variant.product_name,
                             productSize: variant.size,
                             price,
                             stock: parseFloat(variant.stock || 0),
-                            quantity: 1,
+                            quantity: minSaleQuantity,
+                            quantity_input_mode: variant.quantity_input_mode || 'integer',
+                            unit_type: variant.unit_type || 'unidad',
+                            min_sale_quantity: minSaleQuantity,
                             line_discount_percentage: 0,
                             taxes,
                             taxRate: totalTaxRate,
@@ -2793,14 +2904,18 @@ function updateQuantity(id, newQty) {
             const quantityInputs = Array.from(document.querySelectorAll('.qty-edit'));
             let firstInvalidInput = null;
 
-            quantityInputs.forEach(input => {
+            quantityInputs.forEach((input, index) => {
+                const item = selectedItems[index] || null;
                 const rawValue = String(input.value ?? '').trim();
-                const parsedValue = Number.parseInt(rawValue, 10);
-                const isValid = rawValue !== '' && Number.isFinite(parsedValue) && parsedValue >= 1;
+                const mode = item?.quantity_input_mode || 'integer';
+                const minSale = normalizeSaleQuantity(item?.min_sale_quantity ?? 1, mode)
+                    || (String(mode) === 'decimal' ? 1.00 : 1);
+                const parsedValue = normalizeSaleQuantity(rawValue, mode);
+                const isValid = rawValue !== '' && parsedValue !== null && parsedValue >= minSale;
 
                 if (!isValid) {
                     input.classList.add('is-invalid');
-                    input.setCustomValidity('La cantidad minima es 1.');
+                    input.setCustomValidity(`La cantidad minima es ${formatSaleQuantity(minSale, mode)}.`);
                     if (!firstInvalidInput) {
                         firstInvalidInput = input;
                     }
