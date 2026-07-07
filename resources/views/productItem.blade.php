@@ -201,6 +201,7 @@
                       <div class="d-flex flex-wrap gap-2 mb-3">
                         @if(!$productItemIsSellerRole)
                           <button type="button" class="btn btn-outline-dark btn-sm" id="generateProductCodesBtn">Generar códigos de todas las variantes</button>
+                          <button type="button" class="btn btn-outline-secondary btn-sm" id="applyMainImageToAllVariantsBtn">Usar foto principal en todas las variantes</button>
                           <button class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#addImageModal">Agregar imagen +</button>
                           <button class="btn btn-dark btn-sm" onclick="deleteProduct({{ $product->id }})">Eliminar</button>
                         @endif
@@ -1325,6 +1326,112 @@
         this.textContent = originalText;
       }
     });
+  });
+
+  document.getElementById('applyMainImageToAllVariantsBtn')?.addEventListener('click', async function () {
+    const rows = Array.from(document.querySelectorAll('[data-existing-variant-row]'));
+    if (!rows.length) {
+      alert('No hay variantes para actualizar.');
+      return;
+    }
+
+    const mainImageElement = document.getElementById('mainImage');
+    const mainImageUrl = String(mainImageElement?.getAttribute('src') || '').trim();
+    if (!mainImageUrl || mainImageUrl.includes('shopix5.png')) {
+      alert('No hay una imagen principal válida para copiar a las variantes.');
+      return;
+    }
+
+    if (!window.confirm('Se aplicará la foto principal a todas las variantes existentes. ¿Deseas continuar?')) {
+      return;
+    }
+
+    const button = this;
+    const originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Aplicando...';
+
+    try {
+      const imageResponse = await fetch(mainImageUrl, { credentials: 'same-origin' });
+      if (!imageResponse.ok) {
+        throw new Error('No se pudo leer la imagen principal.');
+      }
+
+      const imageBlob = await imageResponse.blob();
+      const mimeType = imageBlob.type || 'image/jpeg';
+      const extension = mimeType.includes('png') ? 'png' : (mimeType.includes('webp') ? 'webp' : 'jpg');
+
+      let updatedCount = 0;
+      const failedVariants = [];
+
+      for (const row of rows) {
+        const variantId = String(row.getAttribute('data-existing-variant-row') || '').trim();
+        if (!variantId) continue;
+
+        const size = row.querySelector('[data-existing-size]')?.value?.trim() || '';
+        const price = parsePositiveProductAmount(row.querySelector('[data-existing-price]')?.value);
+        const stock = parseProductStockAmount(row.querySelector('[data-existing-stock]')?.value, 0);
+
+        if (!size || price === null || stock === null) {
+          failedVariants.push(variantId);
+          continue;
+        }
+
+        const formData = new FormData();
+        formData.append('size', size);
+        formData.append('price', String(price));
+        formData.append('discount_percentage', row.querySelector('[data-existing-discount]')?.value || '0');
+        formData.append('stock', String(stock));
+        formData.append('barcode', row.querySelector('[data-existing-barcode]')?.value || '');
+        formData.append('unit_type', row.querySelector('[data-existing-unit-type]')?.value || 'unidad');
+        formData.append('quantity_input_mode', row.querySelector('[data-existing-quantity-mode]')?.value || 'integer');
+        formData.append('min_sale_quantity', row.querySelector('[data-existing-min-sale-quantity]')?.value || '1');
+        formData.append('image', new File([imageBlob], `main-product-image.${extension}`, { type: mimeType }));
+        formData.append('_method', 'PUT');
+
+        try {
+          const response = await fetch(`/api/variants/${variantId}`, {
+            method: 'POST',
+            headers: {
+              'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+              'Accept': 'application/json',
+            },
+            body: formData,
+          });
+
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok || !payload.success) {
+            failedVariants.push(variantId);
+            continue;
+          }
+
+          const preview = document.getElementById(`variantPreview-${variantId}`);
+          const imagePath = payload?.variant?.image_url || payload?.variant?.image || payload?.variant?.image_path || null;
+          if (preview) {
+            preview.src = imagePath || mainImageUrl;
+          }
+
+          updatedCount += 1;
+        } catch (error) {
+          failedVariants.push(variantId);
+        }
+      }
+
+      if (!updatedCount) {
+        throw new Error('No se pudo actualizar ninguna variante con la foto principal.');
+      }
+
+      if (failedVariants.length) {
+        alert(`Se actualizó la imagen en ${updatedCount} variante(s), pero ${failedVariants.length} no se pudieron actualizar.`);
+      } else {
+        alert(`Imagen principal aplicada en ${updatedCount} variante(s).`);
+      }
+    } catch (error) {
+      alert(error.message || 'No se pudo aplicar la imagen principal a las variantes.');
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
   });
 function confirmRemoveImage(imageId) {
     if (confirm('¿Estás seguro de que deseas eliminar esta imagen?')) {
