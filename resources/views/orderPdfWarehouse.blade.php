@@ -264,10 +264,8 @@
 
         return $amountBs / $orderRateToBsSnapshot;
     };
-    $formatUsdOrderAmount = function (float $amount) use ($toUsdOrderAmount): string {
-        $usdAmount = $toUsdOrderAmount($amount);
-
-        return number_format((float) ($usdAmount ?? 0), 2, '.', ',');
+    $formatOrderCurrencyAmount = function (float $amount): string {
+        return number_format((float) $amount, 2, '.', ',');
     };
 
     $formatBsOrderAmount = function (float $amount) use ($toBsOrderAmount): string {
@@ -376,9 +374,9 @@
             <th>Producto</th>
             <th>Cantidad</th>
             <th>Variante</th>
-            <th>Sub total USD</th>
+            <th>Sub total {{ $orderCurrencyCode }}</th>
             <th>Sub total Bs</th>
-            <th>Total USD</th>
+            <th>Total {{ $orderCurrencyCode }}</th>
             <th>Total Bs</th>
         </tr>
     </thead>
@@ -392,9 +390,9 @@
                 <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
                 <td class="qty-cell">{{ (int) round((float) $detalle->quantity) }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
-                <td class="amount-cell">{{ $formatUsdOrderAmount($lineSubtotal) }}</td>
+                <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineSubtotal) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($lineSubtotal) }}</td>
-                <td class="amount-cell">{{ $formatUsdOrderAmount($lineTotal) }}</td>
+                <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineTotal) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($lineTotal) }}</td>
             </tr>
         @endforeach
@@ -403,17 +401,17 @@
                 <td><strong>Delivery</strong></td>
                 <td class="qty-cell">1</td>
                 <td>-</td>
-                <td class="amount-cell">{{ $formatUsdOrderAmount($deliveryFee) }}</td>
+                <td class="amount-cell">{{ $formatOrderCurrencyAmount($deliveryFee) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($deliveryFee) }}</td>
-                <td class="amount-cell">{{ $formatUsdOrderAmount($deliveryFee) }}</td>
+                <td class="amount-cell">{{ $formatOrderCurrencyAmount($deliveryFee) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($deliveryFee) }}</td>
             </tr>
         @endif
         <tr>
             <td colspan="3" style="text-align: right;"><strong>Total orden</strong></td>
-            <td class="amount-cell"><strong>{{ $formatUsdOrderAmount($orderTotal) }}</strong></td>
+            <td class="amount-cell"><strong>{{ $formatOrderCurrencyAmount($orderTotal) }}</strong></td>
             <td class="amount-cell"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
-            <td class="amount-cell"><strong>{{ $formatUsdOrderAmount($orderTotal) }}</strong></td>
+            <td class="amount-cell"><strong>{{ $formatOrderCurrencyAmount($orderTotal) }}</strong></td>
             <td class="amount-cell"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
         </tr>
     </tbody>

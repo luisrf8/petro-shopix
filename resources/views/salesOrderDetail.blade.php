@@ -284,7 +284,7 @@
                   <a id="downloadInvoiceBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'invoice']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-danger mb-0" target="_blank" rel="noopener">Factura anulada</a>
                   @endif
                 @endif
-                <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?currency_code={{ $orderCurrencyCode ?? 'USD' }}&disposition=inline" class="btn btn-outline-dark mb-0" target="_blank" rel="noopener">Orden de entrega</a>
+                <a id="downloadDeliveryBtn" data-base-url="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}" href="{{ route('sales.orders.pdfs', ['id' => $order->id, 'type' => 'delivery']) }}?disposition=inline" class="btn btn-outline-dark mb-0" target="_blank" rel="noopener">Orden de entrega</a>
                 @endif
                 @if($canRegisterReturn)
                   <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#returnModal">Registrar Devolución</button>
@@ -3336,7 +3336,7 @@ if (returnForm) {
     if (invoiceBtn && invoiceBase !== '') {
       invoiceBtn.href = `${invoiceBase}?currency_code=${currencyCode}&disposition=inline`;
     }
-    deliveryBtn.href = `${deliveryBase}?currency_code=${currencyCode}&disposition=inline`;
+    deliveryBtn.href = `${deliveryBase}?disposition=inline`;
   };
 
   currencySelect.addEventListener('change', syncDownloadUrls);
