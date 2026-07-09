@@ -592,11 +592,110 @@
         height: 100%;
         right: 0.6rem;
     }
+
+    .sale-products-pagination-wrap {
+        display: flex;
+        justify-content: center;
+        margin-top: 1rem;
+    }
+
+    .pagination .page-link {
+        background-color: #000000;
+        border-color: #000000;
+        color: #ffffff;
+        box-shadow: none;
+    }
+
+    .pagination .page-link:hover,
+    .pagination .page-link:focus {
+        background-color: #111111;
+        border-color: #111111;
+        color: #ffffff;
+    }
+
+    .pagination .page-item.active .page-link {
+        background-color: #000000;
+        border-color: #000000;
+        color: #ffffff;
+        font-weight: 700;
+    }
+
+    .pagination .page-item.disabled .page-link {
+        background-color: #1f2937;
+        border-color: #1f2937;
+        color: rgba(255, 255, 255, 0.55);
+    }
+
+    .sale-page-loading-skeleton {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: none;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.82);
+        backdrop-filter: blur(4px);
+    }
+
+    .sale-page-loading-skeleton.is-visible {
+        display: block;
+    }
+
+    .sale-page-skeleton-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .sale-page-skeleton-card {
+        min-height: 188px;
+        border-radius: 1rem;
+        border: 1px solid rgba(17, 24, 39, 0.12);
+        background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 37%, #e5e7eb 63%);
+        background-size: 400% 100%;
+        animation: salePageSkeletonShimmer 1.3s ease infinite;
+        padding: 1rem;
+    }
+
+    .sale-page-skeleton-line {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(17, 24, 39, 0.15);
+        margin-bottom: 0.55rem;
+    }
+
+    .sale-page-skeleton-line.short { width: 38%; }
+    .sale-page-skeleton-line.medium { width: 64%; }
+    .sale-page-skeleton-line.long { width: 88%; }
+
+    @keyframes salePageSkeletonShimmer {
+        0% { background-position: 100% 0; }
+        100% { background-position: 0 0; }
+    }
 </style>
 @endpush
 
     @section('content')
     <div class="container-fluid px-2 px-md-4">
+        <div id="salePageSkeleton" class="sale-page-loading-skeleton" aria-hidden="true">
+            <div class="sale-page-skeleton-grid">
+                @for ($i = 0; $i < 8; $i++)
+                    <div class="sale-page-skeleton-card">
+                        <div class="d-flex gap-3 align-items-center mb-3">
+                            <div style="width:70px;height:70px;border-radius:0.9rem;background:rgba(17,24,39,.12);"></div>
+                            <div class="flex-grow-1">
+                                <div class="sale-page-skeleton-line long"></div>
+                                <div class="sale-page-skeleton-line medium"></div>
+                                <div class="sale-page-skeleton-line short"></div>
+                            </div>
+                        </div>
+                        <div class="sale-page-skeleton-line long"></div>
+                        <div class="sale-page-skeleton-line medium"></div>
+                        <div class="sale-page-skeleton-line short"></div>
+                    </div>
+                @endfor
+            </div>
+        </div>
         <button type="button"
             id="openAdminCartBtn"
             class="btn btn-dark admin-cart-fab d-xl-none"
@@ -890,6 +989,11 @@
                             </div>
                         @endforeach
                     </div>
+                    @if(method_exists($productItems, 'hasPages') && $productItems->hasPages())
+                        <div class="sale-products-pagination-wrap">
+                            {{ $productItems->links('pagination::bootstrap-5') }}
+                        </div>
+                    @endif
                     </div>
                 </div>
                 <div id="step2" class="step d-none sale-step-panel">
@@ -4126,6 +4230,39 @@ function updateQuantity(id, newQty) {
         });
 });
 
+
+    const salePageSkeleton = document.getElementById('salePageSkeleton');
+    const salePaginationStorageKey = 'shopix-sale-products-loading';
+
+    function setSalePageSkeletonVisible(isVisible) {
+        if (!salePageSkeleton) {
+            return;
+        }
+
+        salePageSkeleton.classList.toggle('is-visible', isVisible);
+        salePageSkeleton.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    }
+
+    document.addEventListener('click', function (event) {
+        const paginationLink = event.target.closest('.pagination a');
+        if (!paginationLink || paginationLink.classList.contains('disabled')) {
+            return;
+        }
+
+        sessionStorage.setItem(salePaginationStorageKey, '1');
+        setSalePageSkeletonVisible(true);
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        if (sessionStorage.getItem(salePaginationStorageKey) === '1') {
+            setSalePageSkeletonVisible(true);
+        }
+    });
+
+    window.addEventListener('load', function () {
+        sessionStorage.removeItem(salePaginationStorageKey);
+        setSalePageSkeletonVisible(false);
+    });
 
     </script>
 @endpush
