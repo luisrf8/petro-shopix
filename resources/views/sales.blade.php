@@ -767,12 +767,16 @@
                             <div class="col-12 col-lg-6">
                                 <div class="sale-toolbar-card h-100 mb-0">
                                     <h6 class="mb-2">Buscar producto</h6>
-                                    <input
-                                        type="text"
-                                        id="searchInput"
-                                        class="form-control border border-1 p-2 bg-white"
-                                        placeholder="Buscar producto..."
-                                        onkeyup="filterProducts()">
+                                    <form method="GET" action="{{ route('sales') }}" id="salesProductSearchForm" class="d-flex gap-2 align-items-center">
+                                        <input
+                                            type="text"
+                                            id="searchInput"
+                                            name="q"
+                                            value="{{ request('q', $search ?? '') }}"
+                                            class="form-control border border-1 p-2 bg-white"
+                                            placeholder="Buscar producto...">
+                                        <button type="submit" class="btn btn-dark mb-0">Buscar</button>
+                                    </form>
                                 </div>
                             </div>
 
@@ -2624,16 +2628,13 @@ function updateQuantity(id, newQty) {
         }
         
         function filterProducts() {
-            applySalesFilters();
+            const form = document.getElementById('salesProductSearchForm');
+            if (form) {
+                form.requestSubmit();
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function () {
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) {
-                searchInput.addEventListener('input', filterProducts);
-                searchInput.addEventListener('search', filterProducts);
-            }
-
             applySalesFilters();
         });
 

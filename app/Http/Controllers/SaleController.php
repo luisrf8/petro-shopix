@@ -66,17 +66,58 @@ class SaleController extends Controller
     {
         $user = auth()->user();
         $customerId = $user;
+        $search = trim((string) request()->input('q', ''));
+        $searchNormalized = mb_strtolower($search);
+
+        $productItemsQuery = Product::query()
+            ->with(['category', 'images', 'variants', 'taxes'])
+            ->where('tenant_id', $user->tenant_id)
+            ->where('is_consumable', false)
+            ->where('is_active', true);
+
+        if ($search !== '') {
+            $productItemsQuery->where(function ($query) use ($searchNormalized) {
+                $query->whereRaw('LOWER(name) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereRaw('LOWER(description) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereRaw('LOWER(barcode) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereRaw('LOWER(qr_code) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereHas('variants', function ($variantQuery) use ($searchNormalized) {
+                        $variantQuery->whereRaw('LOWER(size) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(barcode) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(qr_code) LIKE ?', ['%' . $searchNormalized . '%']);
+                    });
+            });
+        }
+
         // Traer todos los productos con sus variantes
-        $productItems = Product::with(['category', 'images', 'variants', 'taxes'])
-        ->where('tenant_id', $user->tenant_id)
-        ->where('is_consumable', false)
-        ->where('is_active', true)
+        $productItems = $productItemsQuery
         ->orderBy('created_at', 'desc')
         ->paginate(24)
         ->withQueryString();
-        $materialPackages = MaterialPackage::with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images', 'items.variant.product.taxes', 'items.variant.product.variants'])
+
+        $materialPackagesQuery = MaterialPackage::query()
+            ->with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images', 'items.variant.product.taxes', 'items.variant.product.variants'])
             ->where('tenant_id', $user->tenant_id)
-            ->where('is_active', true)
+            ->where('is_active', true);
+
+        if ($search !== '') {
+            $materialPackagesQuery->where(function ($query) use ($searchNormalized) {
+                $query->whereRaw('LOWER(name) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereHas('items.variant.product', function ($productQuery) use ($searchNormalized) {
+                        $productQuery->whereRaw('LOWER(name) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(description) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(barcode) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(qr_code) LIKE ?', ['%' . $searchNormalized . '%']);
+                    })
+                    ->orWhereHas('items.variant', function ($variantQuery) use ($searchNormalized) {
+                        $variantQuery->whereRaw('LOWER(size) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(barcode) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(qr_code) LIKE ?', ['%' . $searchNormalized . '%']);
+                    });
+            });
+        }
+
+        $materialPackages = $materialPackagesQuery
             ->orderBy('created_at', 'desc')
             ->get();
         $paymentMethods = PaymentMethod::with('currency')
@@ -117,7 +158,7 @@ class SaleController extends Controller
                 ->with('warning', 'Debes crear al menos una categoría antes de registrar ventas.');
         }
 
-        return view('sales', compact('categories', 'paymentMethods', 'productItems', 'materialPackages', 'dollarRate', 'euroRate', 'customerId', 'taxes', 'tenant', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs', 'ratePayload', 'existingCustomersForSale'));
+        return view('sales', compact('categories', 'paymentMethods', 'productItems', 'materialPackages', 'dollarRate', 'euroRate', 'customerId', 'taxes', 'tenant', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs', 'ratePayload', 'existingCustomersForSale', 'search'));
     }
     
     public function store(Request $request)

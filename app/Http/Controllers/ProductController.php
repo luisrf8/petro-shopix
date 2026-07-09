@@ -41,6 +41,8 @@ class ProductController extends Controller
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
         $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
+        $search = trim((string) request()->input('q', ''));
+        $searchNormalized = mb_strtolower($search);
 
         $categories = Category::query()
             ->where('is_active', true)
@@ -48,12 +50,29 @@ class ProductController extends Controller
             ->get();
         $taxes = $this->allowedProductTaxes();
 
-        $productItems = Product::with(['category', 'images', 'variants.images'])
-            ->where('tenant_id', $user->tenant_id)
+        $productItemsQuery = Product::with(['category', 'images', 'variants.images'])
+            ->where('tenant_id', $user->tenant_id);
+
+        if ($search !== '') {
+            $productItemsQuery->where(function ($query) use ($searchNormalized) {
+                $query->whereRaw('LOWER(name) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereRaw('LOWER(description) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereRaw('LOWER(barcode) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereRaw('LOWER(qr_code) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereHas('variants', function ($variantQuery) use ($searchNormalized) {
+                        $variantQuery->whereRaw('LOWER(size) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(barcode) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(qr_code) LIKE ?', ['%' . $searchNormalized . '%']);
+                    });
+            });
+        }
+
+        $productItems = $productItemsQuery
             ->orderBy('created_at', 'desc')
             ->paginate(24)
             ->withQueryString();
-        return view('products', compact('categories', 'productItems', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs'));
+
+        return view('products', compact('categories', 'productItems', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs', 'search'));
     }
 
     public function indexCreateProduct()
@@ -115,18 +134,38 @@ class ProductController extends Controller
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
         $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
+        $search = trim((string) request()->input('q', ''));
+        $searchNormalized = mb_strtolower($search);
 
         $category = Category::where('tenant_id', $user->tenant_id)->findOrFail($categoryId);
         $categories = Category::where('tenant_id', $user->tenant_id)
         ->where('is_active', true)
         ->get();
-        $productItems = Product::where('category_id', $category->id)
-        ->orderBy('created_at', 'desc')
-        ->paginate(24)
-        ->withQueryString();
+        $productItemsQuery = Product::with(['category', 'images', 'variants.images'])
+            ->where('tenant_id', $user->tenant_id)
+            ->where('category_id', $category->id);
+
+        if ($search !== '') {
+            $productItemsQuery->where(function ($query) use ($searchNormalized) {
+                $query->whereRaw('LOWER(name) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereRaw('LOWER(description) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereRaw('LOWER(barcode) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereRaw('LOWER(qr_code) LIKE ?', ['%' . $searchNormalized . '%'])
+                    ->orWhereHas('variants', function ($variantQuery) use ($searchNormalized) {
+                        $variantQuery->whereRaw('LOWER(size) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(barcode) LIKE ?', ['%' . $searchNormalized . '%'])
+                            ->orWhereRaw('LOWER(qr_code) LIKE ?', ['%' . $searchNormalized . '%']);
+                    });
+            });
+        }
+
+        $productItems = $productItemsQuery
+            ->orderBy('created_at', 'desc')
+            ->paginate(24)
+            ->withQueryString();
         $taxes = $this->allowedProductTaxes();
     
-        return view('products', compact('productItems', 'category', 'categories', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs'));
+        return view('products', compact('productItems', 'category', 'categories', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs', 'search'));
     }
     public function showByCategoryEcomm($categoryId)
     {

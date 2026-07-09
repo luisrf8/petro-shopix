@@ -395,7 +395,10 @@
         <div class="">
           <div class="products-toolbar">
             <div class="px-3 w-100" style="max-width: 420px;">
-              <input type="text" id="searchProduct" class="w-100 form-control border border-1 p-2 bg-white" placeholder="Buscar producto...">
+              <form method="GET" action="{{ isset($category) ? route('products.byCategory', $category->id) : route('products.index') }}" id="productsSearchForm" class="d-flex gap-2 align-items-center">
+                <input type="text" id="searchProduct" name="q" value="{{ request('q', $search ?? '') }}" class="w-100 form-control border border-1 p-2 bg-white" placeholder="Buscar producto...">
+                <button type="submit" class="btn btn-dark mb-0">Buscar</button>
+              </form>
             </div>
             <div class="px-3 products-primary-actions align-items-center">
               @if(!$productsIsSellerRole)
@@ -880,14 +883,10 @@
       applySearchFilter('searchCategory', '.category-item');
     }
 
-    if (target.id === 'searchProduct') {
-      applySearchFilter('searchProduct', '.product-item');
-    }
   });
 
   window.addEventListener('load', () => {
     applySearchFilter('searchCategory', '.category-item');
-    applySearchFilter('searchProduct', '.product-item');
   });
   </script>
 @endpush
