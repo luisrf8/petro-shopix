@@ -256,7 +256,6 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::post('/sales/scan-code', [SaleController::class, 'resolveScanCode'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.resolveScanCode');
     Route::get('/sales-orders/{id}/pdf', [SaleController::class, 'downloadPdf'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller');
     Route::get('/sales-orders/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('sales.orders.pdfs');
-    Route::post('/sales-orders/{order}/whatsapp/send-delivery-pdf', [SaleController::class, 'sendDeliveryPdfToCustomerWhatsapp'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('sales.orders.whatsapp.sendDeliveryPdf');
     Route::get('/seller-commissions', [SellerCommissionController::class, 'index'])->middleware('role.name:owner,admin,administrador')->name('seller-commissions.index');
     Route::get('/seller-commissions/progress', [SellerCommissionController::class, 'sellerProgress'])->middleware('role.name:vendor,vendedor,seller')->name('seller-commissions.progress');
     Route::get('/seller-commissions/progress/pdf', [SellerCommissionController::class, 'sellerProgressPdf'])->middleware('role.name:vendor,vendedor,seller')->name('seller-commissions.progress.pdf');

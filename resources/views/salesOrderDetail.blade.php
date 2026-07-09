@@ -100,8 +100,9 @@
       $storeWhatsappUrl = $storePhone !== ''
         ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'tienda') . ', sobre la orden #' . $order->id . '.')
         : null;
+      $publicDeliveryPdfUrl = route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) . '?disposition=inline';
       $customerWhatsappUrl = $customerPhone !== ''
-        ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', te escribimos sobre la orden #' . $order->id . '.')
+        ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', te compartimos la orden de entrega #' . $order->id . ': ' . $publicDeliveryPdfUrl)
         : null;
       $customerCallUrl = $customerPhone !== '' ? 'tel:' . $customerPhone : null;
       $deliveryTypeLabel = strtolower(trim((string) ($order->preference ?? '')));
@@ -291,17 +292,7 @@
                 @endif
                 @endunless
                 @if($customerWhatsappUrl)
-                  <a href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0">Ir a WhatsApp del cliente</a>
-                @endif
-                @if($canApproveSale && $customerPhone !== '')
-                  <button
-                    type="button"
-                    id="sendDeliveryPdfWhatsappBtn"
-                    class="btn btn-success mb-0"
-                    data-url="{{ route('sales.orders.whatsapp.sendDeliveryPdf', ['order' => $order->id]) }}"
-                  >
-                    Enviar orden PDF por WhatsApp
-                  </button>
+                  <a href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0">Enviar URL PDF por WhatsApp</a>
                 @endif
                 @if($customerCallUrl)
                   <a href="{{ $customerCallUrl }}" class="btn btn-outline-primary mb-0">Llamar al cliente</a>
@@ -3351,58 +3342,6 @@ if (returnForm) {
 
   currencySelect.addEventListener('change', syncDownloadUrls);
   syncDownloadUrls();
-})();
-
-(() => {
-  const sendBtn = document.getElementById('sendDeliveryPdfWhatsappBtn');
-  if (!sendBtn) {
-    return;
-  }
-
-  const endpoint = sendBtn.dataset.url || '';
-  if (!endpoint) {
-    return;
-  }
-
-  const originalLabel = sendBtn.textContent || 'Enviar orden PDF por WhatsApp';
-
-  sendBtn.addEventListener('click', async () => {
-    sendBtn.disabled = true;
-    sendBtn.textContent = 'Enviando PDF...';
-
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-
-      let payload = null;
-      try {
-        payload = await response.json();
-      } catch (_) {
-        payload = null;
-      }
-
-      if (!response.ok || !payload?.success) {
-        const message = payload?.message || `No se pudo enviar la orden por WhatsApp (HTTP ${response.status}).`;
-        alert(message);
-        return;
-      }
-
-      alert(payload.message || 'Orden enviada por WhatsApp correctamente.');
-    } catch (error) {
-      console.error('Error enviando orden por WhatsApp:', error);
-      alert('Ocurrió un error al enviar el PDF por WhatsApp.');
-    } finally {
-      sendBtn.disabled = false;
-      sendBtn.textContent = originalLabel;
-    }
-  });
 })();
 </script>
 @endpush
