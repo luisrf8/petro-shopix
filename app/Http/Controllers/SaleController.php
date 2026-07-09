@@ -2076,7 +2076,7 @@ class SaleController extends Controller
                 }
             }
 
-            $assets = $this->ensureAssociatedPdfAssets($order);
+            $assets = $this->ensureAssociatedPdfAssets($order, false);
             $filePath = $type === 'delivery' ? $assets['delivery_path'] : $assets['invoice_path'];
 
             if (!is_file($filePath)) {
@@ -2103,7 +2103,7 @@ class SaleController extends Controller
         }
     }
 
-    private function ensureAssociatedPdfAssets(SalesOrder $order): array
+    private function ensureAssociatedPdfAssets(SalesOrder $order, bool $generateMissing = true): array
     {
         $invoiceRelative = 'orders/factura-' . $order->id . '.pdf';
         $deliveryRelative = 'orders/' . $this->resolveInternalDispatchFilename((int) $order->id);
@@ -2113,7 +2113,7 @@ class SaleController extends Controller
             $deliveryRelative = $legacyDeliveryRelative;
         }
 
-        if (!Storage::disk('public')->exists($invoiceRelative) || !Storage::disk('public')->exists($deliveryRelative)) {
+        if ($generateMissing && (!Storage::disk('public')->exists($invoiceRelative) || !Storage::disk('public')->exists($deliveryRelative))) {
             $this->generateAssociatedPdfAssets($order);
             if (!Storage::disk('public')->exists($deliveryRelative) && Storage::disk('public')->exists($legacyDeliveryRelative)) {
                 $deliveryRelative = $legacyDeliveryRelative;
