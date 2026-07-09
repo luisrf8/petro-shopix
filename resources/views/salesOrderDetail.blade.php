@@ -101,8 +101,25 @@
         ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'tienda') . ', sobre la orden #' . $order->id . '.')
         : null;
       $publicDeliveryPdfUrl = route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) . '?disposition=inline';
+      $orderProductsSummary = $order->details
+        ->map(function ($detail) {
+          $productName = trim((string) ($detail->variant->product->name ?? 'Producto'));
+          $quantity = (float) ($detail->quantity ?? 0);
+          if ($quantity <= 0) {
+            $quantity = 1;
+          }
+
+          return $productName . ' x' . rtrim(rtrim(number_format($quantity, 2, '.', ''), '0'), '.');
+        })
+        ->filter(fn ($line) => $line !== '')
+        ->implode(', ');
+      if ($orderProductsSummary === '') {
+        $orderProductsSummary = 'Productos no especificados';
+      }
+      $orderDateText = trim((string) ($order->date ?? 'sin fecha registrada'));
+      $tenantNameForMessage = trim((string) ($order->tenant->name ?? 'la tienda'));
       $customerWhatsappUrl = $customerPhone !== ''
-        ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', te compartimos la orden de entrega #' . $order->id . ': ' . $publicDeliveryPdfUrl)
+        ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', te saludamos de parte de ' . $tenantNameForMessage . '. Te compartimos la orden de entrega número #' . $order->id . '. Productos comprados: ' . $orderProductsSummary . '. Fecha de compra: ' . $orderDateText . '. PDF de la orden: ' . $publicDeliveryPdfUrl)
         : null;
       $customerCallUrl = $customerPhone !== '' ? 'tel:' . $customerPhone : null;
       $deliveryTypeLabel = strtolower(trim((string) ($order->preference ?? '')));
