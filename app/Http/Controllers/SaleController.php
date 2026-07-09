@@ -2057,17 +2057,43 @@ class SaleController extends Controller
         $emissionCurrencyCode = $this->resolveEmissionCurrencyCode((string) $request->query('currency_code', ''), $orderCurrencyCode);
 
         if ($request->has('currency_code')) {
-            return $this->downloadRenderedPdfByCurrency($request, $order, $type, $emissionCurrencyCode);
+            try {
+                return $this->downloadRenderedPdfByCurrency($request, $order, $type, $emissionCurrencyCode);
+            } catch (\Throwable $exception) {
+                Log::warning('Fallo al renderizar PDF por moneda; se usa PDF almacenado.', [
+                    'order_id' => (int) $order->id,
+                    'tenant_id' => (int) ($order->tenant_id ?? 0),
+                    'pdf_type' => (string) $type,
+                    'requested_currency_code' => (string) $request->query('currency_code', ''),
+                    'error' => $exception->getMessage(),
+                ]);
+            }
         }
 
-        $assets = $this->ensureAssociatedPdfAssets($order);
-        $filePath = $type === 'delivery' ? $assets['delivery_path'] : $assets['invoice_path'];
-        $fileName = basename($filePath);
+        try {
+            $assets = $this->ensureAssociatedPdfAssets($order);
+            $filePath = $type === 'delivery' ? $assets['delivery_path'] : $assets['invoice_path'];
 
-        return response()->file($filePath, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $fileName, (string) $request->query('disposition', 'attachment')),
-        ]);
+            if (!is_file($filePath)) {
+                throw new \RuntimeException('No se encontro el archivo PDF generado para la orden.');
+            }
+
+            $fileName = basename($filePath);
+
+            return response()->file($filePath, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $fileName, (string) $request->query('disposition', 'attachment')),
+            ]);
+        } catch (\Throwable $exception) {
+            Log::error('No se pudo entregar el PDF de la orden.', [
+                'order_id' => (int) $order->id,
+                'tenant_id' => (int) ($order->tenant_id ?? 0),
+                'pdf_type' => (string) $type,
+                'error' => $exception->getMessage(),
+            ]);
+
+            abort(422, 'No se pudo generar el PDF de la orden en este momento. Intenta nuevamente.');
+        }
     }
 
     private function ensureAssociatedPdfAssets(SalesOrder $order): array
