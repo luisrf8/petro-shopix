@@ -2076,7 +2076,7 @@ class SaleController extends Controller
                 }
             }
 
-            $assets = $this->ensureAssociatedPdfAssets($order, false);
+            $assets = $this->ensureAssociatedPdfAssets($order, true, $type);
             $filePath = $type === 'delivery' ? $assets['delivery_path'] : $assets['invoice_path'];
 
             if (!is_file($filePath)) {
@@ -2103,7 +2103,7 @@ class SaleController extends Controller
         }
     }
 
-    private function ensureAssociatedPdfAssets(SalesOrder $order, bool $generateMissing = true): array
+    private function ensureAssociatedPdfAssets(SalesOrder $order, bool $generateMissing = true, string $requestedType = 'delivery'): array
     {
         $invoiceRelative = 'orders/factura-' . $order->id . '.pdf';
         $deliveryRelative = 'orders/' . $this->resolveInternalDispatchFilename((int) $order->id);
@@ -2113,8 +2113,14 @@ class SaleController extends Controller
             $deliveryRelative = $legacyDeliveryRelative;
         }
 
-        if ($generateMissing && (!Storage::disk('public')->exists($invoiceRelative) || !Storage::disk('public')->exists($deliveryRelative))) {
-            $this->generateAssociatedPdfAssets($order);
+        $deliveryExists = Storage::disk('public')->exists($deliveryRelative);
+        $invoiceExists = Storage::disk('public')->exists($invoiceRelative);
+        $shouldGenerateForRequestedType = $requestedType === 'delivery'
+            ? !$deliveryExists
+            : (!$invoiceExists || !$deliveryExists);
+
+        if ($generateMissing && $shouldGenerateForRequestedType) {
+            $this->generateAssociatedPdfAssets($order, $requestedType === 'delivery');
             if (!Storage::disk('public')->exists($deliveryRelative) && Storage::disk('public')->exists($legacyDeliveryRelative)) {
                 $deliveryRelative = $legacyDeliveryRelative;
             }
@@ -2128,7 +2134,7 @@ class SaleController extends Controller
         ];
     }
 
-    private function generateAssociatedPdfAssets(SalesOrder $order): array
+    private function generateAssociatedPdfAssets(SalesOrder $order, bool $deliveryOnly = false): array
     {
         $order->loadMissing(['details.taxes', 'details.variant.product', 'payments.payment', 'tenant']);
         $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
@@ -2172,7 +2178,7 @@ class SaleController extends Controller
         $invoiceRelative = 'orders/factura-' . $order->id . '.pdf';
         $deliveryRelative = 'orders/' . $this->resolveInternalDispatchFilename((int) $order->id);
 
-        if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
+        if (!$deliveryOnly && ($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
             $invoiceHtml = view('fiscalOrderPdf', compact(
                 'order',
                 'totalOrden',
@@ -2200,6 +2206,9 @@ class SaleController extends Controller
 
     private function renderPdfOutput(string $html): string
     {
+        @ini_set('max_execution_time', '120');
+        @set_time_limit(120);
+
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isPhpEnabled', true);
