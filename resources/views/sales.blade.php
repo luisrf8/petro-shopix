@@ -4226,13 +4226,16 @@ function updateQuantity(id, newQty) {
         body: formData
     })
         .then(async response => {
-            const payload = await response.json().catch(() => ({}));
+            const payload = await response.clone().json().catch(() => null);
+            const rawBody = await response.text().catch(() => '');
 
             if (response.ok) {
-                return payload;
+                return payload || {};
             }
 
-            throw new Error(payload.message || payload.error || 'Error al confirmar la compra.');
+            const serverMessage = payload?.message || payload?.error || String(rawBody || '').trim();
+            const fallbackMessage = `Error al confirmar la compra (HTTP ${response.status}).`;
+            throw new Error(serverMessage || fallbackMessage);
         })
         .then(data => {
             let successMessage = data.message || 'Compra confirmada con éxito.';

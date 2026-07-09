@@ -7,6 +7,7 @@ use Google\Service\Drive;
 use Google\Service\Drive\DriveFile;
 use Google\Service\Drive\Permission;
 use Google\Service\Exception as GoogleServiceException;
+use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -350,7 +351,7 @@ class ImageStorage
         }
     }
 
-    public static function downloadGoogleFileById(string $fileId): array
+    public static function downloadGoogleFileById(string $fileId, ?int $timeoutSeconds = null): array
     {
         $fileId = self::extractGoogleFileId(trim($fileId));
         if ($fileId === '') {
@@ -358,6 +359,14 @@ class ImageStorage
         }
 
         $service = self::buildDriveService();
+        if (is_int($timeoutSeconds) && $timeoutSeconds > 0) {
+            $safeTimeout = max(2, min(20, $timeoutSeconds));
+            $service->getClient()->setHttpClient(new GuzzleClient([
+                'timeout' => $safeTimeout,
+                'connect_timeout' => min(5, $safeTimeout),
+            ]));
+        }
+
         $metadata = $service->files->get($fileId, [
             'fields' => 'id,name,mimeType',
             'supportsAllDrives' => true,

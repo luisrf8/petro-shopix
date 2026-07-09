@@ -617,54 +617,106 @@ class SaleController extends Controller
             'salesRepresentative'
         ])->findOrFail($salesOrder->id);
 
-        $this->syncSellerCommissionForOrder($order);
+        try {
+            $this->syncSellerCommissionForOrder($order);
+        } catch (\Throwable $exception) {
+            Log::warning('No se pudo sincronizar comision del vendedor para la venta.', [
+                'order_id' => (int) $order->id,
+                'tenant_id' => (int) $order->tenant_id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
 
         $creatorName = trim((string) (auth()->user()->name ?? ''));
         $salesRepresentativeName = trim((string) ($order->salesRepresentative->name ?? ''));
         $createdByLabel = $creatorName !== '' ? $creatorName : ($salesRepresentativeName !== '' ? $salesRepresentativeName : 'usuario interno');
 
-        WorkflowNotifier::notifyTenantRoles((int) $order->tenant_id, ['owner', 'administrador', 'admin', 'vendedor'], [
-            'title' => 'Nueva venta registrada',
-            'message' => 'Se registró la venta #' . $order->id . ' desde la vista administrativa por ' . $createdByLabel . '.',
-            'type' => 'sale-created',
-            'tenant_id' => $order->tenant_id,
-            'order_id' => $order->id,
-            'action' => 'sale_created_from_admin',
-            'meta' => [
-                'source' => 'admin_sales_view',
-                'creator_name' => $creatorName,
-                'sales_representative_name' => $salesRepresentativeName,
-            ],
-        ]);
+        try {
+            WorkflowNotifier::notifyTenantRoles((int) $order->tenant_id, ['owner', 'administrador', 'admin', 'vendedor'], [
+                'title' => 'Nueva venta registrada',
+                'message' => 'Se registró la venta #' . $order->id . ' desde la vista administrativa por ' . $createdByLabel . '.',
+                'type' => 'sale-created',
+                'tenant_id' => $order->tenant_id,
+                'order_id' => $order->id,
+                'action' => 'sale_created_from_admin',
+                'meta' => [
+                    'source' => 'admin_sales_view',
+                    'creator_name' => $creatorName,
+                    'sales_representative_name' => $salesRepresentativeName,
+                ],
+            ]);
+        } catch (\Throwable $exception) {
+            Log::warning('No se pudo despachar notificaciones de venta interna.', [
+                'order_id' => (int) $order->id,
+                'tenant_id' => (int) $order->tenant_id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
 
         if ($markSaleCompleted) {
-            $this->attemptElectronicEmission($order);
+            try {
+                $this->attemptElectronicEmission($order);
+            } catch (\Throwable $exception) {
+                Log::warning('No se pudo emitir documento electronico al completar la venta.', [
+                    'order_id' => (int) $order->id,
+                    'tenant_id' => (int) $order->tenant_id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
         }
 
     // =====================================
     //   GENERAR PDF SI HAY PAGOS APROBADOS
     // =====================================
         if ($approvedPayments->isNotEmpty()) {
-            $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
+            try {
+                $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
 
-            // Totales
-            $totalOrden = (float) $order->gross_total;
-            $totalTaxes = $order->details->flatMap->taxes->sum('tax_amount');
-            $totalPagado = $order->payments->sum('amount');
-            $totalGeneral = $totalOrden + $totalTaxes;
-            // Generar QR
-            $qrUrl = url('/publicOrder/' . $order->id);
-            $qrCode = QrCode::create($qrUrl)
-                ->setEncoding(new Encoding('UTF-8'))
-                ->setSize(250)
-                ->setMargin(10);
+                // Totales
+                $totalOrden = (float) $order->gross_total;
+                $totalTaxes = $order->details->flatMap->taxes->sum('tax_amount');
+                $totalPagado = $order->payments->sum('amount');
+                $totalGeneral = $totalOrden + $totalTaxes;
+                // Generar QR
+                $qrUrl = url('/publicOrder/' . $order->id);
+                $qrCode = QrCode::create($qrUrl)
+                    ->setEncoding(new Encoding('UTF-8'))
+                    ->setSize(250)
+                    ->setMargin(10);
 
-            $writer = new PngWriter();
-            $qrCodeImage = $writer->write($qrCode);
-            $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
-            $pdfUrl = null;
-            if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
-                $pdfContent = view('fiscalOrderPdf', compact(
+                $writer = new PngWriter();
+                $qrCodeImage = $writer->write($qrCode);
+                $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
+                $pdfUrl = null;
+                if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
+                    $pdfContent = view('fiscalOrderPdf', compact(
+                        'order',
+                        'totalOrden',
+                        'totalTaxes',
+                        'totalGeneral',
+                        'totalPagado',
+                        'imageBase64',
+                        'qrCodeBase64',
+                        'dollarRate'
+                    ))->render();
+
+                    $options = new Options();
+                    $options->set('isHtml5ParserEnabled', true);
+                    $options->set('isPhpEnabled', true);
+
+                    $dompdf = new Dompdf($options);
+                    $dompdf->loadHtml($pdfContent);
+                    $dompdf->setPaper('A4', 'portrait');
+                    $dompdf->render();
+
+                    $fileName = 'factura-' . $order->id . '.pdf';
+                    Storage::disk('public')->put('orders/' . $fileName, $dompdf->output());
+                    $pdfUrl = asset('storage/orders/' . $fileName);
+                }
+
+
+                //ORDEN DE ENTREGA PDF
+                $pdfContentNota = view('orderPdf', compact(
                     'order',
                     'totalOrden',
                     'totalTaxes',
@@ -672,61 +724,60 @@ class SaleController extends Controller
                     'totalPagado',
                     'imageBase64',
                     'qrCodeBase64',
-                    'dollarRate'
+                    'dollarRate',
+                    'tienda'
                 ))->render();
 
-                $options = new Options();
-                $options->set('isHtml5ParserEnabled', true);
-                $options->set('isPhpEnabled', true);
+                $optionsNota = new Options();
+                $optionsNota->set('isHtml5ParserEnabled', true);
+                $optionsNota->set('isPhpEnabled', true);
 
-                $dompdf = new Dompdf($options);
-                $dompdf->loadHtml($pdfContent);
-                $dompdf->setPaper('A4', 'portrait');
-                $dompdf->render();
+                $dompdfNota = new Dompdf($optionsNota);
+                $dompdfNota->loadHtml($pdfContentNota);
+                $dompdfNota->setPaper('A4', 'portrait');
+                $dompdfNota->render();
 
-                $fileName = 'factura-' . $order->id . '.pdf';
-                Storage::disk('public')->put('orders/' . $fileName, $dompdf->output());
-                $pdfUrl = asset('storage/orders/' . $fileName);
+                // $fileName = 'orden-' . $order->id . '.pdf';
+                $fileNameNota = $this->resolveInternalDispatchFilename((int) $order->id);
+                Storage::disk('public')->put('orders/' . $fileNameNota, $dompdfNota->output());
+                $pdfUrlNota = asset('storage/orders/' . $fileNameNota);
+            } catch (\Throwable $exception) {
+                Log::warning('No se pudieron generar los PDF de la venta.', [
+                    'order_id' => (int) $order->id,
+                    'tenant_id' => (int) $order->tenant_id,
+                    'error' => $exception->getMessage(),
+                ]);
+                $pdfUrl = null;
+                $pdfUrlNota = null;
             }
-            
-
-            //ORDEN DE ENTREGA PDF
-            $pdfContentNota = view('orderPdf', compact(
-                'order',
-                'totalOrden',
-                'totalTaxes',
-                'totalGeneral',
-                'totalPagado',
-                'imageBase64',
-                'qrCodeBase64',
-                'dollarRate',
-                'tienda'
-            ))->render();
-
-            $optionsNota = new Options();
-            $optionsNota->set('isHtml5ParserEnabled', true);
-            $optionsNota->set('isPhpEnabled', true);
-
-            $dompdfNota = new Dompdf($optionsNota);
-            $dompdfNota->loadHtml($pdfContentNota);
-            $dompdfNota->setPaper('A4', 'portrait');
-            $dompdfNota->render();
-
-            // $fileName = 'orden-' . $order->id . '.pdf';
-            $fileNameNota = $this->resolveInternalDispatchFilename((int) $order->id);
-            Storage::disk('public')->put('orders/' . $fileNameNota, $dompdfNota->output());
-            $pdfUrlNota = asset('storage/orders/' . $fileNameNota);
         } else {
             $pdfUrl = null;
             $pdfUrlNota = null;
         }
 
         if ($deliveryType === 'delivery' && $markSaleCompleted) {
-            $this->notifyDeliveryTeamIfEnabled($tienda, $salesOrder, 'Pedido listo para despacho desde venta interna.');
+            try {
+                $this->notifyDeliveryTeamIfEnabled($tienda, $salesOrder, 'Pedido listo para despacho desde venta interna.');
+            } catch (\Throwable $exception) {
+                Log::warning('No se pudo notificar al equipo de delivery para la venta.', [
+                    'order_id' => (int) $salesOrder->id,
+                    'tenant_id' => (int) $salesOrder->tenant_id,
+                    'error' => $exception->getMessage(),
+                ]);
+            }
         }
 
-        $order->loadMissing('electronicDocuments');
-        $hkaDispatchGuide = $this->resolveLatestDispatchGuideDocument($order);
+        try {
+            $order->loadMissing('electronicDocuments');
+            $hkaDispatchGuide = $this->resolveLatestDispatchGuideDocument($order);
+        } catch (\Throwable $exception) {
+            Log::warning('No se pudo resolver la guia de despacho HKA de la venta.', [
+                'order_id' => (int) $order->id,
+                'tenant_id' => (int) $order->tenant_id,
+                'error' => $exception->getMessage(),
+            ]);
+            $hkaDispatchGuide = null;
+        }
 
         return response()->json([
             'message' => $approvedPayments->isNotEmpty()
@@ -3345,11 +3396,11 @@ class SaleController extends Controller
             if (ImageStorage::isGooglePath($logoPath)) {
                 $googleFileId = ImageStorage::extractGoogleFileId($logoPath);
                 if ($googleFileId !== '') {
-                    $file = ImageStorage::downloadGoogleFileById($googleFileId);
+                    $file = ImageStorage::downloadGoogleFileById($googleFileId, 5);
                     $content = (string) ($file['content'] ?? '');
                     $mime = trim((string) ($file['mime_type'] ?? 'image/png'));
 
-                    if ($content !== '') {
+                    if ($content !== '' && $this->isSupportedBillingLogoMime($mime)) {
                         return 'data:' . ($mime !== '' ? $mime : 'image/png') . ';base64,' . base64_encode($content);
                     }
                 }
@@ -3359,7 +3410,7 @@ class SaleController extends Controller
                 $content = Storage::disk('public')->get($logoPath);
                 $mime = (string) (Storage::disk('public')->mimeType($logoPath) ?: 'image/png');
 
-                if ($content !== '') {
+                if ($content !== '' && $this->isSupportedBillingLogoMime($mime)) {
                     return 'data:' . $mime . ';base64,' . base64_encode($content);
                 }
             }
@@ -3392,8 +3443,25 @@ class SaleController extends Controller
         }
 
         $mime = @mime_content_type($path) ?: 'image/png';
+        if (!$this->isSupportedBillingLogoMime($mime)) {
+            return null;
+        }
 
         return 'data:' . $mime . ';base64,' . base64_encode($content);
+    }
+
+    private function isSupportedBillingLogoMime(string $mime): bool
+    {
+        $normalized = Str::lower(trim($mime));
+
+        return in_array($normalized, [
+            'image/png',
+            'image/jpg',
+            'image/jpeg',
+            'image/svg+xml',
+            'text/svg',
+            'image/webp',
+        ], true);
     }
 
     private function validateShippingCityAgainstTenant(Tenant $tenant, int $deliveryCityId): array
