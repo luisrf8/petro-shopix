@@ -2029,48 +2029,53 @@ class SaleController extends Controller
 
     public function downloadStoredPdf(Request $request, int $id, string $type)
     {
-        $order = SalesOrder::with(['user', 'details', 'details.variant.product', 'details.taxes', 'payments.payment'])->findOrFail($id);
-        $authUser = auth()->user();
-        $isWarehouseOnly = ($authUser?->hasStoreRole('warehouse') ?? false)
-            && !($authUser?->hasStoreRole('owner', 'admin', 'seller') ?? false);
-
-        if ($request->routeIs('public.order.pdf')
-            && $type === 'invoice'
-            && !(bool) ($order->tenant?->electronic_invoicing_enabled ?? false)
-        ) {
-            abort(404);
-        }
-
-        if ($isWarehouseOnly && $type === 'invoice') {
-            abort(403, 'El rol Almacenista solo puede descargar la orden de entrega.');
-        }
-
-        if ($type === 'invoice' && ($order->document_issue_mode ?? 'delivery_note') === 'electronic_invoice') {
-            return $this->downloadElectronicInvoicePdf(
-                $request,
-                $order,
-                (string) $request->query('disposition', 'attachment')
-            );
-        }
-
-        $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
-        $emissionCurrencyCode = $this->resolveEmissionCurrencyCode((string) $request->query('currency_code', ''), $orderCurrencyCode);
-
-        if ($request->has('currency_code')) {
-            try {
-                return $this->downloadRenderedPdfByCurrency($request, $order, $type, $emissionCurrencyCode);
-            } catch (\Throwable $exception) {
-                Log::warning('Fallo al renderizar PDF por moneda; se usa PDF almacenado.', [
-                    'order_id' => (int) $order->id,
-                    'tenant_id' => (int) ($order->tenant_id ?? 0),
-                    'pdf_type' => (string) $type,
-                    'requested_currency_code' => (string) $request->query('currency_code', ''),
-                    'error' => $exception->getMessage(),
-                ]);
-            }
-        }
-
         try {
+            $order = SalesOrder::with(['user', 'details', 'details.variant.product', 'details.taxes', 'payments.payment'])->findOrFail($id);
+            $authUser = auth()->user();
+            $isWarehouseOnly = ($authUser?->hasStoreRole('warehouse') ?? false)
+                && !($authUser?->hasStoreRole('owner', 'admin', 'seller') ?? false);
+
+            if ($request->routeIs('public.order.pdf')
+                && $type === 'invoice'
+                && !(bool) ($order->tenant?->electronic_invoicing_enabled ?? false)
+            ) {
+                abort(404);
+            }
+
+            if ($isWarehouseOnly && $type === 'invoice') {
+                abort(403, 'El rol Almacenista solo puede descargar la orden de entrega.');
+            }
+
+            if ($type === 'invoice' && ($order->document_issue_mode ?? 'delivery_note') === 'electronic_invoice') {
+                return $this->downloadElectronicInvoicePdf(
+                    $request,
+                    $order,
+                    (string) $request->query('disposition', 'attachment')
+                );
+            }
+
+            $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
+            $emissionCurrencyCode = $this->resolveEmissionCurrencyCode((string) $request->query('currency_code', ''), $orderCurrencyCode);
+
+            // If requested currency matches order currency, prefer cached/generated stored PDF.
+            $shouldRenderByCurrency = $request->has('currency_code') && $emissionCurrencyCode !== $orderCurrencyCode;
+
+            if ($shouldRenderByCurrency) {
+                try {
+                    return $this->downloadRenderedPdfByCurrency($request, $order, $type, $emissionCurrencyCode);
+                } catch (\Throwable $exception) {
+                    Log::warning('Fallo al renderizar PDF por moneda; se usa PDF almacenado.', [
+                        'order_id' => (int) $order->id,
+                        'tenant_id' => (int) ($order->tenant_id ?? 0),
+                        'pdf_type' => (string) $type,
+                        'requested_currency_code' => (string) $request->query('currency_code', ''),
+                        'resolved_currency_code' => (string) $emissionCurrencyCode,
+                        'order_currency_code' => (string) $orderCurrencyCode,
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            }
+
             $assets = $this->ensureAssociatedPdfAssets($order);
             $filePath = $type === 'delivery' ? $assets['delivery_path'] : $assets['invoice_path'];
 
@@ -2084,11 +2089,13 @@ class SaleController extends Controller
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $fileName, (string) $request->query('disposition', 'attachment')),
             ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+            throw $exception;
         } catch (\Throwable $exception) {
             Log::error('No se pudo entregar el PDF de la orden.', [
-                'order_id' => (int) $order->id,
-                'tenant_id' => (int) ($order->tenant_id ?? 0),
+                'order_id' => (int) $id,
                 'pdf_type' => (string) $type,
+                'requested_currency_code' => (string) $request->query('currency_code', ''),
                 'error' => $exception->getMessage(),
             ]);
 
