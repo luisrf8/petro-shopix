@@ -1087,14 +1087,16 @@ class SaleController extends Controller
 
         $salesOrders = $salesOrdersQuery
             ->orderBy('id', 'desc')
-            ->get();
+            ->paginate(20)
+            ->withQueryString();
 
-        foreach ($salesOrders as $order) {
+        $salesOrders->setCollection($salesOrders->getCollection()->map(function (SalesOrder $order) {
             $order->total_items = $order->details->sum('quantity');
             $order->has_returns = $order->returns->isNotEmpty();
             $order->latest_electronic_document = $this->resolvePrimaryInvoiceDocument($order);
             $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
-        }
+            return $order;
+        }));
 
         $isWarehouse = $user?->hasStoreRole('warehouse') ?? false;
         $isDelivery = $user?->hasStoreRole('delivery') ?? false;
@@ -1103,7 +1105,7 @@ class SaleController extends Controller
         $pageTitle = 'VENTAS REALIZADAS';
         $isPendingDeliveryView = false;
         $pendingDispatchGuideAlert = ($tenant?->electronic_invoicing_enabled ?? false)
-            ? $this->buildPendingDispatchGuideAlertData($salesOrders, $tenant)
+            ? $this->buildPendingDispatchGuideAlertData($salesOrders->getCollection(), $tenant)
             : null;
     
         return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView', 'pendingDispatchGuideAlert'));
@@ -1168,14 +1170,16 @@ class SaleController extends Controller
                     });
             })
             ->orderBy('id', 'desc')
-            ->get();
+            ->paginate(20)
+            ->withQueryString();
 
-        foreach ($salesOrders as $order) {
+        $salesOrders->setCollection($salesOrders->getCollection()->map(function (SalesOrder $order) {
             $order->total_items = $order->details->sum('quantity');
             $order->has_returns = $order->returns->isNotEmpty();
             $order->latest_electronic_document = $this->resolvePrimaryInvoiceDocument($order);
             $order->has_annulled_invoice = (bool) optional($order->latest_electronic_document)->is_annulled;
-        }
+            return $order;
+        }));
 
         $isSeller = $user?->hasStoreRole('seller') ?? false;
         $isWarehouse = $user?->hasStoreRole('warehouse') ?? false;
@@ -1226,7 +1230,13 @@ class SaleController extends Controller
                 ->with('warning', 'El plan actual no permite usar la bandeja de entregas pendientes.');
         }
 
-        $salesOrders = SalesOrder::with(['user', 'details', 'payments', 'assignedDeliveryUser', 'retentions'])
+        $salesOrders = SalesOrder::with([
+                'user:id,name',
+                'details:id,sales_order_id,quantity,amount,product_variant_id',
+                'payments:id,sales_order_id,status,amount',
+                'assignedDeliveryUser:id,name',
+                'retentions:id,sales_order_id,retained_amount',
+            ])
             ->where('tenant_id', $user->tenant_id)
             ->where('deliver_status', 0)
             ->where('status', '!=', 2)
@@ -1329,7 +1339,7 @@ class SaleController extends Controller
         ])->filter(fn (array $tab) => (bool) $tab['canManage'])->values();
 
         $activeTab = (string) optional($visibleTabs->first())['key'];
-        $visibleOrders = $visibleTabs->flatMap(fn (array $tab) => $tab['orders'])->unique('id')->values();
+        $visibleOrders = collect([$pickupOrders, $deliveryOrders, $shippingOrders])->flatten(1);
         $ordersCount = (int) $visibleOrders->count();
         $totalPaidOrdersAmount = (float) $visibleOrders->sum('effective_paid_amount');
 

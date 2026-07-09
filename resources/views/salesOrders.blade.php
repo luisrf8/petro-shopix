@@ -30,6 +30,58 @@
     max-width: 100%;
   }
 
+  .page-loading-skeleton {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: none;
+    padding: 1rem;
+    background: rgba(248, 250, 252, 0.84);
+    backdrop-filter: blur(4px);
+  }
+
+  .page-loading-skeleton.is-visible {
+    display: block;
+  }
+
+  .sales-skeleton-shell {
+    margin-top: 1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: #fff;
+    padding: 1rem;
+  }
+
+  .sales-skeleton-row {
+    display: grid;
+    grid-template-columns: 70px 110px 120px 130px 140px 100px 90px 110px 110px 100px 120px 90px;
+    gap: 0.65rem;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  }
+
+  .sales-skeleton-row:last-child {
+    border-bottom: 0;
+  }
+
+  .skeleton-bar {
+    height: 12px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 37%, #eef2f7 63%);
+    background-size: 400% 100%;
+    animation: skeletonShimmer 1.3s ease infinite;
+  }
+
+  .skeleton-bar.short { width: 55%; }
+  .skeleton-bar.medium { width: 75%; }
+  .skeleton-bar.long { width: 95%; }
+
+  @keyframes skeletonShimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: 0 0; }
+  }
+
   #salesOrdersTable {
     min-width: 1080px;
   }
@@ -62,6 +114,17 @@
 
 @section('content')
     <div class="container-fluid py-2">
+      <div id="salesOrdersPageSkeleton" class="page-loading-skeleton" aria-hidden="true">
+        <div class="sales-skeleton-shell">
+          @for ($i = 0; $i < 8; $i++)
+            <div class="sales-skeleton-row">
+              @for ($j = 0; $j < 12; $j++)
+                <div class="skeleton-bar {{ $j % 3 === 0 ? 'short' : ($j % 3 === 1 ? 'medium' : 'long') }}"></div>
+              @endfor
+            </div>
+          @endfor
+        </div>
+      </div>
       <div class="row mt-4">
         <div class="col-12">
             <div class="card">
@@ -215,6 +278,11 @@
                     </tbody>
                   </table>
                 </div>
+                @if(method_exists($salesOrders, 'hasPages') && $salesOrders->hasPages())
+                  <div class="d-flex justify-content-center mt-4">
+                    {{ $salesOrders->links('pagination::bootstrap-5') }}
+                  </div>
+                @endif
               </div>
             </div>
         </div>
@@ -398,9 +466,40 @@
       clearBtn.addEventListener('click', clearFilters);
     }
 
+    const salesOrdersPageSkeleton = document.getElementById('salesOrdersPageSkeleton');
+    const salesOrdersPaginationKey = 'shopix-sales-orders-loading';
+
+    function setSalesOrdersSkeletonVisible(isVisible) {
+      if (!salesOrdersPageSkeleton) {
+        return;
+      }
+
+      salesOrdersPageSkeleton.classList.toggle('is-visible', isVisible);
+      salesOrdersPageSkeleton.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    }
+
+    document.addEventListener('click', (event) => {
+      const paginationLink = event.target.closest('.pagination a');
+      if (!paginationLink || paginationLink.classList.contains('disabled')) {
+        return;
+      }
+
+      sessionStorage.setItem(salesOrdersPaginationKey, '1');
+      setSalesOrdersSkeletonVisible(true);
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
+      if (sessionStorage.getItem(salesOrdersPaginationKey) === '1') {
+        setSalesOrdersSkeletonVisible(true);
+      }
+
       setupPendingDispatchGuideAlert();
       setupSalesOrdersFilters();
+    });
+
+    window.addEventListener('load', () => {
+      sessionStorage.removeItem(salesOrdersPaginationKey);
+      setSalesOrdersSkeletonVisible(false);
     });
 
     document.getElementById('createProductForm')?.addEventListener('submit', function(event) {

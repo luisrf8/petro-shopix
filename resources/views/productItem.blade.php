@@ -304,10 +304,13 @@
                         $effectivePrice = (float) $variant->price * ((100 - $productDiscount) / 100) * ((100 - $variantDiscount) / 100);
                         $variantImage = $variant->images->first();
                       @endphp
-                      <div class="border rounded p-3" data-existing-variant-row="{{ $variant->id }}">
+                      <div class="border rounded p-3 {{ !($variant->is_active ?? true) ? 'bg-light opacity-75' : '' }}" data-existing-variant-row="{{ $variant->id }}" data-variant-active="{{ ($variant->is_active ?? true) ? '1' : '0' }}">
                         <div class="row g-2 align-items-end">
                           <div class="col-lg-3 col-md-6">
-                            <label class="form-label">Variante</label>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                              <label class="form-label mb-0">Variante</label>
+                              <span class="badge {{ ($variant->is_active ?? true) ? 'bg-success' : 'bg-secondary' }}">{{ ($variant->is_active ?? true) ? 'Activa' : 'Inhabilitada' }}</span>
+                            </div>
                             <input type="text" class="form-control border" data-existing-size value="{{ $variant->size }}" {{ $productItemIsSellerRole ? 'readonly' : '' }}>
                           </div>
                           <div class="col-lg-2 col-md-6">
@@ -372,6 +375,7 @@
                               <button type="button" class="btn btn-outline-dark btn-sm open-existing-variant-ai-btn" data-variant-id="{{ $variant->id }}">IA imagen</button>
                               <button type="button" class="btn btn-dark btn-sm save-existing-variant-btn" data-variant-id="{{ $variant->id }}">Guardar variante</button>
                               <button type="button" class="btn btn-outline-secondary btn-sm generate-variant-codes-btn" data-variant-id="{{ $variant->id }}">Generar códigos</button>
+                              <button type="button" class="btn btn-outline-danger btn-sm delete-existing-variant-btn" data-variant-id="{{ $variant->id }}">Eliminar / inhabilitar</button>
                               <button type="button" class="btn btn-outline-secondary btn-sm open-qr-modal-btn" data-qr-title="QR variante {{ $variant->size }}" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="showVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Ver QR</button>
                               <button type="button" class="btn btn-outline-secondary btn-sm download-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="downloadVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Descargar QR</button>
                               <button type="button" class="btn btn-outline-secondary btn-sm print-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" id="printVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Imprimir QR</button>
@@ -1698,6 +1702,46 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Códigos de variante generados correctamente.');
       } catch (error) {
         alert(error.message || 'Error al generar códigos de variante.');
+      } finally {
+        this.disabled = false;
+        this.textContent = originalText;
+      }
+    });
+  });
+
+  document.querySelectorAll('.delete-existing-variant-btn').forEach((button) => {
+    button.addEventListener('click', async function () {
+      const variantId = this.getAttribute('data-variant-id');
+      if (!variantId) {
+        return;
+      }
+
+      if (!window.confirm('¿Eliminar esta variante? Si ya fue usada en ventas u otros procesos, se inhabilitará en lugar de borrarse.')) {
+        return;
+      }
+
+      const originalText = this.textContent;
+      this.disabled = true;
+      this.textContent = 'Procesando...';
+
+      try {
+        const response = await fetch(`/api/variants/${variantId}`, {
+          method: 'DELETE',
+          headers: {
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+          },
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || 'No se pudo eliminar la variante.');
+        }
+
+        alert(payload.message || 'Variante procesada correctamente.');
+        window.location.reload();
+      } catch (error) {
+        alert(error.message || 'No se pudo eliminar la variante.');
       } finally {
         this.disabled = false;
         this.textContent = originalText;

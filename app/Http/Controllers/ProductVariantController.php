@@ -8,6 +8,7 @@ use App\Support\AuditLogger;
 use App\Support\ImageStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use SimpleSoftwareIO\QrCode\Facades\QrCode as QrCodeGenerator;
 
@@ -228,10 +229,99 @@ class ProductVariantController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $productVariant->loadMissing('product');
+
+        if ((int) ($productVariant->product->tenant_id ?? 0) !== (int) (auth()->user()->tenant_id ?? 0)) {
+            return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
+        }
+
+        $protectionReasons = $this->variantProtectionReasons([(int) $productVariant->id]);
+        $hasStock = (float) ($productVariant->stock ?? 0) > 0;
+
+        if ($hasStock && !in_array('stock disponible', $protectionReasons, true)) {
+            $protectionReasons[] = 'stock disponible';
+        }
+
+        $mustInactivate = $hasStock || !empty($protectionReasons);
+
+        if ($mustInactivate) {
+            if ($productVariant->is_active !== false) {
+                $productVariant->is_active = false;
+                $productVariant->save();
+            }
+
+            $message = 'La variante tiene uso previo o stock y se ha inhabilitado en lugar de eliminarse.';
+
+            AuditLogger::logEvent(
+                'product_variants',
+                'VARIANT_INACTIVATED',
+                'Variante inhabilitada por dependencias',
+                (int) (auth()->id() ?? 0),
+                [
+                    'route_name' => (string) (request()->route()?->getName() ?? ''),
+                    'path' => '/' . trim((string) request()->path(), '/'),
+                    'method' => strtoupper((string) request()->method()),
+                    'old' => [
+                        'variant_id' => (int) $productVariant->id,
+                        'product_id' => (int) $productVariant->product_id,
+                        'is_active' => true,
+                    ],
+                    'new' => [
+                        'variant_id' => (int) $productVariant->id,
+                        'product_id' => (int) $productVariant->product_id,
+                        'is_active' => false,
+                        'reasons' => $protectionReasons,
+                    ],
+                ]
+            );
+
+            if (request()->expectsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'action' => 'inactivated',
+                    'message' => $message,
+                    'reasons' => $protectionReasons,
+                    'variant' => [
+                        'id' => (int) $productVariant->id,
+                        'is_active' => false,
+                    ],
+                ]);
+            }
+
+            return redirect()->route('productItem', $productVariant->product_id)
+                ->with('success', $message);
+        }
+
         $productVariant->delete();
 
-        return redirect()->route('products.show', $productVariant->product_id)
-                         ->with('success', 'Variante eliminada exitosamente.');
+        AuditLogger::logEvent(
+            'product_variants',
+            'VARIANT_DELETED',
+            'Variante eliminada',
+            (int) (auth()->id() ?? 0),
+            [
+                'route_name' => (string) (request()->route()?->getName() ?? ''),
+                'path' => '/' . trim((string) request()->path(), '/'),
+                'method' => strtoupper((string) request()->method()),
+                'old' => [
+                    'variant_id' => (int) $productVariant->id,
+                    'product_id' => (int) $productVariant->product_id,
+                    'is_active' => (bool) ($productVariant->is_active ?? true),
+                ],
+                'new' => null,
+            ]
+        );
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'action' => 'deleted',
+                'message' => 'Variante eliminada exitosamente.',
+            ]);
+        }
+
+        return redirect()->route('productItem', $productVariant->product_id)
+            ->with('success', 'Variante eliminada exitosamente.');
     }
 
     public function generateCodes(ProductVariant $productVariant)
@@ -332,6 +422,94 @@ class ProductVariantController extends Controller
                 ], 422)
             );
         }
+    }
+
+    private function variantProtectionReasons(array $variantIds): array
+    {
+        if (empty($variantIds)) {
+            return [];
+        }
+
+        $relationRules = [
+            [
+                'table' => 'sales_order_details',
+                'column' => 'product_variant_id',
+                'label' => 'ventas',
+            ],
+            [
+                'table' => 'sales_return_items',
+                'column' => 'product_variant_id',
+                'label' => 'devoluciones de ventas',
+            ],
+            [
+                'table' => 'purchase_order_detail',
+                'column' => 'product_variant_id',
+                'label' => 'compras',
+            ],
+            [
+                'table' => 'purchase_order_details',
+                'column' => 'product_variant_id',
+                'label' => 'compras',
+            ],
+            [
+                'table' => 'purchase_order_consumptions',
+                'column' => 'consumed_variant_id',
+                'label' => 'consumos de producción',
+            ],
+            [
+                'table' => 'purchase_order_consumptions',
+                'column' => 'produced_variant_id',
+                'label' => 'producción interna',
+            ],
+            [
+                'table' => 'warehouse_movements',
+                'column' => 'product_variant_id',
+                'label' => 'movimientos de almacén',
+            ],
+            [
+                'table' => 'product_variant_warehouse_stocks',
+                'column' => 'product_variant_id',
+                'label' => 'stock por almacén',
+            ],
+            [
+                'table' => 'material_package_items',
+                'column' => 'product_variant_id',
+                'label' => 'listas de materiales',
+            ],
+            [
+                'table' => 'appointment_services',
+                'column' => 'product_variant_id',
+                'label' => 'servicios de citas',
+            ],
+            [
+                'table' => 'appointment_consumptions',
+                'column' => 'product_variant_id',
+                'label' => 'consumos de citas',
+            ],
+            [
+                'table' => 'project_quotation_items',
+                'column' => 'product_variant_id',
+                'label' => 'cotizaciones de proyectos',
+            ],
+        ];
+
+        $reasons = [];
+
+        foreach ($relationRules as $rule) {
+            $table = (string) $rule['table'];
+            $column = (string) $rule['column'];
+            $label = (string) $rule['label'];
+
+            if (!Schema::hasTable($table) || !Schema::hasColumn($table, $column)) {
+                continue;
+            }
+
+            if (DB::table($table)->whereIn($column, $variantIds)->exists()) {
+                $reasons[] = $label;
+            }
+        }
+
+        return array_values(array_unique($reasons));
     }
 }
 

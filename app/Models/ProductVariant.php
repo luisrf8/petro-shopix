@@ -43,6 +43,7 @@ class ProductVariant extends Model
         'unit_type',
         'quantity_input_mode',
         'min_sale_quantity',
+        'is_active',
     ];
 
     protected $casts = [
@@ -50,6 +51,7 @@ class ProductVariant extends Model
         'discount_percentage' => 'float',
         'stock' => 'float',
         'min_sale_quantity' => 'float',
+        'is_active' => 'bool',
     ];
 
     public static function normalizeUnitType(?string $value): string

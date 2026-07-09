@@ -4083,7 +4083,13 @@ function updateQuantity(id, newQty) {
                         const salePdfUrl = data.nota_entrega_pdf_url || data.pdf_url;
 
                         if (salePdfUrl) {
-                window.open(salePdfUrl, '_blank', 'noopener');
+                const salePdfLink = document.createElement('a');
+                salePdfLink.href = salePdfUrl;
+                salePdfLink.download = '';
+                salePdfLink.rel = 'noopener';
+                document.body.appendChild(salePdfLink);
+                salePdfLink.click();
+                document.body.removeChild(salePdfLink);
             }
 
             if (data.hka_dispatch_guide_download_url) {

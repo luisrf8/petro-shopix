@@ -46,6 +46,46 @@
     transition: box-shadow .25s ease;
   }
 
+  .tenant-delete-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(3px);
+  }
+
+  .tenant-delete-overlay.is-visible {
+    display: flex;
+  }
+
+  .tenant-delete-overlay-card {
+    min-width: min(92vw, 360px);
+    padding: 1.25rem 1.35rem;
+    border-radius: 1rem;
+    background: #ffffff;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
+    text-align: center;
+  }
+
+  .tenant-delete-overlay-spinner {
+    width: 2.75rem;
+    height: 2.75rem;
+    margin: 0 auto 0.8rem;
+    border-radius: 50%;
+    border: 4px solid rgba(15, 23, 42, 0.12);
+    border-top-color: #0f172a;
+    animation: tenantDeleteSpin 0.8s linear infinite;
+  }
+
+  @keyframes tenantDeleteSpin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   .tenant-table-wrapper {
     overflow-x: auto;
     padding-bottom: 0.35rem;
@@ -489,11 +529,11 @@
                       <a href="{{ route('tenants.edit', $tenant) }}" class="btn btn-outline-dark btn-sm mb-0">Editar</a>
                     </td>
                     <td class="tenant-actions-cell tenant-actions-cell--delete">
-                      <a href="javascript:;" 
-                         class="text-danger font-weight-bold text-xs btn-delete-tenant"
+                      <button type="button"
+                         class="btn btn-link text-danger font-weight-bold text-xs p-0 btn-delete-tenant"
                          data-id="{{ $tenant->id }}">
                         Eliminar
-                      </a>
+                      </button>
                     </td>
                   </tr>
                 @endforeach
@@ -505,15 +545,51 @@
     </div>
   </div>
 
+  <div id="tenantDeleteOverlay" class="tenant-delete-overlay" aria-hidden="true">
+    <div class="tenant-delete-overlay-card">
+      <div class="tenant-delete-overlay-spinner" role="status" aria-label="Eliminando tienda"></div>
+      <h6 class="mb-2">Eliminando tienda</h6>
+      <p class="mb-0 text-muted">Procesando dependencias y limpieza de registros. No cierres esta pantalla.</p>
+    </div>
+  </div>
+
 </div>
 @endsection
 
 @push('scripts')
 <script>
+  const tenantDeleteOverlay = document.getElementById('tenantDeleteOverlay');
+  const tenantDeleteButtons = Array.from(document.querySelectorAll('.btn-delete-tenant'));
+
+  function setTenantDeleteLoading(isLoading, sourceButton = null) {
+    if (tenantDeleteOverlay) {
+      tenantDeleteOverlay.classList.toggle('is-visible', isLoading);
+      tenantDeleteOverlay.setAttribute('aria-hidden', isLoading ? 'false' : 'true');
+    }
+
+    tenantDeleteButtons.forEach((button) => {
+      button.disabled = isLoading;
+      if (!sourceButton || button !== sourceButton) {
+        button.style.pointerEvents = isLoading ? 'none' : '';
+        button.style.opacity = isLoading ? '0.6' : '';
+      }
+    });
+  }
+
   // Eliminar Tenant
-  document.querySelectorAll('.btn-delete-tenant').forEach(button => {
+  tenantDeleteButtons.forEach(button => {
     button.addEventListener('click', function () {
       const tenantId = this.dataset.id;
+      if (!tenantId) return;
+
+      if (!window.confirm('¿Eliminar esta tienda? Si tiene datos asociados, el proceso puede tardar unos segundos.')) {
+        return;
+      }
+
+      const originalText = this.textContent;
+      this.textContent = 'Eliminando...';
+      setTenantDeleteLoading(true, this);
+
       fetch(`/api/tenants/${tenantId}`, {
         method: 'DELETE',
         headers: {
@@ -535,6 +611,10 @@
       .catch(error => {
         console.error('Error:', error);
         alert(error.message || 'Ocurrió un error al eliminar la tienda');
+      })
+      .finally(() => {
+        setTenantDeleteLoading(false);
+        this.textContent = originalText;
       });
     });
   });

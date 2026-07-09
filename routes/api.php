@@ -82,6 +82,7 @@ Route::get('/products/report', [ProductController::class, 'generateReport']);
 
 Route::post('/variants/store', [ProductVariantController::class, 'store'])->name('variants.store');
 Route::put('/variants/{productVariant}', [ProductVariantController::class, 'update'])->name('variants.update');
+Route::delete('/variants/{productVariant}', [ProductVariantController::class, 'destroy'])->name('variants.destroy');
 Route::put('/variants/{productVariant}/barcode', [ProductVariantController::class, 'updateBarcode'])->name('variants.updateBarcode');
 Route::post('/variants/{productVariant}/generate-codes', [ProductVariantController::class, 'generateCodes'])->name('variants.generateCodes');
 

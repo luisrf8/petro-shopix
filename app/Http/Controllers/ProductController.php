@@ -42,20 +42,17 @@ class ProductController extends Controller
         $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
         $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
 
-        $categories = Category::with(['products' => function ($query) use ($user) {
-                $query->where('is_active', true)
-                    ->where('tenant_id', $user->tenant_id)
-                    ->with(['variants']);
-            }])
+        $categories = Category::query()
             ->where('is_active', true)
-            ->where('tenant_id', $user->tenant_id) // 👈 aquí filtras las categorías
+            ->where('tenant_id', $user->tenant_id)
             ->get();
         $taxes = $this->allowedProductTaxes();
 
         $productItems = Product::with(['category', 'images', 'variants.images'])
             ->where('tenant_id', $user->tenant_id)
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->paginate(24)
+            ->withQueryString();
         return view('products', compact('categories', 'productItems', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs'));
     }
 
@@ -125,7 +122,8 @@ class ProductController extends Controller
         ->get();
         $productItems = Product::where('category_id', $category->id)
         ->orderBy('created_at', 'desc')
-        ->get();
+        ->paginate(24)
+        ->withQueryString();
         $taxes = $this->allowedProductTaxes();
     
         return view('products', compact('productItems', 'category', 'categories', 'taxes', 'baseCurrencyCode', 'baseCurrencySymbol', 'baseRateToBs'));

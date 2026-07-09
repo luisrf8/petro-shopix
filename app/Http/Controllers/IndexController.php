@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Warehouse;
+use App\Models\Provider;
 use Illuminate\Http\Request;
 use App\Models\ProductInventory;
 use App\Models\Category;
@@ -55,7 +56,11 @@ class IndexController extends Controller
             $category->icon = $icons[$category->name] ?? 'bi bi-tag'; // icono por defecto
         }
     
-        $productItems = Product::with(['category', 'images', 'variants'])
+        $productItems = Product::with([
+                'category:id,name',
+                'images:id,product_id,path',
+                'variants:id,product_id,size,price,stock,discount_percentage,qr_code,barcode,is_active',
+            ])
             ->orderBy('created_at', 'desc')
             ->take(3)
             ->get();
@@ -853,10 +858,9 @@ class IndexController extends Controller
     {
         $warehouses = Warehouse::all();
         $productInventories = ProductInventory::all();
-        $productItems = Product::all();
-        $providers = Provider::all();
-        $warehouses = Warehouse::all();
-        return view('productWarehouse', compact('warehouses', 'productInventories', 'productItems', 'providers', 'warehouses')); // Asegúrate de tener una vista para mostrar las almacens.
+        $productItems = Product::query()->select(['id', 'name', 'tenant_id', 'is_active'])->get();
+        $providers = Provider::query()->select(['id', 'name'])->get();
+        return view('productWarehouse', compact('warehouses', 'productInventories', 'productItems', 'providers')); // Asegúrate de tener una vista para mostrar las almacens.
     }
     public function getWarehouses()
     {
