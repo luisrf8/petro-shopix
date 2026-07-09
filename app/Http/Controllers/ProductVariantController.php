@@ -237,21 +237,16 @@ class ProductVariantController extends Controller
         }
 
         $protectionReasons = $this->variantProtectionReasons([(int) $productVariant->id]);
+        $hasUsageDependencies = !empty($protectionReasons);
         $hasStock = (float) ($productVariant->stock ?? 0) > 0;
 
-        if ($hasStock && !in_array('stock disponible', $protectionReasons, true)) {
-            $protectionReasons[] = 'stock disponible';
-        }
-
-        $mustInactivate = $hasStock || !empty($protectionReasons);
-
-        if ($mustInactivate) {
+        if ($hasUsageDependencies) {
             if ($productVariant->is_active !== false) {
                 $productVariant->is_active = false;
                 $productVariant->save();
             }
 
-            $message = 'La variante tiene uso previo o stock y se ha inhabilitado en lugar de eliminarse.';
+            $message = 'La variante tiene uso previo y se ha inhabilitado en lugar de eliminarse.';
 
             AuditLogger::logEvent(
                 'product_variants',
@@ -271,6 +266,7 @@ class ProductVariantController extends Controller
                         'variant_id' => (int) $productVariant->id,
                         'product_id' => (int) $productVariant->product_id,
                         'is_active' => false,
+                        'stock' => (float) ($productVariant->stock ?? 0),
                         'reasons' => $protectionReasons,
                     ],
                 ]
@@ -308,6 +304,7 @@ class ProductVariantController extends Controller
                     'variant_id' => (int) $productVariant->id,
                     'product_id' => (int) $productVariant->product_id,
                     'is_active' => (bool) ($productVariant->is_active ?? true),
+                    'stock' => (float) ($productVariant->stock ?? 0),
                 ],
                 'new' => null,
             ]
@@ -323,6 +320,62 @@ class ProductVariantController extends Controller
 
         return redirect()->route('productItem', $productVariant->product_id)
             ->with('success', 'Variante eliminada exitosamente.');
+    }
+
+    public function toggleStatus(ProductVariant $productVariant)
+    {
+        DB::raw("SET @user_id = " . auth()->id());
+
+        $productVariant->loadMissing('product');
+
+        if ((int) ($productVariant->product->tenant_id ?? 0) !== (int) (auth()->user()->tenant_id ?? 0)) {
+            return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
+        }
+
+        $previousStatus = (bool) $productVariant->is_active;
+        $productVariant->is_active = !$previousStatus;
+        $productVariant->save();
+
+        $message = $productVariant->is_active
+            ? 'Variante habilitada correctamente.'
+            : 'Variante inhabilitada correctamente.';
+
+        AuditLogger::logEvent(
+            'product_variants',
+            $productVariant->is_active ? 'VARIANT_ENABLED' : 'VARIANT_DISABLED',
+            $productVariant->is_active ? 'Variante habilitada' : 'Variante inhabilitada',
+            (int) (auth()->id() ?? 0),
+            [
+                'route_name' => (string) (request()->route()?->getName() ?? ''),
+                'path' => '/' . trim((string) request()->path(), '/'),
+                'method' => strtoupper((string) request()->method()),
+                'old' => [
+                    'variant_id' => (int) $productVariant->id,
+                    'product_id' => (int) $productVariant->product_id,
+                    'is_active' => $previousStatus,
+                ],
+                'new' => [
+                    'variant_id' => (int) $productVariant->id,
+                    'product_id' => (int) $productVariant->product_id,
+                    'is_active' => (bool) $productVariant->is_active,
+                ],
+            ]
+        );
+
+        if (request()->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'action' => $productVariant->is_active ? 'enabled' : 'disabled',
+                'message' => $message,
+                'variant' => [
+                    'id' => (int) $productVariant->id,
+                    'is_active' => (bool) $productVariant->is_active,
+                ],
+            ]);
+        }
+
+        return redirect()->route('productItem', $productVariant->product_id)
+            ->with('success', $message);
     }
 
     public function reassign(Request $request, ProductVariant $productVariant)

@@ -11,6 +11,26 @@
 
 @section('content')
     <style>
+      #variantReassignTargetProduct + .select2-container {
+        width: 100% !important;
+      }
+
+      #variantReassignTargetProduct + .select2-container .select2-selection--single {
+        min-height: calc(2.25rem + 2px);
+        border-color: #d2d6da;
+        border-radius: 0.5rem;
+      }
+
+      #variantReassignTargetProduct + .select2-container .select2-selection__rendered {
+        line-height: calc(2.25rem + 2px);
+        padding-left: 0.75rem;
+        color: #344767;
+      }
+
+      #variantReassignTargetProduct + .select2-container .select2-selection__arrow {
+        height: calc(2.25rem + 2px);
+      }
+
       .ai-chat-box {
         border: 1px solid #dee2e6;
         border-radius: .5rem;
@@ -377,6 +397,12 @@
                               <button type="button" class="btn btn-outline-secondary btn-sm generate-variant-codes-btn" data-variant-id="{{ $variant->id }}">Generar códigos</button>
                               <button
                                 type="button"
+                                class="btn btn-outline-secondary btn-sm toggle-variant-status-btn"
+                                data-variant-id="{{ $variant->id }}"
+                                data-variant-active="{{ $variant->is_active ? '1' : '0' }}"
+                              >{{ $variant->is_active ? 'Inhabilitar' : 'Habilitar' }}</button>
+                              <button
+                                type="button"
                                 class="btn btn-outline-danger btn-sm open-variant-management-btn"
                                 data-variant-id="{{ $variant->id }}"
                                 data-variant-size="{{ $variant->size }}"
@@ -544,7 +570,7 @@
                   </div>
                   <div class="modal-body">
                     <div class="alert alert-warning border mb-3">
-                      <strong>Eliminar definitivamente</strong> borra la variante de la base de datos sólo si no tiene dependencias ni stock. Si tiene uso previo, el sistema la inhabilitará.
+                      <strong>Eliminar definitivamente</strong> borra la variante de la base de datos si no tiene uso previo en ventas, compras, devoluciones u otros flujos. Si ya fue usada, el sistema la inhabilitará.
                     </div>
 
                     <div class="row g-3">
@@ -559,7 +585,7 @@
                         <div class="border rounded p-3 h-100">
                           <h6 class="mb-2">Reasignar a otro producto</h6>
                           <p class="text-sm text-muted mb-3">La variante se moverá al producto seleccionado y dejará de pertenecer al actual.</p>
-                          <select class="form-select mb-3" id="variantReassignTargetProduct">
+                          <select class="form-select mb-3" id="variantReassignTargetProduct" data-placeholder="Busca el producto">
                             <option value="">Selecciona un producto</option>
                             @foreach($reassignableProducts as $reassignableProduct)
                               <option value="{{ $reassignableProduct->id }}">
@@ -586,6 +612,8 @@
 @push('scripts')
 <script src="{{ asset('assets/js/core/popper.min.js') }}"></script>
 <script src="{{ asset('assets/js/core/bootstrap.min.js') }}"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <!-- Github buttons -->
 <script async defer src="https://buttons.github.io/buttons.js"></script>
 
@@ -615,6 +643,34 @@
       variantName: '',
       variantSize: '',
     };
+
+    function initializeVariantReassignSelect2() {
+      const selectElement = document.getElementById('variantReassignTargetProduct');
+      if (!selectElement || !window.jQuery || !window.jQuery.fn?.select2 || !variantManagementModalEl) {
+        return;
+      }
+
+      const $select = window.jQuery(selectElement);
+      if ($select.hasClass('select2-hidden-accessible')) {
+        return;
+      }
+
+      $select.select2({
+        width: '100%',
+        placeholder: selectElement.getAttribute('data-placeholder') || 'Busca el producto',
+        allowClear: true,
+        dropdownParent: window.jQuery(variantManagementModalEl),
+      });
+    }
+
+    function updateVariantStatusButton(button, isActive) {
+      if (!button) {
+        return;
+      }
+
+      button.setAttribute('data-variant-active', isActive ? '1' : '0');
+      button.textContent = isActive ? 'Inhabilitar' : 'Habilitar';
+    }
 
     function showProductToast(message, type = 'info') {
       let container = document.getElementById('shopixToastContainer');
@@ -1801,6 +1857,46 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('variantManagementModalSubtitle').textContent = variantName ? `Producto actual: ${variantName}` : 'Selecciona una acción para esta variante.';
       document.getElementById('variantReassignTargetProduct').value = '';
       variantManagementModalInstance.show();
+      initializeVariantReassignSelect2();
+    });
+  });
+
+  document.querySelectorAll('.toggle-variant-status-btn').forEach((button) => {
+    button.addEventListener('click', async function () {
+      const variantId = this.getAttribute('data-variant-id');
+
+      if (!variantId) {
+        return;
+      }
+
+      const originalText = this.textContent;
+      this.disabled = true;
+      this.textContent = 'Procesando...';
+
+      try {
+        const response = await fetch(`/api/variants/${variantId}/toggle-status`, {
+          method: 'POST',
+          headers: {
+            'X-CSRF-TOKEN': csrfToken,
+            'Accept': 'application/json',
+          },
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.message || 'No se pudo cambiar el estado de la variante.');
+        }
+
+        updateVariantStatusButton(this, !!payload?.variant?.is_active);
+        showProductToast(payload.message || 'Estado actualizado.', 'success');
+      } catch (error) {
+        alert(error.message || 'No se pudo cambiar el estado de la variante.');
+      } finally {
+        this.disabled = false;
+        if (this.textContent === 'Procesando...') {
+          this.textContent = originalText;
+        }
+      }
     });
   });
 
