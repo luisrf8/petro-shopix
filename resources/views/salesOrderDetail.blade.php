@@ -293,6 +293,16 @@
                 @if($customerWhatsappUrl)
                   <a href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0">Ir a WhatsApp del cliente</a>
                 @endif
+                @if($canApproveSale && $customerPhone !== '')
+                  <button
+                    type="button"
+                    id="sendDeliveryPdfWhatsappBtn"
+                    class="btn btn-success mb-0"
+                    data-url="{{ route('sales.orders.whatsapp.sendDeliveryPdf', ['order' => $order->id]) }}"
+                  >
+                    Enviar orden PDF por WhatsApp
+                  </button>
+                @endif
                 @if($customerCallUrl)
                   <a href="{{ $customerCallUrl }}" class="btn btn-outline-primary mb-0">Llamar al cliente</a>
                 @endif
@@ -3341,6 +3351,58 @@ if (returnForm) {
 
   currencySelect.addEventListener('change', syncDownloadUrls);
   syncDownloadUrls();
+})();
+
+(() => {
+  const sendBtn = document.getElementById('sendDeliveryPdfWhatsappBtn');
+  if (!sendBtn) {
+    return;
+  }
+
+  const endpoint = sendBtn.dataset.url || '';
+  if (!endpoint) {
+    return;
+  }
+
+  const originalLabel = sendBtn.textContent || 'Enviar orden PDF por WhatsApp';
+
+  sendBtn.addEventListener('click', async () => {
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Enviando PDF...';
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (_) {
+        payload = null;
+      }
+
+      if (!response.ok || !payload?.success) {
+        const message = payload?.message || `No se pudo enviar la orden por WhatsApp (HTTP ${response.status}).`;
+        alert(message);
+        return;
+      }
+
+      alert(payload.message || 'Orden enviada por WhatsApp correctamente.');
+    } catch (error) {
+      console.error('Error enviando orden por WhatsApp:', error);
+      alert('Ocurrió un error al enviar el PDF por WhatsApp.');
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = originalLabel;
+    }
+  });
 })();
 </script>
 @endpush

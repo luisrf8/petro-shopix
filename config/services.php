@@ -90,4 +90,13 @@ return [
         'verify_ssl' => env('TFHKA_VERIFY_SSL', true),
     ],
 
+    'whatsapp' => [
+        'enabled' => env('WHATSAPP_ENABLED', false),
+        'base_url' => env('WHATSAPP_BASE_URL', 'https://graph.facebook.com'),
+        'version' => env('WHATSAPP_GRAPH_VERSION', 'v20.0'),
+        'default_country_code' => env('WHATSAPP_DEFAULT_COUNTRY_CODE', ''),
+        'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID', ''),
+        'access_token' => env('WHATSAPP_ACCESS_TOKEN', ''),
+    ],
+
 ];
