@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProductImage;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Support\AuditLogger;
 use App\Support\ImageStorage;
@@ -322,6 +323,71 @@ class ProductVariantController extends Controller
 
         return redirect()->route('productItem', $productVariant->product_id)
             ->with('success', 'Variante eliminada exitosamente.');
+    }
+
+    public function reassign(Request $request, ProductVariant $productVariant)
+    {
+        DB::raw("SET @user_id = " . auth()->id());
+
+        $productVariant->loadMissing('product', 'images');
+
+        if ((int) ($productVariant->product->tenant_id ?? 0) !== (int) (auth()->user()->tenant_id ?? 0)) {
+            return response()->json(['success' => false, 'message' => 'No autorizado.'], 403);
+        }
+
+        $validated = $request->validate([
+            'target_product_id' => 'required|integer|exists:products,id',
+        ]);
+
+        $targetProduct = Product::query()
+            ->where('tenant_id', (int) (auth()->user()->tenant_id ?? 0))
+            ->where('is_active', true)
+            ->findOrFail((int) $validated['target_product_id']);
+
+        if ((int) $targetProduct->id === (int) $productVariant->product_id) {
+            return response()->json(['success' => false, 'message' => 'La variante ya pertenece a ese producto.'], 422);
+        }
+
+        $oldProductId = (int) $productVariant->product_id;
+
+        DB::transaction(function () use ($productVariant, $targetProduct) {
+            $productVariant->product_id = (int) $targetProduct->id;
+            $productVariant->save();
+
+            foreach ($productVariant->images as $image) {
+                $image->product_id = (int) $targetProduct->id;
+                $image->save();
+            }
+        });
+
+        AuditLogger::logEvent(
+            'product_variants',
+            'VARIANT_REASSIGNED',
+            'Variante reasignada a otro producto',
+            (int) (auth()->id() ?? 0),
+            [
+                'route_name' => (string) (request()->route()?->getName() ?? ''),
+                'path' => '/' . trim((string) request()->path(), '/'),
+                'method' => strtoupper((string) request()->method()),
+                'old' => [
+                    'variant_id' => (int) $productVariant->id,
+                    'product_id' => $oldProductId,
+                ],
+                'new' => [
+                    'variant_id' => (int) $productVariant->id,
+                    'product_id' => (int) $targetProduct->id,
+                ],
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Variante reasignada exitosamente.',
+            'variant' => [
+                'id' => (int) $productVariant->id,
+                'product_id' => (int) $targetProduct->id,
+            ],
+        ]);
     }
 
     public function generateCodes(ProductVariant $productVariant)

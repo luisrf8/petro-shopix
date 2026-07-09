@@ -375,7 +375,13 @@
                               <button type="button" class="btn btn-outline-dark btn-sm open-existing-variant-ai-btn" data-variant-id="{{ $variant->id }}">IA imagen</button>
                               <button type="button" class="btn btn-dark btn-sm save-existing-variant-btn" data-variant-id="{{ $variant->id }}">Guardar variante</button>
                               <button type="button" class="btn btn-outline-secondary btn-sm generate-variant-codes-btn" data-variant-id="{{ $variant->id }}">Generar códigos</button>
-                              <button type="button" class="btn btn-outline-danger btn-sm delete-existing-variant-btn" data-variant-id="{{ $variant->id }}">Eliminar / inhabilitar</button>
+                              <button
+                                type="button"
+                                class="btn btn-outline-danger btn-sm open-variant-management-btn"
+                                data-variant-id="{{ $variant->id }}"
+                                data-variant-size="{{ $variant->size }}"
+                                data-variant-name="{{ $product->name }}"
+                              >Eliminar / reasignar</button>
                               <button type="button" class="btn btn-outline-secondary btn-sm open-qr-modal-btn" data-qr-title="QR variante {{ $variant->size }}" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="showVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Ver QR</button>
                               <button type="button" class="btn btn-outline-secondary btn-sm download-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="downloadVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Descargar QR</button>
                               <button type="button" class="btn btn-outline-secondary btn-sm print-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" id="printVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Imprimir QR</button>
@@ -526,6 +532,49 @@
                 </div>
               </div>
             </div>
+            <div class="modal fade" id="variantManagementModal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <div>
+                      <h5 class="modal-title mb-0" id="variantManagementModalTitle">Gestionar variante</h5>
+                      <small class="text-muted" id="variantManagementModalSubtitle">Selecciona una acción para esta variante.</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="alert alert-warning border mb-3">
+                      <strong>Eliminar definitivamente</strong> borra la variante de la base de datos sólo si no tiene dependencias ni stock. Si tiene uso previo, el sistema la inhabilitará.
+                    </div>
+
+                    <div class="row g-3">
+                      <div class="col-12 col-lg-6">
+                        <div class="border rounded p-3 h-100">
+                          <h6 class="mb-2">Eliminar variante</h6>
+                          <p class="text-sm text-muted mb-3">Esta acción no se puede deshacer.</p>
+                          <button type="button" class="btn btn-outline-danger w-100 mb-0" id="variantManagementDeleteBtn">Eliminar definitivamente</button>
+                        </div>
+                      </div>
+                      <div class="col-12 col-lg-6">
+                        <div class="border rounded p-3 h-100">
+                          <h6 class="mb-2">Reasignar a otro producto</h6>
+                          <p class="text-sm text-muted mb-3">La variante se moverá al producto seleccionado y dejará de pertenecer al actual.</p>
+                          <select class="form-select mb-3" id="variantReassignTargetProduct">
+                            <option value="">Selecciona un producto</option>
+                            @foreach($reassignableProducts as $reassignableProduct)
+                              <option value="{{ $reassignableProduct->id }}">
+                                {{ $reassignableProduct->name }}@if($reassignableProduct->category) - {{ $reassignableProduct->category->name }}@endif
+                              </option>
+                            @endforeach
+                          </select>
+                          <button type="button" class="btn btn-dark w-100 mb-0" id="variantManagementReassignBtn">Reasignar variante</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
       </div>
     </div>
@@ -556,10 +605,16 @@
     const PRODUCT_ITEM_SAFE_IMAGE_BYTES = 1.2 * 1024 * 1024;
     let productAiModalInstance = null;
     let variantImagePreviewModalInstance = null;
+    let variantManagementModalInstance = null;
     let productAiHistory = [];
     let productAiLatestResult = null;
     let productAiTarget = null;
     let productAiShouldReturnToAddImageModal = false;
+    let variantManagementState = {
+      variantId: null,
+      variantName: '',
+      variantSize: '',
+    };
 
     function showProductToast(message, type = 'info') {
       let container = document.getElementById('shopixToastContainer');
@@ -1709,44 +1764,107 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  document.querySelectorAll('.delete-existing-variant-btn').forEach((button) => {
-    button.addEventListener('click', async function () {
-      const variantId = this.getAttribute('data-variant-id');
-      if (!variantId) {
-        return;
-      }
+  const variantManagementModalEl = document.getElementById('variantManagementModal');
+  variantManagementModalInstance = bootstrap.Modal.getOrCreateInstance(variantManagementModalEl);
 
-      if (!window.confirm('¿Eliminar esta variante? Si ya fue usada en ventas u otros procesos, se inhabilitará en lugar de borrarse.')) {
-        return;
-      }
-
-      const originalText = this.textContent;
-      this.disabled = true;
-      this.textContent = 'Procesando...';
-
-      try {
-        const response = await fetch(`/api/variants/${variantId}`, {
-          method: 'DELETE',
-          headers: {
-            'X-CSRF-TOKEN': csrfToken,
-            'Accept': 'application/json',
-          },
-        });
-
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || !payload.success) {
-          throw new Error(payload.message || 'No se pudo eliminar la variante.');
-        }
-
-        alert(payload.message || 'Variante procesada correctamente.');
-        window.location.reload();
-      } catch (error) {
-        alert(error.message || 'No se pudo eliminar la variante.');
-      } finally {
-        this.disabled = false;
-        this.textContent = originalText;
-      }
+  async function sendVariantDeleteRequest(variantId, button) {
+    const response = await fetch(`/api/variants/${variantId}`, {
+      method: 'DELETE',
+      headers: {
+        'X-CSRF-TOKEN': csrfToken,
+        'Accept': 'application/json',
+      },
     });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.success) {
+      throw new Error(payload.message || 'No se pudo eliminar la variante.');
+    }
+
+    alert(payload.message || 'Variante procesada correctamente.');
+    window.location.reload();
+  }
+
+  document.querySelectorAll('.open-variant-management-btn').forEach((button) => {
+    button.addEventListener('click', function () {
+      const variantId = this.getAttribute('data-variant-id');
+      const variantSize = this.getAttribute('data-variant-size') || '';
+      const variantName = this.getAttribute('data-variant-name') || '';
+
+      variantManagementState = {
+        variantId,
+        variantName,
+        variantSize,
+      };
+
+      document.getElementById('variantManagementModalTitle').textContent = `Gestionar variante ${variantSize}`;
+      document.getElementById('variantManagementModalSubtitle').textContent = variantName ? `Producto actual: ${variantName}` : 'Selecciona una acción para esta variante.';
+      document.getElementById('variantReassignTargetProduct').value = '';
+      variantManagementModalInstance.show();
+    });
+  });
+
+  document.getElementById('variantManagementDeleteBtn')?.addEventListener('click', async function () {
+    const { variantId } = variantManagementState;
+    if (!variantId) {
+      return;
+    }
+
+    const originalText = this.textContent;
+    this.disabled = true;
+    this.textContent = 'Procesando...';
+
+    try {
+      await sendVariantDeleteRequest(variantId, this);
+    } catch (error) {
+      alert(error.message || 'No se pudo eliminar la variante.');
+    } finally {
+      this.disabled = false;
+      this.textContent = originalText;
+    }
+  });
+
+  document.getElementById('variantManagementReassignBtn')?.addEventListener('click', async function () {
+    const { variantId } = variantManagementState;
+    const targetProductId = document.getElementById('variantReassignTargetProduct')?.value || '';
+
+    if (!variantId) {
+      return;
+    }
+
+    if (!targetProductId) {
+      alert('Selecciona un producto destino.');
+      return;
+    }
+
+    const originalText = this.textContent;
+    this.disabled = true;
+    this.textContent = 'Reasignando...';
+
+    try {
+      const response = await fetch(`/api/variants/${variantId}/reassign`, {
+        method: 'POST',
+        headers: {
+          'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ target_product_id: targetProductId }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'No se pudo reasignar la variante.');
+      }
+
+      alert(payload.message || 'Variante reasignada exitosamente.');
+      window.location.reload();
+    } catch (error) {
+      alert(error.message || 'No se pudo reasignar la variante.');
+    } finally {
+      this.disabled = false;
+      this.textContent = originalText;
+    }
   });
 
   const addImageModalEl = document.getElementById('addImageModal');

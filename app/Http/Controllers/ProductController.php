@@ -221,11 +221,18 @@ class ProductController extends Controller
             ->keyBy(function ($item) {
                 return $item->warehouse_id . '_' . $item->product_variant_id;
             });
+        $reassignableProducts = Product::query()
+            ->with('category:id,name')
+            ->where('tenant_id', $tenantId)
+            ->where('id', '!=', (int) $product->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'category_id']);
         $taxes = $this->allowedProductTaxes();
         $canEditProductTaxes = (bool) ($tenant->printer_tax_change_enabled ?? false);
         $productTaxChangeReference = (string) ($tenant->printer_tax_change_reference ?? '');
 
-        return view('productItem', compact('product', 'categories', 'taxes', 'canEditProductTaxes', 'productTaxChangeReference', 'warehouses', 'warehouseStocks'));
+        return view('productItem', compact('product', 'categories', 'taxes', 'canEditProductTaxes', 'productTaxChangeReference', 'warehouses', 'warehouseStocks', 'reassignableProducts'));
     }
     
     public function store(Request $request)

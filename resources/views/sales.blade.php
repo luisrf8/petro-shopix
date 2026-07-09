@@ -640,6 +640,37 @@
         display: block;
     }
 
+    .sale-submit-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 3000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: rgba(15, 23, 42, 0.62);
+        backdrop-filter: blur(3px);
+    }
+
+    .sale-submit-overlay.is-visible {
+        display: flex;
+    }
+
+    .sale-submit-overlay-card {
+        min-width: min(92vw, 360px);
+        border-radius: 1rem;
+        background: #ffffff;
+        padding: 1.1rem 1.25rem;
+        box-shadow: 0 28px 60px rgba(15, 23, 42, 0.28);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        text-align: center;
+    }
+
+    .sale-submit-overlay-card .spinner-border {
+        width: 2.25rem;
+        height: 2.25rem;
+    }
+
     .sale-page-skeleton-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -677,6 +708,13 @@
 
     @section('content')
     <div class="container-fluid px-2 px-md-4">
+        <div id="saleSubmitOverlay" class="sale-submit-overlay" aria-hidden="true">
+            <div class="sale-submit-overlay-card">
+                <div class="spinner-border text-dark mb-3" role="status" aria-label="Procesando"></div>
+                <div class="fw-semibold">Procesando venta</div>
+                <div class="text-muted small mt-1">Estamos guardando la orden. No cierres esta pantalla.</div>
+            </div>
+        </div>
         <div id="salePageSkeleton" class="sale-page-loading-skeleton" aria-hidden="true">
             <div class="sale-page-skeleton-grid">
                 @for ($i = 0; $i < 8; $i++)
@@ -4026,6 +4064,18 @@ function updateQuantity(id, newQty) {
         Procesando...
     `;
 
+        const saleSubmitOverlay = document.getElementById('saleSubmitOverlay');
+        const setSaleSubmitOverlayVisible = (isVisible) => {
+            if (!saleSubmitOverlay) {
+                return;
+            }
+
+            saleSubmitOverlay.classList.toggle('is-visible', isVisible);
+            saleSubmitOverlay.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+        };
+
+        setSaleSubmitOverlayVisible(true);
+
     const tenantId = Number(authUser.tenant_id);
     const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
     const saleDocumentMode = document.querySelector('input[name="sale_document_mode"]:checked')?.value || 'delivery_note';
@@ -4044,6 +4094,7 @@ function updateQuantity(id, newQty) {
         alert(deliveryAddressData.message || 'Debes indicar la dirección cuando la entrega es por envío.');
         button.disabled = false;
         button.innerHTML = originalText;
+            setSaleSubmitOverlayVisible(false);
         return;
     }
 
@@ -4051,6 +4102,7 @@ function updateQuantity(id, newQty) {
         alert('Debes indicar nombre y teléfono de la persona que recibe para delivery o envío.');
         button.disabled = false;
         button.innerHTML = originalText;
+            setSaleSubmitOverlayVisible(false);
         return;
     }
 
@@ -4058,6 +4110,7 @@ function updateQuantity(id, newQty) {
         alert(deliveryContext.message || 'Debes completar la información del delivery.');
         button.disabled = false;
         button.innerHTML = originalText;
+            setSaleSubmitOverlayVisible(false);
         return;
     }
 
@@ -4065,6 +4118,7 @@ function updateQuantity(id, newQty) {
         alert('La facturación digital está desactivada para esta tienda.');
         button.disabled = false;
         button.innerHTML = originalText;
+            setSaleSubmitOverlayVisible(false);
         return;
     }
 
@@ -4074,6 +4128,7 @@ function updateQuantity(id, newQty) {
             alert('Para crear un cliente nuevo debes completar nombre, correo, teléfono y DNI.');
             button.disabled = false;
             button.innerHTML = originalText;
+                setSaleSubmitOverlayVisible(false);
             return;
         }
 
@@ -4081,12 +4136,14 @@ function updateQuantity(id, newQty) {
             alert('El correo del nuevo cliente no es válido.');
             button.disabled = false;
             button.innerHTML = originalText;
+                setSaleSubmitOverlayVisible(false);
             return;
         }
     } else if (!selectedExistingCustomerId) {
         alert('Debes seleccionar un cliente existente para registrar la venta.');
         button.disabled = false;
         button.innerHTML = originalText;
+            setSaleSubmitOverlayVisible(false);
         return;
     }
 
@@ -4228,6 +4285,7 @@ function updateQuantity(id, newQty) {
             // Restaurar botón en cualquier caso
             button.disabled = false;
             button.innerHTML = originalText;
+            setSaleSubmitOverlayVisible(false);
         });
 });
 
