@@ -43,7 +43,6 @@
   $authUserEmail = (string) ($authUser->email ?? 'Sin correo');
   $authUserRole = (string) (optional($authUser?->role)->name ?? 'Sin rol');
   $headerUnreadNotificationsCount = $authUser ? $authUser->unreadNotifications()->count() : 0;
-  $dollarRateValue = isset($dollarRate) ? $dollarRate : null;
 @endphp
 <style>
   #navbarBlur {
@@ -272,7 +271,7 @@
 
             <li class="breadcrumb-item text-sm d-flex align-items-center">
               <a class="opacity-5 text-dark" href="/paymentMethods">
-                <!-- Tasa Actual: {{ $dollarRateValue ? number_format($dollarRateValue->rate, 2) : 'No disponible' }} VES / USD -->
+                <!-- Tasa Actual disponible en /paymentMethods -->
               </a>
             </li>
 
