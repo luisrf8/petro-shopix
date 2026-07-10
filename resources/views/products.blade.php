@@ -25,66 +25,6 @@
     margin-top: 0.5rem;
   }
 
-  .page-loading-skeleton {
-    position: fixed;
-    inset: 0;
-    z-index: 2000;
-    display: none;
-    padding: 1rem;
-    background: rgba(248, 250, 252, 0.82);
-    backdrop-filter: blur(4px);
-  }
-
-  .page-loading-skeleton.is-visible {
-    display: block;
-  }
-
-  .skeleton-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-    gap: 1rem;
-    margin-top: 2rem;
-  }
-
-  .skeleton-card {
-    min-height: 148px;
-    border-radius: 1rem;
-    border: 1px solid rgba(148, 163, 184, 0.25);
-    background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 37%, #eef2f7 63%);
-    background-size: 400% 100%;
-    animation: skeletonShimmer 1.3s ease infinite;
-    padding: 0.95rem;
-  }
-
-  .skeleton-line {
-    height: 10px;
-    border-radius: 999px;
-    background: rgba(148, 163, 184, 0.35);
-    margin-bottom: 0.55rem;
-  }
-
-  .skeleton-line.short {
-    width: 42%;
-  }
-
-  .skeleton-line.medium {
-    width: 68%;
-  }
-
-  .skeleton-chip {
-    display: inline-block;
-    width: 72px;
-    height: 20px;
-    border-radius: 999px;
-    background: rgba(148, 163, 184, 0.25);
-    margin-right: 0.45rem;
-  }
-
-  @keyframes skeletonShimmer {
-    0% { background-position: 100% 0; }
-    100% { background-position: 0 0; }
-  }
-
   .products-primary-actions {
     display: flex;
     flex-wrap: wrap;
@@ -113,6 +53,7 @@
   }
 
   .product-thumb-clean {
+    position: relative;
     width: 62px;
     height: 62px;
     border-radius: 0.72rem;
@@ -129,6 +70,28 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .product-thumb-clean img.is-loaded {
+    opacity: 1;
+  }
+
+  .product-image-spinner {
+    position: absolute;
+    inset: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.82);
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+  }
+
+  .product-image-spinner.is-hidden {
+    opacity: 0;
+    visibility: hidden;
   }
 
   .product-main-clean {
@@ -330,23 +293,6 @@
 
 @section('content')
     <div class="container-fluid py-2">
-      <div id="productsPageSkeleton" class="page-loading-skeleton" aria-hidden="true">
-        <div class="skeleton-grid">
-          @for ($i = 0; $i < 8; $i++)
-            <div class="skeleton-card">
-              <div class="d-flex gap-3">
-                <div style="width:62px;height:62px;border-radius:0.72rem;background:rgba(148,163,184,.25);"></div>
-                <div class="flex-grow-1">
-                  <div class="skeleton-line medium"></div>
-                  <div class="skeleton-line short"></div>
-                  <div class="skeleton-chip"></div><div class="skeleton-chip"></div>
-                  <div class="skeleton-line"></div>
-                </div>
-              </div>
-            </div>
-          @endfor
-        </div>
-      </div>
       <div class="row">
         <div class="col-lg-12">
           <!-- Buscador -->
@@ -578,7 +524,16 @@
           <div class="product-card-clean">
               <a href="{{ route('productItem', $product->id) }}" class="product-thumb-clean" aria-label="Abrir producto {{ $product->name }}">
                 @if($productCoverImage)
-                  <img src="{{ \App\Support\ImageStorage::url($productCoverImage->path) ?? asset('assets/img/shopix5.png') }}" alt="Imagen del producto">
+                  <span class="product-image-spinner" aria-hidden="true">
+                    <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+                  </span>
+                  <img
+                    src="{{ \App\Support\ImageStorage::url($productCoverImage->path) ?? asset('assets/img/shopix5.png') }}"
+                    alt="Imagen del producto"
+                    class="js-product-thumb-image"
+                    loading="lazy"
+                    decoding="async"
+                  >
                 @else
                   <i class="material-symbols-rounded text-dark">photo_camera</i>
                 @endif
@@ -823,38 +778,31 @@
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
 
-  const productsPageSkeleton = document.getElementById('productsPageSkeleton');
-  const productsPaginationKey = 'shopix-products-loading';
-
-  function setProductsSkeletonVisible(isVisible) {
-    if (!productsPageSkeleton) {
+  function hideProductImageSpinner(imageElement) {
+    if (!(imageElement instanceof HTMLImageElement)) {
       return;
     }
 
-    productsPageSkeleton.classList.toggle('is-visible', isVisible);
-    productsPageSkeleton.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+    imageElement.classList.add('is-loaded');
+    const spinner = imageElement.parentElement?.querySelector('.product-image-spinner');
+    spinner?.classList.add('is-hidden');
   }
 
-  document.addEventListener('click', (event) => {
-    const paginationLink = event.target.closest('.pagination a');
-    if (!paginationLink || paginationLink.classList.contains('disabled')) {
-      return;
-    }
+  function setupProductImageSpinners() {
+    document.querySelectorAll('.js-product-thumb-image').forEach((imageElement) => {
+      if (!(imageElement instanceof HTMLImageElement)) {
+        return;
+      }
 
-    sessionStorage.setItem(productsPaginationKey, '1');
-    setProductsSkeletonVisible(true);
-  });
+      if (imageElement.complete) {
+        hideProductImageSpinner(imageElement);
+        return;
+      }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    if (sessionStorage.getItem(productsPaginationKey) === '1') {
-      setProductsSkeletonVisible(true);
-    }
-  });
-
-  window.addEventListener('load', () => {
-    sessionStorage.removeItem(productsPaginationKey);
-    setProductsSkeletonVisible(false);
-  });
+      imageElement.addEventListener('load', () => hideProductImageSpinner(imageElement), { once: true });
+      imageElement.addEventListener('error', () => hideProductImageSpinner(imageElement), { once: true });
+    });
+  }
 
   const applySearchFilter = (inputId, itemSelector) => {
     const input = document.getElementById(inputId);
@@ -886,6 +834,7 @@
   });
 
   window.addEventListener('load', () => {
+    setupProductImageSpinners();
     applySearchFilter('searchCategory', '.category-item');
   });
   </script>
