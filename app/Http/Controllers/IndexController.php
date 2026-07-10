@@ -56,10 +56,24 @@ class IndexController extends Controller
             $category->icon = $icons[$category->name] ?? 'bi bi-tag'; // icono por defecto
         }
     
+        $variantColumns = [
+            'id',
+            'product_id',
+            'size',
+            'price',
+            'stock',
+            'discount_percentage',
+            'qr_code',
+            'barcode',
+        ];
+        if (Schema::hasColumn('product_variants', 'is_active')) {
+            $variantColumns[] = 'is_active';
+        }
+
         $productItems = Product::with([
                 'category:id,name',
                 'images:id,product_id,path',
-                'variants:id,product_id,size,price,stock,discount_percentage,qr_code,barcode,is_active',
+                'variants:' . implode(',', $variantColumns),
             ])
             ->orderBy('created_at', 'desc')
             ->take(3)
