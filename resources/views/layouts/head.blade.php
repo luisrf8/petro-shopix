@@ -37,13 +37,6 @@
 </head>
 
 <body class="g-sidenav-show  bg-gray-100">
-@php
-  $authUser = auth()->user();
-  $authUserName = (string) ($authUser->name ?? 'Usuario');
-  $authUserEmail = (string) ($authUser->email ?? 'Sin correo');
-  $authUserRole = (string) (optional($authUser?->role)->name ?? 'Sin rol');
-  $headerUnreadNotificationsCount = $authUser ? $authUser->unreadNotifications()->count() : 0;
-@endphp
 <style>
   #navbarBlur {
     position: relative;
@@ -300,16 +293,17 @@
             <li class="nav-item d-flex align-items-center me-3 header-session-user">
               <div class="d-flex text-end align-items-center gap-1 header-session-user-inner">
                 <i class="material-symbols-rounded flex-shrink-0">account_circle</i>
-                <span class="session-name session-text">{{ $authUserName }}</span>
+                <span class="session-name session-text">{{ $authUserName ?? (string) (auth()->user()->name ?? 'Usuario') }}</span>
                 <span class="session-sep session-sep-email">/</span>
-                <span class="session-meta session-text session-meta-email">{{ $authUserEmail }}</span>
+                <span class="session-meta session-text session-meta-email">{{ $authUserEmail ?? (string) (auth()->user()->email ?? 'Sin correo') }}</span>
                 <span class="session-sep session-sep-role">/</span>
-                <span class="session-meta session-text session-meta-role">Rol: {{ $authUserRole }}</span>
+                <span class="session-meta session-text session-meta-role">Rol: {{ $authUserRole ?? (string) (optional(auth()->user()?->role)->name ?? 'Sin rol') }}</span>
               </div>
             </li>
             <li class="nav-item d-flex align-items-center me-2 header-icon-item">
               <a href="{{ route('notifications.index') }}" class="nav-link text-body p-0 position-relative" aria-label="Notificaciones" title="Notificaciones">
                 <i class="material-symbols-rounded">notifications</i>
+                @php($headerUnreadNotificationsCount = auth()->check() ? auth()->user()->unreadNotifications()->count() : 0)
                 @if($headerUnreadNotificationsCount > 0)
                   <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger backoffice-notifications-count">{{ $headerUnreadNotificationsCount }}</span>
                 @else
