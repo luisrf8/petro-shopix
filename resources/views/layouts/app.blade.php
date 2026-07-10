@@ -6,11 +6,12 @@
       $backofficePwaName = $backofficePwaName !== '' ? $backofficePwaName . ' Admin' : 'Shopix Admin';
       $backofficePwaTheme = '0F172A';
       $backofficePwaStartUrl = request()->getRequestUri() ?: '/dashboard';
+      $backofficePwaIconVersion = (string) config('app.asset_version', '20260710');
     @endphp
     <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180, 'variant' => 'admin']) }}">
-  <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192, 'variant' => 'admin']) }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180, 'variant' => 'admin', 'v' => $backofficePwaIconVersion]) }}">
+  <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192, 'variant' => 'admin', 'v' => $backofficePwaIconVersion]) }}">
   <meta name="theme-color" content="#{{ $backofficePwaTheme }}">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">

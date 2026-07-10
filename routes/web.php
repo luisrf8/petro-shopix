@@ -128,21 +128,18 @@ Route::get('/pwa-icon/{size}.png', function (int $size) {
 
     imagealphablending($icon, true);
     imagesavealpha($icon, false);
-    $background = imagecolorallocate($icon, 255, 255, 255);
+    [$red, $green, $blue] = $variant === 'admin'
+        ? [10, 70, 133]
+        : [37, 99, 235];
+    $background = imagecolorallocate($icon, $red, $green, $blue);
     imagefilledrectangle($icon, 0, 0, $size, $size, $background);
 
-    $padding = (int) floor($size * 0.12);
-    $sourceAspectRatio = $sourceWidth / max($sourceHeight, 1);
-
-    if ($sourceAspectRatio >= 2.2) {
-        $targetWidth = max((int) round($size * 0.84), 1);
-        $targetHeight = max((int) round($size * 0.34), 1);
-    } else {
-        $availableSize = max($size - ($padding * 2), 1);
-        $scale = min($availableSize / max($sourceWidth, 1), $availableSize / max($sourceHeight, 1));
-        $targetWidth = max((int) round($sourceWidth * $scale), 1);
-        $targetHeight = max((int) round($sourceHeight * $scale), 1);
-    }
+    $scale = max(
+        $size / max($sourceWidth, 1),
+        $size / max($sourceHeight, 1)
+    );
+    $targetWidth = max((int) round($sourceWidth * $scale), 1);
+    $targetHeight = max((int) round($sourceHeight * $scale), 1);
 
     $destinationX = (int) floor(($size - $targetWidth) / 2);
     $destinationY = (int) floor(($size - $targetHeight) / 2);
@@ -169,7 +166,7 @@ Route::get('/pwa-icon/{size}.png', function (int $size) {
 
     return response($binary, 200, [
         'Content-Type' => 'image/png',
-        'Cache-Control' => 'public, max-age=604800',
+        'Cache-Control' => 'public, max-age=3600',
     ]);
 })->name('pwa.icon');
 Route::get('/storage/gdrive/{fileId}', [GoogleDriveController::class, 'streamImage'])->where('fileId', '.*')->name('storage.gdrive.proxy');

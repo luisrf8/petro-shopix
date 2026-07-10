@@ -16,10 +16,11 @@
 <html lang="en">
 
 <head>
+  @php($pwaIconVersion = (string) config('app.asset_version', '20260710'))
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180, 'variant' => 'admin']) }}">
-  <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192, 'variant' => 'admin']) }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180, 'variant' => 'admin', 'v' => $pwaIconVersion]) }}">
+  <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192, 'variant' => 'admin', 'v' => $pwaIconVersion]) }}">
   <title>
   </title>
   <!--     Fonts and icons     -->
