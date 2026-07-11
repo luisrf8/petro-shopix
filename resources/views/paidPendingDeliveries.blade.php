@@ -150,6 +150,8 @@
   document.addEventListener('DOMContentLoaded', function () {
     const tenantId = @json((int) ($currentUser->tenant_id ?? 0));
     const pusherKey = @json(config('broadcasting.connections.reverb.key'));
+    const reloadCooldownMs = 2500;
+    const reloadStorageKey = 'shopix_delivery_ops_last_reload_at';
 
     if (!tenantId || !pusherKey || typeof Pusher === 'undefined') {
       return;
@@ -193,12 +195,24 @@
     const pusher = new Pusher(pusherKey, pusherOptions);
     const channel = pusher.subscribe(`private-tenant.delivery-ops.${tenantId}`);
     const handleAssignmentUpdate = function () {
+      const now = Date.now();
+      const lastReloadAt = Number(sessionStorage.getItem(reloadStorageKey) || 0);
+
+      if ((now - lastReloadAt) < reloadCooldownMs) {
+        return;
+      }
+
+      sessionStorage.setItem(reloadStorageKey, String(now));
       window.location.reload();
     };
 
     channel.bind('delivery.assignment.updated', handleAssignmentUpdate);
     channel.bind('.delivery.assignment.updated', handleAssignmentUpdate);
     pusher.connection.bind('error', function () {});
+
+    window.addEventListener('pagehide', function () {
+      pusher.disconnect();
+    }, { once: true });
   });
 </script>
 @endpush

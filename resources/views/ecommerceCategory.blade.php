@@ -1429,6 +1429,7 @@
 
       </div>
 
+      @if($appointmentsEnabledForStorefront ?? false)
       <section class="catalog-appointments-section" data-shopix-catalog-appointment>
         <div class="filter-panel-card">
           <h3 class="h5 fw-bold mb-2">Calendario de citas</h3>
@@ -1465,6 +1466,7 @@
           </div>
         </div>
       </section>
+      @endif
       </div>
     </div>
   </section>

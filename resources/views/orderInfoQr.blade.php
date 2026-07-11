@@ -216,6 +216,49 @@
 
             return '';
         };
+        $normalizeCurrencyCode = function (?string $code) {
+            $normalized = strtoupper(trim((string) $code));
+
+            if (in_array($normalized, ['BS', 'VES'], true)) {
+                return 'VES';
+            }
+
+            return $normalized;
+        };
+        $currencyToBsRate = function (?string $code) use ($normalizeCurrencyCode, $dollarRateToBs, $euroRateToBs) {
+            $normalized = $normalizeCurrencyCode($code);
+
+            if ($normalized === 'VES') {
+                return 1.0;
+            }
+
+            if ($normalized === 'USD') {
+                return (float) $dollarRateToBs;
+            }
+
+            if ($normalized === 'EUR') {
+                return (float) $euroRateToBs;
+            }
+
+            return 0.0;
+        };
+        $formatEquivalentUsdBs = function (float $amount, ?string $amountCurrencyCode) use ($normalizeCurrencyCode, $currencyToBsRate, $dollarRateToBs) {
+            $normalized = $normalizeCurrencyCode($amountCurrencyCode);
+            $rateToBs = $currencyToBsRate($normalized);
+
+            if ($rateToBs <= 0) {
+                return null;
+            }
+
+            $amountBs = $amount * $rateToBs;
+            $parts = ['Bs ' . number_format($amountBs, 2)];
+
+            if ((float) $dollarRateToBs > 0) {
+                $parts[] = '$' . number_format($amountBs / (float) $dollarRateToBs, 2);
+            }
+
+            return implode(' | ', $parts);
+        };
         $storeWhatsappUrl = $storePhone !== ''
             ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'tienda') . ', sobre la orden #' . $order->id . '.')
             : null;
@@ -233,6 +276,8 @@
         $approvalLabel = $order->status == 0 ? 'En proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado');
         $paymentBalance = max(0, (float) $totalOrden - (float) $totalPagado);
         $paymentStepTone = $totalPagado >= $totalOrden && $totalOrden > 0 ? 'success' : ($totalPagado > 0 ? 'pending' : 'danger');
+        $deliveryFeeAmount = round((float) ($order->delivery_fee ?? 0), 2);
+        $deliveryFeeEquivalent = $formatEquivalentUsdBs($deliveryFeeAmount, $orderCurrencyCode ?? 'USD');
         $invoiceDocument = $order->latest_electronic_document;
         $assignedDeliveryName = trim((string) ($order->assignedDeliveryUser->name ?? ''));
         $assignedDeliveryPhone = trim((string) ($order->assignedDeliveryUser->phone_number ?? ''));
@@ -254,7 +299,7 @@
                 'tone' => 'success',
                 'title' => 'Orden creada',
                 'description' => 'La orden fue registrada el ' . ($order->date ?: 'sin fecha disponible') . '.',
-                'meta' => 'Entrega: ' . ($order->preference ?: 'Sin preferencia definida'),
+                'meta' => 'Entrega: ' . ($order->preference ?: 'Sin preferencia definida') . ' | Costo delivery: ' . (($orderCurrencySymbol ?? '$') . number_format($deliveryFeeAmount, 2)),
             ],
             [
                 'tone' => $paymentStepTone,
@@ -344,24 +389,36 @@
                 <div class="glass-card metric-card">
                     <div class="metric-label">Total orden</div>
                     <div class="metric-value">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalOrden, 2) }}</div>
+                    @if(($totalEquivalent = $formatEquivalentUsdBs((float) $totalOrden, $orderCurrencyCode ?? 'USD')))
+                        <small class="text-muted d-block mt-1">{{ $totalEquivalent }}</small>
+                    @endif
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="glass-card metric-card">
                     <div class="metric-label">Total pagado</div>
                     <div class="metric-value">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($totalPagado, 2) }}</div>
+                    @if(($paidEquivalent = $formatEquivalentUsdBs((float) $totalPagado, $orderCurrencyCode ?? 'USD')))
+                        <small class="text-muted d-block mt-1">{{ $paidEquivalent }}</small>
+                    @endif
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="glass-card metric-card">
                     <div class="metric-label">Saldo pendiente</div>
                     <div class="metric-value">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($paymentBalance, 2) }}</div>
+                    @if(($balanceEquivalent = $formatEquivalentUsdBs((float) $paymentBalance, $orderCurrencyCode ?? 'USD')))
+                        <small class="text-muted d-block mt-1">{{ $balanceEquivalent }}</small>
+                    @endif
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="glass-card metric-card">
-                    <div class="metric-label">Factura</div>
-                    <div class="metric-value" style="font-size:1rem;">{{ $invoiceDocument?->numero_documento ?: ($order->has_annulled_invoice ? 'Anulada' : 'Pendiente') }}</div>
+                    <div class="metric-label">Costo delivery</div>
+                    <div class="metric-value" style="font-size:1rem;">{{ $orderCurrencySymbol ?? '$' }}{{ number_format($deliveryFeeAmount, 2) }}</div>
+                    @if($deliveryFeeEquivalent)
+                        <small class="text-muted d-block mt-1">{{ $deliveryFeeEquivalent }}</small>
+                    @endif
                 </div>
             </div>
         </div>
@@ -446,7 +503,11 @@
                                 @forelse($order->payments as $payment)
                                     @php
                                         $paymentCurrencyCode = strtoupper(trim((string) ($payment->currency ?? '')));
+                                        if (in_array($paymentCurrencyCode, ['BS', 'VES'], true)) {
+                                            $paymentCurrencyCode = 'VES';
+                                        }
                                         $paymentSymbol = $resolveCurrencySymbol($paymentCurrencyCode);
+                                        $paymentEquivalent = $formatEquivalentUsdBs((float) $payment->amount, $paymentCurrencyCode);
                                     @endphp
                                     <tr>
                                         <td>{{ $payment->currency }}</td>
@@ -454,7 +515,12 @@
                                             {{ $payment->payment->name }}<br>
                                             <small class="text-muted">{{ $payment->payment->bank }}</small>
                                         </td>
-                                        <td>{{ $paymentSymbol }}{{ number_format($payment->amount, 2) }}{{ $paymentSymbol === '' && $paymentCurrencyCode !== '' ? ' ' . $paymentCurrencyCode : '' }}</td>
+                                        <td>
+                                            {{ $paymentSymbol }}{{ number_format($payment->amount, 2) }}{{ $paymentSymbol === '' && $paymentCurrencyCode !== '' ? ' ' . $paymentCurrencyCode : '' }}
+                                            @if($paymentEquivalent)
+                                                <small class="text-muted d-block">Equivalente: {{ $paymentEquivalent }}</small>
+                                            @endif
+                                        </td>
                                         <td>{{ $payment->payment->admin_name }}</td>
                                         <td>{{ $payment->reference ?? 'N/A' }}</td>
                                         <td>

@@ -779,14 +779,14 @@
             <label class="form-check-label" for="delivery-store">Delivery</label>
           </div>
           <div class="form-check form-check-inline">
-            <input class="form-check-input" type="radio" name="tenant-delivery-type" id="delivery-shipping" value="shipping">
+            <input class="form-check-input" type="radio" name="tenant-delivery-type" id="delivery-shipping" value="shipping" {{ (bool) ($tenant->delivery_enabled ?? false) ? '' : 'disabled' }}>
             <label class="form-check-label" for="delivery-shipping">Envío</label>
           </div>
           <small class="text-muted d-block mt-2">
             @if((bool) ($tenant->delivery_enabled ?? false))
               Delivery tienda: {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
             @else
-              El delivery de la tienda está desactivado. El envío externo sigue disponible.
+              El delivery y los envíos están desactivados. Solo está disponible retiro en tienda.
             @endif
           </small>
         </div>
@@ -803,7 +803,18 @@
                   <input type="text" id="tenant-delivery-receiver-name" class="form-control" placeholder="Nombre de quien recibe">
                 </div>
                 <div class="col-12 col-md-6">
-                  <input type="text" id="tenant-delivery-receiver-phone" class="form-control" placeholder="Teléfono de quien recibe">
+                  <div class="input-group">
+                    <select id="tenant-delivery-receiver-phone-code" class="form-select" style="max-width: 120px;">
+                      <option value="+58" selected>+58</option>
+                      <option value="+1">+1</option>
+                      <option value="+52">+52</option>
+                      <option value="+57">+57</option>
+                      <option value="+51">+51</option>
+                      <option value="+54">+54</option>
+                      <option value="+34">+34</option>
+                    </select>
+                    <input type="text" id="tenant-delivery-receiver-phone" class="form-control" placeholder="Teléfono de quien recibe">
+                  </div>
                 </div>
                 <div class="col-12">
                   <textarea id="tenant-delivery-extra-info" class="form-control" rows="2" placeholder="Información adicional para el delivery (opcional)"></textarea>
@@ -834,11 +845,12 @@
               <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-shipping-use-current-location">Usar ubicación actual</button>
               <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-delivery-open-map">Marcar ubicación en mapa</button>
               <small class="text-muted w-100" id="tenant-shipping-location-status">Aún no se ha fijado una ubicación exacta.</small>
+              <small class="text-muted w-100" id="tenant-delivery-price-info">Precio delivery: se calcula al fijar ubicación.</small>
               <input type="hidden" id="tenant-shipping-latitude">
               <input type="hidden" id="tenant-shipping-longitude">
             </div>
             <div class="col-12 col-md-4 d-none" id="tenant-shipping-distance-wrap">
-              <input type="number" min="0" step="0.01" id="tenant-shipping-distance" class="form-control" placeholder="Distancia estimada (km)">
+              <input type="number" min="0" step="0.01" id="tenant-shipping-distance" class="form-control" placeholder="Distancia estimada (km)" readonly>
             </div>
           </div>
         </div>
@@ -989,6 +1001,10 @@
                 <span class="text-muted small">Base: <span id="tenant-pro-base-currency">USD</span></span>
               </div>
             </div>
+            <div class="tenant-pro-summary-row mt-2" id="tenant-pro-delivery-fee-row">
+              <span class="text-muted">Delivery estimado</span>
+              <span id="tenant-pro-delivery-fee" class="text-muted">0.00 $</span>
+            </div>
             <div class="tenant-pro-summary-row mt-2 d-none" id="tenant-pro-igtf-base-payments-row">
               <span class="text-muted">Pagado en <span id="tenant-pro-igtf-base-code">USD</span> (base IGTF)</span>
               <span id="tenant-pro-igtf-base-payments" class="text-muted">0.00 $</span>
@@ -1028,14 +1044,14 @@
                   <label class="form-check-label" for="tenant-pro-delivery-store">Delivery</label>
                 </div>
                 <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-shipping" value="shipping">
+                  <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-shipping" value="shipping" {{ (bool) ($tenant->delivery_enabled ?? false) ? '' : 'disabled' }}>
                   <label class="form-check-label" for="tenant-pro-delivery-shipping">Envío</label>
                 </div>
                 <small class="text-muted d-block mt-2">
                   @if((bool) ($tenant->delivery_enabled ?? false))
                     Delivery tienda: {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
                   @else
-                    El delivery de la tienda está desactivado. El envío externo sigue disponible.
+                    El delivery y los envíos están desactivados. Solo está disponible retiro en tienda.
                   @endif
                 </small>
               </div>
@@ -1052,7 +1068,18 @@
                         <input type="text" id="tenant-pro-delivery-receiver-name" class="form-control" placeholder="Nombre de quien recibe">
                       </div>
                       <div class="col-12 col-md-6">
-                        <input type="text" id="tenant-pro-delivery-receiver-phone" class="form-control" placeholder="Teléfono de quien recibe">
+                        <div class="input-group">
+                          <select id="tenant-pro-delivery-receiver-phone-code" class="form-select" style="max-width: 120px;">
+                            <option value="+58" selected>+58</option>
+                            <option value="+1">+1</option>
+                            <option value="+52">+52</option>
+                            <option value="+57">+57</option>
+                            <option value="+51">+51</option>
+                            <option value="+54">+54</option>
+                            <option value="+34">+34</option>
+                          </select>
+                          <input type="text" id="tenant-pro-delivery-receiver-phone" class="form-control" placeholder="Teléfono de quien recibe">
+                        </div>
                       </div>
                       <div class="col-12">
                         <textarea id="tenant-pro-delivery-extra-info" class="form-control" rows="2" placeholder="Información adicional para el delivery (opcional)"></textarea>
@@ -1083,11 +1110,12 @@
                     <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-shipping-use-current-location">Usar ubicación actual</button>
                     <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-delivery-open-map">Marcar ubicación en mapa</button>
                     <small class="text-muted w-100" id="tenant-pro-shipping-location-status">Aún no se ha fijado una ubicación exacta.</small>
+                    <small class="text-muted w-100" id="tenant-pro-delivery-price-info">Precio delivery: se calcula al fijar ubicación.</small>
                     <input type="hidden" id="tenant-pro-shipping-latitude">
                     <input type="hidden" id="tenant-pro-shipping-longitude">
                   </div>
                   <div class="col-12 col-md-4 d-none" id="tenant-pro-shipping-distance-wrap">
-                    <input type="number" min="0" step="0.01" id="tenant-pro-shipping-distance" class="form-control" placeholder="Distancia estimada (km)">
+                    <input type="number" min="0" step="0.01" id="tenant-pro-shipping-distance" class="form-control" placeholder="Distancia estimada (km)" readonly>
                   </div>
                 </div>
               </div>
@@ -1372,8 +1400,10 @@
     const shippingAddressHint = document.getElementById('tenant-shipping-address-hint');
     const deliveryRecipientFields = document.getElementById('tenant-delivery-recipient-fields');
     const deliveryReceiverNameInput = document.getElementById('tenant-delivery-receiver-name');
+    const deliveryReceiverPhoneCodeInput = document.getElementById('tenant-delivery-receiver-phone-code');
     const deliveryReceiverPhoneInput = document.getElementById('tenant-delivery-receiver-phone');
     const deliveryExtraInfoInput = document.getElementById('tenant-delivery-extra-info');
+    const deliveryPriceInfo = document.getElementById('tenant-delivery-price-info');
     const deliveryUseCustomerDataBtn = document.getElementById('tenant-delivery-use-customer-data');
     const deliveryOpenMapBtn = document.getElementById('tenant-delivery-open-map');
     const shippingDistanceInput = document.getElementById('tenant-shipping-distance');
@@ -1402,8 +1432,11 @@
     const proShippingAddressHint = document.getElementById('tenant-pro-shipping-address-hint');
     const proDeliveryRecipientFields = document.getElementById('tenant-pro-delivery-recipient-fields');
     const proDeliveryReceiverNameInput = document.getElementById('tenant-pro-delivery-receiver-name');
+    const proDeliveryReceiverPhoneCodeInput = document.getElementById('tenant-pro-delivery-receiver-phone-code');
     const proDeliveryReceiverPhoneInput = document.getElementById('tenant-pro-delivery-receiver-phone');
     const proDeliveryExtraInfoInput = document.getElementById('tenant-pro-delivery-extra-info');
+    const proDeliveryPriceInfo = document.getElementById('tenant-pro-delivery-price-info');
+    const proDeliveryFeeSummary = document.getElementById('tenant-pro-delivery-fee');
     const proDeliveryUseCustomerDataBtn = document.getElementById('tenant-pro-delivery-use-customer-data');
     const proDeliveryOpenMapBtn = document.getElementById('tenant-pro-delivery-open-map');
     const proShippingDistanceInput = document.getElementById('tenant-pro-shipping-distance');
@@ -1516,14 +1549,56 @@
     }
 
     function normalizePhoneValue(value) {
-      return String(value || '').trim();
+      return String(value || '').replace(/\D+/g, '').trim();
+    }
+
+    function normalizeDialCode(value, fallback = '+58') {
+      const digits = String(value || '').replace(/\D+/g, '');
+      const fallbackDigits = String(fallback || '+58').replace(/\D+/g, '') || '58';
+      return `+${digits || fallbackDigits}`;
+    }
+
+    function splitPhoneWithCode(value, fallbackCode = '+58') {
+      const cleaned = String(value || '').trim();
+      if (!cleaned) {
+        return { code: normalizeDialCode(fallbackCode), local: '' };
+      }
+
+      const normalized = cleaned.replace(/\s+/g, '');
+      if (normalized.startsWith('+')) {
+        const digits = normalized.replace(/\D+/g, '');
+        const knownCodes = ['58', '1', '52', '57', '51', '54', '34'];
+        const matchedCode = knownCodes.find(code => digits.startsWith(code));
+        if (matchedCode) {
+          return {
+            code: `+${matchedCode}`,
+            local: digits.slice(matchedCode.length),
+          };
+        }
+
+        return {
+          code: normalizeDialCode(fallbackCode),
+          local: digits,
+        };
+      }
+
+      return {
+        code: normalizeDialCode(fallbackCode),
+        local: normalizePhoneValue(normalized),
+      };
+    }
+
+    function composePhoneWithCountryCode(localPhone, dialCode) {
+      const localDigits = normalizePhoneValue(localPhone);
+      const normalizedCode = normalizeDialCode(dialCode);
+      return localDigits ? `${normalizedCode}${localDigits}` : '';
     }
 
     function getUserPhone(user) {
-      return normalizePhoneValue(user?.phone_number || user?.phone || '');
+      return String(user?.phone_number || user?.phone || '').trim();
     }
 
-    function fillReceiverFieldsFromUser(user, nameInput, phoneInput) {
+    function fillReceiverFieldsFromUser(user, nameInput, phoneInput, phoneCodeInput = null) {
       if (!user) {
         alert('Debes iniciar sesión para usar tus datos como receptor.');
         return false;
@@ -1534,15 +1609,22 @@
       }
 
       if (phoneInput) {
-        phoneInput.value = getUserPhone(user);
+        const phoneParts = splitPhoneWithCode(getUserPhone(user), phoneCodeInput?.value || '+58');
+        if (phoneCodeInput) {
+          phoneCodeInput.value = phoneParts.code;
+        }
+        phoneInput.value = phoneParts.local;
       }
 
       return true;
     }
 
-    function buildDeliveryAddress(receiverNameInput, receiverPhoneInput, extraInfoInput, latitudeInput = null, longitudeInput = null) {
+    function buildDeliveryAddress(receiverNameInput, receiverPhoneInput, extraInfoInput, latitudeInput = null, longitudeInput = null, receiverPhoneCodeInput = null) {
       const receiverName = (receiverNameInput?.value || '').trim();
-      const receiverPhone = normalizePhoneValue(receiverPhoneInput?.value || '');
+      const receiverPhone = composePhoneWithCountryCode(
+        receiverPhoneInput?.value || '',
+        receiverPhoneCodeInput?.value || '+58'
+      );
       const extraInfo = (extraInfoInput?.value || '').trim();
       const latitude = latitudeInput?.value ? Number(latitudeInput.value) : null;
       const longitude = longitudeInput?.value ? Number(longitudeInput.value) : null;
@@ -1618,7 +1700,8 @@
           options.receiverPhoneInput,
           options.extraInfoInput,
           options.latitudeInput,
-          options.longitudeInput
+          options.longitudeInput,
+          options.receiverPhoneCodeInput
         );
       }
 
@@ -1642,7 +1725,76 @@
       };
     }
 
-    function renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput) {
+    function calculateDistanceKm(originLat, originLng, destinationLat, destinationLng) {
+      const toRad = (value) => (Number(value) * Math.PI) / 180;
+      const earthRadiusKm = 6371;
+      const dLat = toRad(destinationLat - originLat);
+      const dLng = toRad(destinationLng - originLng);
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+        + Math.cos(toRad(originLat)) * Math.cos(toRad(destinationLat))
+        * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return earthRadiusKm * c;
+    }
+
+    function estimateDistanceFromCoordinates(latitudeInput, longitudeInput, distanceInput) {
+      if (!distanceInput || !Number.isFinite(Number(tenantLatitude)) || !Number.isFinite(Number(tenantLongitude))) {
+        return null;
+      }
+
+      const latitude = latitudeInput?.value ? Number(latitudeInput.value) : null;
+      const longitude = longitudeInput?.value ? Number(longitudeInput.value) : null;
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        distanceInput.value = '';
+        return null;
+      }
+
+      const distanceKm = calculateDistanceKm(Number(tenantLatitude), Number(tenantLongitude), latitude, longitude);
+      const normalizedDistanceKm = Number.isFinite(distanceKm) && distanceKm > 0 ? Number(distanceKm.toFixed(2)) : null;
+      distanceInput.value = normalizedDistanceKm ? String(normalizedDistanceKm) : '';
+      return normalizedDistanceKm;
+    }
+
+    function formatDeliveryFeeText(deliveryType, distanceInput) {
+      const deliveryContext = getTenantDeliveryContext(deliveryType, distanceInput, false);
+      if (deliveryType !== 'delivery') {
+        return 'Precio delivery: no aplica para este tipo de entrega.';
+      }
+
+      if (!tenantDeliveryConfig?.enabled) {
+        return 'Precio delivery: delivery de tienda no disponible.';
+      }
+
+      if (!deliveryContext.valid && deliveryContext.message) {
+        return `Precio delivery: ${deliveryContext.message}`;
+      }
+
+      const distanceLabel = deliveryContext.distanceKm
+        ? ` | Distancia: ${deliveryContext.distanceKm.toFixed(2)} km`
+        : '';
+
+      return `Precio delivery estimado: ${Number(deliveryContext.fee || 0).toFixed(2)} ${getBaseCurrencySymbol()}${distanceLabel}`;
+    }
+
+    function refreshDeliveryUiInfo() {
+      const deliveryType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup';
+      const proDeliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+
+      if (deliveryPriceInfo) {
+        deliveryPriceInfo.textContent = formatDeliveryFeeText(deliveryType, shippingDistanceInput);
+      }
+
+      if (proDeliveryPriceInfo) {
+        proDeliveryPriceInfo.textContent = formatDeliveryFeeText(proDeliveryType, proShippingDistanceInput);
+      }
+
+      if (proDeliveryFeeSummary) {
+        const proDeliveryContext = getTenantDeliveryContext(proDeliveryType, proShippingDistanceInput, false);
+        proDeliveryFeeSummary.textContent = `${Number(proDeliveryContext.fee || 0).toFixed(2)} ${getBaseCurrencySymbol()}`;
+      }
+    }
+
+    function renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput, distanceInput = null) {
       if (!statusElement) {
         return;
       }
@@ -1651,16 +1803,22 @@
       const longitude = longitudeInput?.value ? Number(longitudeInput.value) : null;
 
       if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-        statusElement.textContent = `Ubicación exacta fijada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        const estimatedDistanceKm = estimateDistanceFromCoordinates(latitudeInput, longitudeInput, distanceInput);
+        statusElement.textContent = estimatedDistanceKm
+          ? `Ubicación exacta fijada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} | Distancia tienda-cliente: ${estimatedDistanceKm.toFixed(2)} km`
+          : `Ubicación exacta fijada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        refreshDeliveryUiInfo();
         return;
       }
 
       statusElement.textContent = 'Aún no se ha fijado una ubicación exacta.';
+      estimateDistanceFromCoordinates(latitudeInput, longitudeInput, distanceInput);
+      refreshDeliveryUiInfo();
     }
 
-    function applyUserLocationCoordinates(user, latitudeInput, longitudeInput, statusElement) {
+    function applyUserLocationCoordinates(user, latitudeInput, longitudeInput, statusElement, distanceInput = null) {
       if (!user) {
-        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput, distanceInput);
         alert('Debes iniciar sesión para usar tu ubicación guardada.');
         return;
       }
@@ -1673,12 +1831,12 @@
         longitudeInput.value = user.longitude ?? '';
       }
 
-      renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+      renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput, distanceInput);
     }
 
-    function applyUserLocationToShippingForm(user, countrySelect, stateSelect, citySelect, detailInput, latitudeInput, longitudeInput, statusElement) {
+    function applyUserLocationToShippingForm(user, countrySelect, stateSelect, citySelect, detailInput, latitudeInput, longitudeInput, statusElement, distanceInput = null) {
       if (!user) {
-        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput, distanceInput);
         return;
       }
 
@@ -1694,7 +1852,7 @@
         longitudeInput.value = user.longitude ?? '';
       }
 
-      renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+      renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput, distanceInput);
 
       initLocationSelectors(countrySelect, stateSelect, citySelect, {
         countryId: user.country_id || tenantCountryId,
@@ -1704,7 +1862,7 @@
       });
     }
 
-    function requestCurrentUserLocation(latitudeInput, longitudeInput, statusElement) {
+    function requestCurrentUserLocation(latitudeInput, longitudeInput, statusElement, distanceInput = null) {
       if (!navigator.geolocation) {
         alert('Tu dispositivo no permite obtener ubicación desde el navegador.');
         return;
@@ -1723,9 +1881,9 @@
           longitudeInput.value = String(position.coords.longitude || '');
         }
 
-        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput, distanceInput);
       }, () => {
-        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput);
+        renderShippingLocationStatus(statusElement, latitudeInput, longitudeInput, distanceInput);
         alert('No se pudo obtener tu ubicación actual. Revisa los permisos de la app o del navegador.');
       }, {
         enableHighAccuracy: true,
@@ -2002,6 +2160,7 @@
         latitudeInput,
         longitudeInput,
         receiverFieldsElement,
+        distanceInput,
       } = config;
       const isStoreDelivery = deliveryType === 'delivery';
       const isThirdPartyShipping = deliveryType === 'shipping';
@@ -2043,8 +2202,10 @@
         if (longitudeInput) {
           longitudeInput.value = '';
         }
-        renderShippingLocationStatus(locationStatusElement, latitudeInput, longitudeInput);
+        renderShippingLocationStatus(locationStatusElement, latitudeInput, longitudeInput, distanceInput);
       }
+
+      refreshDeliveryUiInfo();
     }
 
     function updateDeliveryAddressVisibility() {
@@ -2068,6 +2229,7 @@
           latitudeInput: shippingLatitudeInput,
           longitudeInput: shippingLongitudeInput,
           receiverFieldsElement: deliveryRecipientFields,
+          distanceInput: shippingDistanceInput,
         }
       );
       if (shippingDistanceWrap) {
@@ -2495,6 +2657,7 @@
         longitudeInput: shippingLongitudeInput,
         receiverNameInput: deliveryReceiverNameInput,
         receiverPhoneInput: deliveryReceiverPhoneInput,
+        receiverPhoneCodeInput: deliveryReceiverPhoneCodeInput,
         extraInfoInput: deliveryExtraInfoInput,
       });
       const authUser = getAuthUser();
@@ -4347,6 +4510,7 @@
         longitudeInput: proShippingLongitudeInput,
         receiverNameInput: proDeliveryReceiverNameInput,
         receiverPhoneInput: proDeliveryReceiverPhoneInput,
+        receiverPhoneCodeInput: proDeliveryReceiverPhoneCodeInput,
         extraInfoInput: proDeliveryExtraInfoInput,
       });
 
@@ -5107,6 +5271,9 @@
       document.getElementById('tenant-pro-remaining-amount-bs').textContent = `${remainingBs.toFixed(2)} Bs`;
       document.getElementById('tenant-pro-dollar-rate').textContent = `${(proBaseRate || 0).toFixed(2)}`;
       document.getElementById('tenant-pro-base-currency').textContent = String(proBaseCurrency || 'USD').toUpperCase();
+      if (proDeliveryFeeSummary) {
+        proDeliveryFeeSummary.textContent = `${Number(proDeliveryContext.fee || 0).toFixed(2)} ${baseSymbol}`;
+      }
 
       const igtfRow = document.getElementById('tenant-pro-igtf-row');
       const igtfBasePaymentsRow = document.getElementById('tenant-pro-igtf-base-payments-row');
@@ -5135,6 +5302,8 @@
           igtfBasePaymentsRow.classList.add('d-none');
         }
       }
+
+      refreshDeliveryUiInfo();
     }
 
     function syncTenantProStatusAll() {
@@ -5280,7 +5449,7 @@
         }
       }
 
-      applyUserLocationToShippingForm(user, proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
+      applyUserLocationToShippingForm(user, proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus, proShippingDistanceInput);
 
       paymentRowsContainer.innerHTML = '';
       let rowCounter = 0;
@@ -5610,6 +5779,7 @@
         longitudeInput: proShippingLongitudeInput,
         receiverNameInput: proDeliveryReceiverNameInput,
         receiverPhoneInput: proDeliveryReceiverPhoneInput,
+        receiverPhoneCodeInput: proDeliveryReceiverPhoneCodeInput,
         extraInfoInput: proDeliveryExtraInfoInput,
       });
 
@@ -6029,6 +6199,7 @@
               latitudeInput: proShippingLatitudeInput,
               longitudeInput: proShippingLongitudeInput,
               receiverFieldsElement: proDeliveryRecipientFields,
+              distanceInput: proShippingDistanceInput,
             }
           );
           proShippingDistanceWrap?.classList.toggle('d-none', !(isStoreDelivery && tenantDeliveryConfig?.enabled && tenantDeliveryConfig.mode === 'distance'));
@@ -6052,19 +6223,19 @@
       proShippingUseProfileLocationBtn?.addEventListener('click', () => {
         const currentType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
         if (currentType === 'delivery') {
-          applyUserLocationCoordinates(getAuthUser(), proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
+          applyUserLocationCoordinates(getAuthUser(), proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus, proShippingDistanceInput);
           return;
         }
 
-        applyUserLocationToShippingForm(getAuthUser(), proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
+        applyUserLocationToShippingForm(getAuthUser(), proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus, proShippingDistanceInput);
       });
 
       proShippingUseCurrentLocationBtn?.addEventListener('click', () => {
-        requestCurrentUserLocation(proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
+        requestCurrentUserLocation(proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus, proShippingDistanceInput);
       });
 
       proDeliveryUseCustomerDataBtn?.addEventListener('click', () => {
-        fillReceiverFieldsFromUser(getAuthUser(), proDeliveryReceiverNameInput, proDeliveryReceiverPhoneInput);
+        fillReceiverFieldsFromUser(getAuthUser(), proDeliveryReceiverNameInput, proDeliveryReceiverPhoneInput, proDeliveryReceiverPhoneCodeInput);
       });
 
       proDeliveryOpenMapBtn?.addEventListener('click', () => {
@@ -6072,6 +6243,7 @@
           latitudeInput: proShippingLatitudeInput,
           longitudeInput: proShippingLongitudeInput,
           statusElement: proShippingLocationStatus,
+          distanceInput: proShippingDistanceInput,
         });
       });
 
@@ -6105,19 +6277,19 @@
     shippingUseProfileLocationBtn?.addEventListener('click', () => {
       const currentType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup';
       if (currentType === 'delivery') {
-        applyUserLocationCoordinates(getAuthUser(), shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus);
+        applyUserLocationCoordinates(getAuthUser(), shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus, shippingDistanceInput);
         return;
       }
 
-      applyUserLocationToShippingForm(getAuthUser(), shippingCountrySelect, shippingStateSelect, shippingCitySelect, shippingAddressDetailInput, shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus);
+      applyUserLocationToShippingForm(getAuthUser(), shippingCountrySelect, shippingStateSelect, shippingCitySelect, shippingAddressDetailInput, shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus, shippingDistanceInput);
     });
 
     shippingUseCurrentLocationBtn?.addEventListener('click', () => {
-      requestCurrentUserLocation(shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus);
+      requestCurrentUserLocation(shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus, shippingDistanceInput);
     });
 
     deliveryUseCustomerDataBtn?.addEventListener('click', () => {
-      fillReceiverFieldsFromUser(getAuthUser(), deliveryReceiverNameInput, deliveryReceiverPhoneInput);
+      fillReceiverFieldsFromUser(getAuthUser(), deliveryReceiverNameInput, deliveryReceiverPhoneInput, deliveryReceiverPhoneCodeInput);
     });
 
     deliveryOpenMapBtn?.addEventListener('click', () => {
@@ -6125,6 +6297,7 @@
         latitudeInput: shippingLatitudeInput,
         longitudeInput: shippingLongitudeInput,
         statusElement: shippingLocationStatus,
+        distanceInput: shippingDistanceInput,
       });
     });
 
@@ -6163,7 +6336,8 @@
       renderShippingLocationStatus(
         activeDeliveryMapContext.statusElement,
         activeDeliveryMapContext.latitudeInput,
-        activeDeliveryMapContext.longitudeInput
+        activeDeliveryMapContext.longitudeInput,
+        activeDeliveryMapContext.distanceInput
       );
 
       if (typeof bootstrap !== 'undefined' && bootstrap?.Modal && deliveryMapModalElement) {
@@ -6180,7 +6354,7 @@
       });
     }
 
-    applyUserLocationToShippingForm(getAuthUser(), shippingCountrySelect, shippingStateSelect, shippingCitySelect, shippingAddressDetailInput, shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus);
+    applyUserLocationToShippingForm(getAuthUser(), shippingCountrySelect, shippingStateSelect, shippingCitySelect, shippingAddressDetailInput, shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus, shippingDistanceInput);
 
     if (proShippingCountrySelect) {
       initLocationSelectors(proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, {
@@ -6191,7 +6365,7 @@
       });
     }
 
-    applyUserLocationToShippingForm(getAuthUser(), proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus);
+    applyUserLocationToShippingForm(getAuthUser(), proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus, proShippingDistanceInput);
 
     setProSubmitLoading(false);
     renderCart();

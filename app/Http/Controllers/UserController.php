@@ -113,6 +113,8 @@ class UserController extends Controller
             'email' => 'required|email|unique:users,email,' . $id,
             'role_id' => 'required|exists:roles,id',
             'tenant_id' => 'nullable|exists:tenants,id',
+            'phone_number' => 'required|string|max:20',
+            'dni' => 'required|string|max:100',
             'password' => 'nullable|string|min:8|confirmed',
         ]);
     
@@ -132,6 +134,8 @@ class UserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'role_id' => $request->role_id,
+            'phone_number' => $request->phone_number,
+            'dni' => trim((string) $request->dni),
             'tenant_id' => $request->has('tenant_id')
                 ? ($request->filled('tenant_id') ? (int) $request->tenant_id : null)
                 : $user->tenant_id,
@@ -183,6 +187,12 @@ class UserController extends Controller
         $actorRole = User::canonicalRoleName(optional($actor->role)->name);
         $targetRole = User::canonicalRoleName(optional($target->role)->name);
         $isSuperUser = (int) ($actor->role_id ?? 0) === 4 || $actorRole === 'super_user';
+
+        if (in_array($targetRole, ['user', 'cliente', 'customer'], true)) {
+            return response()->json([
+                'message' => 'No puedes editar ni inactivar usuarios cliente desde esta sección.',
+            ], Response::HTTP_FORBIDDEN);
+        }
 
         if (!$isSuperUser) {
             if ((int) ($actor->tenant_id ?? 0) <= 0 || (int) ($target->tenant_id ?? 0) <= 0 || (int) $actor->tenant_id !== (int) $target->tenant_id) {

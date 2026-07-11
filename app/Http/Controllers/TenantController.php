@@ -475,6 +475,7 @@ class TenantController extends Controller
                 ->all(),
             'opening_time' => preg_match('/^\d{2}:\d{2}/', (string) ($tenantInput['opening_time'] ?? '')) ? substr((string) $tenantInput['opening_time'], 0, 5) : null,
             'closing_time' => preg_match('/^\d{2}:\d{2}/', (string) ($tenantInput['closing_time'] ?? '')) ? substr((string) $tenantInput['closing_time'], 0, 5) : null,
+            'appointments_enabled' => filter_var($tenantInput['appointments_enabled'] ?? true, FILTER_VALIDATE_BOOLEAN),
             'appointments_first_come_enabled' => filter_var($tenantInput['appointments_first_come_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'offers_projects' => filter_var($tenantInput['offers_projects'] ?? true, FILTER_VALIDATE_BOOLEAN),
             'special_taxpayer' => filter_var($tenantInput['special_taxpayer'] ?? false, FILTER_VALIDATE_BOOLEAN),
@@ -975,10 +976,20 @@ class TenantController extends Controller
                 ->get();
         }
 
+        $editableTenantRoles = Role::query()
+            ->get()
+            ->filter(function (Role $role) {
+                $canonical = User::canonicalRoleName((string) $role->name);
+
+                return !in_array($canonical, ['user', 'cliente', 'customer', 'super_user', 'super user'], true);
+            })
+            ->values();
+
         return view('tenantStore', compact(
             'tenant',
             'tenantPlanCapabilities',
             'roles',
+            'editableTenantRoles',
             'countries',
             'states',
             'cities',
@@ -1323,6 +1334,7 @@ class TenantController extends Controller
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
         $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
         $storefrontBsRate = $this->resolveStorefrontBsRate($tenant);
+        $appointmentsEnabledForStorefront = $this->tenantSupportsPublicAppointmentCheckout($tenant);
         $activeProjects = collect();
 
         if ((bool) ($tenant->offers_projects ?? true)) {
@@ -1342,7 +1354,7 @@ class TenantController extends Controller
                 ->get();
         }
 
-        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate', 'activeProjects'));
+        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate', 'activeProjects', 'appointmentsEnabledForStorefront'));
     }
 
     public function store(Request $request)
@@ -2083,6 +2095,7 @@ class TenantController extends Controller
                 'phone_number'    => 'nullable|string|max:20',
                 'working_days'    => 'nullable|array',
                 'working_days.*'  => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
+                'appointments_enabled' => 'nullable|boolean',
                 'appointments_first_come_enabled' => 'nullable|boolean',
                 'offers_projects' => 'nullable|boolean',
                 'opening_time'    => 'nullable|date_format:H:i',
@@ -2135,6 +2148,9 @@ class TenantController extends Controller
                 $validated['delivery_notifications_enabled'] = false;
             }
 
+            $appointmentsEnabled = $request->has('appointments_enabled')
+                ? $request->boolean('appointments_enabled')
+                : (bool) ($tenant->appointments_enabled ?? true);
             $appointmentsFirstComeEnabled = $request->boolean('appointments_first_come_enabled');
             $offersProjectsEnabled = $request->has('offers_projects')
                 ? $request->boolean('offers_projects')
@@ -2294,6 +2310,7 @@ class TenantController extends Controller
                 'working_days'    => array_key_exists('working_days', $validated)
                     ? $this->normalizeWorkingDays($validated['working_days'] ?? null)
                     : $tenant->working_days,
+                'appointments_enabled' => $appointmentsEnabled,
                 'appointments_first_come_enabled' => $appointmentsFirstComeEnabled,
                 'offers_projects' => $offersProjectsEnabled,
                 'opening_time'    => $validated['opening_time'] ?? $tenant->opening_time,
@@ -2421,6 +2438,7 @@ class TenantController extends Controller
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
         $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
         $storefrontBsRate = $this->resolveStorefrontBsRate($tenant);
+        $appointmentsEnabledForStorefront = $this->tenantSupportsPublicAppointmentCheckout($tenant);
 
         return view('ecommerceCategory', compact(
             'tenant',
@@ -2432,7 +2450,8 @@ class TenantController extends Controller
             'baseCurrencyCode',
             'baseCurrencySymbol',
             'showBsPrices',
-            'storefrontBsRate'
+            'storefrontBsRate',
+            'appointmentsEnabledForStorefront'
         ));
     }
     public function publicTenantProduct(Tenant $tenant, string $product)
@@ -2817,6 +2836,13 @@ class TenantController extends Controller
 
                 if (!in_array($validated['delivery_type'], ['pickup', 'delivery', 'shipping'], true)) {
                     throw new \RuntimeException('Debes seleccionar un tipo de entrega válido.');
+                }
+
+                if (in_array($validated['delivery_type'], ['delivery', 'shipping'], true) && !(bool) ($tenant->delivery_enabled ?? false)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Los envíos y el delivery están desactivados para esta tienda.',
+                    ], 422);
                 }
 
                 if (in_array($validated['delivery_type'], ['delivery', 'shipping'], true) && empty(trim((string) ($validated['delivery_address'] ?? '')))) {
@@ -3504,8 +3530,9 @@ class TenantController extends Controller
     private function tenantSupportsPublicAppointmentCheckout(Tenant $tenant): bool
     {
         $isServiceBusiness = Str::lower(trim((string) ($tenant->business_type ?? ''))) === 'servicio';
+        $appointmentsEnabled = (bool) ($tenant->appointments_enabled ?? true);
 
-        return $isServiceBusiness && TenantPlanCapabilities::forTenant($tenant)->canAppointments();
+        return $isServiceBusiness && $appointmentsEnabled && TenantPlanCapabilities::forTenant($tenant)->canAppointments();
     }
 
     private function publicAppointmentServicesQuery(int $tenantId)

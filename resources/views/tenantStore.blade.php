@@ -617,6 +617,21 @@
                                 <div class="mb-4 p-3" id="tenantRestrictionsSection">
                                     <div class="mb-3" id="serviceAppointmentConfigFields" style="display: {{ $isServiceBusinessType ? 'block' : 'none' }};">
                                         <label class="form-label fw-bold d-block">Configuración de agenda de citas</label>
+                                        <input type="hidden" name="appointments_enabled" value="0">
+                                        <div class="form-check form-switch mb-2">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="appointments_enabled"
+                                                name="appointments_enabled"
+                                                value="1"
+                                                {{ (bool) ($tenant->appointments_enabled ?? true) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="appointments_enabled">
+                                                Activar servicio de citas
+                                            </label>
+                                        </div>
+                                        <small class="text-muted d-block mt-1">Si se desactiva, el calendario de citas no se mostrará en la tienda pública.</small>
                                         <input type="hidden" name="appointments_first_come_enabled" value="0">
                                         <div class="form-check form-switch">
                                             <input
@@ -1040,26 +1055,44 @@
                                                         @php
                                                             $tenantUserRole = \App\Models\User::canonicalRoleName(optional($user->role)->name);
                                                             $adminCannotManageThisUser = $tenantUsersActorRole === 'admin' && $tenantUserRole === 'admin';
+                                                            $isCustomerTenantUser = in_array($tenantUserRole, ['user', 'cliente', 'customer'], true);
                                                         @endphp
                                                         <li class="list-group-item d-flex justify-content-between align-items-center">
                                                             <div>
                                                                 <strong>{{ $user->name }}</strong>
                                                                 <small class="d-block text-muted">{{ $user->email }}</small>
+                                                                <small class="d-block text-muted">Tel: {{ $user->phone_number ?: 'No registrado' }} | DNI: {{ $user->dni ?: 'No registrado' }}</small>
                                                                 <small class="d-block text-muted">{{ ($roleDefinitions[\App\Models\User::canonicalRoleName(optional($user->role)->name)]['description'] ?? 'Usuario operativo de la tienda.') }}</small>
                                                                 @if($canManageTenantUsers)
                                                                     <div class="d-flex flex-wrap gap-2 mt-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            class="btn btn-dark btn-sm mb-0 tenantEditUserBtn"
+                                                                            data-user-id="{{ $user->id }}"
+                                                                            data-user-name="{{ $user->name }}"
+                                                                            data-user-email="{{ $user->email }}"
+                                                                            data-user-phone="{{ $user->phone_number }}"
+                                                                            data-user-dni="{{ $user->dni }}"
+                                                                            data-role-id="{{ $user->role_id }}"
+                                                                            data-bs-toggle="modal"
+                                                                            data-bs-target="#editUserModal"
+                                                                            {{ $adminCannotManageThisUser || $isCustomerTenantUser ? 'disabled' : '' }}>
+                                                                            Editar
+                                                                        </button>
                                                                         <button
                                                                             type="button"
                                                                             class="btn btn-outline-dark btn-sm mb-0 tenantChangePasswordBtn"
                                                                             data-user-id="{{ $user->id }}"
                                                                             data-user-name="{{ $user->name }}"
                                                                             data-user-email="{{ $user->email }}"
+                                                                            data-user-phone="{{ $user->phone_number }}"
+                                                                            data-user-dni="{{ $user->dni }}"
                                                                             data-role-id="{{ $user->role_id }}"
                                                                             data-bs-toggle="collapse"
                                                                             data-bs-target="#tenantPasswordForm-{{ $user->id }}"
                                                                             aria-expanded="false"
                                                                             aria-controls="tenantPasswordForm-{{ $user->id }}"
-                                                                            {{ $adminCannotManageThisUser ? 'disabled' : '' }}>
+                                                                            {{ $adminCannotManageThisUser || $isCustomerTenantUser ? 'disabled' : '' }}>
                                                                             Cambiar contraseña
                                                                         </button>
                                                                         <button
@@ -1068,7 +1101,7 @@
                                                                             data-user-id="{{ $user->id }}"
                                                                             data-user-name="{{ $user->name }}"
                                                                             data-user-active="{{ (int) $user->is_active }}"
-                                                                            {{ $adminCannotManageThisUser ? 'disabled' : '' }}>
+                                                                            {{ $adminCannotManageThisUser || $isCustomerTenantUser ? 'disabled' : '' }}>
                                                                             {{ (bool) $user->is_active ? 'Inactivar' : 'Activar' }}
                                                                         </button>
                                                                     </div>
@@ -1090,6 +1123,9 @@
                                                                     </div>
                                                                     @if($adminCannotManageThisUser)
                                                                         <small class="d-block text-muted mt-1">No puedes modificar ni inactivar a otro admin.</small>
+                                                                    @endif
+                                                                    @if($isCustomerTenantUser)
+                                                                        <small class="d-block text-muted mt-1">Los usuarios cliente no se editan desde esta sección.</small>
                                                                     @endif
                                                                 @endif
                                                             </div>
@@ -1312,6 +1348,16 @@
                         <input type="email" name="email" id="edit_user_email" class="form-control" required>
                     </div>
 
+                    <div class="mb-3">
+                        <label class="form-label">Teléfono</label>
+                        <input type="text" name="phone_number" id="edit_user_phone" class="form-control" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">DNI</label>
+                        <input type="text" name="dni" id="edit_user_dni" class="form-control" required>
+                    </div>
+
                     <!-- Contraseña -->
                     <div class="mb-3">
                         <label class="form-label">
@@ -1323,10 +1369,10 @@
                     <!-- Rol -->
                     <div class="mb-3">
                         <label class="form-label">Rol</label>
-                        <select name="role" id="edit_user_role" class="form-select" required>
+                        <select name="role_id" id="edit_user_role" class="form-select" required>
                             <option value="">Seleccione un rol</option>
-                            @foreach($roles as $role)
-                                <option value="{{ $role->name }}">{{ \App\Models\User::displayRoleName($role->name) }}</option>
+                            @foreach(($editableTenantRoles ?? collect()) as $role)
+                                <option value="{{ $role->id }}">{{ \App\Models\User::displayRoleName($role->name) }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -1686,6 +1732,7 @@
         }
 
         setWorkingDays(Array.isArray(tenant.working_days) ? tenant.working_days : []);
+        setFormCheckboxValue('#appointments_enabled', tenant.appointments_enabled ?? true);
         setFormCheckboxValue('#appointments_first_come_enabled', tenant.appointments_first_come_enabled);
         setFormCheckboxValue('#offers_projects', tenant.offers_projects ?? true);
         setFormCheckboxValue('#special_taxpayer', tenant.special_taxpayer);
@@ -2857,7 +2904,10 @@ if (!window.__tenantUsersModalActionsBound) {
             const userId = formNode.dataset.userId;
             const userName = cardItem?.querySelector('strong')?.textContent?.trim() || 'usuario';
             const userEmail = cardItem?.querySelector('small')?.textContent?.trim() || '';
-            const roleId = cardItem?.querySelector('.tenantChangePasswordBtn')?.dataset.roleId || '';
+            const editButton = cardItem?.querySelector('.tenantEditUserBtn');
+            const roleId = editButton?.dataset.roleId || cardItem?.querySelector('.tenantChangePasswordBtn')?.dataset.roleId || '';
+            const phoneNumber = editButton?.dataset.userPhone || cardItem?.querySelector('.tenantChangePasswordBtn')?.dataset.userPhone || '';
+            const dni = editButton?.dataset.userDni || cardItem?.querySelector('.tenantChangePasswordBtn')?.dataset.userDni || '';
             const passwordInput = formNode.querySelector('.tenantPasswordInput');
             const passwordConfirmInput = formNode.querySelector('.tenantPasswordConfirmInput');
             const newPassword = String(passwordInput?.value || '').trim();
@@ -2878,6 +2928,8 @@ if (!window.__tenantUsersModalActionsBound) {
             payload.append('name', userName);
             payload.append('email', userEmail);
             payload.append('role_id', roleId);
+            payload.append('phone_number', phoneNumber);
+            payload.append('dni', dni);
             payload.append('password', newPassword);
             payload.append('password_confirmation', confirmPassword);
 
@@ -2997,21 +3049,89 @@ if (!window.__tenantUsersModalActionsBound) {
         }
     });
 }
-// Abrir modal y cargar datos del usuario
-document.querySelectorAll('.editUserBtn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const id = btn.dataset.id;
-        const name = btn.dataset.name;
-        const email = btn.dataset.email;
+document.addEventListener('click', (event) => {
+    const editButton = event.target.closest('.tenantEditUserBtn');
+    if (!editButton) {
+        return;
+    }
 
-        document.getElementById('edit_user_id').value = id;
-        document.getElementById('edit_user_name').value = name;
-        document.getElementById('edit_user_email').value = email;
+    const setValue = (selector, value) => {
+        const input = document.querySelector(selector);
+        if (input) {
+            input.value = String(value ?? '');
+        }
+    };
 
-        let modal = new bootstrap.Modal(document.getElementById('editUserModal'));
-        modal.show();
-    });
+    setValue('#edit_user_id', editButton.dataset.userId || '');
+    setValue('#edit_user_name', editButton.dataset.userName || '');
+    setValue('#edit_user_email', editButton.dataset.userEmail || '');
+    setValue('#edit_user_phone', editButton.dataset.userPhone || '');
+    setValue('#edit_user_dni', editButton.dataset.userDni || '');
+    setValue('#edit_user_role', editButton.dataset.roleId || '');
+    setValue('#edit_user_password', '');
 });
+
+const editUserForm = document.getElementById('editUserForm');
+if (editUserForm) {
+    editUserForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const userId = String(document.getElementById('edit_user_id')?.value || '').trim();
+        if (!userId) {
+            showTenantToast('No se encontró el usuario a editar.', 'warning');
+            return;
+        }
+
+        const payload = new FormData();
+        payload.append('_token', getTenantCsrfToken());
+        payload.append('name', String(document.getElementById('edit_user_name')?.value || '').trim());
+        payload.append('email', String(document.getElementById('edit_user_email')?.value || '').trim());
+        payload.append('phone_number', String(document.getElementById('edit_user_phone')?.value || '').trim());
+        payload.append('dni', String(document.getElementById('edit_user_dni')?.value || '').trim());
+        payload.append('role_id', String(document.getElementById('edit_user_role')?.value || '').trim());
+
+        const password = String(document.getElementById('edit_user_password')?.value || '').trim();
+        if (password !== '') {
+            payload.append('password', password);
+            payload.append('password_confirmation', password);
+        }
+
+        const submitButton = editUserForm.querySelector('button[type="submit"]');
+        setTenantActionButtonLoading(submitButton, true, 'Guardando...', 'Guardar');
+
+        try {
+            const updateUrl = tenantUserUpdateEndpointTemplate.replace('__ID__', encodeURIComponent(userId));
+            const response = await fetch(updateUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': getTenantCsrfToken(),
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                body: payload
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                showTenantToast(data.message || 'No se pudo actualizar el usuario.', 'error');
+                return;
+            }
+
+            showTenantToast('Usuario actualizado correctamente.', 'success');
+            if (window.bootstrap?.Modal) {
+                const modalElement = document.getElementById('editUserModal');
+                const modal = window.bootstrap.Modal.getInstance(modalElement) || new window.bootstrap.Modal(modalElement);
+                modal.hide();
+            }
+            window.location.reload();
+        } catch (error) {
+            showTenantToast('No se pudo conectar con el servidor para actualizar el usuario.', 'error');
+        } finally {
+            setTenantActionButtonLoading(submitButton, false, 'Guardando...', 'Guardar');
+        }
+    });
+}
     // Al cambiar país
     document.getElementById('country').addEventListener('change', function(){
         let country_id = this.value;

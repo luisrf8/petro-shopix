@@ -591,6 +591,12 @@
       const userId = @json(optional(auth()->user())->id);
       if (!userId) return;
 
+      if (window.__shopixBackofficeNotificationsBootstrapped === userId) {
+        return;
+      }
+
+      window.__shopixBackofficeNotificationsBootstrapped = userId;
+
       const badges = Array.from(document.querySelectorAll('.backoffice-notifications-count'));
       const toastContainer = document.getElementById('backoffice-toast-container');
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -601,6 +607,7 @@
       const processedNotificationIds = new Set();
       let feedPrimed = false;
       let notificationPollIntervalId = null;
+      let realtimePusher = null;
 
       function isAlreadyProcessedNotification(notification) {
         const id = notification?.id;
@@ -956,6 +963,10 @@
         const pusherKey = @json(config('broadcasting.connections.reverb.key'));
         if (!pusherKey) return;
 
+        if (realtimePusher && typeof realtimePusher.disconnect === 'function') {
+          realtimePusher.disconnect();
+        }
+
         const configuredHost = @json(config('broadcasting.connections.reverb.options.host'));
         const configuredPort = Number(@json(config('broadcasting.connections.reverb.options.port')));
         const configuredScheme = @json(config('broadcasting.connections.reverb.options.scheme'));
@@ -992,6 +1003,7 @@
         }
 
         const pusher = new Pusher(pusherKey, pusherOptions);
+        realtimePusher = pusher;
 
         const channel = pusher.subscribe(`private-App.Models.User.${userId}`);
         const handleIncoming = (notification) => {
@@ -1081,6 +1093,20 @@
           syncNotificationsFromFeed(true);
         }, 30000);
       }
+
+      window.addEventListener('pagehide', () => {
+        if (notificationPollIntervalId) {
+          window.clearInterval(notificationPollIntervalId);
+          notificationPollIntervalId = null;
+        }
+
+        if (realtimePusher && typeof realtimePusher.disconnect === 'function') {
+          realtimePusher.disconnect();
+          realtimePusher = null;
+        }
+
+        window.__shopixBackofficeNotificationsBootstrapped = null;
+      }, { once: true });
 
       try {
         ensureServiceWorkerRegistration().catch(() => {});

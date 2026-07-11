@@ -1995,8 +1995,20 @@ class SaleController extends Controller
 
         $orderCurrencyCode = $this->resolveOrderCurrencyCode($order);
         $orderCurrencySymbol = TenantCurrency::resolveCurrencySymbol($orderCurrencyCode);
+        $dollarRateToBs = (float) (DollarRate::latest('created_at')->where('tenant_id', $order->tenant_id)->value('rate') ?? 0);
+        $euroRateToBs = (float) (EuroRate::latest('created_at')->where('tenant_id', $order->tenant_id)->value('rate') ?? 0);
+        $orderRateToBs = $this->resolveCurrencyToBsRate($orderCurrencyCode, $dollarRateToBs, $euroRateToBs);
 
-        return view('orderInfoQr', compact('order', 'totalOrden', 'totalPagado', 'orderCurrencyCode', 'orderCurrencySymbol'));
+        return view('orderInfoQr', compact(
+            'order',
+            'totalOrden',
+            'totalPagado',
+            'orderCurrencyCode',
+            'orderCurrencySymbol',
+            'dollarRateToBs',
+            'euroRateToBs',
+            'orderRateToBs'
+        ));
     }
 
     private function resolveOrderCurrencyCode(SalesOrder $order): string

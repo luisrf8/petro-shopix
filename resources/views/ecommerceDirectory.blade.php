@@ -1064,15 +1064,11 @@
                 </p>
 
                 <div class="mt-auto">
-                  @php
-                    $directoryTypeLabel = mb_strtolower(trim((string) ($tenant->directory_type ?? 'tienda')));
-                    $directoryActionLabel = str_contains($directoryTypeLabel, 'servicio') ? 'Ver servicio' : 'Ver tienda';
-                    $externalUrl = trim((string) ($tenant->external_url ?? ''));
-                    if ($externalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($externalUrl), ['http://', 'https://'])) {
-                        $externalUrl = 'https://' . $externalUrl;
-                    }
-                    $shopixUrl = url('/' . $tenant->slug);
-                  @endphp
+                  @php($directoryTypeLabel = mb_strtolower(trim((string) ($tenant->directory_type ?? 'tienda'))))
+                  @php($directoryActionLabel = str_contains($directoryTypeLabel, 'servicio') ? 'Ver servicio' : 'Ver tienda')
+                  @php($externalUrl = trim((string) ($tenant->external_url ?? '')))
+                  @php($externalUrl = $externalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($externalUrl), ['http://', 'https://']) ? ('https://' . $externalUrl) : $externalUrl)
+                  @php($shopixUrl = url('/' . $tenant->slug))
                   @if($externalUrl !== '')
                     <div class="d-flex gap-2 flex-wrap">
                       <a

@@ -1047,6 +1047,12 @@
 
 <script>
   (() => {
+    if (window.__shopixTenantNavBootstrapped) {
+      return;
+    }
+
+    window.__shopixTenantNavBootstrapped = true;
+
     const indicatorWrap = document.getElementById('tenant-session-indicator-wrap');
     const indicatorText = document.getElementById('tenant-session-indicator');
     const logoutWrap = document.getElementById('tenant-session-logout-wrap');
@@ -2727,6 +2733,7 @@
     }
 
     let tenantRealtimeSessionKey = '';
+    let tenantRealtimePusher = null;
 
     function bindRealtimeChannel(user, token) {
       const sessionKey = `${user.id}:${token}`;
@@ -2777,7 +2784,12 @@
         pusherOptions.cluster = configuredCluster;
       }
 
+      if (tenantRealtimePusher && typeof tenantRealtimePusher.disconnect === 'function') {
+        tenantRealtimePusher.disconnect();
+      }
+
       const pusher = new Pusher(pusherKey, pusherOptions);
+      tenantRealtimePusher = pusher;
 
       const incrementBadge = () => {
         const current = Number(notificationsCount.textContent || 0) + 1;
@@ -2809,6 +2821,11 @@
 
     function bootstrapTenantSession(user, token) {
       if (!token || !user?.id) {
+        if (tenantRealtimePusher && typeof tenantRealtimePusher.disconnect === 'function') {
+          tenantRealtimePusher.disconnect();
+          tenantRealtimePusher = null;
+        }
+
         tenantRealtimeSessionKey = '';
         return;
       }
@@ -2874,9 +2891,24 @@
     let currentUser = null;
     let currentToken = '';
 
+    const handleTenantPageShow = () => {
+      if (currentToken && shouldForceIosPushRefresh()) {
+        syncBrowserPushSubscription(currentToken, { forceRefresh: true }).catch(() => {});
+      }
+    };
+
+    const handleTenantVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && currentToken && shouldForceIosPushRefresh()) {
+        syncBrowserPushSubscription(currentToken, { forceRefresh: true }).catch(() => {});
+      }
+    };
+
     initializeTenantAuthState().catch(() => {
       applyAuthState(null, '');
     });
+
+    window.addEventListener('pageshow', handleTenantPageShow);
+    document.addEventListener('visibilitychange', handleTenantVisibilityChange);
 
     notificationsBtn?.addEventListener('click', async () => {
       if (!currentToken || !currentUser?.id) {
@@ -2905,18 +2937,6 @@
       setTimeout(() => {
         maybeAutoRequestBrowserNotificationPermission();
       }, 180);
-
-      window.addEventListener('pageshow', () => {
-        if (token && shouldForceIosPushRefresh()) {
-          syncBrowserPushSubscription(token, { forceRefresh: true }).catch(() => {});
-        }
-      });
-
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && token && shouldForceIosPushRefresh()) {
-          syncBrowserPushSubscription(token, { forceRefresh: true }).catch(() => {});
-        }
-      });
     });
 
     window.addEventListener('storage', (event) => {
@@ -3067,5 +3087,16 @@
     document.getElementById('tenant-customer-change-password-form')?.addEventListener('submit', submitTenantCustomerPasswordChange);
     document.getElementById('tenant-customer-phone-form')?.addEventListener('submit', submitTenantCustomerPhoneUpdate);
     enableBrowserNotificationsBtn?.addEventListener('click', requestBrowserNotificationPermission);
+
+    window.addEventListener('pagehide', () => {
+      if (tenantRealtimePusher && typeof tenantRealtimePusher.disconnect === 'function') {
+        tenantRealtimePusher.disconnect();
+        tenantRealtimePusher = null;
+      }
+
+      window.removeEventListener('pageshow', handleTenantPageShow);
+      document.removeEventListener('visibilitychange', handleTenantVisibilityChange);
+      window.__shopixTenantNavBootstrapped = false;
+    }, { once: true });
   })();
 </script>
