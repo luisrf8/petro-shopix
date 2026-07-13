@@ -2059,11 +2059,13 @@ class SaleController extends Controller
                 abort(403, 'El rol Almacenista solo puede descargar la orden de entrega.');
             }
 
+            $defaultDisposition = $request->routeIs('public.order.pdf') ? 'inline' : 'attachment';
+
             if ($type === 'invoice' && ($order->document_issue_mode ?? 'delivery_note') === 'electronic_invoice') {
                 return $this->downloadElectronicInvoicePdf(
                     $request,
                     $order,
-                    (string) $request->query('disposition', 'attachment')
+                    (string) $request->query('disposition', $defaultDisposition)
                 );
             }
 
@@ -2101,7 +2103,7 @@ class SaleController extends Controller
 
             return response()->file($filePath, [
                 'Content-Type' => 'application/pdf',
-                'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $fileName, (string) $request->query('disposition', 'attachment')),
+                'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $fileName, (string) $request->query('disposition', $defaultDisposition)),
             ]);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
             throw $exception;

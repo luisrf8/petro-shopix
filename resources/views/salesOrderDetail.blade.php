@@ -100,7 +100,7 @@
       $storeWhatsappUrl = $storePhone !== ''
         ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'tienda') . ', sobre la orden #' . $order->id . '.')
         : null;
-      $publicDeliveryPdfUrl = route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) . '?disposition=inline';
+      $publicDeliveryPdfUrl = route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']);
       $orderProductsSummary = $order->details
         ->map(function ($detail) {
           $productName = trim((string) ($detail->variant->product->name ?? 'Producto'));
