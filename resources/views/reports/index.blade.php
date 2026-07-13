@@ -222,11 +222,11 @@
                         <div class="col-md-6 col-xl-4">
                             <div class="card h-100 border">
                                 <div class="card-body">
-                                    <h6 class="mb-2">Ingresos por usuario</h6>
-                                    <p class="text-sm text-muted mb-3">Ingresos vendidos/cobrados por usuario, con filtro por paciente o cliente.</p>
+                                    <h6 class="mb-2">Ventas por vendedor</h6>
+                                    <p class="text-sm text-muted mb-3">Ventas y cobros por vendedor, con periodo semanal, mensual, trimestral o anual.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.income.byUser.pdf') }}" data-report-name="Ingresos por usuario" data-format="PDF" data-endpoint="{{ route('reports.income.byUser.pdf') }}" data-filters="date,currency,income_user_id,income_customer_id">PDF</a>
-                                        <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.income.byUser.excel') }}" data-report-name="Ingresos por usuario" data-format="Excel" data-endpoint="{{ route('reports.income.byUser.excel') }}" data-filters="date,currency,income_user_id,income_customer_id">Excel</a>
+                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.income.byUser.pdf') }}" data-report-name="Ventas por vendedor" data-format="PDF" data-endpoint="{{ route('reports.income.byUser.pdf') }}" data-filters="date,currency,report_period,income_user_id,income_customer_id">PDF</a>
+                                        <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.income.byUser.excel') }}" data-report-name="Ventas por vendedor" data-format="Excel" data-endpoint="{{ route('reports.income.byUser.excel') }}" data-filters="date,currency,report_period,income_user_id,income_customer_id">Excel</a>
                                     </div>
                                 </div>
                             </div>
@@ -260,6 +260,17 @@
                                                 <select id="modal_currency_code" name="currency_code" class="form-control border border-1 p-2">
                                                     <option value="USD" {{ request('currency_code', $selectedCurrencyCode ?? $baseCurrencyCode ?? 'USD') === 'USD' ? 'selected' : '' }}>USD</option>
                                                     <option value="EUR" {{ request('currency_code', $selectedCurrencyCode ?? $baseCurrencyCode ?? 'USD') === 'EUR' ? 'selected' : '' }}>EUR</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="col-md-6" data-filter-group="report_period">
+                                                <label for="modal_report_period" class="form-label">Periodo rápido</label>
+                                                <select id="modal_report_period" name="report_period" class="form-control border border-1 p-2">
+                                                    <option value="custom" {{ request('report_period', 'custom') === 'custom' ? 'selected' : '' }}>Personalizado</option>
+                                                    <option value="weekly" {{ request('report_period') === 'weekly' ? 'selected' : '' }}>Semanal</option>
+                                                    <option value="monthly" {{ request('report_period') === 'monthly' ? 'selected' : '' }}>Mensual</option>
+                                                    <option value="quarterly" {{ request('report_period') === 'quarterly' ? 'selected' : '' }}>Trimestral</option>
+                                                    <option value="yearly" {{ request('report_period') === 'yearly' ? 'selected' : '' }}>Anual</option>
                                                 </select>
                                             </div>
 
@@ -373,6 +384,9 @@ document.addEventListener('DOMContentLoaded', function () {
     var form = document.getElementById('reportFiltersForm');
     var launchers = document.querySelectorAll('.js-report-launch');
     var groups = modalElement ? modalElement.querySelectorAll('[data-filter-group]') : [];
+    var periodSelect = document.getElementById('modal_report_period');
+    var startDateInput = document.getElementById('modal_start_date');
+    var endDateInput = document.getElementById('modal_end_date');
 
     if (!modalElement || !form || !launchers.length) {
         return;
@@ -383,6 +397,53 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     var modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+
+    var pad = function (value) {
+        return String(value).padStart(2, '0');
+    };
+
+    var formatDate = function (date) {
+        return [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join('-');
+    };
+
+    var applyReportPeriod = function () {
+        if (!periodSelect || !startDateInput || !endDateInput) {
+            return;
+        }
+
+        var today = new Date();
+        var period = periodSelect.value;
+
+        if (period === 'weekly') {
+            var weekStart = new Date(today);
+            var day = weekStart.getDay();
+            var offset = day === 0 ? -6 : 1 - day;
+            weekStart.setDate(weekStart.getDate() + offset);
+            startDateInput.value = formatDate(weekStart);
+            endDateInput.value = formatDate(today);
+            return;
+        }
+
+        if (period === 'monthly') {
+            startDateInput.value = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
+            endDateInput.value = formatDate(today);
+            return;
+        }
+
+        if (period === 'quarterly') {
+            var quarterMonth = Math.floor(today.getMonth() / 3) * 3;
+            startDateInput.value = formatDate(new Date(today.getFullYear(), quarterMonth, 1));
+            endDateInput.value = formatDate(today);
+            return;
+        }
+
+        if (period === 'yearly') {
+            startDateInput.value = formatDate(new Date(today.getFullYear(), 0, 1));
+            endDateInput.value = formatDate(today);
+        }
+    };
+
+    periodSelect?.addEventListener('change', applyReportPeriod);
 
     var toggleGroups = function (filters) {
         groups.forEach(function (group) {
@@ -417,6 +478,15 @@ document.addEventListener('DOMContentLoaded', function () {
             form.setAttribute('action', endpoint);
             modalLabel.textContent = 'Filtros: ' + reportName + ' (' + format + ')';
             toggleGroups(filters);
+
+            if (periodSelect) {
+                if (filters.indexOf('report_period') === -1) {
+                    periodSelect.value = 'custom';
+                } else {
+                    applyReportPeriod();
+                }
+            }
+
             modal.show();
         });
     });

@@ -41,7 +41,7 @@ class CustomerController extends Controller
             ->withSum([
                 'payments as tenant_paid_total' => function ($paymentsQuery) use ($tenantId) {
                     $paymentsQuery
-                        ->where('payments.status', 1)
+                        ->whereRaw('payments.status = ?', [1])
                         ->whereHas('salesOrder', function ($salesOrderQuery) use ($tenantId) {
                             $salesOrderQuery->where('tenant_id', $tenantId);
                         });
@@ -64,7 +64,7 @@ class CustomerController extends Controller
             ->withSum([
                 'payments as total_paid_amount' => function ($paymentsQuery) use ($tenantId) {
                     $paymentsQuery
-                        ->where('payments.status', 1)
+                        ->whereRaw('payments.status = ?', [1])
                         ->whereHas('salesOrder', function ($salesOrderQuery) use ($tenantId) {
                             $salesOrderQuery->where('tenant_id', $tenantId);
                         });

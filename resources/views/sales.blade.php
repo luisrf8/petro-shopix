@@ -1515,8 +1515,102 @@
         const existingCustomersForSale = @json(($existingCustomersForSale ?? collect())->values());
         
         const authUser = @json($authUser);
+        const salesCartStorageKey = `shopix_admin_sales_cart_${Number(authUser?.tenant_id || 0)}_${Number(authUser?.id || 0)}`;
         let selectedExistingCustomerId = Number(existingCustomersForSale?.[0]?.id || 0);
         let currentDeliveryFee = 0;
+
+        function normalizeStoredCartItem(rawItem) {
+            if (!rawItem || typeof rawItem !== 'object') {
+                return null;
+            }
+
+            const parsedId = String(rawItem.id || '').trim();
+            const parsedQuantity = Number(rawItem.quantity || 0);
+            const parsedPrice = Number(rawItem.price || 0);
+            const parsedTotalPrice = Number(rawItem.totalPrice || 0);
+
+            if (parsedId === '' || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0 || !Number.isFinite(parsedPrice) || parsedPrice < 0) {
+                return null;
+            }
+
+            return {
+                id: parsedId,
+                productName: String(rawItem.productName || 'Producto'),
+                productSize: String(rawItem.productSize || ''),
+                price: parsedPrice,
+                stock: Number.isFinite(Number(rawItem.stock)) ? Number(rawItem.stock) : 999999,
+                quantity: parsedQuantity,
+                quantity_input_mode: String(rawItem.quantity_input_mode || 'integer') === 'decimal' ? 'decimal' : 'integer',
+                unit_type: String(rawItem.unit_type || 'unidad'),
+                min_sale_quantity: Number(rawItem.min_sale_quantity || 1) > 0 ? Number(rawItem.min_sale_quantity) : 1,
+                line_discount_percentage: Number(rawItem.line_discount_percentage || 0),
+                imageSrc: rawItem.imageSrc ? String(rawItem.imageSrc) : null,
+                taxes: Array.isArray(rawItem.taxes) ? rawItem.taxes : [],
+                taxRate: Number(rawItem.taxRate || 0),
+                taxAmount: Number(rawItem.taxAmount || 0),
+                totalPrice: Number.isFinite(parsedTotalPrice) && parsedTotalPrice > 0
+                    ? parsedTotalPrice
+                    : parsedPrice,
+            };
+        }
+
+        function clearSalesCartStorage() {
+            try {
+                localStorage.removeItem(salesCartStorageKey);
+            } catch (error) {
+            }
+        }
+
+        function persistSalesCart() {
+            try {
+                if (!Array.isArray(selectedItems) || selectedItems.length === 0) {
+                    clearSalesCartStorage();
+                    return;
+                }
+
+                localStorage.setItem(salesCartStorageKey, JSON.stringify({
+                    items: selectedItems,
+                    saved_at: Date.now(),
+                }));
+            } catch (error) {
+            }
+        }
+
+        function syncCartCheckboxesWithSelectedItems() {
+            document.querySelectorAll('input[name="selectedVariants[]"]').forEach((checkbox) => {
+                const variantId = String(checkbox.value || '').trim();
+                checkbox.checked = selectedItems.some(item => String(item.id) === variantId);
+            });
+        }
+
+        function restoreSalesCartFromStorage() {
+            try {
+                const rawValue = localStorage.getItem(salesCartStorageKey);
+                if (!rawValue) {
+                    return;
+                }
+
+                const parsedPayload = JSON.parse(rawValue);
+                const rawItems = Array.isArray(parsedPayload)
+                    ? parsedPayload
+                    : (Array.isArray(parsedPayload?.items) ? parsedPayload.items : []);
+
+                const restoredItems = rawItems
+                    .map(normalizeStoredCartItem)
+                    .filter(item => item !== null);
+
+                if (restoredItems.length === 0) {
+                    clearSalesCartStorage();
+                    return;
+                }
+
+                selectedItems = restoredItems;
+                recalcSubtotals();
+                syncCartCheckboxesWithSelectedItems();
+            } catch (error) {
+                clearSalesCartStorage();
+            }
+        }
 
         function initializeExistingCustomerSelect() {
             const selectElement = document.getElementById('existingCustomerSelect');
@@ -2079,9 +2173,21 @@
             // Escuchar todos los checkboxes
             const checkboxes = document.querySelectorAll('input[name="selectedVariants[]"]');
             initializeExistingCustomerSelect();
+            restoreSalesCartFromStorage();
+
             checkboxes.forEach(checkbox => {
                 checkbox.addEventListener('change', handleCheckboxChange);
             });
+
+            syncCartCheckboxesWithSelectedItems();
+            renderCart();
+
+            const salesProductSearchForm = document.getElementById('salesProductSearchForm');
+            if (salesProductSearchForm) {
+                salesProductSearchForm.addEventListener('submit', function () {
+                    persistSalesCart();
+                });
+            }
 
             const variantRows = document.querySelectorAll('.variant-row');
             variantRows.forEach(row => {
@@ -2541,6 +2647,8 @@ function updateQuantity(id, newQty) {
             totalAmountValue.textContent = totalAmount.toFixed(2); // Asegúrate de mostrar un número válido
             totalAmountBsValue.textContent = (totalAmount * baseRateToBs ).toFixed(2); // Asegúrate de mostrar un número válido
             toStep2Btn.disabled = selectedItems.length === 0;
+
+            persistSalesCart();
         }
 
         function removeFromCart(id) {
@@ -2666,6 +2774,7 @@ function updateQuantity(id, newQty) {
         }
         
         function filterProducts() {
+            persistSalesCart();
             const form = document.getElementById('salesProductSearchForm');
             if (form) {
                 form.requestSubmit();
@@ -4245,6 +4354,10 @@ function updateQuantity(id, newQty) {
             }
             alert(successMessage);
 
+            selectedItems = [];
+            recalcSubtotals();
+            clearSalesCartStorage();
+
                         const salePdfUrl = data.nota_entrega_pdf_url || data.pdf_url;
 
                         if (salePdfUrl) {
@@ -4324,6 +4437,10 @@ function updateQuantity(id, newQty) {
     window.addEventListener('load', function () {
         sessionStorage.removeItem(salePaginationStorageKey);
         setSalePageSkeletonVisible(false);
+    });
+
+    window.addEventListener('beforeunload', function () {
+        persistSalesCart();
     });
 
     </script>

@@ -1051,11 +1051,17 @@
                                             </div>
                                             <div class="modal-body">
                                                 <ul class="list-group">
-                                                    @forelse($tenant->users as $user)
+                                                    @php
+                                                        $tenantManagementUsers = $tenant->users->filter(function ($user) {
+                                                            $tenantUserRole = \App\Models\User::canonicalRoleName(optional($user->role)->name);
+
+                                                            return !in_array($tenantUserRole, ['user', 'cliente', 'customer'], true);
+                                                        });
+                                                    @endphp
+                                                    @forelse($tenantManagementUsers as $user)
                                                         @php
                                                             $tenantUserRole = \App\Models\User::canonicalRoleName(optional($user->role)->name);
                                                             $adminCannotManageThisUser = $tenantUsersActorRole === 'admin' && $tenantUserRole === 'admin';
-                                                            $isCustomerTenantUser = in_array($tenantUserRole, ['user', 'cliente', 'customer'], true);
                                                         @endphp
                                                         <li class="list-group-item d-flex justify-content-between align-items-center">
                                                             <div>
@@ -1076,7 +1082,7 @@
                                                                             data-role-id="{{ $user->role_id }}"
                                                                             data-bs-toggle="modal"
                                                                             data-bs-target="#editUserModal"
-                                                                            {{ $adminCannotManageThisUser || $isCustomerTenantUser ? 'disabled' : '' }}>
+                                                                            {{ $adminCannotManageThisUser ? 'disabled' : '' }}>
                                                                             Editar
                                                                         </button>
                                                                         <button
@@ -1092,7 +1098,7 @@
                                                                             data-bs-target="#tenantPasswordForm-{{ $user->id }}"
                                                                             aria-expanded="false"
                                                                             aria-controls="tenantPasswordForm-{{ $user->id }}"
-                                                                            {{ $adminCannotManageThisUser || $isCustomerTenantUser ? 'disabled' : '' }}>
+                                                                            {{ $adminCannotManageThisUser ? 'disabled' : '' }}>
                                                                             Cambiar contraseña
                                                                         </button>
                                                                         <button
@@ -1101,7 +1107,7 @@
                                                                             data-user-id="{{ $user->id }}"
                                                                             data-user-name="{{ $user->name }}"
                                                                             data-user-active="{{ (int) $user->is_active }}"
-                                                                            {{ $adminCannotManageThisUser || $isCustomerTenantUser ? 'disabled' : '' }}>
+                                                                            {{ $adminCannotManageThisUser ? 'disabled' : '' }}>
                                                                             {{ (bool) $user->is_active ? 'Inactivar' : 'Activar' }}
                                                                         </button>
                                                                     </div>
@@ -1123,9 +1129,6 @@
                                                                     </div>
                                                                     @if($adminCannotManageThisUser)
                                                                         <small class="d-block text-muted mt-1">No puedes modificar ni inactivar a otro admin.</small>
-                                                                    @endif
-                                                                    @if($isCustomerTenantUser)
-                                                                        <small class="d-block text-muted mt-1">Los usuarios cliente no se editan desde esta sección.</small>
                                                                     @endif
                                                                 @endif
                                                             </div>

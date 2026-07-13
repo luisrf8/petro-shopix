@@ -783,6 +783,19 @@ class ReportController extends Controller
     {
         $startInput = $request->query('start_date');
         $endInput = $request->query('end_date');
+        $period = strtolower(trim((string) $request->query('report_period', 'custom')));
+
+        if ($startInput === null && $endInput === null) {
+            $now = Carbon::now();
+
+            return match ($period) {
+                'week', 'weekly' => [$now->copy()->startOfWeek(Carbon::MONDAY)->startOfDay(), $now->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay()],
+                'month', 'monthly' => [$now->copy()->startOfMonth()->startOfDay(), $now->copy()->endOfMonth()->endOfDay()],
+                'quarter', 'quarterly' => [$now->copy()->startOfQuarter()->startOfDay(), $now->copy()->endOfQuarter()->endOfDay()],
+                'year', 'yearly' => [$now->copy()->startOfYear()->startOfDay(), $now->copy()->endOfYear()->endOfDay()],
+                default => [$now->copy()->subDays(30)->startOfDay(), $now->copy()->endOfDay()],
+            };
+        }
 
         $startDate = $startInput ? Carbon::parse($startInput)->startOfDay() : Carbon::now()->subDays(30)->startOfDay();
         $endDate = $endInput ? Carbon::parse($endInput)->endOfDay() : Carbon::now()->endOfDay();
@@ -1118,6 +1131,7 @@ class ReportController extends Controller
             'currency_code' => $currency['code'],
             'income_user_id' => $incomeUserId,
             'income_customer_id' => $incomeCustomerId,
+            'report_period' => strtolower(trim((string) $request->query('report_period', 'custom'))),
         ];
 
         return [$rows, $summary];
