@@ -18,6 +18,7 @@ use App\Models\SalesReturnItem;
 use App\Models\Appointment;
 use Dompdf\Dompdf;
 use Dompdf\Options;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 use App\Mail\OrderPdfMail;  // Importa la clase correctamente
@@ -2091,8 +2092,9 @@ class SaleController extends Controller
             $assets = $this->ensureAssociatedPdfAssets($order, true, $type);
             $filePath = $type === 'delivery' ? $assets['delivery_path'] : $assets['invoice_path'];
 
-            if (!is_file($filePath)) {
-                throw new \RuntimeException('No se encontro el archivo PDF generado para la orden.');
+            if (!is_file($filePath) || @filesize($filePath) <= 0) {
+                // Fallback: intentar renderizar en memoria para no bloquear al cliente.
+                return $this->downloadRenderedPdfByCurrency($request, $order, $type, $orderCurrencyCode);
             }
 
             $fileName = basename($filePath);
@@ -2121,20 +2123,32 @@ class SaleController extends Controller
         $deliveryRelative = 'orders/' . $this->resolveInternalDispatchFilename((int) $order->id);
         $legacyDeliveryRelative = 'orders/NotaEntrega-' . $order->id . '.pdf';
 
-        if (!Storage::disk('public')->exists($deliveryRelative) && Storage::disk('public')->exists($legacyDeliveryRelative)) {
+        if (!$this->storedPdfExistsAndReadable($deliveryRelative) && $this->storedPdfExistsAndReadable($legacyDeliveryRelative)) {
             $deliveryRelative = $legacyDeliveryRelative;
         }
 
-        $deliveryExists = Storage::disk('public')->exists($deliveryRelative);
-        $invoiceExists = Storage::disk('public')->exists($invoiceRelative);
+        $deliveryExists = $this->storedPdfExistsAndReadable($deliveryRelative);
+        $invoiceExists = $this->storedPdfExistsAndReadable($invoiceRelative);
         $shouldGenerateForRequestedType = $requestedType === 'delivery'
             ? !$deliveryExists
             : (!$invoiceExists || !$deliveryExists);
 
         if ($generateMissing && $shouldGenerateForRequestedType) {
-            $this->generateAssociatedPdfAssets($order, $requestedType === 'delivery');
-            if (!Storage::disk('public')->exists($deliveryRelative) && Storage::disk('public')->exists($legacyDeliveryRelative)) {
-                $deliveryRelative = $legacyDeliveryRelative;
+            $lockKey = 'pdf-assets-order-' . (int) $order->id;
+            try {
+                Cache::lock($lockKey, 45)->block(10, function () use ($order, $requestedType, &$deliveryRelative, $legacyDeliveryRelative) {
+                    $this->generateAssociatedPdfAssets($order, $requestedType === 'delivery');
+
+                    if (!$this->storedPdfExistsAndReadable($deliveryRelative) && $this->storedPdfExistsAndReadable($legacyDeliveryRelative)) {
+                        $deliveryRelative = $legacyDeliveryRelative;
+                    }
+                });
+            } catch (\Throwable $exception) {
+                // Fallback para drivers/cache sin lock robusto.
+                $this->generateAssociatedPdfAssets($order, $requestedType === 'delivery');
+                if (!$this->storedPdfExistsAndReadable($deliveryRelative) && $this->storedPdfExistsAndReadable($legacyDeliveryRelative)) {
+                    $deliveryRelative = $legacyDeliveryRelative;
+                }
             }
         }
 
@@ -2218,8 +2232,9 @@ class SaleController extends Controller
 
     private function renderPdfOutput(string $html): string
     {
-        @ini_set('max_execution_time', '120');
-        @set_time_limit(120);
+        @ini_set('max_execution_time', '180');
+        @set_time_limit(180);
+        @ini_set('memory_limit', '512M');
 
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
@@ -2231,6 +2246,20 @@ class SaleController extends Controller
         $dompdf->render();
 
         return $dompdf->output();
+    }
+
+    private function storedPdfExistsAndReadable(string $relativePath): bool
+    {
+        try {
+            $disk = Storage::disk('public');
+            if (!$disk->exists($relativePath)) {
+                return false;
+            }
+
+            return (int) $disk->size($relativePath) > 0;
+        } catch (\Throwable $exception) {
+            return false;
+        }
     }
 
     private function downloadRenderedPdfByCurrency(Request $request, SalesOrder $order, string $type, string $emissionCurrencyCode)
@@ -2948,7 +2977,7 @@ class SaleController extends Controller
             $orderId = $payment->salesOrder->id;
             $tenantId = (int) ($payment->salesOrder->tenant_id ?? 0);
 
-            WorkflowNotifier::notifyTenantRoles($tenantId, ['administrador', 'admin', 'vendedor'], [
+            WorkflowNotifier::notifyTenantRoles($tenantId, ['owner', 'administrador', 'admin', 'vendedor'], [
                 'title' => 'Pago actualizado',
                 'message' => 'El pago #' . $payment->id . ' del pedido #' . $orderId . ' cambió de estado.',
                 'type' => 'payment-status',

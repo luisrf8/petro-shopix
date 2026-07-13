@@ -119,7 +119,7 @@
       $orderDateText = trim((string) ($order->date ?? 'sin fecha registrada'));
       $tenantNameForMessage = trim((string) ($order->tenant->name ?? 'la tienda'));
       $customerWhatsappUrl = $customerPhone !== ''
-        ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', te saludamos de parte de ' . $tenantNameForMessage . '. Te compartimos la orden de entrega número #' . $order->id . '. Productos comprados: ' . $orderProductsSummary . '. Fecha de compra: ' . $orderDateText . '. PDF de la orden: ' . $publicDeliveryPdfUrl)
+        ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', te saludamos de parte de ' . $tenantNameForMessage . '. Te compartimos la orden de entrega número #' . $order->id . '. Productos comprados: ' . $orderProductsSummary . '. Fecha de compra: ' . $orderDateText . '. PDF de la orden:' . "\n" . $publicDeliveryPdfUrl)
         : null;
       $customerCallUrl = $customerPhone !== '' ? 'tel:' . $customerPhone : null;
       $deliveryTypeLabel = strtolower(trim((string) ($order->preference ?? '')));
