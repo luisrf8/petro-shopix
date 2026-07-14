@@ -150,26 +150,39 @@ class SellerCommissionController extends Controller
 
     public function sellerProgressPdf()
     {
+        @ini_set('max_execution_time', '180');
+        @set_time_limit(180);
+        @ini_set('memory_limit', '512M');
+
         [$summary, $commissions] = $this->buildSellerProgressData();
 
         $html = view('sellerCommissions.pdf.progress', compact('summary', 'commissions'))->render();
 
-        $options = new Options();
-        $options->set('isRemoteEnabled', true);
-        $options->set('defaultFont', 'DejaVu Sans');
-
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
-
         $monthLabel = $summary['month_start']->format('Y-m');
         $fileName = 'avance_comisiones_' . $monthLabel . '.pdf';
 
-        return response($dompdf->output(), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
-        ]);
+        try {
+            $options = new Options();
+            $options->set('isRemoteEnabled', true);
+            $options->set('defaultFont', 'DejaVu Sans');
+
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+
+            $binary = $dompdf->output();
+            if ($binary === '' || strlen($binary) < 128) {
+                throw new \RuntimeException('Salida PDF vacia o invalida.');
+            }
+
+            return response($binary, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+            ]);
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('[PDF] No se pudo generar el avance de comisiones en PDF. Intenta nuevamente.', 0, $exception);
+        }
     }
 
     private function buildSellerProgressData(): array

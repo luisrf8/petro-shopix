@@ -801,15 +801,23 @@ class WithholdingController extends Controller
 
     private function renderPdf(string $html): string
     {
-        $options = new Options();
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isPhpEnabled', true);
+        @ini_set('max_execution_time', '180');
+        @set_time_limit(180);
+        @ini_set('memory_limit', '512M');
 
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html, 'UTF-8');
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
+        try {
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', true);
 
-        return $dompdf->output();
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html, 'UTF-8');
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+
+            return $dompdf->output();
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('[PDF] No se pudo generar el PDF de retencion en este momento. Intenta nuevamente.', 0, $exception);
+        }
     }
 }

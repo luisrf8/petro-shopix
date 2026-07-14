@@ -24,6 +24,8 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class ReportController extends Controller
 {
@@ -809,22 +811,69 @@ class ReportController extends Controller
 
     private function renderPdf(string $view, array $data, string $prefix)
     {
-        $html = view($view, $data)->render();
-
-        $options = new Options();
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isPhpEnabled', true);
-
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
+        @ini_set('max_execution_time', '180');
+        @set_time_limit(180);
+        @ini_set('memory_limit', '512M');
 
         $fileName = $prefix . '_' . now()->format('Ymd_His') . '.pdf';
 
-        return response($dompdf->output(), 200)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', PdfDownload::buildDispositionHeader(request(), $fileName));
+        $user = auth()->user();
+        $lockKey = sprintf(
+            'pdf:report:%s:tenant:%d:%s',
+            $prefix,
+            (int) ($user->tenant_id ?? 0),
+            md5((string) json_encode(request()->query()))
+        );
+
+        $lock = Cache::lock($lockKey, 30);
+        $hasLock = $lock->get();
+
+        if (!$hasLock) {
+            $message = 'Ya existe un PDF en generacion para este reporte. Espera unos segundos e intenta nuevamente.';
+
+            if (request()->expectsJson() || request()->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                ], 429);
+            }
+
+            return redirect()->back()->with('warning', $message);
+        }
+
+        try {
+            $html = view($view, $data)->render();
+
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', true);
+
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+
+            $binary = $dompdf->output();
+            if ($binary === '' || strlen($binary) < 128) {
+                throw new \RuntimeException('Salida PDF vacia o invalida.');
+            }
+
+            return response($binary, 200)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', PdfDownload::buildDispositionHeader(request(), $fileName));
+        } catch (\Throwable $exception) {
+            Log::warning('Fallo al generar reporte PDF.', [
+                'prefix' => $prefix,
+                'tenant_id' => (int) ($user->tenant_id ?? 0),
+                'error' => $exception->getMessage(),
+            ]);
+
+            throw new \RuntimeException('[PDF] No se pudo generar el PDF en este momento. Reduce el rango de fechas o aplica mas filtros e intenta nuevamente.', 0, $exception);
+        } finally {
+            if ($hasLock) {
+                $lock->release();
+            }
+        }
     }
 
     private function downloadCsv(string $prefix, array $header, array $rows)

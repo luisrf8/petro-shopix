@@ -393,6 +393,10 @@ class PaymentMethodController extends Controller
 
     public function exportRateHistory(string $format)
     {
+        @ini_set('max_execution_time', '180');
+        @set_time_limit(180);
+        @ini_set('memory_limit', '512M');
+
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         $entries = $this->buildRateHistoryEntries($tenantId);
 
@@ -437,19 +441,28 @@ class PaymentMethodController extends Controller
             'exportedAt' => now(),
         ])->render();
 
-        $options = new Options();
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isPhpEnabled', true);
+        try {
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', true);
 
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
 
-        return response($dompdf->output(), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="historial-tasas-shopix.pdf"',
-        ]);
+            $binary = $dompdf->output();
+            if ($binary === '' || strlen($binary) < 128) {
+                throw new \RuntimeException('Salida PDF vacia o invalida.');
+            }
+
+            return response($binary, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="historial-tasas-shopix.pdf"',
+            ]);
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('[PDF] No se pudo generar el historial de tasas en PDF. Intenta nuevamente en unos segundos.', 0, $exception);
+        }
     }
 
     private function buildRateHistoryEntries(int $tenantId, ?int $limit = null)

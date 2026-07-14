@@ -56,6 +56,27 @@ class Handler extends ExceptionHandler
             ]);
         });
 
+        $this->renderable(function (\RuntimeException $e, Request $request) {
+            if (!str_starts_with((string) $e->getMessage(), '[PDF]')) {
+                return null;
+            }
+
+            $message = trim((string) preg_replace('/^\[PDF\]\s*/', '', (string) $e->getMessage()));
+            if ($message === '') {
+                $message = 'No se pudo generar el PDF en este momento. Intenta nuevamente con un rango mas corto.';
+            }
+
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'code' => 'pdf_generation_failed',
+                ], 422);
+            }
+
+            return redirect()->back()->with('warning', $message);
+        });
+
         $this->renderable(function (TokenMismatchException $e, Request $request) {
             $message = 'Tu sesion vencio por seguridad. Inicia sesion nuevamente para continuar.';
 

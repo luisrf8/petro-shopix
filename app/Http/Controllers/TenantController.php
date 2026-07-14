@@ -745,22 +745,35 @@ class TenantController extends Controller
 
     public function termsAndConditionsPdf()
     {
+        @ini_set('max_execution_time', '180');
+        @set_time_limit(180);
+        @ini_set('memory_limit', '512M');
+
         $html = view('legal.termsAndConditionsPdf', [
             'generatedAt' => now(),
         ])->render();
 
-        $options = new Options();
-        $options->set('isRemoteEnabled', true);
-        $options->set('defaultFont', 'DejaVu Sans');
+        try {
+            $options = new Options();
+            $options->set('isRemoteEnabled', true);
+            $options->set('defaultFont', 'DejaVu Sans');
 
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
 
-        return response($dompdf->output(), 200)
-            ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'inline; filename="shopix-terminos-y-condiciones.pdf"');
+            $binary = $dompdf->output();
+            if ($binary === '' || strlen($binary) < 128) {
+                throw new \RuntimeException('Salida PDF vacia o invalida.');
+            }
+
+            return response($binary, 200)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'inline; filename="shopix-terminos-y-condiciones.pdf"');
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('[PDF] No se pudieron generar los terminos y condiciones en PDF. Intenta nuevamente.', 0, $exception);
+        }
     }
 
     public function index()

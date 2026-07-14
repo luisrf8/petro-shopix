@@ -1242,6 +1242,176 @@
         });
       })();
     </script>
+    <script>
+      (function () {
+        const PDF_NOTICE_ID = 'shopix-pdf-notice';
+        let hideTimer = null;
+
+        function ensureNotice() {
+          let notice = document.getElementById(PDF_NOTICE_ID);
+          if (notice) {
+            return notice;
+          }
+
+          notice = document.createElement('div');
+          notice.id = PDF_NOTICE_ID;
+          notice.setAttribute('role', 'status');
+          notice.setAttribute('aria-live', 'polite');
+          notice.style.position = 'fixed';
+          notice.style.right = '16px';
+          notice.style.bottom = '16px';
+          notice.style.zIndex = '1085';
+          notice.style.minWidth = '280px';
+          notice.style.maxWidth = '420px';
+          notice.style.padding = '12px 14px';
+          notice.style.borderRadius = '10px';
+          notice.style.boxShadow = '0 10px 30px rgba(15, 23, 42, 0.22)';
+          notice.style.fontSize = '14px';
+          notice.style.fontWeight = '600';
+          notice.style.display = 'none';
+          notice.style.background = '#0f172a';
+          notice.style.color = '#f8fafc';
+
+          document.body.appendChild(notice);
+          return notice;
+        }
+
+        function showNotice(message, tone) {
+          const notice = ensureNotice();
+          clearTimeout(hideTimer);
+
+          const tones = {
+            loading: { bg: '#0f172a', color: '#f8fafc' },
+            success: { bg: '#14532d', color: '#ecfdf5' },
+            error: { bg: '#7f1d1d', color: '#fef2f2' }
+          };
+
+          const selected = tones[tone] || tones.loading;
+          notice.style.background = selected.bg;
+          notice.style.color = selected.color;
+          notice.textContent = message;
+          notice.style.display = 'block';
+
+          if (tone !== 'loading') {
+            hideTimer = window.setTimeout(function () {
+              notice.style.display = 'none';
+            }, 5000);
+          }
+        }
+
+        function looksLikePdfUrl(url) {
+          if (!url || typeof url !== 'string') {
+            return false;
+          }
+
+          const normalized = url.toLowerCase();
+          return normalized.includes('/pdf') || normalized.includes('/pdfs/');
+        }
+
+        function isStandalonePwa() {
+          const mediaStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+          const iosStandalone = typeof window.navigator.standalone === 'boolean' && window.navigator.standalone;
+          return mediaStandalone || iosStandalone;
+        }
+
+        function sameOrigin(url) {
+          try {
+            const resolved = new URL(url, window.location.origin);
+            return resolved.origin === window.location.origin;
+          } catch (error) {
+            return false;
+          }
+        }
+
+        function launchPdfRequest(url) {
+          showNotice('Generando PDF. Estamos optimizando la carga...', 'loading');
+
+          const opened = window.open(url, '_blank', 'noopener');
+          if (!opened) {
+            if (isStandalonePwa()) {
+              showNotice('Tu PWA no permite nueva pestaña. Abriendo PDF en la vista actual...', 'loading');
+              window.location.assign(url);
+              return;
+            }
+
+            showNotice('El navegador bloqueo la nueva pestaña. Habilita popups para este sitio e intenta nuevamente.', 'error');
+            return;
+          }
+
+          window.setTimeout(function () {
+            showNotice('Solicitud PDF enviada. Revisa la nueva pestaña o la descarga del navegador.', 'success');
+          }, 800);
+        }
+
+        function formToUrl(form) {
+          const action = form.getAttribute('action') || window.location.href;
+          const method = (form.getAttribute('method') || 'GET').toUpperCase();
+          if (method !== 'GET') {
+            return null;
+          }
+
+          const data = new FormData(form);
+          const params = new URLSearchParams();
+          data.forEach(function (value, key) {
+            if (typeof value === 'string') {
+              params.append(key, value);
+            }
+          });
+
+          const query = params.toString();
+          if (!query) {
+            return action;
+          }
+
+          return action + (action.includes('?') ? '&' : '?') + query;
+        }
+
+        document.addEventListener('click', function (event) {
+          const link = event.target.closest('a[href]');
+          if (!link) {
+            return;
+          }
+
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+          }
+
+          const href = link.getAttribute('href') || '';
+          if (!looksLikePdfUrl(href)) {
+            return;
+          }
+
+          if (link.hasAttribute('download')) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          launchPdfRequest(href);
+        }, true);
+
+        document.addEventListener('submit', function (event) {
+          const form = event.target;
+          if (!(form instanceof HTMLFormElement)) {
+            return;
+          }
+
+          const action = form.getAttribute('action') || '';
+          if (!looksLikePdfUrl(action)) {
+            return;
+          }
+
+          const url = formToUrl(form);
+          if (!url) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          launchPdfRequest(url);
+        }, true);
+      })();
+    </script>
     @stack('scripts')
 </body>
 </html>

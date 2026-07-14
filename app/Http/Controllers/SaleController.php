@@ -701,17 +701,10 @@ class SaleController extends Controller
                         'dollarRate'
                     ))->render();
 
-                    $options = new Options();
-                    $options->set('isHtml5ParserEnabled', true);
-                    $options->set('isPhpEnabled', true);
-
-                    $dompdf = new Dompdf($options);
-                    $dompdf->loadHtml($pdfContent);
-                    $dompdf->setPaper('A4', 'portrait');
-                    $dompdf->render();
+                    $pdfBinary = $this->renderPdfOutput($pdfContent);
 
                     $fileName = 'factura-' . $order->id . '.pdf';
-                    Storage::disk('public')->put('orders/' . $fileName, $dompdf->output());
+                    Storage::disk('public')->put('orders/' . $fileName, $pdfBinary);
                     $pdfUrl = asset('storage/orders/' . $fileName);
                 }
 
@@ -729,18 +722,11 @@ class SaleController extends Controller
                     'tienda'
                 ))->render();
 
-                $optionsNota = new Options();
-                $optionsNota->set('isHtml5ParserEnabled', true);
-                $optionsNota->set('isPhpEnabled', true);
-
-                $dompdfNota = new Dompdf($optionsNota);
-                $dompdfNota->loadHtml($pdfContentNota);
-                $dompdfNota->setPaper('A4', 'portrait');
-                $dompdfNota->render();
+                $pdfBinaryNota = $this->renderPdfOutput($pdfContentNota);
 
                 // $fileName = 'orden-' . $order->id . '.pdf';
                 $fileNameNota = $this->resolveInternalDispatchFilename((int) $order->id);
-                Storage::disk('public')->put('orders/' . $fileNameNota, $dompdfNota->output());
+                Storage::disk('public')->put('orders/' . $fileNameNota, $pdfBinaryNota);
                 $pdfUrlNota = asset('storage/orders/' . $fileNameNota);
             } catch (\Throwable $exception) {
                 Log::warning('No se pudieron generar los PDF de la venta.', [
@@ -959,15 +945,9 @@ class SaleController extends Controller
 
         $pdfContent = view('orderPdf', compact('order', 'totalOrden', 'totalPagado', 'imageBase64', 'qrCodeBase64'))->render();
 
-        $options = new Options();
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isPhpEnabled', true);
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($pdfContent);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
+        $pdfBinary = $this->renderPdfOutput($pdfContent);
 
-        return response($dompdf->output(), 200)
+        return response($pdfBinary, 200)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', PdfDownload::buildDispositionHeader($request, 'orden-' . $order->id . '.pdf'));
     }
@@ -1505,21 +1485,12 @@ class SaleController extends Controller
 
 
         $pdfContent = view('salesOrdersReport', compact('salesOrders', 'rangoDescriptivo', 'startDate', 'range'))->render();
-        
-            // Configuración de Dompdf
-            $options = new Options();
-            $options->set('isHtml5ParserEnabled', true);
-            $options->set('isPhpEnabled', true);
-            $dompdf = new Dompdf($options);
-            $dompdf->loadHtml($pdfContent);
-            $dompdf->setPaper('A4', 'portrait');
-            $dompdf->render();
-            $fecha = now()->format('d-m-Y_His');
-            $fileName = 'reporte_ordenes_ventas_' . $fecha . '.pdf';
-            Storage::disk('public')->put('reports/' . $fileName, $dompdf->output());
-            $filePath = storage_path('app/public/reports/' . $fileName);
 
-            $pdfUrl = asset('storage/reports/' . $fileName);
+        $pdfBinary = $this->renderPdfOutput($pdfContent);
+        $fecha = now()->format('d-m-Y_His');
+        $fileName = 'reporte_ordenes_ventas_' . $fecha . '.pdf';
+        Storage::disk('public')->put('reports/' . $fileName, $pdfBinary);
+        $pdfUrl = asset('storage/reports/' . $fileName);
 
         return response()->json([
             'success' => true,
@@ -2238,16 +2209,25 @@ class SaleController extends Controller
         @set_time_limit(180);
         @ini_set('memory_limit', '512M');
 
-        $options = new Options();
-        $options->set('isHtml5ParserEnabled', true);
-        $options->set('isPhpEnabled', true);
+        try {
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', true);
 
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html);
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
 
-        return $dompdf->output();
+            $binary = $dompdf->output();
+            if ($binary === '' || strlen($binary) < 128) {
+                throw new \RuntimeException('Salida PDF vacia o invalida.');
+            }
+
+            return $binary;
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('[PDF] No se pudo generar el PDF de la orden. Intenta nuevamente con menos carga.', 0, $exception);
+        }
     }
 
     private function storedPdfExistsAndReadable(string $relativePath): bool
@@ -2685,19 +2665,12 @@ class SaleController extends Controller
     
             // Generar el HTML para el PDF con el QR y otros datos
             $pdfContent = view('orderPdf', compact('order', 'totalOrden', 'totalPagado', 'imageBase64', 'qrCodeBase64'))->render();
-    
-            // Configuración de Dompdf
-            $options = new Options();
-            $options->set('isHtml5ParserEnabled', true);
-            $options->set('isPhpEnabled', true);
-            $dompdf = new Dompdf($options);
-            $dompdf->loadHtml($pdfContent);
-            $dompdf->setPaper('A4', 'portrait');
-            $dompdf->render();
+
+            $pdfBinary = $this->renderPdfOutput($pdfContent);
     
             // Guardar el PDF en storage/app/public/orders/
             $fileName = 'orden-' . $order->id . '.pdf';
-            Storage::disk('public')->put('orders/' . $fileName, $dompdf->output());
+            Storage::disk('public')->put('orders/' . $fileName, $pdfBinary);
             $filePath = storage_path('app/public/orders/' . $fileName);
     
             // URL accesible del PDF

@@ -25,14 +25,17 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\ProductVariantWarehouseStock;
 use App\Support\ImageStorage;
+use App\Support\PdfDownload;
 use App\Support\WorkflowNotifier;
 use App\Support\TenantCurrency;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -1111,6 +1114,7 @@ class ProjectModuleController extends Controller
     public function convertQuotationToSale(Request $request, ProjectQuotation $quotation)
     {
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $actingUserId = (int) (auth()->id() ?? 0);
         abort_if((int) $quotation->tenant_id !== $tenantId, 404);
 
         if ($this->isQuotationLockedStatus((string) $quotation->status)) {
@@ -1155,39 +1159,42 @@ class ProjectModuleController extends Controller
         if (!$customer) {
             $customerName = trim((string) ($quotation->customer_name ?? ''));
             if ($customerName === '') {
-                throw ValidationException::withMessages([
-                    'customer_name' => ['Debes definir un cliente en la cotización para convertirla en venta.'],
-                ]);
-            }
-
-            $customerEmail = trim((string) ($quotation->customer_email ?? ''));
-            if ($customerEmail !== '') {
-                $customer = User::query()
-                    ->where('tenant_id', $tenantId)
-                    ->whereRaw('LOWER(email) = ?', [Str::lower($customerEmail)])
-                    ->first();
+                $customer = $this->resolveFallbackCustomerForQuotationSale($tenantId);
+                $customerName = (string) ($customer->name ?? 'Cliente no especificado');
+                $quotation->customer_name = $customerName;
+                $quotation->customer_email = (string) ($customer->email ?? '');
             }
 
             if (!$customer) {
-                $customer = User::query()->create([
-                    'name' => $customerName,
-                    'email' => $customerEmail !== '' ? $customerEmail : null,
-                    'phone_number' => null,
-                    'tenant_id' => $tenantId,
-                    'role_id' => $this->resolveCustomerRoleId(),
-                    'password' => Hash::make(Str::random(16)),
-                    'is_active' => 1,
-                ]);
+                $customerEmail = trim((string) ($quotation->customer_email ?? ''));
+                if ($customerEmail !== '') {
+                    $customer = User::query()
+                        ->where('tenant_id', $tenantId)
+                        ->whereRaw('LOWER(email) = ?', [Str::lower($customerEmail)])
+                        ->first();
+                }
+
+                if (!$customer) {
+                    $customer = User::query()->create([
+                        'name' => $customerName,
+                        'email' => $customerEmail !== '' ? $customerEmail : null,
+                        'phone_number' => null,
+                        'tenant_id' => $tenantId,
+                        'role_id' => $this->resolveCustomerRoleId(),
+                        'password' => Hash::make(Str::random(16)),
+                        'is_active' => 1,
+                    ]);
+                }
             }
 
             $quotation->customer_id = (int) $customer->id;
             $quotation->customer_name = (string) $customer->name;
-            $quotation->customer_email = (string) ($customer->email ?? $customerEmail);
+            $quotation->customer_email = (string) ($customer->email ?? $quotation->customer_email);
         }
 
         $salesOrder = null;
 
-        DB::transaction(function () use ($tenantId, $quotation, $saleItems, $validated, $customer, &$salesOrder) {
+        DB::transaction(function () use ($tenantId, $actingUserId, $quotation, $saleItems, $validated, $customer, &$salesOrder) {
             $normalizedSaleCurrency = TenantCurrency::normalizeCurrencyCode((string) ($quotation->currency_code ?: 'USD'));
             $saleRateToBs = (float) ($quotation->exchange_rate_to_bs ?? 0);
             if ($normalizedSaleCurrency === 'BS') {
@@ -1198,7 +1205,7 @@ class ProjectModuleController extends Controller
 
             $salesOrder = SalesOrder::query()->create([
                 'user_id' => (int) $customer->id,
-                'sales_rep_user_id' => null,
+                'sales_rep_user_id' => $actingUserId > 0 ? $actingUserId : null,
                 'date' => now()->toDateString(),
                 'address' => 'Venta generada desde cotización #' . (int) $quotation->id,
                 'status' => 0,
@@ -1472,12 +1479,64 @@ class ProjectModuleController extends Controller
         return back()->with('success', 'Cotización convertida en entrada de inventario correctamente.');
     }
 
-    public function quotationPdf(ProjectQuotation $quotation)
+    public function quotationPdf(Request $request, ProjectQuotation $quotation)
     {
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if((int) $quotation->tenant_id !== $tenantId, 404);
 
-        $quotation->load(['items.product.taxes', 'items.variant', 'provider']);
+        $relativePath = 'quotations/cotizacion-' . (int) $quotation->id . '.pdf';
+        $filename = 'cotizacion-' . (int) $quotation->id . '.pdf';
+        $mustRegenerate = !$this->storedProjectPdfExistsAndReadable($relativePath)
+            || !$this->storedProjectPdfIsFresh($relativePath, $quotation->updated_at);
+
+        try {
+            if ($mustRegenerate) {
+                $lockKey = 'quotation-pdf-' . (int) $quotation->id;
+                $lock = Cache::lock($lockKey, 20);
+
+                if ($lock) {
+                    $lock->block(5, function () use ($quotation, $tenantId, $relativePath) {
+                        if (!$this->storedProjectPdfExistsAndReadable($relativePath)
+                            || !$this->storedProjectPdfIsFresh($relativePath, $quotation->updated_at)) {
+                            $output = $this->generateQuotationPdfOutput($quotation, $tenantId);
+                            Storage::disk('public')->put($relativePath, $output);
+                        }
+                    });
+                } else {
+                    $output = $this->generateQuotationPdfOutput($quotation, $tenantId);
+                    Storage::disk('public')->put($relativePath, $output);
+                }
+            }
+
+            if ($this->storedProjectPdfExistsAndReadable($relativePath)) {
+                return response(Storage::disk('public')->get($relativePath), 200, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $filename, (string) $request->query('disposition', 'inline')),
+                ]);
+            }
+
+            // Fallback de seguridad: responder renderizando en memoria.
+            $fallbackOutput = $this->generateQuotationPdfOutput($quotation, $tenantId);
+
+            return response($fallbackOutput, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => PdfDownload::buildDispositionHeader($request, $filename, (string) $request->query('disposition', 'inline')),
+            ]);
+        } catch (\Throwable $exception) {
+            Log::error('No se pudo generar/entregar el PDF de cotizacion.', [
+                'quotation_id' => (int) $quotation->id,
+                'tenant_id' => (int) $tenantId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            abort(422, 'No se pudo generar el PDF de la cotizacion en este momento. Intenta nuevamente.');
+        }
+    }
+
+    private function generateQuotationPdfOutput(ProjectQuotation $quotation, int $tenantId): string
+    {
+        $quotation->loadMissing(['items.product.taxes', 'items.variant', 'provider']);
+
         $tenant = Tenant::query()->find($tenantId);
         $billingLogoDataUri = $this->resolveTenantBillingLogoDataUri($tenant);
 
@@ -1503,21 +1562,73 @@ class ProjectModuleController extends Controller
             'usdRateToBs'
         ))->render();
 
-        $options = new Options();
-        $options->set('isRemoteEnabled', false);
-        $options->set('defaultFont', 'DejaVu Sans');
+        return $this->renderProjectPdfOutput($html);
+    }
 
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html, 'UTF-8');
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
+    private function renderProjectPdfOutput(string $html): string
+    {
+        @ini_set('max_execution_time', '180');
+        @set_time_limit(180);
+        @ini_set('memory_limit', '512M');
 
-        $filename = 'cotizacion-' . (int) $quotation->id . '.pdf';
+        try {
+            $options = new Options();
+            $options->set('isHtml5ParserEnabled', true);
+            $options->set('isPhpEnabled', true);
+            $options->set('isRemoteEnabled', false);
+            $options->set('defaultFont', 'DejaVu Sans');
 
-        return response($dompdf->output(), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="' . $filename . '"',
-        ]);
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html, 'UTF-8');
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+
+            $binary = $dompdf->output();
+            if ($binary === '' || strlen($binary) < 128) {
+                throw new \RuntimeException('Salida PDF vacia o invalida.');
+            }
+
+            return $binary;
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('[PDF] No se pudo generar el PDF del modulo de proyectos. Intenta nuevamente.', 0, $exception);
+        }
+    }
+
+    private function storedProjectPdfExistsAndReadable(string $relativePath): bool
+    {
+        try {
+            $disk = Storage::disk('public');
+            if (!$disk->exists($relativePath)) {
+                return false;
+            }
+
+            return (int) $disk->size($relativePath) > 0;
+        } catch (\Throwable $exception) {
+            return false;
+        }
+    }
+
+    private function storedProjectPdfIsFresh(string $relativePath, $updatedAt): bool
+    {
+        try {
+            if (!$this->storedProjectPdfExistsAndReadable($relativePath)) {
+                return false;
+            }
+
+            if (!$updatedAt) {
+                return true;
+            }
+
+            $disk = Storage::disk('public');
+            $lastModified = (int) $disk->lastModified($relativePath);
+            $updatedAtTimestamp = $updatedAt instanceof Carbon
+                ? $updatedAt->timestamp
+                : Carbon::parse((string) $updatedAt)->timestamp;
+
+            return $lastModified >= $updatedAtTimestamp;
+        } catch (\Throwable $exception) {
+            return false;
+        }
     }
 
     private function resolveTenantBillingLogoDataUri(?Tenant $tenant): ?string
@@ -1910,6 +2021,10 @@ class ProjectModuleController extends Controller
 
     public function payrollReceipt(ProjectPayroll $payroll)
     {
+        @ini_set('max_execution_time', '180');
+        @set_time_limit(180);
+        @ini_set('memory_limit', '512M');
+
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         abort_if($tenantId <= 0 || (int) $payroll->tenant_id !== $tenantId, 404);
 
@@ -1920,21 +2035,55 @@ class ProjectModuleController extends Controller
             'forPdf' => true,
         ])->render();
 
-        $options = new Options();
-        $options->set('isRemoteEnabled', true);
-        $options->set('defaultFont', 'DejaVu Sans');
-
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html, 'UTF-8');
-        $dompdf->setPaper('A4', 'portrait');
-        $dompdf->render();
-
         $filename = 'comprobante-nomina-' . (int) $payroll->id . '.pdf';
         $disposition = request()->boolean('download') ? 'attachment' : 'inline';
 
-        return response($dompdf->output(), 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+        try {
+            $options = new Options();
+            $options->set('isRemoteEnabled', true);
+            $options->set('defaultFont', 'DejaVu Sans');
+
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html, 'UTF-8');
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+
+            $binary = $dompdf->output();
+            if ($binary === '' || strlen($binary) < 128) {
+                throw new \RuntimeException('Salida PDF vacia o invalida.');
+            }
+
+            return response($binary, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => $disposition . '; filename="' . $filename . '"',
+            ]);
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('[PDF] No se pudo generar el comprobante de nomina. Intenta nuevamente.', 0, $exception);
+        }
+    }
+
+    private function resolveFallbackCustomerForQuotationSale(int $tenantId): User
+    {
+        $customerRoleId = $this->resolveCustomerRoleId();
+
+        $customer = User::query()
+            ->where('tenant_id', $tenantId)
+            ->where('role_id', $customerRoleId)
+            ->whereRaw('LOWER(name) = ?', ['cliente no especificado'])
+            ->first();
+
+        if ($customer) {
+            return $customer;
+        }
+
+        return User::query()->create([
+            'name' => 'Cliente no especificado',
+            'email' => null,
+            'phone_number' => null,
+            'tenant_id' => $tenantId,
+            'role_id' => $customerRoleId,
+            'password' => Hash::make(Str::random(16)),
+            'is_active' => 1,
         ]);
     }
 
