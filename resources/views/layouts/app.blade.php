@@ -1308,33 +1308,12 @@
           return normalized.includes('/pdf') || normalized.includes('/pdfs/');
         }
 
-        function isStandalonePwa() {
-          const mediaStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-          const iosStandalone = typeof window.navigator.standalone === 'boolean' && window.navigator.standalone;
-          return mediaStandalone || iosStandalone;
-        }
-
-        function sameOrigin(url) {
-          try {
-            const resolved = new URL(url, window.location.origin);
-            return resolved.origin === window.location.origin;
-          } catch (error) {
-            return false;
-          }
-        }
-
         function launchPdfRequest(url) {
           showNotice('Generando PDF. Estamos optimizando la carga...', 'loading');
 
-          const opened = window.open(url, '_blank', 'noopener');
+          const opened = window.open(url, '_blank', 'noopener,noreferrer');
           if (!opened) {
-            if (isStandalonePwa()) {
-              showNotice('Tu PWA no permite nueva pestaña. Abriendo PDF en la vista actual...', 'loading');
-              window.location.assign(url);
-              return;
-            }
-
-            showNotice('El navegador bloqueo la nueva pestaña. Habilita popups para este sitio e intenta nuevamente.', 'error');
+            showNotice('No se pudo abrir una nueva pestaña. Habilita popups para este sitio e intenta nuevamente.', 'error');
             return;
           }
 
