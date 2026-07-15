@@ -26,9 +26,58 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ReportController extends Controller
 {
+    public function csvViewer(Request $request)
+    {
+        $csvUrl = trim((string) $request->query('csv_url', ''));
+        if ($csvUrl === '') {
+            abort(422, 'No se encontro la fuente CSV solicitada.');
+        }
+
+        $parsed = parse_url($csvUrl);
+        if ($parsed === false) {
+            abort(422, 'La URL del CSV no es valida.');
+        }
+
+        $path = (string) ($parsed['path'] ?? '');
+        if (!Str::startsWith($path, '/reports/') || !Str::endsWith($path, '/excel')) {
+            abort(403, 'La fuente CSV no esta autorizada para este visor.');
+        }
+
+        $sourceHost = (string) ($parsed['host'] ?? '');
+        $appHost = (string) parse_url(url('/'), PHP_URL_HOST);
+        if ($sourceHost !== '' && strcasecmp($sourceHost, $appHost) !== 0) {
+            abort(403, 'La fuente CSV debe pertenecer a este sistema.');
+        }
+
+        $baseUrl = $sourceHost !== ''
+            ? sprintf(
+                '%s://%s%s%s',
+                (string) ($parsed['scheme'] ?? request()->getScheme()),
+                $sourceHost,
+                isset($parsed['port']) ? ':' . $parsed['port'] : '',
+                $path
+            )
+            : url($path);
+
+        $sourceQuery = [];
+        parse_str((string) ($parsed['query'] ?? ''), $sourceQuery);
+
+        $filters = $request->except(['csv_url']);
+        $query = array_merge($sourceQuery, $filters, ['view' => 'inline']);
+        $resolvedCsvUrl = $baseUrl . (empty($query) ? '' : ('?' . http_build_query($query)));
+
+        return view('reports.csv-viewer', [
+            'csvUrl' => $resolvedCsvUrl,
+            'reportName' => (string) $request->query('report_name', 'Reporte CSV'),
+            'startDate' => $request->query('start_date'),
+            'endDate' => $request->query('end_date'),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
@@ -411,15 +460,18 @@ class ReportController extends Controller
         );
     }
 
-    public function inventoryTotalPdf()
+    public function inventoryTotalPdf(Request $request)
     {
         $user = auth()->user();
+        [$startDate, $endDate] = $this->resolveDateRange($request);
         $currency = $this->resolveReportCurrencyContext(request(), (int) $user->tenant_id);
 
         $rows = ProductVariant::with(['product.category'])
             ->whereHas('product', function ($query) use ($user) {
                 $query->where('tenant_id', $user->tenant_id);
             })
+            ->whereDate('product_variants.updated_at', '>=', $startDate->toDateString())
+            ->whereDate('product_variants.updated_at', '<=', $endDate->toDateString())
             ->orderByDesc('stock')
             ->get();
 
@@ -433,6 +485,8 @@ class ReportController extends Controller
             'variants' => (int) $rows->count(),
             'total_stock' => (int) $rows->sum('stock'),
             'inventory_value' => (float) $rows->sum('report_value'),
+            'start_date' => $startDate,
+            'end_date' => $endDate,
             'generated_at' => now(),
             'currency_code' => $currency['code'],
         ];
@@ -444,15 +498,18 @@ class ReportController extends Controller
         );
     }
 
-    public function inventoryTotalExcel()
+    public function inventoryTotalExcel(Request $request)
     {
         $user = auth()->user();
+        [$startDate, $endDate] = $this->resolveDateRange($request);
         $currency = $this->resolveReportCurrencyContext(request(), (int) $user->tenant_id);
 
         $rows = ProductVariant::with(['product.category'])
             ->whereHas('product', function ($query) use ($user) {
                 $query->where('tenant_id', $user->tenant_id);
             })
+            ->whereDate('product_variants.updated_at', '>=', $startDate->toDateString())
+            ->whereDate('product_variants.updated_at', '<=', $endDate->toDateString())
             ->orderByDesc('stock')
             ->get();
 
@@ -879,8 +936,12 @@ class ReportController extends Controller
     private function downloadCsv(string $prefix, array $header, array $rows)
     {
         $fileName = $prefix . '_' . now()->format('Ymd_His') . '.csv';
+        $disposition = strtolower((string) request()->query('disposition', request()->query('view') === 'inline' ? 'inline' : 'attachment'));
+        if (!in_array($disposition, ['inline', 'attachment'], true)) {
+            $disposition = 'attachment';
+        }
 
-        return response()->streamDownload(function () use ($header, $rows) {
+        return response()->stream(function () use ($header, $rows) {
             $output = fopen('php://output', 'w');
             fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
             fputcsv($output, $header);
@@ -890,8 +951,10 @@ class ReportController extends Controller
             }
 
             fclose($output);
-        }, $fileName, [
+        }, 200, [
             'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => sprintf('%s; filename="%s"; filename*=UTF-8\'\'%s', $disposition, $fileName, rawurlencode($fileName)),
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
         ]);
     }
 

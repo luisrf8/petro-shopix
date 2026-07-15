@@ -442,7 +442,7 @@
         }
 
         #cart.offcanvas-admin-desktop #cartList {
-            max-height: 48vh;
+            max-height: 100vh;
         }
 
         #cart.offcanvas-admin-desktop .offcanvas-header {
@@ -1015,6 +1015,7 @@
                                                                 <small class="text-muted">| Bs {{ number_format((float) $originalVariantPriceBs, 2) }}</small>
                                                             @endif
                                                         @endif
+                                                        | Cd: {{ $variant->barcode }}
                                                         | Stock: {{ $variant->stock }}
                                                     </span>
                                                     <i class="check-icon d-none ms-2 text-success fas fa-check"></i>
@@ -4358,18 +4359,6 @@ function updateQuantity(id, newQty) {
             recalcSubtotals();
             clearSalesCartStorage();
 
-                        const salePdfUrl = data.nota_entrega_pdf_url || data.pdf_url;
-
-                        if (salePdfUrl) {
-                const salePdfLink = document.createElement('a');
-                salePdfLink.href = salePdfUrl;
-                salePdfLink.download = '';
-                salePdfLink.rel = 'noopener';
-                document.body.appendChild(salePdfLink);
-                salePdfLink.click();
-                document.body.removeChild(salePdfLink);
-            }
-
             if (data.hka_dispatch_guide_download_url) {
                 setTimeout(() => {
                     const linkGuiaHka = document.createElement('a');
@@ -4380,18 +4369,7 @@ function updateQuantity(id, newQty) {
                     document.body.removeChild(linkGuiaHka);
                 }, 700);
             }
-
-            const redirectDelayMs = data.hka_dispatch_guide_download_url
-                ? 1800
-                : (salePdfUrl ? 900 : 0);
-
-            if (redirectDelayMs > 0) {
-                setTimeout(() => {
-                    window.location.href = '/sales-orders';
-                }, redirectDelayMs);
-            } else {
-                window.location.href = '/sales-orders';
-            }
+            window.location.href = "/sales-orders";
         })
         .catch(error => {
             console.error('Error:', error);

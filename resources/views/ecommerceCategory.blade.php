@@ -1077,26 +1077,37 @@
       .product-variant-chip {
         min-width: 0;
         width: 100%;
-        padding: 0.42rem 0.3rem;
+        min-height: 72px;
+        padding: 0.48rem 0.38rem;
         border-radius: 11px;
         flex: initial;
-        gap: 0.18rem;
+        gap: 0.2rem;
       }
 
       .product-variant-size {
-        justify-content: center;
-        font-size: 0.66rem;
+        justify-content: flex-start;
+        font-size: 0.64rem;
         gap: 0.18rem;
+        line-height: 1.12;
+        white-space: normal;
       }
 
       .product-variant-price {
-        justify-content: center;
-        font-size: 0.68rem;
-        gap: 0.18rem;
+        justify-content: flex-start;
+        align-items: flex-start;
+        font-size: 0.64rem;
+        line-height: 1.1;
+        gap: 0.12rem;
       }
 
       .product-variant-price strong {
-        font-size: 0.72rem;
+        font-size: 0.7rem;
+        line-height: 1;
+      }
+
+      .product-variant-price small {
+        font-size: 0.6rem;
+        line-height: 1.05;
       }
 
       .product-variant-chip.product-variant-more strong {

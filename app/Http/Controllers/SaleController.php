@@ -666,81 +666,9 @@ class SaleController extends Controller
             }
         }
 
-    // =====================================
-    //   GENERAR PDF SI HAY PAGOS APROBADOS
-    // =====================================
-        if ($approvedPayments->isNotEmpty()) {
-            try {
-                $imageBase64 = $this->resolveTenantBillingLogoDataUri($order->tenant ?? null);
-
-                // Totales
-                $totalOrden = (float) $order->gross_total;
-                $totalTaxes = $order->details->flatMap->taxes->sum('tax_amount');
-                $totalPagado = $order->payments->sum('amount');
-                $totalGeneral = $totalOrden + $totalTaxes;
-                // Generar QR
-                $qrUrl = url('/publicOrder/' . $order->id);
-                $qrCode = QrCode::create($qrUrl)
-                    ->setEncoding(new Encoding('UTF-8'))
-                    ->setSize(250)
-                    ->setMargin(10);
-
-                $writer = new PngWriter();
-                $qrCodeImage = $writer->write($qrCode);
-                $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodeImage->getString());
-                $pdfUrl = null;
-                if (($order->document_issue_mode ?? 'delivery_note') !== 'electronic_invoice') {
-                    $pdfContent = view('fiscalOrderPdf', compact(
-                        'order',
-                        'totalOrden',
-                        'totalTaxes',
-                        'totalGeneral',
-                        'totalPagado',
-                        'imageBase64',
-                        'qrCodeBase64',
-                        'dollarRate'
-                    ))->render();
-
-                    $pdfBinary = $this->renderPdfOutput($pdfContent);
-
-                    $fileName = 'factura-' . $order->id . '.pdf';
-                    Storage::disk('public')->put('orders/' . $fileName, $pdfBinary);
-                    $pdfUrl = asset('storage/orders/' . $fileName);
-                }
-
-
-                //ORDEN DE ENTREGA PDF
-                $pdfContentNota = view('orderPdf', compact(
-                    'order',
-                    'totalOrden',
-                    'totalTaxes',
-                    'totalGeneral',
-                    'totalPagado',
-                    'imageBase64',
-                    'qrCodeBase64',
-                    'dollarRate',
-                    'tienda'
-                ))->render();
-
-                $pdfBinaryNota = $this->renderPdfOutput($pdfContentNota);
-
-                // $fileName = 'orden-' . $order->id . '.pdf';
-                $fileNameNota = $this->resolveInternalDispatchFilename((int) $order->id);
-                Storage::disk('public')->put('orders/' . $fileNameNota, $pdfBinaryNota);
-                $pdfUrlNota = asset('storage/orders/' . $fileNameNota);
-            } catch (\Throwable $exception) {
-                Log::warning('No se pudieron generar los PDF de la venta.', [
-                    'order_id' => (int) $order->id,
-                    'tenant_id' => (int) $order->tenant_id,
-                    'error' => $exception->getMessage(),
-                ]);
-                $pdfUrl = null;
-                $pdfUrlNota = null;
-            }
-        } else {
-            $pdfUrl = null;
-            $pdfUrlNota = null;
-        }
+        // No generar PDFs al registrar la venta. Se generan bajo demanda desde el detalle de la orden.
+        $pdfUrl = null;
+        $pdfUrlNota = null;
 
         if ($deliveryType === 'delivery' && $markSaleCompleted) {
             try {

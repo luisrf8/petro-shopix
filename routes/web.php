@@ -300,6 +300,7 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
 
     // Reportes PDF
     Route::get('/reports', [ReportController::class, 'index'])->middleware('role.name:owner,admin,administrador')->name('reports.index');
+    Route::get('/reports/csv/viewer', [ReportController::class, 'csvViewer'])->middleware('role.name:owner,admin,administrador')->name('reports.csv.viewer');
     Route::get('/reports/products/top-selling/pdf', [ReportController::class, 'topSellingProductsPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.products.topSelling.pdf');
     Route::get('/reports/products/top-selling/excel', [ReportController::class, 'topSellingProductsExcel'])->middleware('role.name:owner,admin,administrador')->name('reports.products.topSelling.excel');
     Route::get('/reports/inventory/entries/pdf', [ReportController::class, 'inventoryEntriesPdf'])->middleware('role.name:owner,admin,administrador')->name('reports.inventory.entries.pdf');

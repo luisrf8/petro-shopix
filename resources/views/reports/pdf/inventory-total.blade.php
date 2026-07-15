@@ -16,6 +16,9 @@
 <body>
     <h2>Reporte de Inventario Total</h2>
     <div class="meta">Generado: {{ $summary['generated_at']->format('d/m/Y H:i') }}</div>
+    @if(isset($summary['start_date'], $summary['end_date']))
+        <div class="meta">Rango: {{ optional($summary['start_date'])->format('d/m/Y') }} - {{ optional($summary['end_date'])->format('d/m/Y') }}</div>
+    @endif
     <div class="meta">
         Variantes: <strong>{{ number_format($summary['variants']) }}</strong> |
         Stock total: <strong>{{ number_format($summary['total_stock']) }}</strong> |

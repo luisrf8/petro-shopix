@@ -361,19 +361,23 @@
 <h3 class="section-title">Detalle de productos</h3>
 <table class="products-table">
     <colgroup>
-        <col style="width: 19%;">
-        <col style="width: 8%;">
         <col style="width: 17%;">
-        <col style="width: 14%;">
-        <col style="width: 14%;">
-        <col style="width: 14%;">
-        <col style="width: 14%;">
+        <col style="width: 7%;">
+        <col style="width: 13%;">
+        <col style="width: 11%;">
+        <col style="width: 11%;">
+        <col style="width: 11%;">
+        <col style="width: 11%;">
+        <col style="width: 9.5%;">
+        <col style="width: 9.5%;">
     </colgroup>
     <thead>
         <tr>
             <th>Producto</th>
             <th>Cantidad</th>
             <th>Variante</th>
+            <th>Unitario {{ $orderCurrencyCode }}</th>
+            <th>Unitario Bs</th>
             <th>Sub total {{ $orderCurrencyCode }}</th>
             <th>Sub total Bs</th>
             <th>Total {{ $orderCurrencyCode }}</th>
@@ -385,11 +389,15 @@
             @php
                 $lineSubtotal = (float) ($detalle->line_subtotal_before_discount ?? ($detalle->price * $detalle->quantity));
                 $lineTotal = (float) ($detalle->amount ?? 0);
+                $lineQuantity = (float) ($detalle->quantity ?? 0);
+                $lineUnitPrice = $lineQuantity > 0 ? ($lineSubtotal / $lineQuantity) : $lineSubtotal;
             @endphp
             <tr>
                 <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
                 <td class="qty-cell">{{ (int) round((float) $detalle->quantity) }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
+                <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineUnitPrice) }}</td>
+                <td class="amount-cell">{{ $formatBsOrderAmount($lineUnitPrice) }}</td>
                 <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineSubtotal) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($lineSubtotal) }}</td>
                 <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineTotal) }}</td>
@@ -405,10 +413,12 @@
                 <td class="amount-cell">{{ $formatBsOrderAmount($deliveryFee) }}</td>
                 <td class="amount-cell">{{ $formatOrderCurrencyAmount($deliveryFee) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($deliveryFee) }}</td>
+                <td class="amount-cell">{{ $formatOrderCurrencyAmount($deliveryFee) }}</td>
+                <td class="amount-cell">{{ $formatBsOrderAmount($deliveryFee) }}</td>
             </tr>
         @endif
         <tr>
-            <td colspan="3" style="text-align: right;"><strong>Total orden</strong></td>
+            <td colspan="5" style="text-align: right;"><strong>Total orden</strong></td>
             <td class="amount-cell"><strong>{{ $formatOrderCurrencyAmount($orderTotal) }}</strong></td>
             <td class="amount-cell"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
             <td class="amount-cell"><strong>{{ $formatOrderCurrencyAmount($orderTotal) }}</strong></td>
