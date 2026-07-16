@@ -115,6 +115,114 @@ class ImageStorage
         return self::storeBinary($webpBinary, $directory, 'webp', 'image/webp');
     }
 
+    public static function storeUploadedImageAsPng(UploadedFile $file, string $directory, int $compressionLevel = 9): string
+    {
+        $mimeType = Str::lower((string) ($file->getClientMimeType() ?: $file->getMimeType() ?: ''));
+        $rasterMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+
+        if (!in_array($mimeType, $rasterMimeTypes, true)) {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        if (!function_exists('imagecreatefromstring') || !function_exists('imagepng')) {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        $binary = file_get_contents($file->getRealPath());
+        if ($binary === false || $binary === '') {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        if (!self::canSafelyDecodeImageForPng($file->getRealPath())) {
+            // Avoid fatal OOM on large raster payloads; keep original upload instead of crashing.
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        $resource = @imagecreatefromstring($binary);
+        if ($resource === false) {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        if (function_exists('imagepalettetotruecolor')) {
+            imagepalettetotruecolor($resource);
+        }
+        imagealphablending($resource, false);
+        imagesavealpha($resource, true);
+
+        if (function_exists('imagetruecolortopalette')) {
+            @imagetruecolortopalette($resource, true, 128);
+        }
+
+        ob_start();
+        $encoded = @imagepng($resource, null, max(0, min(9, $compressionLevel)));
+        $pngBinary = ob_get_clean();
+        imagedestroy($resource);
+
+        if ($encoded !== true || !is_string($pngBinary) || $pngBinary === '') {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        return self::storeBinary($pngBinary, $directory, 'png', 'image/png');
+    }
+
+    private static function canSafelyDecodeImageForPng(string $realPath): bool
+    {
+        if (!function_exists('getimagesize')) {
+            return true;
+        }
+
+        $imageSize = @getimagesize($realPath);
+        if (!is_array($imageSize)) {
+            return true;
+        }
+
+        $width = (int) ($imageSize[0] ?? 0);
+        $height = (int) ($imageSize[1] ?? 0);
+        if ($width <= 0 || $height <= 0) {
+            return true;
+        }
+
+        // GD may require several bytes per pixel while decoding and re-encoding.
+        $estimatedRequiredBytes = (int) round($width * $height * 5);
+        $memoryLimitBytes = self::memoryLimitBytes();
+
+        if ($memoryLimitBytes <= 0) {
+            return true;
+        }
+
+        $safetyReserveBytes = 16 * 1024 * 1024;
+        $availableBytes = $memoryLimitBytes - memory_get_usage(true) - $safetyReserveBytes;
+
+        return $availableBytes > 0 && $estimatedRequiredBytes <= $availableBytes;
+    }
+
+    private static function memoryLimitBytes(): int
+    {
+        $rawLimit = trim((string) ini_get('memory_limit'));
+        if ($rawLimit === '' || $rawLimit === '-1') {
+            return -1;
+        }
+
+        $unit = Str::lower(substr($rawLimit, -1));
+        $value = (float) $rawLimit;
+
+        switch ($unit) {
+            case 'g':
+                $value *= 1024;
+                // no break
+            case 'm':
+                $value *= 1024;
+                // no break
+            case 'k':
+                $value *= 1024;
+                break;
+            default:
+                break;
+        }
+
+        return (int) max(0, round($value));
+    }
+
     public static function storeBinary(string $binary, string $directory, string $extension = 'png', ?string $mimeType = null): string
     {
         $safeExtension = ltrim(Str::lower($extension), '.');

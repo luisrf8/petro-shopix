@@ -102,7 +102,7 @@
                         name="image"
                         accept=".png,.jpg,.jpeg,.svg"
                     >
-                  <small class="text-muted d-block mt-1">JPG/JPEG/PNG se convertirá a WEBP y si la imagen pesa mucho se comprimirá para evitar errores 413.</small>
+                  <small class="text-muted d-block mt-1">También aplica conversión JPG/JPEG/PNG a WEBP y compresión automática por tamaño.</small>
                 </div>
                 <div class="mb-3">
                   <button type="button" class="btn btn-outline-dark w-100" id="openCreateCategoryAiBtn">
@@ -245,7 +245,7 @@
                     <small class="text-muted">
                         Dejar vacío si no deseas cambiar la imagen
                     </small>
-                  <small class="text-muted d-block mt-1">También aplica conversión JPG/JPEG a PNG y compresión automática por tamaño.</small>
+                  <small class="text-muted d-block mt-1">También aplica conversión JPG/JPEG/PNG a WEBP y compresión automática por tamaño.</small>
                 </div>
                 <div class="mb-3">
                   <button type="button" class="btn btn-outline-dark w-100" id="openEditCategoryAiBtn">
@@ -513,9 +513,9 @@
         if (optimized.stillLarge) {
           message += ` Aun supera el maximo recomendado (${recommendedLimit}); baja la resolucion manualmente.`;
         }
-        notifyCategory(message);
+        showShopixToast(message, optimized.stillLarge ? 'warning' : 'info');
       } else if (optimized.stillLarge) {
-        notifyCategory(`La imagen pesa ${formatCategorySize(optimizedSize)}. Recomendado por imagen: ${recommendedLimit}.`);
+        showShopixToast(`La imagen pesa ${formatCategorySize(optimizedSize)}. Recomendado por imagen: ${recommendedLimit}.`, 'warning');
       }
 
       return optimized;
@@ -627,7 +627,8 @@
 
         await optimizeCategoryInput(config.targetInputId);
 
-        preview.src = URL.createObjectURL(file);
+        const appliedFile = input.files?.[0] || file;
+        preview.src = URL.createObjectURL(appliedFile);
         preview.style.display = 'block';
         appendMessage('assistant', 'Imagen aplicada al formulario. Puedes seguir ajustando o cerrar con la X.');
       }
@@ -862,7 +863,11 @@
     document.getElementById('editCategoryImage').addEventListener('change', async function () {
       await optimizeCategoryInput('editCategoryImage');
         const file = this.files[0];
-        if (!file) return;
+        if (!file) {
+            const img = document.getElementById('currentCategoryImage');
+            img.style.display = 'none';
+            return;
+        }
 
         const reader = new FileReader();
         reader.onload = e => {

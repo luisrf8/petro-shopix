@@ -1961,6 +1961,69 @@
         };
     }
 
+    async function optimizeTenantImageFileAsPng(file) {
+        const type = String(file?.type || '').toLowerCase();
+        if (type === 'image/svg+xml') {
+            return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+        }
+
+        const rasterTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+        if (!rasterTypes.includes(type)) {
+            return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+        }
+
+        const source = await loadTenantImageElement(file);
+        const originalWidth = source.naturalWidth || source.width;
+        const originalHeight = source.naturalHeight || source.height;
+
+        let width = originalWidth;
+        let height = originalHeight;
+        const pngMaxDimension = Math.min(TENANT_IMAGE_MAX_DIMENSION, 1400);
+        if (width > pngMaxDimension || height > pngMaxDimension) {
+            const scale = Math.min(pngMaxDimension / width, pngMaxDimension / height);
+            width = Math.max(1, Math.round(width * scale));
+            height = Math.max(1, Math.round(height * scale));
+        }
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(source, 0, 0, width, height);
+
+        const targetType = 'image/png';
+        const convertedToPng = type !== targetType;
+        let blob = await tenantCanvasToBlob(canvas, targetType);
+
+        while (blob && blob.size > TENANT_SAFE_IMAGE_BYTES && width > 640 && height > 640) {
+            width = Math.max(640, Math.round(width * 0.85));
+            height = Math.max(640, Math.round(height * 0.85));
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(source, 0, 0, width, height);
+            blob = await tenantCanvasToBlob(canvas, targetType);
+        }
+
+        if (!blob) {
+            return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+        }
+
+        const changed = blob.size !== file.size || width !== originalWidth || height !== originalHeight || convertedToPng;
+        if (!changed) {
+            return { file, changed: false, convertedToPng: false, stillLarge: file.size > TENANT_SAFE_IMAGE_BYTES };
+        }
+
+        const baseName = file.name.replace(/\.[^.]+$/, '');
+        const optimizedFile = new File([blob], `${baseName}.png`, { type: targetType });
+
+        return {
+            file: optimizedFile,
+            changed: true,
+            convertedToPng,
+            stillLarge: optimizedFile.size > TENANT_SAFE_IMAGE_BYTES,
+        };
+    }
+
     async function optimizeTenantInputFile(inputId, previewId) {
         const input = document.getElementById(inputId);
         const preview = document.getElementById(previewId);
@@ -2010,6 +2073,45 @@
                 videoPreview.classList.add('d-none');
             }
             showTenantToast('No se pudo optimizar la imagen seleccionada.', 'warning');
+        }
+    }
+
+    async function optimizeTenantInputFileAsPng(inputId, previewId) {
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+        const selectedFile = input?.files?.[0];
+        if (!input || !preview || !selectedFile) {
+            return;
+        }
+
+        try {
+            const originalSize = Number(selectedFile.size || 0);
+            const optimized = await optimizeTenantImageFileAsPng(selectedFile);
+            const optimizedSize = Number(optimized.file?.size || originalSize);
+            const recommendedLimit = formatTenantSize(TENANT_SAFE_IMAGE_BYTES);
+            const dt = new DataTransfer();
+            dt.items.add(optimized.file);
+            input.files = dt.files;
+
+            preview.src = URL.createObjectURL(optimized.file);
+            preview.classList.remove('d-none');
+
+            if (optimized.changed) {
+                let message = `Imagen optimizada automaticamente: ${formatTenantSize(originalSize)} -> ${formatTenantSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
+                if (optimized.convertedToPng) {
+                    message = `Imagen convertida a PNG y optimizada: ${formatTenantSize(originalSize)} -> ${formatTenantSize(optimizedSize)} (max recomendado ${recommendedLimit}).`;
+                }
+                if (optimized.stillLarge) {
+                    message += ` Aun supera el maximo recomendado (${recommendedLimit}); baja la resolucion manualmente.`;
+                }
+                showTenantToast(message, optimized.stillLarge ? 'warning' : 'info');
+            } else if (optimized.stillLarge) {
+                showTenantToast(`La imagen pesa ${formatTenantSize(optimizedSize)}. Recomendado por imagen: ${recommendedLimit}.`, 'warning');
+            }
+        } catch (error) {
+            preview.src = URL.createObjectURL(selectedFile);
+            preview.classList.remove('d-none');
+            showTenantToast('No se pudo transformar la imagen a PNG.', 'warning');
         }
     }
 
@@ -2681,6 +2783,12 @@ function initMap() {
             if (!event.target.files?.length) {
                 billingLogoPreview.src = '#';
                 billingLogoPreview.classList.add('d-none');
+                return;
+            }
+
+            const wantsPng = window.confirm('Desea transformarlo a PNG y reducir su tamaño para que funcione correctamente en PDFs y ordenes de entrega?');
+            if (wantsPng) {
+                await optimizeTenantInputFileAsPng('billing_logo', 'billing-logo-preview');
                 return;
             }
 

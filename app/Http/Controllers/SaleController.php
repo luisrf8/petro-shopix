@@ -3373,45 +3373,60 @@ class SaleController extends Controller
             return $fallbackDataUri;
         }
 
-        $logoPath = trim((string) ($tenant->billing_logo ?: $tenant->logo));
-        if ($logoPath === '') {
+        // Align memory ceiling with Dompdf render pipeline for safer logo normalization.
+        @ini_set('memory_limit', '512M');
+
+        $logoCandidates = array_values(array_filter([
+            trim((string) ($tenant->billing_logo ?? '')),
+            trim((string) ($tenant->logo ?? '')),
+        ], static fn ($value) => $value !== ''));
+
+        if (empty($logoCandidates)) {
             return $fallbackDataUri;
         }
 
-        try {
-            if (ImageStorage::isGooglePath($logoPath)) {
-                $googleFileId = ImageStorage::extractGoogleFileId($logoPath);
-                if ($googleFileId !== '') {
-                    $file = ImageStorage::downloadGoogleFileById($googleFileId, 5);
-                    $content = (string) ($file['content'] ?? '');
-                    $mime = trim((string) ($file['mime_type'] ?? 'image/png'));
+        foreach ($logoCandidates as $logoPath) {
+            try {
+                if (ImageStorage::isGooglePath($logoPath)) {
+                    $googleFileId = ImageStorage::extractGoogleFileId($logoPath);
+                    if ($googleFileId !== '') {
+                        $file = ImageStorage::downloadGoogleFileById($googleFileId, 5);
+                        $content = (string) ($file['content'] ?? '');
+                        $mime = trim((string) ($file['mime_type'] ?? 'image/png'));
 
-                    if ($content !== '' && $this->isSupportedBillingLogoMime($mime)) {
-                        return 'data:' . ($mime !== '' ? $mime : 'image/png') . ';base64,' . base64_encode($content);
+                        if ($content !== '') {
+                            $normalizedDataUri = $this->normalizeBillingLogoDataUri($content, $mime);
+                            if (!empty($normalizedDataUri)) {
+                                return $normalizedDataUri;
+                            }
+                        }
                     }
                 }
-            }
 
-            if (Storage::disk('public')->exists($logoPath)) {
-                $content = Storage::disk('public')->get($logoPath);
-                $mime = (string) (Storage::disk('public')->mimeType($logoPath) ?: 'image/png');
+                if (Storage::disk('public')->exists($logoPath)) {
+                    $content = Storage::disk('public')->get($logoPath);
+                    $mime = (string) (Storage::disk('public')->mimeType($logoPath) ?: 'image/png');
 
-                if ($content !== '' && $this->isSupportedBillingLogoMime($mime)) {
-                    return 'data:' . $mime . ';base64,' . base64_encode($content);
+                    if ($content !== '') {
+                        $normalizedDataUri = $this->normalizeBillingLogoDataUri($content, $mime);
+                        if (!empty($normalizedDataUri)) {
+                            return $normalizedDataUri;
+                        }
+                    }
                 }
-            }
 
-            $publicPath = public_path(ltrim($logoPath, '/'));
-            if (is_file($publicPath)) {
-                return $this->buildDataUriFromPath($publicPath) ?: $fallbackDataUri;
-            }
+                $publicPath = public_path(ltrim($logoPath, '/'));
+                if (is_file($publicPath)) {
+                    return $this->buildDataUriFromPath($publicPath) ?: $fallbackDataUri;
+                }
 
-            $storagePublicPath = public_path('storage/' . ltrim($logoPath, '/'));
-            if (is_file($storagePublicPath)) {
-                return $this->buildDataUriFromPath($storagePublicPath) ?: $fallbackDataUri;
+                $storagePublicPath = public_path('storage/' . ltrim($logoPath, '/'));
+                if (is_file($storagePublicPath)) {
+                    return $this->buildDataUriFromPath($storagePublicPath) ?: $fallbackDataUri;
+                }
+            } catch (\Throwable $exception) {
+                // Try next candidate path and keep PDF rendering stable.
             }
-        } catch (\Throwable $exception) {
-            // Silently fallback to default logo for PDF rendering stability.
         }
 
         return $fallbackDataUri;
@@ -3434,6 +3449,165 @@ class SaleController extends Controller
         }
 
         return 'data:' . $mime . ';base64,' . base64_encode($content);
+    }
+
+    private function normalizeBillingLogoDataUri(string $content, string $mime): ?string
+    {
+        $normalizedMime = Str::lower(trim($mime));
+        if (!$this->isSupportedBillingLogoMime($normalizedMime)) {
+            return null;
+        }
+
+        if ($normalizedMime !== 'image/webp') {
+            return 'data:' . ($normalizedMime !== '' ? $normalizedMime : 'image/png') . ';base64,' . base64_encode($content);
+        }
+
+        // Dompdf converts WEBP internally and can exhaust memory; convert to a smaller PNG first.
+        $pngBinary = $this->convertWebpLogoToSafePng($content);
+        if (empty($pngBinary)) {
+            if ($this->canUseWebpDirectlyForPdf($content)) {
+                return 'data:image/webp;base64,' . base64_encode($content);
+            }
+
+            return null;
+        }
+
+        return 'data:image/png;base64,' . base64_encode($pngBinary);
+    }
+
+    private function convertWebpLogoToSafePng(string $binary): ?string
+    {
+        if (!function_exists('imagecreatefromstring') || !function_exists('imagepng') || !function_exists('getimagesizefromstring')) {
+            return null;
+        }
+
+        if (!$this->canSafelyDecodeBillingLogoBinary($binary)) {
+            return null;
+        }
+
+        $source = @imagecreatefromstring($binary);
+        if ($source === false) {
+            return null;
+        }
+
+        $sourceWidth = (int) imagesx($source);
+        $sourceHeight = (int) imagesy($source);
+
+        if ($sourceWidth <= 0 || $sourceHeight <= 0) {
+            imagedestroy($source);
+            return null;
+        }
+
+        $maxDimension = 1200;
+        $targetWidth = $sourceWidth;
+        $targetHeight = $sourceHeight;
+
+        if ($sourceWidth > $maxDimension || $sourceHeight > $maxDimension) {
+            $scale = min($maxDimension / $sourceWidth, $maxDimension / $sourceHeight);
+            $targetWidth = max(1, (int) round($sourceWidth * $scale));
+            $targetHeight = max(1, (int) round($sourceHeight * $scale));
+        }
+
+        $target = imagecreatetruecolor($targetWidth, $targetHeight);
+        if ($target === false) {
+            imagedestroy($source);
+            return null;
+        }
+
+        imagealphablending($target, false);
+        imagesavealpha($target, true);
+        $transparent = imagecolorallocatealpha($target, 0, 0, 0, 127);
+        imagefilledrectangle($target, 0, 0, $targetWidth, $targetHeight, $transparent);
+
+        imagecopyresampled($target, $source, 0, 0, 0, 0, $targetWidth, $targetHeight, $sourceWidth, $sourceHeight);
+
+        ob_start();
+        $encoded = @imagepng($target, null, 8);
+        $pngBinary = ob_get_clean();
+
+        imagedestroy($source);
+        imagedestroy($target);
+
+        if ($encoded !== true || !is_string($pngBinary) || $pngBinary === '') {
+            return null;
+        }
+
+        return $pngBinary;
+    }
+
+    private function canSafelyDecodeBillingLogoBinary(string $binary): bool
+    {
+        $size = @getimagesizefromstring($binary);
+        if (!is_array($size)) {
+            return false;
+        }
+
+        $width = (int) ($size[0] ?? 0);
+        $height = (int) ($size[1] ?? 0);
+        if ($width <= 0 || $height <= 0) {
+            return false;
+        }
+
+        $memoryLimit = $this->memoryLimitBytesForPdf();
+        if ($memoryLimit <= 0) {
+            return true;
+        }
+
+        $estimatedRequired = (int) round($width * $height * 5);
+        $safetyReserve = 32 * 1024 * 1024;
+        $available = $memoryLimit - memory_get_usage(true) - $safetyReserve;
+
+        return $available > 0 && $estimatedRequired <= $available;
+    }
+
+    private function canUseWebpDirectlyForPdf(string $binary): bool
+    {
+        if (!function_exists('getimagesizefromstring')) {
+            return false;
+        }
+
+        $size = @getimagesizefromstring($binary);
+        if (!is_array($size)) {
+            return false;
+        }
+
+        $width = (int) ($size[0] ?? 0);
+        $height = (int) ($size[1] ?? 0);
+        if ($width <= 0 || $height <= 0) {
+            return false;
+        }
+
+        $pixelBudget = 1800 * 1800;
+        $binaryBudget = 2 * 1024 * 1024;
+
+        return ($width * $height) <= $pixelBudget && strlen($binary) <= $binaryBudget;
+    }
+
+    private function memoryLimitBytesForPdf(): int
+    {
+        $raw = trim((string) ini_get('memory_limit'));
+        if ($raw === '' || $raw === '-1') {
+            return -1;
+        }
+
+        $unit = Str::lower(substr($raw, -1));
+        $value = (float) $raw;
+
+        switch ($unit) {
+            case 'g':
+                $value *= 1024;
+                // no break
+            case 'm':
+                $value *= 1024;
+                // no break
+            case 'k':
+                $value *= 1024;
+                break;
+            default:
+                break;
+        }
+
+        return (int) max(0, round($value));
     }
 
     private function isSupportedBillingLogoMime(string $mime): bool

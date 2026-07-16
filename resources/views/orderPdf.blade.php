@@ -71,7 +71,7 @@
         }
 
         .order-header-logo {
-            width: 18%;
+            width: 20%;
             padding-right: 4px;
         }
 
@@ -133,7 +133,7 @@
 
         .order-logo-box {
             display: inline-block;
-            width: 102px;
+            width: 200px;
             text-align: left;
         }
 
@@ -141,8 +141,8 @@
             display: block;
             margin-left: 0;
             margin-right: auto;
-            max-width: 102px;
-            max-height: 48px;
+            max-width: 200px;
+            max-height: 90px;
         }
 
         .order-summary-grid {

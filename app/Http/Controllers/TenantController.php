@@ -2096,8 +2096,8 @@ class TenantController extends Controller
                 'description'     => 'nullable|string',
                 'business_type'   => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
                 'economic_activity' => 'nullable|string|max:150|regex:/.*\S.*/',
-                'logo'            => 'nullable|image|mimes:png,svg,webp|max:2048',
-                'billing_logo'    => 'nullable|image|mimes:png,svg,webp|max:2048',
+                'logo'            => 'nullable|image|mimes:png,jpg,jpeg,svg,webp|max:2048',
+                'billing_logo'    => 'nullable|image|mimes:png,jpg,jpeg,svg,webp|max:2048',
                 'color_primary'   => 'nullable|string|max:7',
                 'color_secondary' => 'nullable|string|max:7',
                 'color_accent'    => 'nullable|string|max:7',
@@ -2277,7 +2277,7 @@ class TenantController extends Controller
 
             // Manejar subida de logo
             if ($request->hasFile('logo')) {
-                $logoPath = ImageStorage::storeUploadedImageAsWebp($request->file('logo'), 'tenants/logos');
+                $logoPath = ImageStorage::storeUploadedImageAsPng($request->file('logo'), 'tenants/logos');
                 $tenant->logo = $logoPath;
             }
             if ($request->hasFile('billing_logo')) {
@@ -2285,7 +2285,7 @@ class TenantController extends Controller
                     ImageStorage::delete($tenant->billing_logo);
                 }
 
-                $billingLogoPath = ImageStorage::storeUploadedImageAsWebp($request->file('billing_logo'), 'tenants/billing-logos');
+                $billingLogoPath = ImageStorage::storeUploadedImageAsPng($request->file('billing_logo'), 'tenants/billing-logos');
                 $tenant->billing_logo = $billingLogoPath;
             }
             // Manejar imagen de fondo
