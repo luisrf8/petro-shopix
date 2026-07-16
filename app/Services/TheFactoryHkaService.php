@@ -1010,9 +1010,11 @@ class TheFactoryHkaService
             $lineUnitDiscount = (float) ($item->quantity ?? 0) > 0
                 ? round($lineDiscountAmount / max(1, (float) $item->quantity), 4)
                 : 0.0;
-            $lineUnitBasePrice = (float) ($item->quantity ?? 0) > 0
-                ? round($lineBaseAmount / max(1, (float) $item->quantity), 4)
-                : (float) $item->price;
+            $lineUnitPriceStored = round(max(0, (float) ($item->price ?? 0)), 4);
+
+            if ($lineUnitPriceStored <= 0 && (float) ($item->quantity ?? 0) > 0) {
+                $lineUnitPriceStored = round($lineSubtotal / max(1, (float) $item->quantity), 4);
+            }
 
             return [
                 'numeroLinea' => (string) ($index + 1),
@@ -1021,7 +1023,7 @@ class TheFactoryHkaService
                 'descripcion' => (string) ($item->variant->product->name ?? 'Producto'),
                 'cantidad' => $this->formatPlainNumber($item->quantity, 4),
                 'unidadMedida' => 'UND',
-                'precioUnitario' => $this->formatAmount($lineUnitBasePrice * $multiplier, 4),
+                'precioUnitario' => $this->formatAmount($lineUnitPriceStored * $multiplier, 4),
                 'precioUnitarioDescuento' => $lineUnitDiscount > 0 ? $this->formatAmount($lineUnitDiscount * $multiplier, 2) : null,
                 'montoBonificacion' => null,
                 'descripcionBonificacion' => null,

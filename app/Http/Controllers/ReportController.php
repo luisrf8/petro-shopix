@@ -827,13 +827,15 @@ class ReportController extends Controller
                 (string) ($row['customers_count'] ?? 0),
                 number_format((float) ($row['total_amount'] ?? 0), 2, '.', ''),
                 number_format((float) ($row['total_paid'] ?? 0), 2, '.', ''),
+                number_format((float) ($row['total_amount_bs'] ?? 0), 2, '.', ''),
+                number_format((float) ($row['total_paid_bs'] ?? 0), 2, '.', ''),
                 number_format((float) ($row['collection_rate'] ?? 0), 2, '.', ''),
             ];
         })->all();
 
         return $this->downloadCsv(
             'reporte_ingresos_por_usuario',
-            ['Usuario', 'Ordenes', 'Clientes', 'Vendido_' . ($summary['currency_code'] ?? 'USD'), 'Cobrado_' . ($summary['currency_code'] ?? 'USD'), 'Cobranza_%'],
+            ['Usuario', 'Ordenes', 'Clientes', 'Vendido_' . ($summary['currency_code'] ?? 'USD'), 'Cobrado_' . ($summary['currency_code'] ?? 'USD'), 'Vendido_BS', 'Cobrado_BS', 'Cobranza_%'],
             $csvRows
         );
     }
@@ -1204,16 +1206,30 @@ class ReportController extends Controller
                     ? (string) ($firstOrder?->salesRepresentative?->name ?? ('Usuario #' . $sellerId))
                     : 'Sin vendedor asignado';
 
-                $grossTotal = (float) $groupOrders->sum(function (SalesOrder $order) {
+                $grossTotalBase = (float) $groupOrders->sum(function (SalesOrder $order) {
                     return (float) $order->gross_total;
                 });
 
-                $approvedPaidTotal = (float) $groupOrders->sum(function (SalesOrder $order) {
+                $approvedPaidTotalBase = (float) $groupOrders->sum(function (SalesOrder $order) {
                     return (float) $order->payments->where('status', 1)->sum('amount');
                 });
 
-                $grossTotal = TenantCurrency::convertAmount($grossTotal, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
-                $approvedPaidTotal = TenantCurrency::convertAmount($approvedPaidTotal, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+                $grossTotalBs = (float) $groupOrders->sum(function (SalesOrder $order) use ($user) {
+                    $grossTotal = (float) $order->gross_total;
+                    $rateToBs = $this->resolveSalesOrderRateToBsForReport($order, (int) $user->tenant_id);
+
+                    return round($grossTotal * $rateToBs, 2);
+                });
+
+                $approvedPaidTotalBs = (float) $groupOrders->sum(function (SalesOrder $order) use ($user) {
+                    $approvedPaid = (float) $order->payments->where('status', 1)->sum('amount');
+                    $rateToBs = $this->resolveSalesOrderRateToBsForReport($order, (int) $user->tenant_id);
+
+                    return round($approvedPaid * $rateToBs, 2);
+                });
+
+                $grossTotal = TenantCurrency::convertAmount($grossTotalBase, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
+                $approvedPaidTotal = TenantCurrency::convertAmount($approvedPaidTotalBase, $currency['base_code'], $currency['code'], (int) $user->tenant_id);
 
                 $collectionRate = $grossTotal > 0
                     ? round(($approvedPaidTotal / $grossTotal) * 100, 2)
@@ -1226,6 +1242,8 @@ class ReportController extends Controller
                     'customers_count' => (int) $groupOrders->pluck('user_id')->filter()->unique()->count(),
                     'total_amount' => (float) $grossTotal,
                     'total_paid' => (float) $approvedPaidTotal,
+                    'total_amount_bs' => round((float) $grossTotalBs, 2),
+                    'total_paid_bs' => round((float) $approvedPaidTotalBs, 2),
                     'collection_rate' => (float) $collectionRate,
                 ];
             })
@@ -1240,6 +1258,8 @@ class ReportController extends Controller
             'customers_count' => (int) $orders->pluck('user_id')->filter()->unique()->count(),
             'total_amount' => (float) $rows->sum('total_amount'),
             'total_paid' => (float) $rows->sum('total_paid'),
+            'total_amount_bs' => (float) $rows->sum('total_amount_bs'),
+            'total_paid_bs' => (float) $rows->sum('total_paid_bs'),
             'currency_code' => $currency['code'],
             'income_user_id' => $incomeUserId,
             'income_customer_id' => $incomeCustomerId,

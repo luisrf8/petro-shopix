@@ -340,14 +340,40 @@
         <tbody>
             @foreach($order->details as $detalle)
             @php
-                $lineSubtotal = (float) ($detalle->line_subtotal_before_discount ?? ($detalle->price * $detalle->quantity));
+                $lineSubtotal = (float) ($detalle->amount ?? 0);
                 $lineTotal = (float) ($detalle->amount ?? 0);
                 $lineQuantity = (float) ($detalle->quantity ?? 0);
-                $lineUnitPrice = $lineQuantity > 0 ? ($lineSubtotal / $lineQuantity) : $lineSubtotal;
+                $lineUnitPrice = (float) ($detalle->price ?? 0);
+                $unitTypeRaw = strtolower(trim((string) ($detalle->variant->unit_type ?? 'unidad')));
+                $unitTypeMap = [
+                    'unidad' => 'und',
+                    'kg' => 'kg',
+                    'g' => 'g',
+                    'lb' => 'lb',
+                    'm' => 'm',
+                    'cm' => 'cm',
+                    'mm' => 'mm',
+                    'm2' => 'm2',
+                    'm3' => 'm3',
+                    'l' => 'l',
+                    'ml' => 'ml',
+                    'caja' => 'caja',
+                    'paquete' => 'paq',
+                    'rollo' => 'rollo',
+                    'pieza' => 'pz',
+                ];
+                $unitTypeLabel = $unitTypeMap[$unitTypeRaw] ?? ($unitTypeRaw !== '' ? $unitTypeRaw : 'und');
+                $lineQuantityText = (abs($lineQuantity - round($lineQuantity)) > 0.00001)
+                    ? rtrim(rtrim(number_format($lineQuantity, 2, '.', ''), '0'), '.')
+                    : (string) ((int) round($lineQuantity));
+
+                if ($lineUnitPrice <= 0 && $lineQuantity > 0) {
+                    $lineUnitPrice = $lineSubtotal / $lineQuantity;
+                }
             @endphp
             <tr>
                 <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
-                <td class="qty-cell">{{ (int) round((float) $detalle->quantity) }}</td>
+                <td class="qty-cell">{{ $lineQuantityText }} {{ $unitTypeLabel }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
                 <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineUnitPrice) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($lineUnitPrice) }}</td>

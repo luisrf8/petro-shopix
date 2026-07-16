@@ -449,7 +449,7 @@ class SaleController extends Controller
 
         // Crear detalles y actualizar stock
         foreach ($preparedLines as $line) {
-            $quantity = (int) $line['quantity'];
+            $quantity = (float) $line['quantity'];
             $lineSubtotalBeforeDiscount = (float) $line['line_subtotal_before_discount'];
             $lineSubtotalAfterLineDiscount = (float) $line['line_subtotal_after_line_discount'];
             $lineSubtotalFinal = round(max(0, $lineSubtotalAfterLineDiscount - (float) $line['global_discount_allocated']), 2);
@@ -907,7 +907,7 @@ class SaleController extends Controller
         foreach ($itemsSelected as $item) {
             $variant = $item['item'] ?? null; // Accedemos a la información del producto
             $variantId = (int) ($variant['id'] ?? 0);
-            $quantity = (int) ($item['quantity'] ?? 0);
+            $quantity = (float) ($item['quantity'] ?? 0);
             $price = (float) ($variant['price'] ?? 0);
 
             if ($variantId <= 0 || $quantity <= 0 || $price <= 0) {
@@ -987,7 +987,7 @@ class SaleController extends Controller
 
         // Crear detalles de la venta y actualizar stock
         foreach ($groupedData as $detail) {
-            if (in_array($deliveryType, ['delivery', 'shipping'], true) && (int) ($detail['quantity'] ?? 0) > 1) {
+            if (in_array($deliveryType, ['delivery', 'shipping'], true) && (float) ($detail['quantity'] ?? 0) > 1.00001) {
                 return response()->json(['error' => 'Las ventas con delivery/envío solo permiten cantidades al detal (1 unidad por ítem).'], 422);
             }
 

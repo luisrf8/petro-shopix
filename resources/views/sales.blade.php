@@ -16,6 +16,111 @@
         padding-right: 5px;
     }
 
+    .cart-line-item {
+        border: 1px solid #dbe4f0;
+        border-radius: 0.75rem;
+        padding: 0.62rem;
+        background: #ffffff;
+        gap: 0.52rem;
+    }
+
+    .cart-line-head {
+        display: grid;
+        grid-template-columns: 58px minmax(0, 1fr);
+        gap: 0.6rem;
+        align-items: start;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .cart-line-thumb {
+        width: 58px;
+        height: 58px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        display: block;
+    }
+
+    .cart-line-copy {
+        min-width: 0;
+    }
+
+    .cart-line-title {
+        font-size: 1.05rem;
+        font-weight: 800;
+        line-height: 1.15;
+        margin: 0 0 0.2rem;
+        color: #1f2937;
+        overflow-wrap: anywhere;
+    }
+
+    .cart-line-meta {
+        margin: 0;
+        font-size: 1.05rem;
+        color: #4b5563;
+        line-height: 1.2;
+    }
+
+    .cart-line-tax {
+        margin: 0.18rem 0 0;
+        font-size: 0.8rem;
+        color: #475569;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .cart-line-total {
+        margin: 0.18rem 0 0;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.2;
+    }
+
+    .cart-line-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        width: 100%;
+    }
+
+    .cart-line-qty {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        min-width: 0;
+    }
+
+    .cart-line-qty-label {
+        margin: 0;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #475569;
+        white-space: nowrap;
+    }
+
+    .cart-line-qty .qty-edit {
+        width: 78px;
+        height: 32px;
+        padding: 0.16rem 0.42rem;
+        font-size: 0.82rem;
+    }
+
+    .cart-line-remove-btn {
+        min-width: 30px;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        padding: 0;
+        line-height: 1;
+    }
+
     .admin-cart-fab {
         position: fixed;
         right: max(16px, env(safe-area-inset-right));
@@ -427,7 +532,7 @@
             position: sticky;
             top: 90px;
             height: calc((85vh - 120px));
-            width: min(100%, 360px);
+            width: min(100%, 390px);
             margin-left: auto;
             border: 1px solid #e3e6ea;
             border-radius: .75rem;
@@ -442,11 +547,66 @@
         }
 
         #cart.offcanvas-admin-desktop #cartList {
-            max-height: 100vh;
+            min-height: 30vh;
+            max-height: 48vh;
         }
 
         #cart.offcanvas-admin-desktop .offcanvas-header {
             border-bottom: 1px solid #e3e6ea !important;
+        }
+
+        #cartList {
+            padding-right: 3px;
+        }
+
+        .cart-line-title {
+            font-size: 1rem;
+        }
+
+        .cart-line-meta {
+            font-size: 0.94rem;
+        }
+    }
+
+    @media (min-width: 1200px) and (max-width: 1550px) {
+        .cart-line-item {
+            padding: 0.52rem;
+            gap: 0.38rem;
+        }
+
+        .cart-line-head {
+            grid-template-columns: 52px minmax(0, 1fr);
+            gap: 0.52rem;
+        }
+
+        .cart-line-thumb {
+            width: 52px;
+            height: 52px;
+            border-radius: 9px;
+        }
+
+        .cart-line-title {
+            font-size: 0.9rem;
+        }
+
+        .cart-line-meta,
+        .cart-line-tax,
+        .cart-line-total {
+            font-size: 0.78rem;
+        }
+
+        .cart-line-qty-label {
+            font-size: 0.76rem;
+        }
+
+        .cart-line-qty .qty-edit {
+            width: 70px;
+            height: 30px;
+            font-size: 0.78rem;
+        }
+
+        .cart-line-controls {
+            margin-top: 0.15rem;
         }
     }
 
@@ -558,6 +718,40 @@
             min-width: 0;
             max-width: 100%;
             margin-inline: 0;
+        }
+
+        .cart-line-head {
+            grid-template-columns: 44px minmax(0, 1fr);
+            gap: 0.44rem;
+        }
+
+        .cart-line-thumb {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+        }
+
+        .cart-line-title {
+            font-size: 0.82rem;
+        }
+
+        .cart-line-meta,
+        .cart-line-tax,
+        .cart-line-total,
+        .cart-line-qty-label {
+            font-size: 0.74rem;
+        }
+
+        .cart-line-qty .qty-edit {
+            width: 64px;
+            height: 30px;
+            font-size: 0.74rem;
+        }
+
+        .cart-line-remove-btn {
+            width: 28px;
+            min-width: 28px;
+            height: 28px;
         }
     }
   </style>
@@ -2497,33 +2691,34 @@ function updateQuantity(id, newQty) {
 
             selectedItems.forEach(item => {
                 const li = document.createElement('li');
-                li.className = 'list-group-item d-flex justify-content-between align-items-start flex-column';
+                li.className = 'list-group-item d-flex justify-content-between align-items-start flex-column cart-line-item';
+
+                const taxSummary = (item.taxes || []).map(tax => `${tax.name} (${parseFloat(tax.rate)}%)`).join(' | ');
+                const subtotalText = `${(item.price * item.quantity).toFixed(2)} ${baseCurrencyCode}`;
+                const totalWithTaxText = `${(item.totalPrice * item.quantity).toFixed(2)} ${baseCurrencyCode}`;
 
                 const textDiv = document.createElement('div');
-                textDiv.className = 'd-flex gap-2 w-100';
+                textDiv.className = 'cart-line-head';
                 textDiv.innerHTML = `
-                    <img src="${item.imageSrc || '/assets/img/shopix5.png'}" alt="${item.productName}" style="width:64px;height:64px;object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;flex-shrink:0;" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
-                    <div>
-                        <strong>${item.productName} ${item.productSize}</strong><br>
-                        Subtotal: ${(item.price * item.quantity).toFixed(2)} ${baseCurrencyCode}
-                        <br>
-                        Impuestos:<br>
-                        ${item.taxes.map(tax => `• ${tax.name} (${parseFloat(tax.rate)}%)`).join('<br>')}
-                        <br>
-                        <strong>Total con Impuestos: ${(item.totalPrice * item.quantity).toFixed(2)} ${baseCurrencyCode}</strong>
+                    <img class="cart-line-thumb" src="${item.imageSrc || '/assets/img/shopix5.png'}" alt="${item.productName}" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
+                    <div class="cart-line-copy">
+                        <p class="cart-line-title">${item.productName} ${item.productSize}</p>
+                        <p class="cart-line-meta">Subtotal: ${subtotalText}</p>
+                        <p class="cart-line-tax">Impuestos: ${taxSummary || 'No aplica'}</p>
+                        <p class="cart-line-total">Total con impuestos: ${totalWithTaxText}</p>
                     </div>
                 `;
 
 
                 const controlsDiv = document.createElement('div');
-                controlsDiv.className = 'd-flex align-items-center justify-content-between w-100 mt-2';
+                controlsDiv.className = 'cart-line-controls';
 
                 // Div para cantidad y el input con gap-2
                 const quantityDiv = document.createElement('div');
-                quantityDiv.className = 'd-flex align-items-center gap-2';
+                quantityDiv.className = 'cart-line-qty';
 
                 const quantityLabel = document.createElement('label');
-                quantityLabel.className = 'd-flex align-items-center mt-2';
+                quantityLabel.className = 'cart-line-qty-label';
                 quantityLabel.textContent = 'Cantidad: ';
                 // quantityLabel.className = 'me-2';
 
@@ -2589,7 +2784,7 @@ function updateQuantity(id, newQty) {
                 quantityDiv.appendChild(quantityInput);
 
                 const removeBtn = document.createElement('button');
-                removeBtn.className = 'btn btn-sm btn-danger mt-3 delete-button';
+                removeBtn.className = 'btn btn-sm btn-danger delete-button cart-line-remove-btn';
                 removeBtn.innerText = 'X';
                 removeBtn.onclick = () => removeFromCart(item.id);
 
