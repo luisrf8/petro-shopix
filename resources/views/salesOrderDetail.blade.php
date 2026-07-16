@@ -352,10 +352,20 @@
 
         <!-- Tabla de Detalles de la Orden -->
         <details class="order-detail-disclosure mb-4" open>
-          <summary>Productos de la orden</summary>
+          <summary>
+            Productos de la orden
+            @if($order->has_returns)
+              <span class="text-danger ms-1">- Devolución Registrada</span>
+            @endif
+          </summary>
           <div class="card order-surface-card">
             <div class="card-header">
-              <h6 class="mb-0">{{ $isDeliveryOnlyView ? 'Lo que vas a entregar' : 'Productos en la Orden' }}</h6>
+              <h6 class="mb-0">
+                {{ $isDeliveryOnlyView ? 'Lo que vas a entregar' : 'Productos en la Orden' }}
+                @if($order->has_returns)
+                  <span class="text-danger ms-1">- Devolución Registrada</span>
+                @endif
+              </h6>
             </div>
             <div class="card-body">
               @php
@@ -1820,16 +1830,45 @@
                                   </thead>
                                   <tbody>
                                       @foreach($order->details as $detalle)
+                                          @php
+                                            $returnUnitTypeRaw = strtolower(trim((string) ($detalle->variant->unit_type ?? 'unidad')));
+                                            $returnUnitTypeMap = [
+                                              'unidad' => 'und',
+                                              'kg' => 'kg',
+                                              'g' => 'g',
+                                              'lb' => 'lb',
+                                              'm' => 'm',
+                                              'cm' => 'cm',
+                                              'mm' => 'mm',
+                                              'm2' => 'm2',
+                                              'm3' => 'm3',
+                                              'l' => 'l',
+                                              'ml' => 'ml',
+                                              'caja' => 'caja',
+                                              'paquete' => 'paq',
+                                              'rollo' => 'rollo',
+                                              'pieza' => 'pz',
+                                            ];
+                                            $returnUnitTypeLabel = $returnUnitTypeMap[$returnUnitTypeRaw] ?? ($returnUnitTypeRaw !== '' ? $returnUnitTypeRaw : 'und');
+                                            $detailQuantityRaw = (float) ($detalle->quantity ?? 0);
+                                            $detailQuantityText = (abs($detailQuantityRaw - round($detailQuantityRaw)) > 0.00001)
+                                              ? rtrim(rtrim(number_format($detailQuantityRaw, 2, '.', ''), '0'), '.')
+                                              : (string) ((int) round($detailQuantityRaw));
+                                            $returnIsDecimal = strtolower(trim((string) ($detalle->variant->quantity_input_mode ?? 'integer'))) === 'decimal';
+                                          @endphp
                                           <tr>
                                             <td data-label="Producto">{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
-                                            <td data-label="Cantidad">{{ $detalle->quantity }}</td>
+                                            <td data-label="Cantidad">{{ $detailQuantityText }} {{ $returnUnitTypeLabel }}</td>
                                             <td data-label="Devolver">
                                                   <input type="number" class="form-control return-quantity border border-1 border-radius-lg p-2" 
                                                       data-id="{{ $detalle->variant->id }}" 
                                                       data-max="{{ $detalle->quantity }}" 
+                                                      data-quantity-mode="{{ $returnIsDecimal ? 'decimal' : 'integer' }}"
                                                       placeholder="Cantidad a devolver" 
                                                       min="0" 
-                                                      max="{{ $detalle->quantity }}">
+                                                      max="{{ $detalle->quantity }}"
+                                                      step="{{ $returnIsDecimal ? '0.01' : '1' }}"
+                                                      inputmode="{{ $returnIsDecimal ? 'decimal' : 'numeric' }}">
                                               </td>
                                             <td data-label="Destino">
                                               <select class="form-select border border-1 border-radius-lg p-2 return-disposition" data-id="{{ $detalle->variant->id }}">
@@ -3290,14 +3329,43 @@ if (returnForm) {
     const items = [];
 
     document.querySelectorAll('.return-quantity').forEach(input => {
-      const quantity = parseInt(input.value);
-      const maxQuantity = parseInt(input.getAttribute('data-max'));
+      const rawValue = String(input.value ?? '').trim().replace(',', '.');
+      const quantityMode = String(input.getAttribute('data-quantity-mode') || 'integer');
+      const quantity = Number.parseFloat(rawValue);
+      const maxQuantity = Number.parseFloat(String(input.getAttribute('data-max') || '0').replace(',', '.'));
       const id = input.getAttribute('data-id');
       const dispositionInput = document.querySelector(`.return-disposition[data-id="${id}"]`);
       const disposition = dispositionInput?.value || 'resalable';
+      const isIntegerMode = quantityMode !== 'decimal';
 
-      if (quantity > 0 && quantity <= maxQuantity) {
-        items.push({ id, quantity, disposition });
+      if (rawValue === '') {
+        return;
+      }
+
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        input.setCustomValidity('Ingresa una cantidad valida para devolver.');
+        input.reportValidity();
+        return;
+      }
+
+      if (isIntegerMode && Math.abs(quantity - Math.round(quantity)) > 0.00001) {
+        input.setCustomValidity('Este producto solo permite devoluciones en cantidades enteras.');
+        input.reportValidity();
+        return;
+      }
+
+      if (Number.isFinite(maxQuantity) && quantity - maxQuantity > 0.00001) {
+        input.setCustomValidity('La cantidad a devolver excede lo disponible en la orden.');
+        input.reportValidity();
+        return;
+      }
+
+      input.setCustomValidity('');
+
+      const normalizedQuantity = isIntegerMode ? Math.round(quantity) : Math.round(quantity * 100) / 100;
+
+      if (normalizedQuantity > 0) {
+        items.push({ id, quantity: normalizedQuantity, disposition });
       }
     });
 

@@ -3685,11 +3685,20 @@ class SaleController extends Controller
 
             $detail = $order->details->where('product_variant_id', $item['id'])->first();
 
-            if (!$detail || $quantityToReturn <= 0 || $quantityToReturn > (float) $detail->quantity) {
+            $alreadyReturnedQuantity = (float) SalesReturnItem::query()
+                ->where('product_variant_id', (int) ($item['id'] ?? 0))
+                ->whereHas('salesReturn', function ($query) use ($order) {
+                    $query->where('sales_order_id', (int) $order->id);
+                })
+                ->sum('quantity');
+
+            $availableToReturn = round(max(0, (float) ($detail->quantity ?? 0) - $alreadyReturnedQuantity), 2);
+
+            if (!$detail || $quantityToReturn <= 0 || $quantityToReturn - $availableToReturn > 0.00001) {
                 return response()->json(['error' => 'Cantidad inválida para devolver.'], 400);
             }
 
-            $detailQuantity = max(1, (float) $detail->quantity);
+            $detailQuantity = max(0.00001, (float) $detail->quantity);
             $lineSubtotal = round((float) $detail->price * $quantityToReturn, 2);
             $lineTaxTotal = (float) $detail->taxes->sum('tax_amount');
             $lineTaxReturned = round($lineTaxTotal * ($quantityToReturn / $detailQuantity), 2);

@@ -2694,8 +2694,12 @@ function updateQuantity(id, newQty) {
                 li.className = 'list-group-item d-flex justify-content-between align-items-start flex-column cart-line-item';
 
                 const taxSummary = (item.taxes || []).map(tax => `${tax.name} (${parseFloat(tax.rate)}%)`).join(' | ');
-                const subtotalText = `${(item.price * item.quantity).toFixed(2)} ${baseCurrencyCode}`;
-                const totalWithTaxText = `${(item.totalPrice * item.quantity).toFixed(2)} ${baseCurrencyCode}`;
+                const subtotalAmount = (item.price * item.quantity);
+                const totalWithTaxAmount = (item.totalPrice * item.quantity);
+                const subtotalText = `${subtotalAmount.toFixed(2)} ${baseCurrencyCode}`;
+                const totalWithTaxText = `${totalWithTaxAmount.toFixed(2)} ${baseCurrencyCode}`;
+                const subtotalBsText = baseRateToBs > 0 ? `Bs ${(subtotalAmount * baseRateToBs).toFixed(2)}` : 'Bs N/D';
+                const totalWithTaxBsText = baseRateToBs > 0 ? `Bs ${(totalWithTaxAmount * baseRateToBs).toFixed(2)}` : 'Bs N/D';
 
                 const textDiv = document.createElement('div');
                 textDiv.className = 'cart-line-head';
@@ -2703,9 +2707,9 @@ function updateQuantity(id, newQty) {
                     <img class="cart-line-thumb" src="${item.imageSrc || '/assets/img/shopix5.png'}" alt="${item.productName}" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
                     <div class="cart-line-copy">
                         <p class="cart-line-title">${item.productName} ${item.productSize}</p>
-                        <p class="cart-line-meta">Subtotal: ${subtotalText}</p>
+                        <p class="cart-line-meta">Subtotal: ${subtotalText} | ${subtotalBsText}</p>
                         <p class="cart-line-tax">Impuestos: ${taxSummary || 'No aplica'}</p>
-                        <p class="cart-line-total">Total con impuestos: ${totalWithTaxText}</p>
+                        <p class="cart-line-total">Total con impuestos: ${totalWithTaxText} | ${totalWithTaxBsText}</p>
                     </div>
                 `;
 

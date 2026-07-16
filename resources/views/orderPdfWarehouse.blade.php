@@ -364,12 +364,10 @@
         <col style="width: 17%;">
         <col style="width: 7%;">
         <col style="width: 13%;">
-        <col style="width: 11%;">
-        <col style="width: 11%;">
-        <col style="width: 11%;">
-        <col style="width: 11%;">
-        <col style="width: 9.5%;">
-        <col style="width: 9.5%;">
+        <col style="width: 13%;">
+        <col style="width: 13%;">
+        <col style="width: 18%;">
+        <col style="width: 18%;">
     </colgroup>
     <thead>
         <tr>
@@ -378,8 +376,6 @@
             <th>Variante</th>
             <th>Unitario {{ $orderCurrencyCode }}</th>
             <th>Unitario Bs</th>
-            <th>Sub total {{ $orderCurrencyCode }}</th>
-            <th>Sub total Bs</th>
             <th>Total {{ $orderCurrencyCode }}</th>
             <th>Total Bs</th>
         </tr>
@@ -424,8 +420,6 @@
                 <td>{{ $detalle->variant->size ?? '' }}</td>
                 <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineUnitPrice) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($lineUnitPrice) }}</td>
-                <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineSubtotal) }}</td>
-                <td class="amount-cell">{{ $formatBsOrderAmount($lineSubtotal) }}</td>
                 <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineTotal) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($lineTotal) }}</td>
             </tr>
@@ -439,14 +433,10 @@
                 <td class="amount-cell">{{ $formatBsOrderAmount($deliveryFee) }}</td>
                 <td class="amount-cell">{{ $formatOrderCurrencyAmount($deliveryFee) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($deliveryFee) }}</td>
-                <td class="amount-cell">{{ $formatOrderCurrencyAmount($deliveryFee) }}</td>
-                <td class="amount-cell">{{ $formatBsOrderAmount($deliveryFee) }}</td>
             </tr>
         @endif
         <tr>
             <td colspan="5" style="text-align: right;"><strong>Total orden</strong></td>
-            <td class="amount-cell"><strong>{{ $formatOrderCurrencyAmount($orderTotal) }}</strong></td>
-            <td class="amount-cell"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
             <td class="amount-cell"><strong>{{ $formatOrderCurrencyAmount($orderTotal) }}</strong></td>
             <td class="amount-cell"><strong>{{ $formatBsOrderAmount($orderTotal) }}</strong></td>
         </tr>
