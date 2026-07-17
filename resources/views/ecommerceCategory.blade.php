@@ -283,6 +283,7 @@
       line-height: 1.2;
       margin: 0;
       color: #111827;
+      overflow-wrap: anywhere;
     }
 
     .product-card-description {
@@ -290,6 +291,7 @@
       font-size: 0.84rem;
       line-height: 1.35;
       margin: 0;
+      overflow-wrap: anywhere;
     }
 
     .product-variant-strip {
@@ -352,6 +354,7 @@
       color: var(--tenant-primary);
       letter-spacing: 0.02em;
       text-transform: uppercase;
+      overflow-wrap: anywhere;
     }
 
     .product-variant-price {
@@ -366,6 +369,7 @@
     .product-variant-price strong {
       font-size: 0.98rem;
       color: #0f172a;
+      white-space: nowrap;
     }
 
     .product-card-footer {
@@ -375,6 +379,7 @@
       gap: 0.65rem;
       color: #475569;
       font-size: 0.8rem;
+      flex-wrap: wrap;
     }
 
     .product-card-cta {
@@ -383,6 +388,7 @@
       gap: 0.35rem;
       font-weight: 700;
       color: var(--tenant-primary);
+      white-space: nowrap;
     }
 
     .landing-media-image {
@@ -644,6 +650,11 @@
       gap: 0.75rem;
       margin-bottom: 0.75rem;
       color: #334155;
+    }
+
+    .products-top-search {
+      max-width: 420px;
+      margin-bottom: 0.6rem;
     }
 
     .products-main-grid {
@@ -1057,11 +1068,12 @@
       }
 
       .product-card-title {
-        font-size: 0.98rem;
+        font-size: 1.04rem;
+        line-height: 1.22;
       }
 
       .product-card-description {
-        font-size: 0.81rem;
+        font-size: 0.83rem;
       }
 
       .product-variant-strip {
@@ -1077,37 +1089,37 @@
       .product-variant-chip {
         min-width: 0;
         width: 100%;
-        min-height: 72px;
-        padding: 0.48rem 0.38rem;
+        min-height: 80px;
+        padding: 0.52rem 0.46rem;
         border-radius: 11px;
         flex: initial;
-        gap: 0.2rem;
+        gap: 0.26rem;
       }
 
       .product-variant-size {
         justify-content: flex-start;
-        font-size: 0.64rem;
-        gap: 0.18rem;
-        line-height: 1.12;
+        font-size: 0.71rem;
+        gap: 0.24rem;
+        line-height: 1.2;
         white-space: normal;
       }
 
       .product-variant-price {
         justify-content: flex-start;
         align-items: flex-start;
-        font-size: 0.64rem;
-        line-height: 1.1;
-        gap: 0.12rem;
+        font-size: 0.7rem;
+        line-height: 1.18;
+        gap: 0.18rem;
       }
 
       .product-variant-price strong {
-        font-size: 0.7rem;
+        font-size: 0.84rem;
         line-height: 1;
       }
 
       .product-variant-price small {
-        font-size: 0.6rem;
-        line-height: 1.05;
+        font-size: 0.66rem;
+        line-height: 1.1;
       }
 
       .product-variant-chip.product-variant-more strong {
@@ -1133,6 +1145,17 @@
 
       #products-container {
         --bs-gutter-x: 0.7rem;
+      }
+
+      #products-container > .product-item,
+      #products-container > .package-item {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .product-variant-strip {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -1298,6 +1321,13 @@
 
         <div class="products-main-grid">
           <div>
+          <div class="products-top-search">
+            <label for="product-search-results" class="small text-muted mb-1 d-block">Buscar en resultados</label>
+            <div class="catalog-search">
+              <i class="bi bi-search"></i>
+              <input type="text" id="product-search-results" data-catalog-search class="form-control border-0 shadow-none" placeholder="Buscar producto o paquete...">
+            </div>
+          </div>
           <div class="products-summary mb-3">
             <span id="products-counter">Mostrando {{ $products->count() }} resultado{{ $products->count() == 1 ? '' : 's' }}</span>
             <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn">Ver todos los productos</a>
@@ -1305,10 +1335,11 @@
 
           <div class="row" id="products-container">
             @foreach($products as $product)
-              <div class="col-6 col-sm-6 col-md-4 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
+              <div class="col-12 col-sm-6 col-md-4 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
                 <a href="{{ route('tenant.public.product', [
                     'tenant' => $tenant->slug,
-                    'product' => $product->slug
+                    'product' => $product->slug,
+                    'return_to' => url()->full()
                   ]) }}" class="product-card-link text-decoration-none d-block h-100">
                   <div class="card card-product h-100">
                     <div class="product-card-media">

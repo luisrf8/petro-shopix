@@ -39,6 +39,7 @@
     $storefrontBsRate = (float) ($storefrontBsRate ?? 0);
     $projectQuoteOnlyMode = (bool) ($projectQuoteOnlyMode ?? false);
     $cartEnabledForStorefront = (bool) ($cartEnabled ?? false) && !$projectQuoteOnlyMode;
+    $returnToUrl = trim((string) request()->query('return_to', ''));
     $tenantExternalUrl = trim((string) ($tenant->external_url ?? ''));
     if ($tenantExternalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($tenantExternalUrl), ['http://', 'https://'])) {
       $tenantExternalUrl = 'https://' . $tenantExternalUrl;
@@ -1137,6 +1138,15 @@
     </div>
   </header>
   <section class="py-10 section-muted page-shell">
+      <div class="page-toolbar">
+        <a href="{{ $returnToUrl !== '' ? $returnToUrl : route('tenant.public.categories', ['tenant' => $tenant->slug]) . '#productos' }}"
+           class="btn btn-outline-dark"
+           id="product-back-link"
+           data-return-url="{{ $returnToUrl }}"
+           data-fallback-url="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}#productos">
+          <i class="bi bi-arrow-left"></i> Volver y seguir comprando
+        </a>
+      </div>
       <div class="product-detail-card">
         <div class="product-detail-layout">
           <div class="product-meta-card">
@@ -1348,6 +1358,7 @@
         const bsCollapse = navbarCollapse ? new bootstrap.Collapse(navbarCollapse, { toggle: false }) : null;
 
         const hasHeroSection = !!document.querySelector('.hero');
+        const backToCatalogLink = document.getElementById('product-back-link');
 
         function syncLandingHeaderState() {
           if (!landingHeader) {
@@ -1379,6 +1390,24 @@
             }
           });
         });
+
+        if (backToCatalogLink) {
+          backToCatalogLink.addEventListener('click', (event) => {
+            const returnUrl = backToCatalogLink.dataset.returnUrl || '';
+            const fallbackUrl = backToCatalogLink.dataset.fallbackUrl || backToCatalogLink.getAttribute('href');
+
+            if (returnUrl) {
+              event.preventDefault();
+              window.location.assign(returnUrl);
+              return;
+            }
+
+            if (fallbackUrl) {
+              event.preventDefault();
+              window.location.assign(fallbackUrl);
+            }
+          });
+        }
 
         const galleryTrack = document.getElementById('product-gallery-track');
         const gallerySlides = Array.from(document.querySelectorAll('[data-gallery-slide]'));

@@ -125,6 +125,20 @@ class ReportController extends Controller
             ->get(['id', 'name'])
             ->values();
 
+        $reportUsers = User::query()
+            ->where('tenant_id', (int) $user->tenant_id)
+            ->where('is_active', 1)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->values();
+
+        $reportPaymentMethods = PaymentMethod::query()
+            ->where('tenant_id', (int) $user->tenant_id)
+            ->where('status', 1)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->values();
+
         [$appointmentsPreviewRows, $appointmentsPreviewSummary] = $this->buildAppointmentsWorkflowReportData($request);
         $appointmentsPreviewRows = $appointmentsPreviewRows->take(5)->values();
 
@@ -153,6 +167,8 @@ class ReportController extends Controller
             'incomeCustomers' => $incomeCustomers,
             'selectedIncomeUserId' => $selectedIncomeUserId,
             'selectedIncomeCustomerId' => $selectedIncomeCustomerId,
+            'reportUsers' => $reportUsers,
+            'reportPaymentMethods' => $reportPaymentMethods,
         ]);
     }
 
@@ -161,6 +177,7 @@ class ReportController extends Controller
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
+        $filters = $this->resolveGlobalReportFilters($request);
 
         $rows = ProductVariant::query()
             ->join('products', 'products.id', '=', 'product_variants.product_id')
@@ -169,6 +186,18 @@ class ReportController extends Controller
             ->where('sales_orders.tenant_id', $user->tenant_id)
             ->whereDate('sales_orders.date', '>=', $startDate->toDateString())
             ->whereDate('sales_orders.date', '<=', $endDate->toDateString())
+            ->when($filters['user_id'] > 0, function ($query) use ($filters) {
+                $query->where('sales_orders.sales_rep_user_id', $filters['user_id']);
+            })
+            ->when($filters['payment_method_id'] > 0, function ($query) use ($filters) {
+                $query->whereExists(function ($subQuery) use ($filters) {
+                    $subQuery->selectRaw('1')
+                        ->from('payments')
+                        ->whereColumn('payments.sales_order_id', 'sales_orders.id')
+                        ->where('payments.payment_method', $filters['payment_method_id'])
+                        ->where('payments.status', 1);
+                });
+            })
             ->groupBy('product_variants.id', 'products.name', 'product_variants.size')
             ->selectRaw('products.name as product_name, product_variants.size as variant_name, SUM(sales_order_details.quantity) as total_quantity, SUM(sales_order_details.amount) as total_amount')
             ->orderByDesc('total_quantity')
@@ -200,6 +229,7 @@ class ReportController extends Controller
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
+        $filters = $this->resolveGlobalReportFilters($request);
 
         $rows = ProductVariant::query()
             ->join('products', 'products.id', '=', 'product_variants.product_id')
@@ -208,6 +238,18 @@ class ReportController extends Controller
             ->where('sales_orders.tenant_id', $user->tenant_id)
             ->whereDate('sales_orders.date', '>=', $startDate->toDateString())
             ->whereDate('sales_orders.date', '<=', $endDate->toDateString())
+            ->when($filters['user_id'] > 0, function ($query) use ($filters) {
+                $query->where('sales_orders.sales_rep_user_id', $filters['user_id']);
+            })
+            ->when($filters['payment_method_id'] > 0, function ($query) use ($filters) {
+                $query->whereExists(function ($subQuery) use ($filters) {
+                    $subQuery->selectRaw('1')
+                        ->from('payments')
+                        ->whereColumn('payments.sales_order_id', 'sales_orders.id')
+                        ->where('payments.payment_method', $filters['payment_method_id'])
+                        ->where('payments.status', 1);
+                });
+            })
             ->groupBy('product_variants.id', 'products.name', 'product_variants.size')
             ->selectRaw('products.name as product_name, product_variants.size as variant_name, SUM(sales_order_details.quantity) as total_quantity, SUM(sales_order_details.amount) as total_amount')
             ->orderByDesc('total_quantity')
@@ -308,18 +350,32 @@ class ReportController extends Controller
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
+        $filters = $this->resolveGlobalReportFilters($request);
 
         $orders = SalesOrder::with(['user', 'details', 'payments', 'salesRepresentative.role'])
             ->where('tenant_id', $user->tenant_id)
             ->whereDate('date', '>=', $startDate->toDateString())
             ->whereDate('date', '<=', $endDate->toDateString())
+            ->when($filters['user_id'] > 0, function ($query) use ($filters) {
+                $query->where('sales_rep_user_id', $filters['user_id']);
+            })
+            ->when($filters['payment_method_id'] > 0, function ($query) use ($filters) {
+                $query->whereHas('payments', function ($paymentsQuery) use ($filters) {
+                    $paymentsQuery->where('payment_method', $filters['payment_method_id'])
+                        ->where('status', 1);
+                });
+            })
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->get();
 
-        $orders->transform(function ($order) use ($currency, $user) {
+        $orders->transform(function ($order) use ($currency, $user, $filters) {
             $grossTotal = (float) $order->gross_total;
-            $totalPaid = (float) $order->payments->where('status', 1)->sum('amount');
+            $approvedPayments = $order->payments->where('status', 1);
+            if ($filters['payment_method_id'] > 0) {
+                $approvedPayments = $approvedPayments->where('payment_method', $filters['payment_method_id']);
+            }
+            $totalPaid = (float) $approvedPayments->sum('amount');
             $rateToBs = $this->resolveSalesOrderRateToBsForReport($order, (int) $user->tenant_id);
             $salesRepresentative = $order->salesRepresentative;
             $salesRepresentativeRole = $salesRepresentative
@@ -358,22 +414,36 @@ class ReportController extends Controller
         $user = auth()->user();
         [$startDate, $endDate] = $this->resolveDateRange($request);
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
+        $filters = $this->resolveGlobalReportFilters($request);
 
         $orders = SalesOrder::with(['user', 'details', 'payments', 'salesRepresentative.role'])
             ->where('tenant_id', $user->tenant_id)
             ->whereDate('date', '>=', $startDate->toDateString())
             ->whereDate('date', '<=', $endDate->toDateString())
+            ->when($filters['user_id'] > 0, function ($query) use ($filters) {
+                $query->where('sales_rep_user_id', $filters['user_id']);
+            })
+            ->when($filters['payment_method_id'] > 0, function ($query) use ($filters) {
+                $query->whereHas('payments', function ($paymentsQuery) use ($filters) {
+                    $paymentsQuery->where('payment_method', $filters['payment_method_id'])
+                        ->where('status', 1);
+                });
+            })
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->get();
 
-        $csvRows = $orders->map(function ($order) use ($currency, $user) {
+        $csvRows = $orders->map(function ($order) use ($currency, $user, $filters) {
             $status = $order->status == 0
                 ? 'En Proceso'
                 : ($order->status == 1 ? 'Aprobado' : ($order->status == 2 ? 'Negado' : 'N/A'));
 
             $grossTotal = (float) $order->gross_total;
-            $totalPaid = (float) $order->payments->where('status', 1)->sum('amount');
+            $approvedPayments = $order->payments->where('status', 1);
+            if ($filters['payment_method_id'] > 0) {
+                $approvedPayments = $approvedPayments->where('payment_method', $filters['payment_method_id']);
+            }
+            $totalPaid = (float) $approvedPayments->sum('amount');
             $rateToBs = $this->resolveSalesOrderRateToBsForReport($order, (int) $user->tenant_id);
             $salesRepresentative = $order->salesRepresentative;
             $salesRepresentativeRole = $salesRepresentative
@@ -571,7 +641,7 @@ class ReportController extends Controller
             [
                 'name' => 'Operacion',
                 'metrics' => [
-                    'Metodos de pago activos' => PaymentMethod::where('tenant_id', $user->tenant_id)->where('is_active', 1)->count(),
+                    'Metodos de pago activos' => PaymentMethod::where('tenant_id', $user->tenant_id)->where('status', 1)->count(),
                     'Paquetes de materiales activos' => MaterialPackage::where('tenant_id', $user->tenant_id)->where('is_active', 1)->count(),
                     'Usuarios tienda' => User::where('tenant_id', $user->tenant_id)->count(),
                 ],
@@ -634,7 +704,7 @@ class ReportController extends Controller
             [
                 'name' => 'Operacion',
                 'metrics' => [
-                    'Metodos de pago activos' => PaymentMethod::where('tenant_id', $user->tenant_id)->where('is_active', 1)->count(),
+                    'Metodos de pago activos' => PaymentMethod::where('tenant_id', $user->tenant_id)->where('status', 1)->count(),
                     'Paquetes de materiales activos' => MaterialPackage::where('tenant_id', $user->tenant_id)->where('is_active', 1)->count(),
                     'Usuarios tienda' => User::where('tenant_id', $user->tenant_id)->count(),
                 ],
@@ -966,6 +1036,7 @@ class ReportController extends Controller
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
         [$startDate, $endDate] = $this->resolveDateRange($request);
         $customerStatus = strtolower(trim((string) $request->query('customer_status', 'all')));
+        $filters = $this->resolveGlobalReportFilters($request);
 
         $rows = User::query()
             ->where('tenant_id', $user->tenant_id)
@@ -980,18 +1051,50 @@ class ReportController extends Controller
                     ->whereDate('date', '>=', $startDate->toDateString())
                     ->whereDate('date', '<=', $endDate->toDateString());
             })
-            ->withCount(['salesOrders as orders_count' => function ($query) use ($user, $startDate, $endDate) {
+            ->when($filters['user_id'] > 0, function ($query) use ($filters) {
+                $query->whereHas('salesOrders', function ($salesOrdersQuery) use ($filters) {
+                    $salesOrdersQuery->where('sales_rep_user_id', $filters['user_id']);
+                });
+            })
+            ->when($filters['payment_method_id'] > 0, function ($query) use ($filters) {
+                $query->whereHas('salesOrders.payments', function ($paymentsQuery) use ($filters) {
+                    $paymentsQuery->where('payment_method', $filters['payment_method_id'])
+                        ->where('status', 1);
+                });
+            })
+            ->withCount(['salesOrders as orders_count' => function ($query) use ($user, $startDate, $endDate, $filters) {
                 $query->where('tenant_id', $user->tenant_id)
                     ->whereDate('date', '>=', $startDate->toDateString())
-                    ->whereDate('date', '<=', $endDate->toDateString());
+                    ->whereDate('date', '<=', $endDate->toDateString())
+                    ->when($filters['user_id'] > 0, function ($salesOrdersQuery) use ($filters) {
+                        $salesOrdersQuery->where('sales_rep_user_id', $filters['user_id']);
+                    })
+                    ->when($filters['payment_method_id'] > 0, function ($salesOrdersQuery) use ($filters) {
+                        $salesOrdersQuery->whereHas('payments', function ($paymentsQuery) use ($filters) {
+                            $paymentsQuery->where('payment_method', $filters['payment_method_id'])
+                                ->where('status', 1);
+                        });
+                    });
             }])
-            ->withMax(['salesOrders as last_purchase_at' => function ($query) use ($user, $startDate, $endDate) {
+            ->withMax(['salesOrders as last_purchase_at' => function ($query) use ($user, $startDate, $endDate, $filters) {
                 $query->where('tenant_id', $user->tenant_id)
                     ->whereDate('date', '>=', $startDate->toDateString())
-                    ->whereDate('date', '<=', $endDate->toDateString());
+                    ->whereDate('date', '<=', $endDate->toDateString())
+                    ->when($filters['user_id'] > 0, function ($salesOrdersQuery) use ($filters) {
+                        $salesOrdersQuery->where('sales_rep_user_id', $filters['user_id']);
+                    })
+                    ->when($filters['payment_method_id'] > 0, function ($salesOrdersQuery) use ($filters) {
+                        $salesOrdersQuery->whereHas('payments', function ($paymentsQuery) use ($filters) {
+                            $paymentsQuery->where('payment_method', $filters['payment_method_id'])
+                                ->where('status', 1);
+                        });
+                    });
             }], 'date')
-            ->withSum(['payments as total_paid_amount' => function ($query) use ($user, $startDate, $endDate) {
+            ->withSum(['payments as total_paid_amount' => function ($query) use ($user, $startDate, $endDate, $filters) {
                 $query->where('payments.status', 1)
+                    ->when($filters['payment_method_id'] > 0, function ($paymentsQuery) use ($filters) {
+                        $paymentsQuery->where('payments.payment_method', $filters['payment_method_id']);
+                    })
                     ->whereHas('salesOrder', function ($salesOrderQuery) use ($user, $startDate, $endDate) {
                         $salesOrderQuery->where('tenant_id', $user->tenant_id)
                             ->whereDate('date', '>=', $startDate->toDateString())
@@ -1025,6 +1128,7 @@ class ReportController extends Controller
         $user = auth()->user();
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $filters = $this->resolveGlobalReportFilters($request);
         $minPendingBalance = max(0, (float) $request->query('min_pending_balance', 0));
         $minPendingBalanceBase = TenantCurrency::convertAmount($minPendingBalance, $currency['code'], $currency['base_code'], (int) $user->tenant_id);
 
@@ -1033,12 +1137,25 @@ class ReportController extends Controller
             ->whereDate('date', '>=', $startDate->toDateString())
             ->whereDate('date', '<=', $endDate->toDateString())
             ->where('status', '!=', 2)
+            ->when($filters['user_id'] > 0, function ($query) use ($filters) {
+                $query->where('sales_rep_user_id', $filters['user_id']);
+            })
+            ->when($filters['payment_method_id'] > 0, function ($query) use ($filters) {
+                $query->whereHas('payments', function ($paymentsQuery) use ($filters) {
+                    $paymentsQuery->where('payment_method', $filters['payment_method_id'])
+                        ->where('status', 1);
+                });
+            })
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->get()
-            ->map(function (SalesOrder $order) use ($currency, $user) {
+            ->map(function (SalesOrder $order) use ($currency, $user, $filters) {
                 $order->order_total_amount = (float) $order->gross_total;
-                $order->approved_paid_amount = (float) $order->payments->where('status', 1)->sum('amount');
+                $approvedPayments = $order->payments->where('status', 1);
+                if ($filters['payment_method_id'] > 0) {
+                    $approvedPayments = $approvedPayments->where('payment_method', $filters['payment_method_id']);
+                }
+                $order->approved_paid_amount = (float) $approvedPayments->sum('amount');
                 $order->retentions_amount = (float) $order->retentions->sum('retained_amount');
                 $order->pending_amount = max(0, round($order->order_total_amount - $order->approved_paid_amount - $order->retentions_amount, 2));
 
@@ -1071,7 +1188,9 @@ class ReportController extends Controller
         $user = auth()->user();
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $filters = $this->resolveGlobalReportFilters($request);
         $expenseCategory = trim((string) $request->query('expense_category', ''));
+        $paymentMethodName = $this->resolvePaymentMethodNameById((int) $user->tenant_id, $filters['payment_method_id']);
 
         $rows = StoreExpense::query()
             ->where('tenant_id', $user->tenant_id)
@@ -1079,6 +1198,17 @@ class ReportController extends Controller
             ->whereDate('spent_at', '<=', $endDate->toDateString())
             ->when($expenseCategory !== '', function ($query) use ($expenseCategory) {
                 $query->where('category', $expenseCategory);
+            })
+            ->when($filters['user_id'] > 0, function ($query) use ($filters) {
+                $query->where('created_by', $filters['user_id']);
+            })
+            ->when($filters['payment_method_id'] > 0, function ($query) use ($filters, $paymentMethodName) {
+                $query->where(function ($innerQuery) use ($filters, $paymentMethodName) {
+                    $innerQuery->where('payment_method', (string) $filters['payment_method_id']);
+                    if (!empty($paymentMethodName)) {
+                        $innerQuery->orWhere('payment_method', $paymentMethodName);
+                    }
+                });
             })
             ->orderByDesc('spent_at')
             ->orderByDesc('id')
@@ -1109,6 +1239,7 @@ class ReportController extends Controller
         $user = auth()->user();
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $filters = $this->resolveGlobalReportFilters($request);
         $appointmentStatus = strtolower(trim((string) $request->query('appointment_status', 'all')));
         $appointmentPaymentStatus = strtolower(trim((string) $request->query('appointment_payment_status', 'all')));
         $serviceId = (int) $request->query('appointment_service_id', 0);
@@ -1118,6 +1249,12 @@ class ReportController extends Controller
             ->where('tenant_id', $user->tenant_id)
             ->whereDate('starts_at', '>=', $startDate->toDateString())
             ->whereDate('starts_at', '<=', $endDate->toDateString())
+            ->when($filters['user_id'] > 0, function ($query) use ($filters) {
+                $query->where('user_id', $filters['user_id']);
+            })
+            ->when($filters['payment_method_id'] > 0, function ($query) use ($filters) {
+                $query->where('payment_method_id', $filters['payment_method_id']);
+            })
             ->when($appointmentStatus !== 'all', function ($query) use ($appointmentStatus) {
                 $query->where('status', $appointmentStatus);
             })
@@ -1176,8 +1313,10 @@ class ReportController extends Controller
         $user = auth()->user();
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $filters = $this->resolveGlobalReportFilters($request);
         $incomeUserId = (int) $request->query('income_user_id', 0);
         $incomeCustomerId = (int) $request->query('income_customer_id', 0);
+        $appliedUserId = $incomeUserId > 0 ? $incomeUserId : $filters['user_id'];
 
         $orders = SalesOrder::query()
             ->with(['salesRepresentative', 'user', 'payments'])
@@ -1185,11 +1324,17 @@ class ReportController extends Controller
             ->whereDate('date', '>=', $startDate->toDateString())
             ->whereDate('date', '<=', $endDate->toDateString())
             ->where('status', '!=', 2)
-            ->when($incomeUserId > 0, function ($query) use ($incomeUserId) {
-                $query->where('sales_rep_user_id', $incomeUserId);
+            ->when($appliedUserId > 0, function ($query) use ($appliedUserId) {
+                $query->where('sales_rep_user_id', $appliedUserId);
             })
             ->when($incomeCustomerId > 0, function ($query) use ($incomeCustomerId) {
                 $query->where('user_id', $incomeCustomerId);
+            })
+            ->when($filters['payment_method_id'] > 0, function ($query) use ($filters) {
+                $query->whereHas('payments', function ($paymentsQuery) use ($filters) {
+                    $paymentsQuery->where('payment_method', $filters['payment_method_id'])
+                        ->where('status', 1);
+                });
             })
             ->orderByDesc('date')
             ->orderByDesc('id')
@@ -1261,7 +1406,7 @@ class ReportController extends Controller
             'total_amount_bs' => (float) $rows->sum('total_amount_bs'),
             'total_paid_bs' => (float) $rows->sum('total_paid_bs'),
             'currency_code' => $currency['code'],
-            'income_user_id' => $incomeUserId,
+            'income_user_id' => $appliedUserId,
             'income_customer_id' => $incomeCustomerId,
             'report_period' => strtolower(trim((string) $request->query('report_period', 'custom'))),
         ];
@@ -1309,6 +1454,7 @@ class ReportController extends Controller
         $user = auth()->user();
         $currency = $this->resolveReportCurrencyContext($request, (int) $user->tenant_id);
         [$startDate, $endDate] = $this->resolveDateRange($request);
+        $filters = $this->resolveGlobalReportFilters($request);
         $salesBookSource = in_array((string) $request->query('sales_book_source', 'shopix'), ['shopix', 'hka'], true)
             ? (string) $request->query('sales_book_source', 'shopix')
             : 'shopix';
@@ -1318,6 +1464,15 @@ class ReportController extends Controller
             ->whereDate('date', '>=', $startDate->toDateString())
             ->whereDate('date', '<=', $endDate->toDateString())
             ->where('status', '!=', 2)
+            ->when($filters['user_id'] > 0, function ($query) use ($filters) {
+                $query->where('sales_rep_user_id', $filters['user_id']);
+            })
+            ->when($filters['payment_method_id'] > 0, function ($query) use ($filters) {
+                $query->whereHas('payments', function ($paymentsQuery) use ($filters) {
+                    $paymentsQuery->where('payment_method', $filters['payment_method_id'])
+                        ->where('status', 1);
+                });
+            })
             ->orderBy('date')
             ->orderBy('id')
             ->get();
@@ -1489,6 +1644,26 @@ class ReportController extends Controller
             'base_code' => $baseCurrencyCode,
             'code' => $reportCurrencyCode,
         ];
+    }
+
+    private function resolveGlobalReportFilters(Request $request): array
+    {
+        return [
+            'user_id' => max(0, (int) $request->query('user_id', 0)),
+            'payment_method_id' => max(0, (int) $request->query('payment_method_id', 0)),
+        ];
+    }
+
+    private function resolvePaymentMethodNameById(int $tenantId, int $paymentMethodId): string
+    {
+        if ($tenantId <= 0 || $paymentMethodId <= 0) {
+            return '';
+        }
+
+        return trim((string) (PaymentMethod::query()
+            ->where('tenant_id', $tenantId)
+            ->where('id', $paymentMethodId)
+            ->value('name') ?? ''));
     }
 
     private function convertModulesMoneyMetrics(array $modules, array $currency, int $tenantId): array

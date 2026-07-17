@@ -14,7 +14,7 @@
                 </div>
                 <div class="card-body">
                     <div class="alert alert-light border text-sm" role="alert">
-                        Selecciona un reporte y formato. Los CSV se visualizan online y los filtros se solicitan en un modal segun el reporte que vayas a generar.
+                        Selecciona un reporte y formato. Los PDF se generan directamente con filtros por defecto y los CSV se visualizan online con filtros desde modal.
                     </div>
 
                     <div class="card border mb-3">
@@ -95,7 +95,7 @@
                                     <h6 class="mb-2">Productos mas vendidos</h6>
                                     <p class="text-sm text-muted mb-3">Ranking por unidades y monto vendido.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.products.topSelling.pdf') }}" data-report-name="Productos mas vendidos" data-format="PDF" data-endpoint="{{ route('reports.products.topSelling.pdf') }}" data-filters="date,currency">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.products.topSelling.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Productos mas vendidos" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.products.topSelling.excel') }}" data-filters="date,currency">CSV</a>
                                     </div>
                                 </div>
@@ -108,7 +108,7 @@
                                     <h6 class="mb-2">Productos de entrada</h6>
                                     <p class="text-sm text-muted mb-3">Entradas de inventario por orden de compra.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.inventory.entries.pdf') }}" data-report-name="Productos de entrada" data-format="PDF" data-endpoint="{{ route('reports.inventory.entries.pdf') }}" data-filters="date,currency">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.inventory.entries.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Productos de entrada" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.inventory.entries.excel') }}" data-filters="date,currency">CSV</a>
                                     </div>
                                 </div>
@@ -121,7 +121,7 @@
                                     <h6 class="mb-2">Gestion de ventas</h6>
                                     <p class="text-sm text-muted mb-3">Estado, cliente, montos y pagos por orden.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.sales.management.pdf') }}" data-report-name="Gestion de ventas" data-format="PDF" data-endpoint="{{ route('reports.sales.management.pdf') }}" data-filters="date,currency">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.sales.management.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Gestion de ventas" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.sales.management.excel') }}" data-filters="date,currency">CSV</a>
                                     </div>
                                 </div>
@@ -134,7 +134,7 @@
                                     <h6 class="mb-2">Total del inventario</h6>
                                     <p class="text-sm text-muted mb-3">Stock y valor total por variante de producto.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.inventory.total.pdf') }}" data-report-name="Total del inventario" data-format="PDF" data-endpoint="{{ route('reports.inventory.total.pdf') }}" data-filters="date,currency">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.inventory.total.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Total del inventario" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.inventory.total.excel') }}" data-filters="date,currency">CSV</a>
                                     </div>
                                 </div>
@@ -147,7 +147,7 @@
                                     <h6 class="mb-2">Reporte general por modulos</h6>
                                     <p class="text-sm text-muted mb-3">Resumen de metricas clave de cada modulo del sistema.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.system.modules.pdf') }}" data-report-name="Reporte general por modulos" data-format="PDF" data-endpoint="{{ route('reports.system.modules.pdf') }}" data-filters="date,currency">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.system.modules.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Reporte general por modulos" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.system.modules.excel') }}" data-filters="date,currency">CSV</a>
                                     </div>
                                 </div>
@@ -160,7 +160,7 @@
                                     <h6 class="mb-2">Clientes</h6>
                                     <p class="text-sm text-muted mb-3">Clientes con compras, actividad y montos cobrados.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.customers.pdf') }}" data-report-name="Clientes" data-format="PDF" data-endpoint="{{ route('reports.customers.pdf') }}" data-filters="date,currency,customer_status">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.customers.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Clientes" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.customers.excel') }}" data-filters="date,currency,customer_status">CSV</a>
                                     </div>
                                 </div>
@@ -173,7 +173,7 @@
                                     <h6 class="mb-2">Cuentas por cobrar</h6>
                                     <p class="text-sm text-muted mb-3">Ordenes con saldo pendiente de cobro.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.accountsReceivable.pdf') }}" data-report-name="Cuentas por cobrar" data-format="PDF" data-endpoint="{{ route('reports.accountsReceivable.pdf') }}" data-filters="date,currency,min_pending_balance">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.accountsReceivable.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Cuentas por cobrar" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.accountsReceivable.excel') }}" data-filters="date,currency,min_pending_balance">CSV</a>
                                     </div>
                                 </div>
@@ -186,7 +186,7 @@
                                     <h6 class="mb-2">Gestión de citas y flujo</h6>
                                     <p class="text-sm text-muted mb-3">Agenda, confirmación, cancelaciones, pagos y saldo pendiente por cita.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.appointments.workflow.pdf') }}" data-report-name="Gestion de citas y flujo" data-format="PDF" data-endpoint="{{ route('reports.appointments.workflow.pdf') }}" data-filters="date,currency,appointment_status,appointment_payment_status,appointment_service_id">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.appointments.workflow.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Gestion de citas y flujo" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.appointments.workflow.excel') }}" data-filters="date,currency,appointment_status,appointment_payment_status,appointment_service_id">CSV</a>
                                     </div>
                                 </div>
@@ -199,7 +199,7 @@
                                     <h6 class="mb-2">Libro de ventas</h6>
                                     <p class="text-sm text-muted mb-3">Ventas con IVA, notas de crédito/débito y retenciones.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.sales.book.pdf') }}" data-report-name="Libro de ventas" data-format="PDF" data-endpoint="{{ route('reports.sales.book.pdf') }}" data-filters="date,currency,sales_book_source">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.sales.book.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Libro de ventas" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.sales.book.excel') }}" data-filters="date,currency,sales_book_source">CSV</a>
                                     </div>
                                 </div>
@@ -212,7 +212,7 @@
                                     <h6 class="mb-2">Gastos de tienda</h6>
                                     <p class="text-sm text-muted mb-3">Egresos por categoria, proveedor y metodo de pago.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.storeExpenses.pdf') }}" data-report-name="Gastos de tienda" data-format="PDF" data-endpoint="{{ route('reports.storeExpenses.pdf') }}" data-filters="date,currency,expense_category">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.storeExpenses.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Gastos de tienda" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.storeExpenses.excel') }}" data-filters="date,currency,expense_category">CSV</a>
                                     </div>
                                 </div>
@@ -225,7 +225,7 @@
                                     <h6 class="mb-2">Ventas por vendedor</h6>
                                     <p class="text-sm text-muted mb-3">Ventas y cobros por vendedor, con periodo semanal, mensual, trimestral o anual.</p>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <a class="btn btn-dark btn-sm mb-0 js-report-launch" href="{{ route('reports.income.byUser.pdf') }}" data-report-name="Ventas por vendedor" data-format="PDF" data-endpoint="{{ route('reports.income.byUser.pdf') }}" data-filters="date,currency,report_period,income_user_id,income_customer_id">PDF</a>
+                                        <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.income.byUser.pdf') }}">PDF</a>
                                         <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Ventas por vendedor" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.income.byUser.excel') }}" data-filters="date,currency,report_period,income_user_id,income_customer_id">CSV</a>
                                     </div>
                                 </div>
@@ -255,6 +255,29 @@
                                             </div>
                                             <div class="col-12" data-filter-group="date">
                                                 <small class="text-muted d-block">El rango aplica a reportes que trabajan por periodo.</small>
+                                            </div>
+
+                                            <div class="col-md-6" data-filter-group="user_id">
+                                                <label for="modal_user_id" class="form-label">Usuario</label>
+                                                <select id="modal_user_id" name="user_id" class="form-control border border-1 p-2">
+                                                    <option value="0">Todos</option>
+                                                    @foreach(($reportUsers ?? []) as $reportUser)
+                                                        <option value="{{ $reportUser->id }}" {{ (int) request('user_id', 0) === (int) $reportUser->id ? 'selected' : '' }}>{{ $reportUser->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+
+                                            <div class="col-md-6" data-filter-group="payment_method_id">
+                                                <label for="modal_payment_method_id" class="form-label">Metodo de pago</label>
+                                                <select id="modal_payment_method_id" name="payment_method_id" class="form-control border border-1 p-2">
+                                                    <option value="0">Todos</option>
+                                                    @foreach(($reportPaymentMethods ?? []) as $reportPaymentMethod)
+                                                        <option value="{{ $reportPaymentMethod->id }}" {{ (int) request('payment_method_id', 0) === (int) $reportPaymentMethod->id ? 'selected' : '' }}>{{ $reportPaymentMethod->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div class="col-12" data-filter-group="payment_method_id">
+                                                <small class="text-muted d-block">Si no seleccionas usuario o método de pago, el reporte incluirá todos.</small>
                                             </div>
 
                                             <div class="col-md-6" data-filter-group="currency">
@@ -480,6 +503,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 .filter(function (value) {
                     return value !== '';
                 });
+
+            ['date', 'user_id', 'payment_method_id'].forEach(function (defaultFilter) {
+                if (filters.indexOf(defaultFilter) === -1) {
+                    filters.push(defaultFilter);
+                }
+            });
 
             form.setAttribute('action', endpoint);
             form.setAttribute('target', csvEndpoint ? '_blank' : '_self');
