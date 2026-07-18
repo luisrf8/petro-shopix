@@ -5199,8 +5199,148 @@
       }
     }
 
-    const PRO_PAYMENT_SAFE_IMAGE_BYTES = 1.2 * 1024 * 1024;
-    const PRO_PAYMENT_SAFE_TOTAL_BYTES = 6 * 1024 * 1024;
+    const PRO_PAYMENT_SAFE_IMAGE_BYTES = 900 * 1024;
+    const PRO_PAYMENT_SAFE_TOTAL_BYTES = 3 * 1024 * 1024;
+    const PRO_PAYMENT_TARGET_IMAGE_BYTES = 600 * 1024;
+    const PRO_PAYMENT_MAX_DIMENSION = 1600;
+
+    function replaceFileInputContent(input, file) {
+      if (!input || !file) {
+        return;
+      }
+
+      if (typeof DataTransfer === 'undefined') {
+        return;
+      }
+
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      input.files = transfer.files;
+    }
+
+    function loadImageFromFile(file) {
+      return new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve(image);
+        };
+        image.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('No se pudo leer la imagen del comprobante.'));
+        };
+        image.src = objectUrl;
+      });
+    }
+
+    async function optimizeProPaymentProofFile(file) {
+      if (!(file instanceof File) || !String(file.type || '').startsWith('image/')) {
+        return file;
+      }
+
+      if (file.size <= PRO_PAYMENT_TARGET_IMAGE_BYTES) {
+        return file;
+      }
+
+      if (!('HTMLCanvasElement' in window)) {
+        return file;
+      }
+
+      const image = await loadImageFromFile(file);
+      const width = Number(image.naturalWidth || image.width || 0);
+      const height = Number(image.naturalHeight || image.height || 0);
+
+      if (!width || !height) {
+        return file;
+      }
+
+      const ratio = Math.min(1, PRO_PAYMENT_MAX_DIMENSION / Math.max(width, height));
+      const targetWidth = Math.max(1, Math.round(width * ratio));
+      const targetHeight = Math.max(1, Math.round(height * ratio));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      const context = canvas.getContext('2d', { alpha: false });
+      if (!context) {
+        return file;
+      }
+
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, targetWidth, targetHeight);
+      context.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+      const qualitySteps = [0.84, 0.78, 0.72, 0.66, 0.6, 0.54, 0.48];
+      let bestBlob = null;
+
+      for (const quality of qualitySteps) {
+        const blob = await new Promise((resolve) => {
+          canvas.toBlob((candidate) => resolve(candidate), 'image/webp', quality);
+        });
+
+        if (!blob) {
+          continue;
+        }
+
+        bestBlob = blob;
+        if (blob.size <= PRO_PAYMENT_TARGET_IMAGE_BYTES) {
+          break;
+        }
+      }
+
+      if (!bestBlob || bestBlob.size >= file.size) {
+        return file;
+      }
+
+      const baseName = String(file.name || 'comprobante').replace(/\.[^.]+$/, '');
+      return new File([bestBlob], `${baseName}.webp`, {
+        type: 'image/webp',
+        lastModified: Date.now(),
+      });
+    }
+
+    async function normalizeProPaymentProofInput(imageInput) {
+      if (!imageInput) {
+        return null;
+      }
+
+      const row = imageInput.closest('[data-pro-payment-row]');
+      const nameElement = row ? row.querySelector('.pro-payment-reference-image-name') : null;
+      let file = imageInput.files?.[0] || null;
+
+      if (!file) {
+        if (nameElement) {
+          nameElement.textContent = 'Sin imagen cargada';
+        }
+        return null;
+      }
+
+      try {
+        const optimized = await optimizeProPaymentProofFile(file);
+        if (optimized !== file) {
+          replaceFileInputContent(imageInput, optimized);
+          file = optimized;
+        }
+      } catch (error) {
+      }
+
+      if (file.size > PRO_PAYMENT_SAFE_IMAGE_BYTES) {
+        imageInput.value = '';
+        if (nameElement) {
+          nameElement.textContent = 'Sin imagen cargada';
+        }
+        alert(`La imagen de comprobante supera ${formatBytesToMb(PRO_PAYMENT_SAFE_IMAGE_BYTES)} incluso optimizada. Recórtala o baja resolución para evitar error 413.`);
+        return null;
+      }
+
+      if (nameElement) {
+        nameElement.textContent = file.name;
+      }
+
+      return file;
+    }
 
     function fileToDataUrl(file) {
       return new Promise((resolve, reject) => {
@@ -5544,23 +5684,6 @@
         if (amountInput) {
           sanitizeLiveMoneyInput(amountInput, parseProPaymentAmountValue, normalizeEditableProPaymentValue);
         }
-
-        const imageInput = event.target.closest('.pro-payment-reference-image');
-        if (imageInput) {
-          const row = imageInput.closest('[data-pro-payment-row]');
-          const file = imageInput.files?.[0] || null;
-
-          if (file && file.size > PRO_PAYMENT_SAFE_IMAGE_BYTES) {
-            imageInput.value = '';
-            alert(`La imagen de comprobante supera ${formatBytesToMb(PRO_PAYMENT_SAFE_IMAGE_BYTES)}. Reduce su tamaño para evitar error 413.`);
-          }
-
-          const effectiveFile = imageInput.files?.[0] || null;
-          const nameElement = row ? row.querySelector('.pro-payment-reference-image-name') : null;
-          if (nameElement) {
-            nameElement.textContent = effectiveFile ? effectiveFile.name : 'Sin imagen cargada';
-          }
-        }
         updateProPaymentSummary();
       };
 
@@ -5586,7 +5709,12 @@
         updateProPaymentSummary();
       };
 
-      paymentRowsContainer.onchange = (event) => {
+      paymentRowsContainer.onchange = async (event) => {
+        const imageInput = event.target.closest('.pro-payment-reference-image');
+        if (imageInput) {
+          await normalizeProPaymentProofInput(imageInput);
+        }
+
         const row = event.target.closest('[data-pro-payment-row]');
         if (row) {
           populatePaymentRowDetails(row);
@@ -5818,7 +5946,10 @@
         const amount = toBaseFromMethodAmount(method, amountRaw);
         const requiresReference = !!method?.has_reference;
         const reference = requiresReference ? (row.querySelector('.pro-payment-reference')?.value || '').trim() : '';
-        const imageFile = requiresReference ? (row.querySelector('.pro-payment-reference-image')?.files?.[0] || null) : null;
+        const proofInput = row.querySelector('.pro-payment-reference-image');
+        const imageFile = requiresReference
+          ? (await normalizeProPaymentProofInput(proofInput))
+          : null;
         const referenceImageData = imageFile ? await fileToDataUrl(imageFile) : null;
 
         return {

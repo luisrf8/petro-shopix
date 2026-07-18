@@ -18,6 +18,8 @@ class ImageStorage
 {
     public const GOOGLE_PREFIX = 'gdrive/';
     private const GOOGLE_FILE_ID_PATTERN = '/^[a-zA-Z0-9_-]{10,}$/';
+    private const PAYMENT_PROOF_MAX_DIMENSION = 1600;
+    private const PAYMENT_PROOF_TARGET_BYTES = 650000;
 
     public static function provider(): string
     {
@@ -115,6 +117,45 @@ class ImageStorage
         return self::storeBinary($webpBinary, $directory, 'webp', 'image/webp');
     }
 
+    public static function storeUploadedPaymentProofImage(UploadedFile $file, string $directory = 'payment_images'): string
+    {
+        $mimeType = Str::lower((string) ($file->getClientMimeType() ?: $file->getMimeType() ?: ''));
+        $rasterMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+
+        if (!in_array($mimeType, $rasterMimeTypes, true)) {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        $binary = file_get_contents($file->getRealPath());
+        if ($binary === false || $binary === '') {
+            return self::storeUploadedFile($file, $directory);
+        }
+
+        return self::storePaymentProofBinary($binary, $directory, $mimeType);
+    }
+
+    public static function storePaymentProofBinary(string $binary, string $directory = 'payment_images', ?string $mimeType = null): string
+    {
+        $optimized = self::optimizeProofImageBinary($binary);
+        if (is_array($optimized) && isset($optimized['binary'], $optimized['extension'], $optimized['mime'])) {
+            return self::storeBinary(
+                (string) $optimized['binary'],
+                $directory,
+                (string) $optimized['extension'],
+                (string) $optimized['mime']
+            );
+        }
+
+        $resolvedMime = Str::lower(trim((string) $mimeType));
+        $extension = match ($resolvedMime) {
+            'image/jpeg', 'image/jpg' => 'jpg',
+            'image/webp' => 'webp',
+            default => 'png',
+        };
+
+        return self::storeBinary($binary, $directory, $extension, $resolvedMime !== '' ? $resolvedMime : null);
+    }
+
     public static function storeUploadedImageAsPng(UploadedFile $file, string $directory, int $compressionLevel = 9): string
     {
         $mimeType = Str::lower((string) ($file->getClientMimeType() ?: $file->getMimeType() ?: ''));
@@ -183,6 +224,150 @@ class ImageStorage
         }
 
         // GD may require several bytes per pixel while decoding and re-encoding.
+        $estimatedRequiredBytes = (int) round($width * $height * 5);
+        $memoryLimitBytes = self::memoryLimitBytes();
+
+        if ($memoryLimitBytes <= 0) {
+            return true;
+        }
+
+        $safetyReserveBytes = 16 * 1024 * 1024;
+        $availableBytes = $memoryLimitBytes - memory_get_usage(true) - $safetyReserveBytes;
+
+        return $availableBytes > 0 && $estimatedRequiredBytes <= $availableBytes;
+    }
+
+    private static function optimizeProofImageBinary(string $binary): ?array
+    {
+        if (
+            !function_exists('imagecreatefromstring')
+            || !function_exists('imagewebp')
+            || !function_exists('imagecreatetruecolor')
+            || !function_exists('imagecopyresampled')
+        ) {
+            return null;
+        }
+
+        if (!self::canSafelyDecodeImageFromBinary($binary)) {
+            return null;
+        }
+
+        $resource = @imagecreatefromstring($binary);
+        if ($resource === false) {
+            return null;
+        }
+
+        $working = self::resizeResourceToMaxDimension(
+            $resource,
+            self::PAYMENT_PROOF_MAX_DIMENSION,
+            self::PAYMENT_PROOF_MAX_DIMENSION
+        );
+
+        if (function_exists('imagepalettetotruecolor')) {
+            imagepalettetotruecolor($working);
+        }
+        imagealphablending($working, true);
+        imagesavealpha($working, true);
+
+        $bestBinary = '';
+        $qualitySteps = [82, 76, 70, 64, 58, 52, 46];
+
+        foreach ($qualitySteps as $quality) {
+            ob_start();
+            $encoded = @imagewebp($working, null, $quality);
+            $candidateBinary = ob_get_clean();
+
+            if ($encoded !== true || !is_string($candidateBinary) || $candidateBinary === '') {
+                continue;
+            }
+
+            $bestBinary = $candidateBinary;
+            if (strlen($candidateBinary) <= self::PAYMENT_PROOF_TARGET_BYTES) {
+                break;
+            }
+        }
+
+        imagedestroy($working);
+        if ($working !== $resource) {
+            imagedestroy($resource);
+        }
+
+        if ($bestBinary === '') {
+            return null;
+        }
+
+        return [
+            'binary' => $bestBinary,
+            'extension' => 'webp',
+            'mime' => 'image/webp',
+        ];
+    }
+
+    private static function resizeResourceToMaxDimension($resource, int $maxWidth, int $maxHeight)
+    {
+        $width = function_exists('imagesx') ? (int) @imagesx($resource) : 0;
+        $height = function_exists('imagesy') ? (int) @imagesy($resource) : 0;
+
+        if ($width <= 0 || $height <= 0) {
+            return $resource;
+        }
+
+        if ($width <= $maxWidth && $height <= $maxHeight) {
+            return $resource;
+        }
+
+        $scale = min($maxWidth / $width, $maxHeight / $height);
+        $targetWidth = max(1, (int) floor($width * $scale));
+        $targetHeight = max(1, (int) floor($height * $scale));
+
+        $canvas = @imagecreatetruecolor($targetWidth, $targetHeight);
+        if ($canvas === false) {
+            return $resource;
+        }
+
+        imagealphablending($canvas, false);
+        imagesavealpha($canvas, true);
+        $transparent = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
+        imagefilledrectangle($canvas, 0, 0, $targetWidth, $targetHeight, $transparent);
+
+        $copied = @imagecopyresampled(
+            $canvas,
+            $resource,
+            0,
+            0,
+            0,
+            0,
+            $targetWidth,
+            $targetHeight,
+            $width,
+            $height
+        );
+
+        if ($copied !== true) {
+            imagedestroy($canvas);
+            return $resource;
+        }
+
+        return $canvas;
+    }
+
+    private static function canSafelyDecodeImageFromBinary(string $binary): bool
+    {
+        if (!function_exists('getimagesizefromstring')) {
+            return true;
+        }
+
+        $imageSize = @getimagesizefromstring($binary);
+        if (!is_array($imageSize)) {
+            return true;
+        }
+
+        $width = (int) ($imageSize[0] ?? 0);
+        $height = (int) ($imageSize[1] ?? 0);
+        if ($width <= 0 || $height <= 0) {
+            return true;
+        }
+
         $estimatedRequiredBytes = (int) round($width * $height * 5);
         $memoryLimitBytes = self::memoryLimitBytes();
 

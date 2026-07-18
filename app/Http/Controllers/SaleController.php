@@ -563,7 +563,7 @@ class SaleController extends Controller
                 }
 
                 if ($request->hasFile("payments.$index.proof_image")) {
-                    $proofPath = ImageStorage::storeUploadedImageAsWebp(
+                    $proofPath = ImageStorage::storeUploadedPaymentProofImage(
                         $request->file("payments.$index.proof_image"),
                         'payment_images'
                     );
@@ -1043,7 +1043,7 @@ class SaleController extends Controller
                     // Comprobar si existe un archivo 'img'
                     if ($request->hasFile("paymentDetails.$key.img")) {
                         $image = $request->file("paymentDetails.$key.img");
-                        $path = ImageStorage::storeUploadedFile($image, 'payment_images');
+                        $path = ImageStorage::storeUploadedPaymentProofImage($image, 'payment_images');
                         
                         // Guardar la ruta de la imagen asociada al pago
                         PaymentImage::create([
@@ -1714,7 +1714,7 @@ class SaleController extends Controller
         ]);
 
         if ($request->hasFile('proof_image')) {
-            $proofPath = ImageStorage::storeUploadedImageAsWebp(
+            $proofPath = ImageStorage::storeUploadedPaymentProofImage(
                 $request->file('proof_image'),
                 'payment_images'
             );
@@ -2990,7 +2990,7 @@ class SaleController extends Controller
                 $existingImage->delete();
             }
 
-            $proofPath = ImageStorage::storeUploadedFile($request->file('proof_image'), 'payment_proofs');
+            $proofPath = ImageStorage::storeUploadedPaymentProofImage($request->file('proof_image'), 'payment_proofs');
             if (!empty($proofPath)) {
                 PaymentImage::create([
                     'payment_id' => $payment->id,

@@ -3319,13 +3319,7 @@ class TenantController extends Controller
             return;
         }
 
-        $extension = match (Str::lower((string) $mimeType)) {
-            'image/jpeg', 'image/jpg' => 'jpg',
-            'image/webp' => 'webp',
-            default => 'png',
-        };
-
-        $path = ImageStorage::storeBinary($binary, 'payment_images', $extension, $mimeType);
+        $path = ImageStorage::storePaymentProofBinary($binary, 'payment_images', $mimeType);
 
         PaymentImage::create([
             'payment_id' => $payment->id,

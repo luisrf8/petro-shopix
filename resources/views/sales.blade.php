@@ -3454,8 +3454,105 @@ function updateQuantity(id, newQty) {
             
         });
         
+        const PAYMENT_PROOF_TARGET_BYTES = 700 * 1024;
+        const PAYMENT_PROOF_MAX_BYTES = 1200 * 1024;
+        const PAYMENT_PROOF_MAX_DIMENSION = 1600;
+
         function generatePaymentEntryId() {
             return `${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+        }
+
+        function loadImageElementFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const objectUrl = URL.createObjectURL(file);
+                const image = new Image();
+                image.onload = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    resolve(image);
+                };
+                image.onerror = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    reject(new Error('No se pudo abrir la imagen del comprobante.'));
+                };
+                image.src = objectUrl;
+            });
+        }
+
+        function replaceInputFile(input, file) {
+            if (!input || !file) return;
+            if (typeof DataTransfer === 'undefined') {
+                return;
+            }
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            input.files = transfer.files;
+        }
+
+        async function optimizePaymentProofFile(file) {
+            if (!(file instanceof File) || !String(file.type || '').startsWith('image/')) {
+                return file;
+            }
+
+            if (file.size <= PAYMENT_PROOF_TARGET_BYTES) {
+                return file;
+            }
+
+            if (!('HTMLCanvasElement' in window) || !('FileReader' in window)) {
+                return file;
+            }
+
+            const image = await loadImageElementFromFile(file);
+            const width = Number(image.naturalWidth || image.width || 0);
+            const height = Number(image.naturalHeight || image.height || 0);
+
+            if (!width || !height) {
+                return file;
+            }
+
+            const ratio = Math.min(1, PAYMENT_PROOF_MAX_DIMENSION / Math.max(width, height));
+            const targetWidth = Math.max(1, Math.round(width * ratio));
+            const targetHeight = Math.max(1, Math.round(height * ratio));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+
+            const context = canvas.getContext('2d', { alpha: false });
+            if (!context) {
+                return file;
+            }
+
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, targetWidth, targetHeight);
+            context.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+            const qualitySteps = [0.84, 0.78, 0.72, 0.66, 0.6, 0.54, 0.48];
+            let bestBlob = null;
+
+            for (const quality of qualitySteps) {
+                const candidateBlob = await new Promise((resolve) => {
+                    canvas.toBlob((blob) => resolve(blob), 'image/webp', quality);
+                });
+
+                if (!candidateBlob) {
+                    continue;
+                }
+
+                bestBlob = candidateBlob;
+                if (candidateBlob.size <= PAYMENT_PROOF_TARGET_BYTES) {
+                    break;
+                }
+            }
+
+            if (!bestBlob || bestBlob.size >= file.size) {
+                return file;
+            }
+
+            const baseName = String(file.name || 'comprobante').replace(/\.[^.]+$/, '');
+            return new File([bestBlob], `${baseName}.webp`, {
+                type: 'image/webp',
+                lastModified: Date.now(),
+            });
         }
 
         function createPaymentRowHtml(methodId, currency, noReference, requiresProofImage, entryId) {
@@ -3752,13 +3849,31 @@ function updateQuantity(id, newQty) {
             fillRemainingPaymentAmount(button.dataset.methodId, button.dataset.entryId);
         });
 
-        function updatePaymentProof(input) {
+        async function updatePaymentProof(input) {
             const methodId = input.dataset.methodId;
             const entryId = input.dataset.entryId;
             const payment = payments.find(payment => payment.methodId === String(methodId) && payment.entryId === entryId);
 
+            let currentFile = input.files?.[0] || null;
+            if (currentFile) {
+                try {
+                    const optimizedFile = await optimizePaymentProofFile(currentFile);
+                    if (optimizedFile !== currentFile) {
+                        replaceInputFile(input, optimizedFile);
+                        currentFile = optimizedFile;
+                    }
+                } catch (error) {
+                }
+
+                if (currentFile.size > PAYMENT_PROOF_MAX_BYTES) {
+                    input.value = '';
+                    alert('El comprobante es muy pesado. Toma una captura más recortada o de menor resolución.');
+                    currentFile = null;
+                }
+            }
+
             if (payment) {
-                payment.hasProofImage = Boolean(input.files?.[0]);
+                payment.hasProofImage = Boolean(currentFile);
             }
 
             validatePaymentDetails();
@@ -4362,7 +4477,7 @@ function updateQuantity(id, newQty) {
 
         updateCreateCustomerVisibility();
         
-        document.getElementById('confirmPurchase').addEventListener('click', function () {
+        document.getElementById('confirmPurchase').addEventListener('click', async function () {
     const button = this;
 
     // Activar loading
@@ -4510,7 +4625,7 @@ function updateQuantity(id, newQty) {
         : false);
     appendFormDataValue(formData, 'change_rate_to_bs', baseRateToBs);
 
-    validPayments.forEach((payment, index) => {
+    for (const [index, payment] of validPayments.entries()) {
         appendFormDataValue(formData, `payments[${index}][methodId]`, payment.methodId);
         appendFormDataValue(formData, `payments[${index}][amount]`, payment.amountBase ?? payment.amount);
         appendFormDataValue(formData, `payments[${index}][amount_base]`, payment.amountBase ?? payment.amount);
@@ -4522,9 +4637,26 @@ function updateQuantity(id, newQty) {
 
         const proofInput = document.querySelector(`.payment-proof-input[data-entry-id="${payment.entryId}"]`);
         if (proofInput?.files?.[0]) {
-            formData.append(`payments[${index}][proof_image]`, proofInput.files[0]);
+            let proofFile = proofInput.files[0];
+            try {
+                proofFile = await optimizePaymentProofFile(proofFile);
+                if (proofFile !== proofInput.files[0]) {
+                    replaceInputFile(proofInput, proofFile);
+                }
+            } catch (error) {
+            }
+
+            if (proofFile.size > PAYMENT_PROOF_MAX_BYTES) {
+                alert('El comprobante sigue siendo muy pesado incluso optimizado. Intenta con una captura más recortada.');
+                button.disabled = false;
+                button.innerHTML = originalText;
+                setSaleSubmitOverlayVisible(false);
+                return;
+            }
+
+            formData.append(`payments[${index}][proof_image]`, proofFile);
         }
-    });
+    }
 
     fetch('/create-sale', {
         method: 'POST',
@@ -4542,7 +4674,14 @@ function updateQuantity(id, newQty) {
                 return payload || {};
             }
 
-            const serverMessage = payload?.message || payload?.error || String(rawBody || '').trim();
+            const bodyText = String(rawBody || '').trim();
+            const bodyLooksLike413 = /413\s+Request\s+Entity\s+Too\s+Large/i.test(bodyText);
+
+            if (response.status === 413 || bodyLooksLike413) {
+                throw new Error('La solicitud es demasiado grande (413). Reduce el tamaño de los comprobantes e intenta de nuevo.');
+            }
+
+            const serverMessage = payload?.message || payload?.error || bodyText;
             const fallbackMessage = `Error al confirmar la compra (HTTP ${response.status}).`;
             throw new Error(serverMessage || fallbackMessage);
         })
