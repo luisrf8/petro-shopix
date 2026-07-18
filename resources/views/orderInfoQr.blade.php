@@ -270,9 +270,11 @@
         $isExternalShipping = str_contains($deliveryTypeLabel, 'env') || str_contains($deliveryTypeLabel, 'shipping');
         $deliveryLabel = (int) $order->deliver_status === 0
             ? 'Pendiente'
+            : ((int) $order->deliver_status === 3
+                ? ($isExternalShipping ? 'En vía' : 'En despacho')
             : ((int) $order->deliver_status === 1
                 ? 'Entregado'
-                : ((int) $order->deliver_status === 2 ? 'Cancelado' : 'En proceso'));
+                : ((int) $order->deliver_status === 2 ? 'Cancelado' : 'En proceso')));
         $approvalLabel = $order->status == 0 ? 'En proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado');
         $paymentBalance = max(0, (float) $totalOrden - (float) $totalPagado);
         $paymentStepTone = $totalPagado >= $totalOrden && $totalOrden > 0 ? 'success' : ($totalPagado > 0 ? 'pending' : 'danger');
@@ -286,13 +288,15 @@
             : 'Aún no hay un repartidor asignado para esta orden.';
         $shippingProgressDescription = match ((int) $order->deliver_status) {
             1 => 'Paso 3 de 3: el envío figura como entregado correctamente.',
+            3 => 'Paso 2 de 3: el pedido está actualmente en ruta para su entrega.',
             2 => 'El envío fue cancelado antes de completar su despacho.',
             default => 'Paso 1 de 3: tu envío fue registrado y está en preparación para despacho.',
         };
         $shippingProgressMeta = match ((int) $order->deliver_status) {
             1 => 'Proceso: 1. Preparación  2. Despacho  3. Entregado',
+            3 => 'Proceso: 1. Preparación  2. En despacho / En vía  3. Entregado',
             2 => 'Proceso interrumpido: 1. Preparación  2. Cancelado',
-            default => 'Proceso: 1. Preparación  2. Despacho  3. Entrega final',
+            default => 'Proceso: 1. Preparación  2. En despacho / En vía  3. Entrega final',
         };
         $timelineSteps = [
             [
@@ -310,7 +314,7 @@
                 'meta' => $approvalLabel,
             ],
             [
-                'tone' => (int) $order->deliver_status === 1 ? 'success' : ((int) $order->deliver_status === 0 ? 'pending' : 'danger'),
+                'tone' => (int) $order->deliver_status === 1 ? 'success' : ((int) $order->deliver_status === 2 ? 'danger' : 'pending'),
                 'title' => $isExternalShipping ? 'Seguimiento del envío' : 'Entrega y despacho',
                 'description' => $isExternalShipping
                     ? $shippingProgressDescription

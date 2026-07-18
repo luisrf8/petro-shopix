@@ -2851,10 +2851,21 @@ class TenantController extends Controller
                     throw new \RuntimeException('Debes seleccionar un tipo de entrega válido.');
                 }
 
-                if (in_array($validated['delivery_type'], ['delivery', 'shipping'], true) && !(bool) ($tenant->delivery_enabled ?? false)) {
+                $tenantAllowsDeliveryOperations = TenantPlanCapabilities::forTenant($tenant)->allowsDeliveryOperations();
+                $tenantDeliveryEnabled = (bool) ($tenant->delivery_enabled ?? false);
+                $tenantShippingEnabled = !(bool) ($tenant->restrict_delivery_city_to_tenant ?? true);
+
+                if ($validated['delivery_type'] === 'delivery' && (!$tenantAllowsDeliveryOperations || !$tenantDeliveryEnabled)) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Los envíos y el delivery están desactivados para esta tienda.',
+                        'message' => 'El delivery local está desactivado para esta tienda.',
+                    ], 422);
+                }
+
+                if ($validated['delivery_type'] === 'shipping' && (!$tenantAllowsDeliveryOperations || !$tenantShippingEnabled)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'El envío nacional está desactivado para esta tienda.',
                     ], 422);
                 }
 
@@ -2865,7 +2876,7 @@ class TenantController extends Controller
                     ], 422);
                 }
 
-                if ($validated['delivery_type'] === 'delivery' && (bool) ($tenant->restrict_delivery_city_to_tenant ?? true)) {
+                if ($validated['delivery_type'] === 'delivery') {
                     $deliveryCityId = (int) ($validated['delivery_city_id'] ?? 0);
                     $shippingCityValidation = $this->validateShippingCityAgainstTenant($tenant, $deliveryCityId);
 

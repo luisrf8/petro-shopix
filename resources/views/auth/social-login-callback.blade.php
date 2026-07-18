@@ -42,6 +42,10 @@
     <script>
         localStorage.setItem('shopix_ecomm_token', @json($token));
         localStorage.setItem('shopix_ecomm_user', JSON.stringify(@json($user)));
+        const authNotice = @json($authNotice ?? null);
+        if (authNotice && typeof authNotice === 'object') {
+            localStorage.setItem('shopix_social_auth_notice', JSON.stringify(authNotice));
+        }
         window.location.replace(@json($redirectTo ?: '/'));
     </script>
 </body>

@@ -2397,12 +2397,14 @@
 
     function deliveryStatusLabel(status) {
       if (Number(status) === 1) return 'Entregado';
+      if (Number(status) === 3) return 'En despacho / En vía';
       if (Number(status) === 2) return 'Cancelado';
       return 'Pendiente';
     }
 
     function deliveryStatusClass(status) {
       if (Number(status) === 1) return 'text-bg-success';
+      if (Number(status) === 3) return 'text-bg-primary';
       if (Number(status) === 2) return 'text-bg-danger';
       return 'text-bg-secondary';
     }

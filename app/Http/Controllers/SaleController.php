@@ -1165,7 +1165,7 @@ class SaleController extends Controller
 
         $salesOrders = SalesOrder::with(['user', 'salesRepresentative', 'details', 'details.variant', 'payments', 'electronicDocuments', 'returns.items'])
             ->where('tenant_id', $user->tenant_id)
-            ->where('deliver_status', 0)
+            ->whereIn('deliver_status', [0, 3])
             ->where(function ($query) {
                 $query->where('status', 1)
                     ->orWhereHas('payments', function ($paymentQuery) {
@@ -1241,7 +1241,7 @@ class SaleController extends Controller
                 'retentions:id,sales_order_id,retained_amount',
             ])
             ->where('tenant_id', $user->tenant_id)
-            ->where('deliver_status', 0)
+            ->whereIn('deliver_status', [0, 3])
             ->where('status', '!=', 2)
             ->orderByDesc('id')
             ->get()
@@ -2767,13 +2767,18 @@ class SaleController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
+        $validated = $request->validate([
+            'status' => 'required|integer|in:0,1,2,3',
+            'action_reason' => 'nullable|string|max:500',
+        ]);
+
         $user = auth()->user();
         if (!$user?->hasStoreRole('owner', 'admin', 'seller', 'warehouse', 'delivery')) {
             return response()->json(['message' => 'No autorizado para cambiar el estado de entrega.'], 403);
         }
 
         $reason = null;
-        if ((int) $request->status === 2) {
+        if ((int) ($validated['status'] ?? 0) === 2) {
             $reason = ActionReason::require($request, 'action_reason', 'Debes indicar el motivo para revertir la entrega.');
         }
 
@@ -2798,7 +2803,7 @@ class SaleController extends Controller
         }
     
         // Actualizar el estado de la orden
-        $order->deliver_status = $request->status;
+        $order->deliver_status = (int) ($validated['status'] ?? 0);
         $order->save();
 
         if ((int) $order->deliver_status === 2) {

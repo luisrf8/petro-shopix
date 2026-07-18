@@ -2035,6 +2035,7 @@
 
     function directoryDeliveryStatusLabel(status) {
       if (Number(status) === 1) return 'Entregado';
+      if (Number(status) === 3) return 'En despacho / En vía';
       if (Number(status) === 2) return 'Cancelado';
       return 'Pendiente';
     }

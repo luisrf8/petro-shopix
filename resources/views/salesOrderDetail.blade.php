@@ -128,9 +128,11 @@
       $deliveryOperationsLocked = !$salesOrderPlanCapabilities->allowsDeliveryOperations();
       $deliveryLabel = (int) $order->deliver_status === 0
         ? 'Pendiente'
+        : ((int) $order->deliver_status === 3
+          ? ($isExternalShipping ? 'En vía' : 'En despacho')
         : ((int) $order->deliver_status === 1
           ? 'Entregado'
-          : ((int) $order->deliver_status === 2 ? 'Cancelado' : 'En proceso'));
+          : ((int) $order->deliver_status === 2 ? 'Cancelado' : 'En proceso')));
       $approvalLabel = $order->status == 0 ? 'En proceso' : ($order->status == 1 ? 'Aprobado' : 'Negado');
       $paymentBalance = max(0, (float) $totalOrden - (float) $totalPagado);
       $availablePaymentCurrencies = collect($paymentMethods ?? collect())
@@ -146,13 +148,15 @@
         : 'Aún no hay un repartidor asignado para esta orden.';
       $shippingProgressDescription = match ((int) $order->deliver_status) {
         1 => 'Paso 3 de 3: el envío figura como entregado correctamente.',
+        3 => 'Paso 2 de 3: el pedido está actualmente en ruta para su entrega.',
         2 => 'El envío fue cancelado antes de completar su despacho.',
         default => 'Paso 1 de 3: tu envío fue registrado y está en preparación para despacho.',
       };
       $shippingProgressMeta = match ((int) $order->deliver_status) {
         1 => 'Proceso: 1. Preparación  2. Despacho  3. Entregado',
+        3 => 'Proceso: 1. Preparación  2. En despacho / En vía  3. Entregado',
         2 => 'Proceso interrumpido: 1. Preparación  2. Cancelado',
-        default => 'Proceso: 1. Preparación  2. Despacho  3. Entrega final',
+        default => 'Proceso: 1. Preparación  2. En despacho / En vía  3. Entrega final',
       };
       $timelineSteps = [
         [
@@ -170,7 +174,7 @@
           'meta' => $approvalLabel,
         ],
         [
-          'tone' => (int) $order->deliver_status === 1 ? 'success' : ((int) $order->deliver_status === 0 ? 'pending' : 'danger'),
+          'tone' => (int) $order->deliver_status === 1 ? 'success' : ((int) $order->deliver_status === 2 ? 'danger' : 'pending'),
           'title' => $isExternalShipping ? 'Seguimiento del envío' : 'Entrega y despacho',
           'description' => $isExternalShipping
             ? $shippingProgressDescription
@@ -616,8 +620,9 @@
                     @if($order->has_returns)
                       <span class="text-danger">Devolución Registrada</span>
                     @elseif($canApproveDelivery)
-                      <select id="deliver-status" data-deliver-id="{{ $order->id }}" class="btn btn-sm toggle-status-btn js-deliver-status {{ $order->deliver_status == 0 ? 'btn-outline-warning' : ($order->deliver_status == 1 ? 'btn-outline-success' : 'btn-outline-danger') }}">
+                      <select id="deliver-status" data-deliver-id="{{ $order->id }}" class="btn btn-sm toggle-status-btn js-deliver-status {{ $order->deliver_status == 0 ? 'btn-outline-warning' : ($order->deliver_status == 1 ? 'btn-outline-success' : ($order->deliver_status == 3 ? 'btn-outline-primary' : 'btn-outline-danger')) }}">
                         <option value="0" {{ $order->deliver_status == 0 ? 'selected' : '' }}>Pendiente ↓</option>
+                        <option value="3" {{ $order->deliver_status == 3 ? 'selected' : '' }}>En despacho / En vía ↓</option>
                         <option value="1" {{ $order->deliver_status == 1 ? 'selected' : '' }}>Entregado ↓</option>
                         <option value="2" {{ $order->deliver_status == 2 ? 'selected' : '' }}>Cancelado ↓</option>
                       </select>

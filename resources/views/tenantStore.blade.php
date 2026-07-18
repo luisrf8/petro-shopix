@@ -744,7 +744,7 @@
                                                 Permitir pedidos con delivery
                                             </label>
                                         </div>
-                                        <small class="text-muted">Si está apagado, la tienda solo permitirá retiro en tienda.</small>
+                                        <small class="text-muted">Si está apagado, se desactiva solo el delivery local. El envío nacional depende de la restricción por ciudad.</small>
                                     </div>
 
                                     <div class="mb-3">

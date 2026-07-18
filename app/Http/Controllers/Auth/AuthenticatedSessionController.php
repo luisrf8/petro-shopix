@@ -170,7 +170,8 @@ class AuthenticatedSessionController extends Controller
                 default => throw new \RuntimeException('Proveedor social no soportado.'),
             };
 
-            $user = $this->resolveCustomerSocialUser($provider, $socialProfile);
+            $socialLoginResolution = $this->resolveCustomerSocialUser($provider, $socialProfile);
+            $user = $socialLoginResolution['user'];
             $token = JWTAuth::fromUser($user);
 
             AuditLogger::logEvent('auth', 'CUSTOMER_SOCIAL_LOGIN_SUCCESS', 'Inicio de sesión social cliente exitoso.', (int) ($user->id ?? 0), [
@@ -183,6 +184,7 @@ class AuthenticatedSessionController extends Controller
                 'user' => $user,
                 'redirectTo' => $redirectTo,
                 'providerLabel' => $this->socialProviderMeta()[$provider]['label'] ?? Str::title($provider),
+                'authNotice' => $socialLoginResolution['auth_notice'] ?? null,
             ]);
         } catch (\Throwable $exception) {
             AuditLogger::logEvent('auth', 'CUSTOMER_SOCIAL_LOGIN_FAILED', 'Falló el inicio de sesión social cliente.', null, [
@@ -786,7 +788,7 @@ class AuthenticatedSessionController extends Controller
         return (string) base64_decode(strtr($value, '-_', '+/'));
     }
 
-    private function resolveCustomerSocialUser(string $provider, array $socialProfile): User
+    private function resolveCustomerSocialUser(string $provider, array $socialProfile): array
     {
         $providerColumn = $this->providerColumn($provider);
         $providerId = trim((string) ($socialProfile['id'] ?? ''));
@@ -800,20 +802,29 @@ class AuthenticatedSessionController extends Controller
         $user = User::query()
             ->where($providerColumn, $providerId)
             ->first();
+        $resolvedBy = $user ? 'provider' : null;
 
         if (! $user && $email !== '') {
             $user = User::query()
                 ->whereRaw('LOWER(email) = ?', [Str::lower($email)])
                 ->first();
+            $resolvedBy = $user ? 'email' : null;
         }
 
         $name = trim((string) ($socialProfile['name'] ?? '')) ?: 'Cliente ' . ($this->socialProviderMeta()[$provider]['label'] ?? Str::title($provider));
         $avatar = trim((string) ($socialProfile['avatar'] ?? '')) ?: null;
+        $providerLabel = $this->socialProviderMeta()[$provider]['label'] ?? Str::title($provider);
 
         if ($user) {
             if (! UserRedirector::isCustomer($user)) {
                 throw new \RuntimeException('Ese correo ya pertenece a una cuenta administrativa. Usa otro método de acceso.');
             }
+
+            if ($resolvedBy === 'email' && filled($user->{$providerColumn}) && (string) $user->{$providerColumn} !== $providerId) {
+                throw new \RuntimeException('Ese correo ya está vinculado a otra cuenta de ' . $providerLabel . '. Usa esa misma cuenta para iniciar sesión.');
+            }
+
+            $linkedNow = empty($user->{$providerColumn});
 
             $user->{$providerColumn} = $providerId;
             $user->name = $user->name ?: $name;
@@ -826,10 +837,19 @@ class AuthenticatedSessionController extends Controller
             }
             $user->save();
 
-            return $user;
+            return [
+                'user' => $user,
+                'auth_notice' => [
+                    'title' => $linkedNow ? 'Cuenta enlazada' : 'Acceso con Google',
+                    'message' => $linkedNow
+                        ? 'Tu cuenta existente fue vinculada con ' . $providerLabel . '. Desde ahora puedes entrar con ese botón usando el mismo correo.'
+                        : 'Inicio de sesión exitoso con ' . $providerLabel . '.',
+                    'status' => $linkedNow ? 'linked_existing' : 'login_existing',
+                ],
+            ];
         }
 
-        return User::query()->create([
+        $createdUser = User::query()->create([
             'name' => $name,
             'email' => $email,
             'password' => Hash::make(Str::random(40)),
@@ -839,6 +859,15 @@ class AuthenticatedSessionController extends Controller
             $providerColumn => $providerId,
             'avatar' => $avatar,
         ]);
+
+        return [
+            'user' => $createdUser,
+            'auth_notice' => [
+                'title' => 'Cuenta creada con ' . $providerLabel,
+                'message' => 'Creamos tu cuenta automáticamente y ya puedes comprar con este acceso.',
+                'status' => 'created_new',
+            ],
+        ];
     }
 
     private function normalizeSocialEmail(string $provider, string $providerId, string $email): string

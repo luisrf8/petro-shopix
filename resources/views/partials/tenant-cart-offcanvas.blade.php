@@ -363,6 +363,11 @@
     background: #f8fafc;
   }
 
+  .tenant-auth-social-btn.is-loading {
+    opacity: 0.75;
+    pointer-events: none;
+  }
+
   .tenant-auth-divider {
     display: flex;
     align-items: center;
@@ -779,14 +784,19 @@
             <label class="form-check-label" for="delivery-store">Delivery</label>
           </div>
           <div class="form-check form-check-inline">
-            <input class="form-check-input" type="radio" name="tenant-delivery-type" id="delivery-shipping" value="shipping" {{ (bool) ($tenant->delivery_enabled ?? false) ? '' : 'disabled' }}>
+            <input class="form-check-input" type="radio" name="tenant-delivery-type" id="delivery-shipping" value="shipping" {{ !(bool) ($tenant->restrict_delivery_city_to_tenant ?? true) ? '' : 'disabled' }}>
             <label class="form-check-label" for="delivery-shipping">Envío</label>
           </div>
           <small class="text-muted d-block mt-2">
             @if((bool) ($tenant->delivery_enabled ?? false))
-              Delivery tienda: {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
+              Delivery local (misma ciudad): {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
             @else
-              El delivery y los envíos están desactivados. Solo está disponible retiro en tienda.
+              Delivery local desactivado.
+            @endif
+            @if(!(bool) ($tenant->restrict_delivery_city_to_tenant ?? true))
+              Envío nacional activo.
+            @else
+              Envío nacional desactivado.
             @endif
           </small>
         </div>
@@ -844,8 +854,8 @@
               <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-shipping-use-profile-location">Usar ubicación guardada</button>
               <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-shipping-use-current-location">Usar ubicación actual</button>
               <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-delivery-open-map">Marcar ubicación en mapa</button>
-              <small class="text-muted w-100" id="tenant-shipping-location-status">Aún no se ha fijado una ubicación exacta.</small>
-              <small class="text-muted w-100" id="tenant-delivery-price-info">Precio delivery: se calcula al fijar ubicación.</small>
+              <small class="text-muted w-100" id="tenant-shipping-location-status">La ubicación de referencia es opcional para delivery.</small>
+              <small class="text-muted w-100" id="tenant-delivery-price-info">Precio delivery: se calcula según la modalidad configurada.</small>
               <input type="hidden" id="tenant-shipping-latitude">
               <input type="hidden" id="tenant-shipping-longitude">
             </div>
@@ -926,7 +936,7 @@
                       </div>
                     </div>
                     <div class="col-12">
-                      <button type="submit" class="btn btn-dark">Entrar</button>
+                      <button type="submit" class="btn btn-dark" data-default-label="Entrar">Entrar</button>
                     </div>
                   </form>
                 </div>
@@ -968,7 +978,7 @@
                       <input type="text" class="form-control" id="tenant-pro-register-phone" placeholder="Teléfono" required>
                     </div>
                     <div class="col-12">
-                      <button type="submit" class="btn btn-dark">Crear cuenta</button>
+                      <button type="submit" class="btn btn-dark" data-default-label="Crear cuenta">Crear cuenta</button>
                     </div>
                   </form>
                 </div>
@@ -1044,14 +1054,19 @@
                   <label class="form-check-label" for="tenant-pro-delivery-store">Delivery</label>
                 </div>
                 <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-shipping" value="shipping" {{ (bool) ($tenant->delivery_enabled ?? false) ? '' : 'disabled' }}>
+                  <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-shipping" value="shipping" {{ !(bool) ($tenant->restrict_delivery_city_to_tenant ?? true) ? '' : 'disabled' }}>
                   <label class="form-check-label" for="tenant-pro-delivery-shipping">Envío</label>
                 </div>
                 <small class="text-muted d-block mt-2">
                   @if((bool) ($tenant->delivery_enabled ?? false))
-                    Delivery tienda: {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
+                    Delivery local (misma ciudad): {{ \App\Support\DeliveryManager::modeLabel($tenant->delivery_fee_mode ?? 'free') }}.
                   @else
-                    El delivery y los envíos están desactivados. Solo está disponible retiro en tienda.
+                    Delivery local desactivado.
+                  @endif
+                  @if(!(bool) ($tenant->restrict_delivery_city_to_tenant ?? true))
+                    Envío nacional activo.
+                  @else
+                    Envío nacional desactivado.
                   @endif
                 </small>
               </div>
@@ -1109,8 +1124,8 @@
                     <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-shipping-use-profile-location">Usar ubicación guardada</button>
                     <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-shipping-use-current-location">Usar ubicación actual</button>
                     <button type="button" class="btn btn-outline-dark btn-sm" id="tenant-pro-delivery-open-map">Marcar ubicación en mapa</button>
-                    <small class="text-muted w-100" id="tenant-pro-shipping-location-status">Aún no se ha fijado una ubicación exacta.</small>
-                    <small class="text-muted w-100" id="tenant-pro-delivery-price-info">Precio delivery: se calcula al fijar ubicación.</small>
+                    <small class="text-muted w-100" id="tenant-pro-shipping-location-status">La ubicación de referencia es opcional para delivery.</small>
+                    <small class="text-muted w-100" id="tenant-pro-delivery-price-info">Precio delivery: se calcula según la modalidad configurada.</small>
                     <input type="hidden" id="tenant-pro-shipping-latitude">
                     <input type="hidden" id="tenant-pro-shipping-longitude">
                   </div>
@@ -1368,6 +1383,8 @@
     const tenantStateId = @json($tenant->state ?? null);
     const tenantCityId = @json($tenant->city ?? null);
     const tenantDeliveryConfig = @json(\App\Support\DeliveryManager::settings($tenant));
+    const tenantDeliveryEnabled = Boolean(tenantDeliveryConfig?.enabled);
+    const tenantShippingEnabled = @json(!(bool) ($tenant->restrict_delivery_city_to_tenant ?? true));
     const showBsPricesInStorefront = @json((bool) ($showBsPricesInStorefront ?? false));
     const storefrontBsRateValue = @json((float) ($storefrontBsRateValue ?? 0));
     const tenantAppointmentAvailabilityEndpoint = `/${tenantSlug}/appointments/public-availability`;
@@ -1637,10 +1654,6 @@
         return { valid: false, message: 'Indica el teléfono de quien recibe el delivery.' };
       }
 
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        return { valid: false, message: 'Debes fijar la ubicación exacta del delivery desde ubicación guardada, ubicación actual o Google Maps.' };
-      }
-
       const parts = [`Recibe: ${receiverName}`, `Teléfono: ${receiverPhone}`];
 
       if (extraInfo) {
@@ -1651,12 +1664,28 @@
         valid: true,
         cityId: tenantCityId ? Number(tenantCityId) : null,
         address: parts.join(' | '),
-        latitude,
-        longitude,
+        latitude: Number.isFinite(latitude) ? latitude : null,
+        longitude: Number.isFinite(longitude) ? longitude : null,
         receiverName,
         receiverPhone,
         extraInfo,
       };
+    }
+
+    function normalizeDeliveryTypeSelection(rawType) {
+      const selectedType = ['pickup', 'delivery', 'shipping'].includes(String(rawType || '').trim())
+        ? String(rawType || '').trim()
+        : 'pickup';
+
+      if (selectedType === 'delivery' && !tenantDeliveryEnabled) {
+        return tenantShippingEnabled ? 'shipping' : 'pickup';
+      }
+
+      if (selectedType === 'shipping' && !tenantShippingEnabled) {
+        return tenantDeliveryEnabled ? 'delivery' : 'pickup';
+      }
+
+      return selectedType;
     }
 
     function buildShippingAddress(countrySelect, stateSelect, citySelect, detailInput, latitudeInput = null, longitudeInput = null) {
@@ -1777,8 +1806,8 @@
     }
 
     function refreshDeliveryUiInfo() {
-      const deliveryType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup';
-      const proDeliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+      const deliveryType = normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup');
+      const proDeliveryType = normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
 
       if (deliveryPriceInfo) {
         deliveryPriceInfo.textContent = formatDeliveryFeeText(deliveryType, shippingDistanceInput);
@@ -1805,13 +1834,13 @@
       if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
         const estimatedDistanceKm = estimateDistanceFromCoordinates(latitudeInput, longitudeInput, distanceInput);
         statusElement.textContent = estimatedDistanceKm
-          ? `Ubicación exacta fijada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} | Distancia tienda-cliente: ${estimatedDistanceKm.toFixed(2)} km`
-          : `Ubicación exacta fijada: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+          ? `Ubicación de referencia registrada. Distancia estimada tienda-cliente: ${estimatedDistanceKm.toFixed(2)} km`
+          : 'Ubicación de referencia registrada.';
         refreshDeliveryUiInfo();
         return;
       }
 
-      statusElement.textContent = 'Aún no se ha fijado una ubicación exacta.';
+      statusElement.textContent = 'La ubicación de referencia es opcional para delivery.';
       estimateDistanceFromCoordinates(latitudeInput, longitudeInput, distanceInput);
       refreshDeliveryUiInfo();
     }
@@ -2209,7 +2238,20 @@
     }
 
     function updateDeliveryAddressVisibility() {
-      const selectedDeliveryType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value;
+      const selectedInput = document.querySelector('input[name="tenant-delivery-type"]:checked');
+      const selectedDeliveryType = normalizeDeliveryTypeSelection(selectedInput?.value || 'pickup');
+      document.querySelectorAll('input[name="tenant-delivery-type"]').forEach((input) => {
+        if (input.value === 'delivery') {
+          input.disabled = !tenantDeliveryEnabled;
+        } else if (input.value === 'shipping') {
+          input.disabled = !tenantShippingEnabled;
+        } else {
+          input.disabled = false;
+        }
+
+        input.checked = input.value === selectedDeliveryType;
+      });
+
       const isAddressRequired = ['delivery', 'shipping'].includes(selectedDeliveryType);
       const isStoreDelivery = selectedDeliveryType === 'delivery';
       const isThirdPartyShipping = selectedDeliveryType === 'shipping';
@@ -2644,7 +2686,7 @@
         return;
       }
 
-      const deliveryType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup';
+      const deliveryType = normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup');
       const isStoreDelivery = deliveryType === 'delivery';
       const isThirdPartyShipping = deliveryType === 'shipping';
       const requiresAddress = isStoreDelivery || isThirdPartyShipping;
@@ -2718,7 +2760,7 @@
           if (deliveryContext.distanceKm) {
             lines.push(`Distancia estimada: ${deliveryContext.distanceKm.toFixed(2)} km`);
           }
-          if (shippingAddressResult.latitude !== null && shippingAddressResult.longitude !== null) {
+          if (!isStoreDelivery && shippingAddressResult.latitude !== null && shippingAddressResult.longitude !== null) {
             lines.push(`Ubicación exacta: https://www.google.com/maps?q=${shippingAddressResult.latitude},${shippingAddressResult.longitude}`);
           }
         }
@@ -2731,6 +2773,7 @@
 
     const authTokenKey = 'shopix_ecomm_token';
     const authUserKey = 'shopix_ecomm_user';
+    const authSocialNoticeKey = 'shopix_social_auth_notice';
     const authResumeKey = `shopix_resume_checkout_${tenantSlug}`;
     const catalogAppointmentSelectionKey = `shopix_catalog_appointment_${tenantSlug}`;
     const tenantAuthAlert = document.getElementById('tenant-pro-auth-alert');
@@ -4496,7 +4539,7 @@
         return true;
       }
 
-      const deliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+      const deliveryType = normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
       if (!['delivery', 'shipping'].includes(deliveryType)) {
         return true;
       }
@@ -4737,6 +4780,41 @@
       showTenantAuthAlert('');
     }
 
+    function setTenantAuthFormLoading(formId, isLoading, loadingText) {
+      const form = document.getElementById(formId);
+      const submitButton = form?.querySelector('button[type="submit"]');
+      if (!submitButton) {
+        return;
+      }
+
+      if (!submitButton.dataset.defaultLabel) {
+        submitButton.dataset.defaultLabel = (submitButton.textContent || '').trim() || 'Procesar';
+      }
+
+      submitButton.disabled = !!isLoading;
+      submitButton.textContent = isLoading ? (loadingText || 'Procesando...') : submitButton.dataset.defaultLabel;
+    }
+
+    function setSocialButtonLoading(button, isLoading) {
+      if (!button) {
+        return;
+      }
+
+      button.classList.toggle('is-loading', !!isLoading);
+      button.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+
+      const labelNode = button.querySelector('span');
+      if (!labelNode) {
+        return;
+      }
+
+      if (!labelNode.dataset.defaultLabel) {
+        labelNode.dataset.defaultLabel = labelNode.textContent || '';
+      }
+
+      labelNode.textContent = isLoading ? 'Conectando...' : (labelNode.dataset.defaultLabel || 'Continuar');
+    }
+
     function resolveTenantApiErrorMessage(payload, fallbackMessage) {
       if (payload?.errors && typeof payload.errors === 'object') {
         const firstError = Object.values(payload.errors).flat()?.[0];
@@ -4814,6 +4892,22 @@
 
       try {
         return JSON.parse(raw);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function consumeSocialAuthNotice() {
+      const raw = localStorage.getItem(authSocialNoticeKey);
+      if (!raw) {
+        return null;
+      }
+
+      localStorage.removeItem(authSocialNoticeKey);
+
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
       } catch (error) {
         return null;
       }
@@ -5383,7 +5477,7 @@
 
     function updateProPaymentSummary() {
       const baseSymbol = getBaseCurrencySymbol();
-      const proDeliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+      const proDeliveryType = normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
       const proDeliveryContext = getTenantDeliveryContext(proDeliveryType, proShippingDistanceInput, false);
       const totalBaseWithoutIgtf = getCheckoutProItemsSubtotalBase(getCart()) + Number(proDeliveryContext.fee || 0);
 
@@ -5632,7 +5726,7 @@
           }
 
           const paymentRows = Array.from(document.querySelectorAll('[data-pro-payment-row]'));
-          const proDeliveryType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+          const proDeliveryType = normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
           const proDeliveryContext = getTenantDeliveryContext(proDeliveryType, proShippingDistanceInput, false);
           const totalBaseWithoutIgtf = getCheckoutProItemsSubtotalBase(getCart()) + Number(proDeliveryContext.fee || 0);
           const igtfTotals = calculateProIgtfTotals(paymentRows, totalBaseWithoutIgtf);
@@ -5722,7 +5816,7 @@
         updateProPaymentSummary();
       };
 
-      const initialDeliveryContext = getTenantDeliveryContext(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup', proShippingDistanceInput, false);
+      const initialDeliveryContext = getTenantDeliveryContext(normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup'), proShippingDistanceInput, false);
       totalAmountElement.textContent = `${(getCheckoutProItemsSubtotalBase(cart) + Number(initialDeliveryContext.fee || 0)).toFixed(2)} ${getBaseCurrencySymbol()}`;
       updateProPaymentSummary();
       syncAppointmentPaymentModeUi();
@@ -5738,33 +5832,40 @@
       clearTenantAuthAlert();
       const login = document.getElementById('tenant-pro-login-email').value.trim();
       const password = document.getElementById('tenant-pro-login-password').value;
+      setTenantAuthFormLoading('tenant-pro-login-form', true, 'Entrando...');
 
-      const response = await fetch('/api/loginEcomm', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': getCsrfToken(),
-        },
-        body: JSON.stringify({ login, password })
-      });
+      try {
+        const response = await fetch('/api/loginEcomm', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': getCsrfToken(),
+          },
+          body: JSON.stringify({ login, password })
+        });
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.token || !data.user) {
-        const message = resolveTenantApiErrorMessage(data, 'No se pudo iniciar sesión.');
-        if (isExpiredTokenMessage(message)) {
-          clearAuthData();
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.token || !data.user) {
+          const message = resolveTenantApiErrorMessage(data, 'No se pudo iniciar sesión.');
+          if (isExpiredTokenMessage(message)) {
+            clearAuthData();
+          }
+
+          showTenantAuthAlert(message);
+          return;
         }
 
-        showTenantAuthAlert(message);
-        return;
+        setAuthData(data.token, data.user);
+        showTenantToast('Acceso correcto', `Inicio de sesión correcto, ${data.user?.name || 'cliente'}.`);
+        openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
+      } catch (error) {
+        showTenantAuthAlert('No se pudo conectar para iniciar sesión. Intenta de nuevo.');
+      } finally {
+        setTenantAuthFormLoading('tenant-pro-login-form', false);
       }
-
-      setAuthData(data.token, data.user);
-      showTenantToast('Acceso correcto', `Inicio de sesión correcto, ${data.user?.name || 'cliente'}.`);
-      openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
     }
 
     async function registerProCustomer(event) {
@@ -5781,32 +5882,40 @@
       const normalizedCode = String(phoneCode || '').replace(/\D+/g, '') || '58';
       const phone_number = normalizedPhone ? `+${normalizedCode}${normalizedPhone}` : '';
 
-      const response = await fetch('/api/registerEcomm', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': getCsrfToken(),
-        },
-        body: JSON.stringify({ name, email, password, password_confirmation, dni, phone_number })
-      });
+      setTenantAuthFormLoading('tenant-pro-register-form', true, 'Creando cuenta...');
 
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.token || !data.user) {
-        const message = resolveTenantApiErrorMessage(data, 'No se pudo crear la cuenta.');
-        if (isExpiredTokenMessage(message)) {
-          clearAuthData();
+      try {
+        const response = await fetch('/api/registerEcomm', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': getCsrfToken(),
+          },
+          body: JSON.stringify({ name, email, password, password_confirmation, dni, phone_number })
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.token || !data.user) {
+          const message = resolveTenantApiErrorMessage(data, 'No se pudo crear la cuenta.');
+          if (isExpiredTokenMessage(message)) {
+            clearAuthData();
+          }
+
+          showTenantAuthAlert(message);
+          return;
         }
 
-        showTenantAuthAlert(message);
-        return;
+        setAuthData(data.token, data.user);
+        showTenantToast('Cuenta creada', `Sesión iniciada correctamente, ${data.user?.name || 'cliente'}.`);
+        openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
+      } catch (error) {
+        showTenantAuthAlert('No se pudo conectar para crear la cuenta. Intenta de nuevo.');
+      } finally {
+        setTenantAuthFormLoading('tenant-pro-register-form', false);
       }
-
-      setAuthData(data.token, data.user);
-      showTenantToast('Cuenta creada', `Sesión iniciada correctamente, ${data.user?.name || 'cliente'}.`);
-      openProCheckout({ authOnly: !cartEnabled || getCart().length === 0 });
     }
 
     async function submitProOrder() {
@@ -5894,7 +6003,7 @@
 
       const deliveryType = appointmentModeActive
         ? 'pickup'
-        : (document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
+        : normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
 
       const deliveryAddressResult = appointmentModeActive
         ? { valid: true, cityId: null, address: 'Tienda', latitude: null, longitude: null }
@@ -6080,7 +6189,12 @@
 
       const socialTrigger = event.target.closest('.tenant-auth-social-btn:not(.is-disabled)');
       if (socialTrigger) {
+        event.preventDefault();
         setCheckoutResumeState(cartEnabled && getCart().length > 0);
+        clearTenantAuthAlert();
+        setSocialButtonLoading(socialTrigger, true);
+        window.location.assign(socialTrigger.getAttribute('href') || '/');
+        return;
       }
 
       const copyAllButton = event.target.closest('.pro-copy-all');
@@ -6206,10 +6320,17 @@
     });
 
     const resumedCheckoutState = consumeCheckoutResumeState();
+    const socialAuthNotice = consumeSocialAuthNotice();
+    if (socialAuthNotice?.message) {
+      showTenantToast(String(socialAuthNotice.title || 'Acceso'), String(socialAuthNotice.message || ''));
+    }
+
     if (resumedCheckoutState) {
       const resumedUser = getAuthUser();
       if (resumedUser?.id) {
-        showTenantToast('Acceso correcto', `Inicio de sesión correcto, ${resumedUser.name || 'cliente'}.`);
+        if (!socialAuthNotice?.message) {
+          showTenantToast('Acceso correcto', `Inicio de sesión correcto, ${resumedUser.name || 'cliente'}.`);
+        }
       }
       const shouldResumeCheckout = !!resumedCheckoutState.checkout && cartEnabled && getCart().length > 0 && !!getAuthToken();
       openProCheckout({ authOnly: !shouldResumeCheckout });
@@ -6312,7 +6433,10 @@
             return;
           }
 
-          const currentType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+          const currentType = normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
+          document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach((radioInput) => {
+            radioInput.checked = radioInput.value === currentType;
+          });
           const isAddressRequired = ['delivery', 'shipping'].includes(currentType);
           const isStoreDelivery = currentType === 'delivery';
           const isThirdPartyShipping = currentType === 'shipping';
@@ -6349,10 +6473,25 @@
         });
       });
 
+      document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach((input) => {
+        if (input.value === 'delivery') {
+          input.disabled = !tenantDeliveryEnabled;
+        } else if (input.value === 'shipping') {
+          input.disabled = !tenantShippingEnabled;
+        } else {
+          input.disabled = false;
+        }
+      });
+
+      const normalizedInitialProType = normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
+      document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach((input) => {
+        input.checked = input.value === normalizedInitialProType;
+      });
+
       proShippingDistanceInput?.addEventListener('input', updateProPaymentSummary);
 
       proShippingUseProfileLocationBtn?.addEventListener('click', () => {
-        const currentType = document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup';
+        const currentType = normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
         if (currentType === 'delivery') {
           applyUserLocationCoordinates(getAuthUser(), proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus, proShippingDistanceInput);
           return;
@@ -6406,7 +6545,7 @@
     bindLocationSelectorEvents(proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect);
 
     shippingUseProfileLocationBtn?.addEventListener('click', () => {
-      const currentType = document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup';
+      const currentType = normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-delivery-type"]:checked')?.value || 'pickup');
       if (currentType === 'delivery') {
         applyUserLocationCoordinates(getAuthUser(), shippingLatitudeInput, shippingLongitudeInput, shippingLocationStatus, shippingDistanceInput);
         return;
