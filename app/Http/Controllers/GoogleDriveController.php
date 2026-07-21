@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Google\Client;
 use Google\Service\Drive;
 use App\Support\ImageStorage;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
@@ -176,8 +177,37 @@ class GoogleDriveController extends Controller
                 'error' => $exception->getMessage(),
             ]);
 
-            // If Drive API auth/network fails, try the public URL for files shared as reader.
-            return redirect()->away('https://drive.google.com/uc?export=view&id=' . rawurlencode($normalizedFileId));
+            // Try public Drive endpoint and relay bytes from this same origin.
+            try {
+                $publicResponse = Http::timeout(12)
+                    ->withHeaders([
+                        'User-Agent' => 'ShopixImageProxy/1.0',
+                        'Accept' => 'image/*,*/*;q=0.8',
+                    ])
+                    ->get('https://drive.google.com/uc', [
+                        'export' => 'view',
+                        'id' => $normalizedFileId,
+                    ]);
+
+                if ($publicResponse->successful()) {
+                    $contentType = trim((string) $publicResponse->header('Content-Type', 'image/*'));
+                    $body = (string) $publicResponse->body();
+
+                    if ($body !== '') {
+                        return response($body, 200, [
+                            'Content-Type' => $contentType,
+                            'Cache-Control' => 'public, max-age=2592000',
+                        ]);
+                    }
+                }
+            } catch (\Throwable $publicException) {
+                Log::warning('Fallback público de Google Drive también falló.', [
+                    'file_id' => $normalizedFileId,
+                    'error' => $publicException->getMessage(),
+                ]);
+            }
+
+            abort(404);
         }
     }
 
