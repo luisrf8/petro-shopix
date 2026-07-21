@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Google\Client;
 use Google\Service\Drive;
 use App\Support\ImageStorage;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class GoogleDriveController extends Controller
@@ -157,15 +158,26 @@ class GoogleDriveController extends Controller
 
     public function streamImage(string $fileId)
     {
+        $normalizedFileId = ImageStorage::extractGoogleFileId(trim($fileId));
+        if ($normalizedFileId === '') {
+            abort(404);
+        }
+
         try {
-            $file = ImageStorage::downloadGoogleFileById(trim($fileId));
+            $file = ImageStorage::downloadGoogleFileById($normalizedFileId);
 
             return response($file['content'], 200, [
                 'Content-Type' => $file['mime_type'],
                 'Cache-Control' => 'public, max-age=2592000',
             ]);
         } catch (\Throwable $exception) {
-            abort(404);
+            Log::warning('No se pudo servir imagen desde Google Drive proxy.', [
+                'file_id' => $normalizedFileId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            // If Drive API auth/network fails, try the public URL for files shared as reader.
+            return redirect()->away('https://drive.google.com/uc?export=view&id=' . rawurlencode($normalizedFileId));
         }
     }
 

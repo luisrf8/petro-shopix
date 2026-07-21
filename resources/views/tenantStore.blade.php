@@ -379,7 +379,7 @@
                     </ul>
 
                     {{-- Formulario principal --}}
-                    <form id="tenantForm" action="{{ route('tenant.update') }}" method="POST" enctype="multipart/form-data" novalidate data-submit-mode="native">
+                    <form id="tenantForm" action="{{ route('tenant.update') }}" method="POST" enctype="multipart/form-data" novalidate data-submit-mode="ajax">
                         @csrf
                         <input type="hidden" name="import_payload" id="tenantImportPayload" value="">
 
@@ -647,6 +647,22 @@
                                             </label>
                                         </div>
                                         <small class="text-muted d-block mt-1">Cuando está activo, la agenda asigna automáticamente el primer horario disponible para cada profesional.</small>
+
+                                        <input type="hidden" name="appointments_allow_unpaid_reservation" value="0">
+                                        <div class="form-check form-switch mt-2">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="appointments_allow_unpaid_reservation"
+                                                name="appointments_allow_unpaid_reservation"
+                                                value="1"
+                                                {{ (bool) ($tenant->appointments_allow_unpaid_reservation ?? true) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="appointments_allow_unpaid_reservation">
+                                                Permitir apartar cita sin pago en línea
+                                            </label>
+                                        </div>
+                                        <small class="text-muted d-block mt-1">Si se desactiva, el cliente debe pagar en línea para confirmar la reserva de la cita.</small>
                                     </div>
 
                                     <div class="mb-3">
@@ -1159,7 +1175,22 @@
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Teléfono</label>
-                                            <input type="text" name="new_user[phone_number]" class="form-control p-2 border border-radius-lg">
+                                            <div class="row g-2">
+                                                <div class="col-4">
+                                                    <select name="new_user[phone_code]" class="form-select p-2 border border-radius-lg">
+                                                        <option value="+58" selected>+58</option>
+                                                        <option value="+1">+1</option>
+                                                        <option value="+52">+52</option>
+                                                        <option value="+57">+57</option>
+                                                        <option value="+51">+51</option>
+                                                        <option value="+54">+54</option>
+                                                        <option value="+34">+34</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-8">
+                                                    <input type="text" name="new_user[phone_number]" class="form-control p-2 border border-radius-lg" placeholder="Número de teléfono">
+                                                </div>
+                                            </div>
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">DNI</label>
@@ -1167,7 +1198,12 @@
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Contraseña</label>
-                                            <input type="password" name="new_user[password]" class="form-control p-2 border border-radius-lg" autocomplete="new-password">
+                                            <div class="input-group">
+                                                <input type="password" id="new-user-password" name="new_user[password]" class="form-control p-2 border border-radius-lg" autocomplete="new-password">
+                                                <button type="button" class="btn btn-outline-secondary tenant-password-toggle-btn" data-target-id="new-user-password" aria-label="Mostrar u ocultar contraseña" aria-pressed="false">
+                                                    <i class="bi bi-eye"></i>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="col-md-6 mb-3">
                                             <label class="form-label">Rol</label>
@@ -1737,6 +1773,7 @@
         setWorkingDays(Array.isArray(tenant.working_days) ? tenant.working_days : []);
         setFormCheckboxValue('#appointments_enabled', tenant.appointments_enabled ?? true);
         setFormCheckboxValue('#appointments_first_come_enabled', tenant.appointments_first_come_enabled);
+        setFormCheckboxValue('#appointments_allow_unpaid_reservation', tenant.appointments_allow_unpaid_reservation ?? true);
         setFormCheckboxValue('#offers_projects', tenant.offers_projects ?? true);
         setFormCheckboxValue('#special_taxpayer', tenant.special_taxpayer);
         setFormCheckboxValue('#delivery_enabled', tenant.delivery_enabled);
@@ -2976,6 +3013,29 @@ if (!window.__tenantUsersModalActionsBound) {
     window.__tenantUsersModalActionsBound = true;
 
     document.addEventListener('click', async (event) => {
+        const togglePasswordButton = event.target.closest('.tenant-password-toggle-btn[data-target-id]');
+        if (togglePasswordButton) {
+            event.preventDefault();
+
+            const targetId = String(togglePasswordButton.dataset.targetId || '').trim();
+            const targetInput = targetId ? document.getElementById(targetId) : null;
+            if (!targetInput) {
+                return;
+            }
+
+            const showingPassword = targetInput.type === 'text';
+            targetInput.type = showingPassword ? 'password' : 'text';
+            togglePasswordButton.setAttribute('aria-pressed', showingPassword ? 'false' : 'true');
+
+            const icon = togglePasswordButton.querySelector('i');
+            if (icon) {
+                icon.classList.toggle('bi-eye', showingPassword);
+                icon.classList.toggle('bi-eye-slash', !showingPassword);
+            }
+
+            return;
+        }
+
         const cancelButton = event.target.closest('.tenantPasswordCancelBtn');
         if (cancelButton) {
             event.preventDefault();
@@ -3114,7 +3174,14 @@ if (!window.__tenantUsersModalActionsBound) {
             }
 
             const payload = new FormData();
-            payload.append('_token', getTenantCsrfToken());
+            const refreshedToggleToken = await refreshTenantCsrfToken().catch(() => '');
+            const activeToggleToken = refreshedToggleToken || getTenantCsrfToken();
+            if (!activeToggleToken) {
+                showTenantToast('Tu sesion expiro. Recarga la pagina e intenta de nuevo.', 'warning');
+                return;
+            }
+
+            payload.append('_token', activeToggleToken);
             if (isCurrentlyActive) {
                 payload.append('action_reason', actionReason);
             }
@@ -3128,10 +3195,10 @@ if (!window.__tenantUsersModalActionsBound) {
 
             try {
                 const toggleUrl = tenantUserToggleEndpointTemplate.replace('__ID__', encodeURIComponent(String(userId || '')));
-                const response = await fetch(toggleUrl, {
+                let response = await fetch(toggleUrl, {
                     method: 'POST',
                     headers: {
-                        'X-CSRF-TOKEN': getTenantCsrfToken(),
+                        'X-CSRF-TOKEN': activeToggleToken,
                         'Accept': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest'
                     },
@@ -3139,9 +3206,34 @@ if (!window.__tenantUsersModalActionsBound) {
                     body: payload
                 });
 
+                if (response.status === 419) {
+                    const retryToken = await refreshTenantCsrfToken().catch(() => '');
+                    if (!retryToken) {
+                        showTenantToast('Tu sesion expiro. Recarga la pagina e intenta de nuevo.', 'warning');
+                        return;
+                    }
+
+                    payload.set('_token', retryToken);
+                    response = await fetch(toggleUrl, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': retryToken,
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        credentials: 'same-origin',
+                        body: payload
+                    });
+                }
+
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok) {
-                    showTenantToast(data.message || 'No se pudo actualizar el estado del usuario.', 'error');
+                    const serverErrorMessage = Object.values(data.errors || {}).flat()?.[0]
+                        || data.message
+                        || (response.status === 419
+                            ? 'Tu sesion expiro. Recarga la pagina e intenta de nuevo.'
+                            : 'No se pudo actualizar el estado del usuario.');
+                    showTenantToast(serverErrorMessage, 'error');
                     return;
                 }
 
@@ -3422,7 +3514,14 @@ if (editUserForm) {
 
         try {
             const formData = new FormData(form);
-            const currentCsrfToken = getTenantCsrfToken();
+            const refreshedToken = await refreshTenantCsrfToken().catch(() => '');
+            const currentCsrfToken = refreshedToken || getTenantCsrfToken();
+
+            if (!currentCsrfToken) {
+                showTenantToast('Tu sesion expiro. Recarga la pagina e intenta de nuevo.', 'warning');
+                return;
+            }
+
             formData.set('_token', currentCsrfToken);
 
             let response = await fetch(tenantUpdateEndpoint, {
@@ -3456,6 +3555,11 @@ if (editUserForm) {
                 }
             }
 
+            if (response.status === 419) {
+                showTenantToast('Tu sesion expiro. Recarga la pagina e intenta de nuevo.', 'warning');
+                return;
+            }
+
             const data = await response.json().catch(() => ({}));
 
             if (response.ok && data.success) {
@@ -3472,7 +3576,9 @@ if (editUserForm) {
 
             const defaultError = response.status === 413
                 ? `La solicitud es demasiado grande (413). Recomendado por imagen: ${formatTenantSize(TENANT_SAFE_IMAGE_BYTES)}.`
-                : 'Error desconocido';
+                : (response.status === 419
+                    ? 'Tu sesion expiro. Recarga la pagina e intenta de nuevo.'
+                    : 'Error desconocido');
             showTenantToast(data.message || defaultError, 'error');
         } catch (error) {
             showTenantToast('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');

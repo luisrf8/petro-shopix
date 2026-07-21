@@ -107,6 +107,11 @@ class Appointment extends Model
         return $this->hasMany(AppointmentServiceItem::class)->orderBy('sequence');
     }
 
+    public function images()
+    {
+        return $this->hasMany(AppointmentImage::class)->latest('id');
+    }
+
     public function getStatusLabelAttribute(): string
     {
         return self::STATUSES[(string) $this->status] ?? ucfirst((string) $this->status);

@@ -35,7 +35,7 @@ class SellerCommissionController extends Controller
             ->where('is_active', 1)
             ->orderBy('name')
             ->get()
-            ->filter(fn (User $candidate) => $candidate->hasStoreRole('seller'))
+            ->filter(fn (User $candidate) => $candidate->hasStoreRole('seller', 'admin'))
             ->values();
 
         $baseQuery = SellerCommission::query()
@@ -99,7 +99,7 @@ class SellerCommissionController extends Controller
         }
 
         $tenantId = (int) ($authUser->tenant_id ?? 0);
-        if ((int) $seller->tenant_id !== $tenantId || !$seller->hasStoreRole('seller')) {
+        if ((int) $seller->tenant_id !== $tenantId || !$seller->hasStoreRole('seller', 'admin')) {
             abort(404);
         }
 

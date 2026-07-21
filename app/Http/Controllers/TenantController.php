@@ -1308,20 +1308,39 @@ class TenantController extends Controller
     public function publicTenantindex(Tenant $tenant)
     {
         $this->abortIfTenantInactiveForPublic($tenant);
+        $appointmentOnlyVariantIds = $this->appointmentOnlyVariantIdsForTenant((int) $tenant->id);
 
         // Cargar categorías y productos del tenant
         $categories = Category::where('tenant_id', $tenant->id)
             ->where('is_active', true)
-            ->with(['products' => function ($query) {
+            ->with(['products' => function ($query) use ($appointmentOnlyVariantIds) {
                 $query->where('is_active', true)
-                    ->with('images')
+                    ->whereHas('variants', function ($variantQuery) use ($appointmentOnlyVariantIds) {
+                        $variantQuery->whereNotIn('product_variants.id', $appointmentOnlyVariantIds);
+                    })
+                    ->with([
+                        'images',
+                        'variants' => function ($variantQuery) use ($appointmentOnlyVariantIds) {
+                            $variantQuery->whereNotIn('product_variants.id', $appointmentOnlyVariantIds)
+                                ->orderBy('id');
+                        },
+                    ])
                     ->latest('id');
             }])
             ->limit(6)
             ->get();
         $productItems = Product::where('tenant_id', $tenant->id)
             ->where('is_active', true)
-            ->with('images')
+            ->whereHas('variants', function ($variantQuery) use ($appointmentOnlyVariantIds) {
+                $variantQuery->whereNotIn('product_variants.id', $appointmentOnlyVariantIds);
+            })
+            ->with([
+                'images',
+                'variants' => function ($variantQuery) use ($appointmentOnlyVariantIds) {
+                    $variantQuery->whereNotIn('product_variants.id', $appointmentOnlyVariantIds)
+                        ->orderBy('id');
+                },
+            ])
             ->limit(9)
             ->get();
 
@@ -1342,12 +1361,19 @@ class TenantController extends Controller
             ->get();
 
         $cartEnabled = $this->tenantHasProPlan($tenant);
+        $isFreePlanTenant = TenantPlanCapabilities::forTenant($tenant)->isFree();
         $cartPlanName = $this->getTenantCurrentPlanName($tenant);
         $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
         $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
         $storefrontBsRate = $this->resolveStorefrontBsRate($tenant);
         $appointmentsEnabledForStorefront = $this->tenantSupportsPublicAppointmentCheckout($tenant);
+        $appointmentCatalogServices = AppointmentService::query()
+            ->with(['productVariant.product.images', 'assignedUsers:id,name', 'assignedUser:id,name'])
+            ->where('tenant_id', (int) $tenant->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
         $activeProjects = collect();
 
         if ((bool) ($tenant->offers_projects ?? true)) {
@@ -1367,7 +1393,7 @@ class TenantController extends Controller
                 ->get();
         }
 
-        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate', 'activeProjects', 'appointmentsEnabledForStorefront'));
+        return view('ecommerceInf', compact('tenant', 'categories', 'productItems', 'materialPackages', 'cartEnabled', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate', 'activeProjects', 'appointmentsEnabledForStorefront', 'appointmentCatalogServices', 'isFreePlanTenant'));
     }
 
     public function store(Request $request)
@@ -2110,6 +2136,7 @@ class TenantController extends Controller
                 'working_days.*'  => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
                 'appointments_enabled' => 'nullable|boolean',
                 'appointments_first_come_enabled' => 'nullable|boolean',
+                'appointments_allow_unpaid_reservation' => 'nullable|boolean',
                 'offers_projects' => 'nullable|boolean',
                 'opening_time'    => 'nullable|date_format:H:i',
                 'closing_time'    => 'nullable|date_format:H:i',
@@ -2165,6 +2192,9 @@ class TenantController extends Controller
                 ? $request->boolean('appointments_enabled')
                 : (bool) ($tenant->appointments_enabled ?? true);
             $appointmentsFirstComeEnabled = $request->boolean('appointments_first_come_enabled');
+            $appointmentsAllowUnpaidReservation = $request->has('appointments_allow_unpaid_reservation')
+                ? $request->boolean('appointments_allow_unpaid_reservation')
+                : (bool) ($tenant->appointments_allow_unpaid_reservation ?? true);
             $offersProjectsEnabled = $request->has('offers_projects')
                 ? $request->boolean('offers_projects')
                 : (bool) ($tenant->offers_projects ?? true);
@@ -2172,8 +2202,10 @@ class TenantController extends Controller
             $newUserInput = $request->input('new_user', []);
             $shouldCreateNewUser = false;
             if (is_array($newUserInput)) {
-                foreach ($newUserInput as $value) {
-                    if (!is_null($value) && trim((string)$value) !== '') {
+                $newUserMeaningfulFields = ['name', 'email', 'password', 'role_id', 'phone_number', 'dni'];
+                foreach ($newUserMeaningfulFields as $field) {
+                    $value = $newUserInput[$field] ?? null;
+                    if (!is_null($value) && trim((string) $value) !== '') {
                         $shouldCreateNewUser = true;
                         break;
                     }
@@ -2270,6 +2302,7 @@ class TenantController extends Controller
                     'new_user.email'        => 'required|email|unique:users,email',
                     'new_user.password'     => 'required|string|min:8',
                     'new_user.role_id'      => ['required', 'integer', Rule::in($assignableRoleIds)],
+                    'new_user.phone_code'   => ['nullable', 'string', Rule::in(['+58', '+1', '+52', '+57', '+51', '+54', '+34'])],
                     'new_user.phone_number' => 'required|string|max:20',
                     'new_user.dni'          => 'required|string|max:50',
                 ]);
@@ -2325,6 +2358,7 @@ class TenantController extends Controller
                     : $tenant->working_days,
                 'appointments_enabled' => $appointmentsEnabled,
                 'appointments_first_come_enabled' => $appointmentsFirstComeEnabled,
+                'appointments_allow_unpaid_reservation' => $appointmentsAllowUnpaidReservation,
                 'offers_projects' => $offersProjectsEnabled,
                 'opening_time'    => $validated['opening_time'] ?? $tenant->opening_time,
                 'closing_time'    => $validated['closing_time'] ?? $tenant->closing_time,
@@ -2356,13 +2390,17 @@ class TenantController extends Controller
             $tenant->update($tenantUpdatePayload);
 
             if ($shouldCreateNewUser) {
+                $newUserPhoneCode = trim((string) ($newUserValidated['new_user']['phone_code'] ?? '+58'));
+                $newUserPhoneNumber = preg_replace('/\s+/', '', trim((string) ($newUserValidated['new_user']['phone_number'] ?? '')));
+                $fullNewUserPhone = $newUserPhoneCode . ltrim($newUserPhoneNumber, '+');
+
                 User::create([
                     'name'        => $newUserValidated['new_user']['name'],
                     'email'       => $newUserValidated['new_user']['email'],
                     'password'    => Hash::make($newUserValidated['new_user']['password']),
                     'tenant_id'   => $tenant->id,
                     'role_id'     => $newUserValidated['new_user']['role_id'],
-                    'phone_number'=> $newUserValidated['new_user']['phone_number'],
+                    'phone_number'=> $fullNewUserPhone,
                     'dni'         => $newUserValidated['new_user']['dni'],
                     'is_active'   => 1,
                 ]);
@@ -2415,6 +2453,7 @@ class TenantController extends Controller
     public function publicTenantCategory(Tenant $tenant)
     {
         $this->abortIfTenantInactiveForPublic($tenant);
+        $appointmentOnlyVariantIds = $this->appointmentOnlyVariantIdsForTenant((int) $tenant->id);
 
         // Asegurarse que la categoría pertenece al tenant
         // if ($category->tenant_id !== $tenant->id) {
@@ -2426,8 +2465,17 @@ class TenantController extends Controller
             ->get();
 
         $products = Product::where('tenant_id', $tenant->id)
-            // ->where('status', 1)
-            ->with('images')
+            ->where('is_active', true)
+            ->whereHas('variants', function ($variantQuery) use ($appointmentOnlyVariantIds) {
+                $variantQuery->whereNotIn('product_variants.id', $appointmentOnlyVariantIds);
+            })
+            ->with([
+                'images',
+                'variants' => function ($variantQuery) use ($appointmentOnlyVariantIds) {
+                    $variantQuery->whereNotIn('product_variants.id', $appointmentOnlyVariantIds)
+                        ->orderBy('id');
+                },
+            ])
             ->get();
 
         $materialPackages = MaterialPackage::with([
@@ -2470,15 +2518,24 @@ class TenantController extends Controller
     public function publicTenantProduct(Tenant $tenant, string $product)
     {
         $this->abortIfTenantInactiveForPublic($tenant);
+        $appointmentOnlyVariantIds = $this->appointmentOnlyVariantIdsForTenant((int) $tenant->id);
 
         $resolvedProduct = Product::query()
             ->where('tenant_id', $tenant->id)
+            ->where('is_active', true)
+            ->whereHas('variants', function ($variantQuery) use ($appointmentOnlyVariantIds) {
+                $variantQuery->whereNotIn('product_variants.id', $appointmentOnlyVariantIds);
+            })
             ->where('slug', $product)
             ->first();
 
         if (!$resolvedProduct && ctype_digit($product)) {
             $legacyProduct = Product::query()
                 ->where('tenant_id', $tenant->id)
+                ->where('is_active', true)
+                ->whereHas('variants', function ($variantQuery) use ($appointmentOnlyVariantIds) {
+                    $variantQuery->whereNotIn('product_variants.id', $appointmentOnlyVariantIds);
+                })
                 ->whereKey((int) $product)
                 ->first();
 
@@ -2497,7 +2554,19 @@ class TenantController extends Controller
         }
 
         // Cargar cualquier relación necesaria (ej: category, variants, images)
-        $product->load(['category', 'variants.images', 'images']);
+        $product->load([
+            'category',
+            'images',
+            'variants' => function ($variantQuery) use ($appointmentOnlyVariantIds) {
+                $variantQuery->whereNotIn('product_variants.id', $appointmentOnlyVariantIds)
+                    ->with('images')
+                    ->orderBy('id');
+            },
+        ]);
+
+        if ($product->variants->isEmpty()) {
+            abort(404);
+        }
 
         $cartEnabled = $this->tenantHasProPlan($tenant);
         $projectQuoteOnlyMode = (bool) ($tenant->offers_projects ?? true);
@@ -2633,6 +2702,7 @@ class TenantController extends Controller
     public function publicTenantResolveScanCode(Request $request, Tenant $tenant)
     {
         $this->abortIfTenantInactiveForPublic($tenant);
+        $appointmentOnlyVariantIds = $this->appointmentOnlyVariantIdsForTenant((int) $tenant->id);
 
         $request->validate([
             'code' => 'required|string|max:150',
@@ -2644,6 +2714,7 @@ class TenantController extends Controller
             ->where(function ($query) use ($code) {
                 $query->where('qr_code', $code)->orWhere('barcode', $code);
             })
+            ->whereNotIn('id', $appointmentOnlyVariantIds)
             ->whereHas('product', function ($query) use ($tenant) {
                 $query->where('tenant_id', $tenant->id)->where('is_active', true);
             })
@@ -2684,6 +2755,74 @@ class TenantController extends Controller
             'success' => false,
             'message' => 'Código no encontrado.',
         ], 404);
+    }
+
+    public function publicTenantProductQuickOptions(Request $request, Tenant $tenant)
+    {
+        $this->abortIfTenantInactiveForPublic($tenant);
+
+        $validated = $request->validate([
+            'q' => 'nullable|string|max:100',
+            'limit' => 'nullable|integer|min:1|max:300',
+        ]);
+
+        $search = trim((string) ($validated['q'] ?? ''));
+        $limit = (int) ($validated['limit'] ?? 40);
+        $appointmentOnlyVariantIds = $this->appointmentOnlyVariantIdsForTenant((int) $tenant->id);
+
+        $variants = ProductVariant::query()
+            ->with(['product.images', 'images'])
+            ->whereNotIn('id', $appointmentOnlyVariantIds)
+            ->where('stock', '>', 0)
+            ->whereHas('product', function ($query) use ($tenant) {
+                $query->where('tenant_id', (int) $tenant->id)
+                    ->where('is_active', true);
+            })
+            ->when($search !== '', function ($query) use ($search, $tenant) {
+                $query->where(function ($searchQuery) use ($search, $tenant) {
+                    $searchQuery->where('size', 'like', '%' . $search . '%')
+                        ->orWhereHas('product', function ($productQuery) use ($tenant, $search) {
+                            $productQuery->where('tenant_id', (int) $tenant->id)
+                                ->where('is_active', true)
+                                ->where(function ($nameQuery) use ($search) {
+                                    $nameQuery->where('name', 'like', '%' . $search . '%')
+                                        ->orWhere('description', 'like', '%' . $search . '%');
+                                });
+                        });
+                });
+            })
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get()
+            ->map(function (ProductVariant $variant) {
+                $variantImagePath = optional($variant->images->first())->path;
+                $productImagePath = optional($variant->product->images->first())->path;
+
+                return [
+                    'id' => (int) $variant->id,
+                    'product_name' => (string) ($variant->product->name ?? 'Producto'),
+                    'size' => (string) ($variant->size ?? ''),
+                    'price' => (float) $this->getVariantDiscountedUnitPrice($variant),
+                    'stock' => (float) ($variant->stock ?? 0),
+                    'variant_image_src' => $variantImagePath
+                        ? (ImageStorage::url($variantImagePath) ?? asset('assets/img/shopix5.png'))
+                        : null,
+                    'product_image_src' => $productImagePath
+                        ? (ImageStorage::url($productImagePath) ?? asset('assets/img/shopix5.png'))
+                        : asset('assets/img/shopix5.png'),
+                    'image_src' => $variantImagePath
+                        ? (ImageStorage::url($variantImagePath) ?? asset('assets/img/shopix5.png'))
+                        : ($productImagePath
+                            ? (ImageStorage::url($productImagePath) ?? asset('assets/img/shopix5.png'))
+                            : asset('assets/img/shopix5.png')),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'variants' => $variants,
+        ]);
     }
 
     public function publicTenantProCheckout(Request $request, Tenant $tenant)
@@ -2737,6 +2876,7 @@ class TenantController extends Controller
 
             $appointmentModeSupported = $this->tenantSupportsPublicAppointmentCheckout($tenant);
             $isAppointmentOrder = $appointmentModeSupported && (bool) ($validated['appointment_mode'] ?? false);
+            $allowUnpaidReservationForAppointment = (bool) ($tenant->appointments_allow_unpaid_reservation ?? true);
             $appointmentPaymentMode = 'online';
             $appointmentService = null;
             $appointmentProfessional = null;
@@ -2750,9 +2890,14 @@ class TenantController extends Controller
                 $appointmentStartRaw = trim((string) ($validated['appointment_start_time'] ?? ''));
                 $appointmentPaymentMode = (string) ($validated['appointment_payment_mode'] ?? 'online');
                 $firstComeEnabled = (bool) ($tenant->appointments_first_come_enabled ?? false);
+                $allowUnpaidReservation = $allowUnpaidReservationForAppointment;
 
                 if ($appointmentServiceId <= 0 || $appointmentUserId <= 0 || $appointmentDateRaw === '' || (!$firstComeEnabled && $appointmentStartRaw === '')) {
                     throw new \RuntimeException('Debes seleccionar servicio, profesional, fecha y hora para programar tu cita.');
+                }
+
+                if ($appointmentPaymentMode === 'on_site' && !$allowUnpaidReservation) {
+                    throw new \RuntimeException('Esta tienda requiere pago en línea para confirmar la reserva de citas.');
                 }
 
                 $appointmentService = AppointmentService::query()
@@ -2773,7 +2918,7 @@ class TenantController extends Controller
                     throw new \RuntimeException('El profesional seleccionado no está disponible para citas.');
                 }
 
-                if ($appointmentService->user_id && (int) $appointmentService->user_id !== (int) $appointmentProfessional->id) {
+                if (!$this->appointmentServiceAllowsProfessional($appointmentService, $appointmentProfessional)) {
                     throw new \RuntimeException('Este servicio está asignado a otro profesional.');
                 }
 
@@ -2816,6 +2961,8 @@ class TenantController extends Controller
 
             $validated['items'] = is_array($validated['items'] ?? null) ? array_values($validated['items']) : [];
 
+            $appointmentOnlyVariantIds = $this->appointmentOnlyVariantIdsForTenant((int) $tenant->id);
+
             if ($isAppointmentOrder && $appointmentService) {
                 $serviceVariantId = (int) ($appointmentService->product_variant_id ?? 0);
                 if ($serviceVariantId <= 0) {
@@ -2842,6 +2989,16 @@ class TenantController extends Controller
 
             if (!$isAppointmentOrder && count($validated['items']) === 0) {
                 throw new \RuntimeException('Debes agregar al menos un producto al carrito.');
+            }
+
+            if (!$isAppointmentOrder && !empty($appointmentOnlyVariantIds)) {
+                $containsAppointmentOnlyVariant = collect($validated['items'])->contains(function ($item) use ($appointmentOnlyVariantIds) {
+                    return in_array((int) ($item['variant_id'] ?? 0), $appointmentOnlyVariantIds, true);
+                });
+
+                if ($containsAppointmentOnlyVariant) {
+                    throw new \RuntimeException('Este producto se vende únicamente por el flujo de citas y servicios. Agenda una cita para continuar.');
+                }
             }
 
             if (!$isAppointmentOrder) {
@@ -2889,7 +3046,9 @@ class TenantController extends Controller
                 }
             }
 
-            $requiresOnlinePayment = !$isAppointmentOrder || $appointmentPaymentMode === 'online';
+            $requiresOnlinePayment = !$isAppointmentOrder
+                || !$allowUnpaidReservationForAppointment
+                || $appointmentPaymentMode === 'online';
             $validated['payments'] = is_array($validated['payments'] ?? null) ? array_values($validated['payments']) : [];
 
             if ($requiresOnlinePayment && count($validated['payments']) === 0) {
@@ -3194,6 +3353,7 @@ class TenantController extends Controller
         $services = $this->publicAppointmentServicesQuery((int) $tenant->id)
             ->get()
             ->map(function (AppointmentService $service) {
+                $assignedUserIds = $this->appointmentServiceAssignedUserIds($service);
                 $configuredPrice = (float) ($service->price ?? 0);
                 $variantPrice = $service->productVariant
                     ? $this->getVariantDiscountedUnitPrice($service->productVariant)
@@ -3207,7 +3367,8 @@ class TenantController extends Controller
                     'price' => (float) $resolvedPrice,
                     'configured_price' => (float) $configuredPrice,
                     'variant_price' => (float) $variantPrice,
-                    'assigned_user_id' => $service->user_id ? (int) $service->user_id : null,
+                    'assigned_user_id' => !empty($assignedUserIds) ? (int) $assignedUserIds[0] : null,
+                    'assigned_user_ids' => $assignedUserIds,
                     'product_variant_id' => $service->product_variant_id ? (int) $service->product_variant_id : null,
                 ];
             })
@@ -3253,7 +3414,7 @@ class TenantController extends Controller
                 ->first();
 
             if ($service && $professional) {
-                if ($service->user_id && (int) $service->user_id !== (int) $professional->id) {
+                if (!$this->appointmentServiceAllowsProfessional($service, $professional)) {
                     $slots = [];
                 } else {
                     if ($date !== '') {
@@ -3301,6 +3462,7 @@ class TenantController extends Controller
             'success' => true,
             'enabled' => true,
             'appointments_first_come_enabled' => (bool) ($tenant->appointments_first_come_enabled ?? false),
+            'appointments_allow_unpaid_reservation' => (bool) ($tenant->appointments_allow_unpaid_reservation ?? true),
             'tenant_opening_time' => !empty($tenant->opening_time) ? substr((string) $tenant->opening_time, 0, 5) : null,
             'tenant_closing_time' => !empty($tenant->closing_time) ? substr((string) $tenant->closing_time, 0, 5) : null,
             'services' => $services,
@@ -3556,7 +3718,7 @@ class TenantController extends Controller
     private function publicAppointmentServicesQuery(int $tenantId)
     {
         return AppointmentService::query()
-            ->with(['assignedUser:id,name', 'productVariant.product'])
+            ->with(['assignedUser:id,name', 'assignedUsers:id,name', 'productVariant.product'])
             ->where('tenant_id', $tenantId)
             ->where(function ($query) {
                 $query->where('is_active', true)
@@ -3582,7 +3744,7 @@ class TenantController extends Controller
 
     private function buildPublicAppointmentSlots(int $tenantId, User $professional, AppointmentService $service, Carbon $selectedDate, ?Tenant $tenant = null): array
     {
-        if ($service->user_id && (int) $service->user_id !== (int) $professional->id) {
+        if (!$this->appointmentServiceAllowsProfessional($service, $professional)) {
             return [];
         }
 
@@ -3730,6 +3892,24 @@ class TenantController extends Controller
         return false;
     }
 
+    private function appointmentOnlyVariantIdsForTenant(int $tenantId): array
+    {
+        if ($tenantId <= 0) {
+            return [];
+        }
+
+        return AppointmentService::query()
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->whereNotNull('product_variant_id')
+            ->pluck('product_variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     private function isDateAllowedByTenantWorkingDays(Tenant $tenant, Carbon $selectedDate): bool
     {
         $workingDays = collect($tenant->working_days ?? [])
@@ -3754,6 +3934,58 @@ class TenantController extends Controller
         $targetDay = $dayMap[(int) $selectedDate->dayOfWeek] ?? '';
 
         return $targetDay !== '' && $workingDays->contains($targetDay);
+    }
+
+    private function appointmentServiceUserPivotTableExists(): bool
+    {
+        static $exists = null;
+
+        if ($exists !== null) {
+            return $exists;
+        }
+
+        try {
+            $exists = DB::getSchemaBuilder()->hasTable('appointment_service_user');
+        } catch (\Throwable $exception) {
+            $exists = false;
+        }
+
+        return (bool) $exists;
+    }
+
+    private function appointmentServiceAssignedUserIds(AppointmentService $service): array
+    {
+        if ($this->appointmentServiceUserPivotTableExists()) {
+            $users = $service->relationLoaded('assignedUsers')
+                ? $service->assignedUsers
+                : $service->assignedUsers()->get(['users.id']);
+
+            $ids = collect($users)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn (int $id) => $id > 0)
+                ->unique()
+                ->values()
+                ->all();
+
+            if (!empty($ids)) {
+                return $ids;
+            }
+        }
+
+        $legacyUserId = (int) ($service->user_id ?? 0);
+
+        return $legacyUserId > 0 ? [$legacyUserId] : [];
+    }
+
+    private function appointmentServiceAllowsProfessional(AppointmentService $service, User $professional): bool
+    {
+        $assignedUserIds = $this->appointmentServiceAssignedUserIds($service);
+        if (empty($assignedUserIds)) {
+            return true;
+        }
+
+        return in_array((int) $professional->id, $assignedUserIds, true);
     }
 
     private function tenantHasProPlan(Tenant $tenant): bool

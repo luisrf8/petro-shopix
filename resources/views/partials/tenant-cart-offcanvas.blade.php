@@ -1187,6 +1187,19 @@
                       <option value="on_site">Pagar en el lugar</option>
                     </select>
                   </div>
+                  <div class="col-12" id="tenant-pro-appointment-extra-products-wrap">
+                    <label class="form-label mb-1">Agregar productos a esta cita</label>
+                    <small class="text-muted d-block mb-2">Puedes sumar productos adicionales sin salir de esta vista. Se guardarán en el mismo pedido de la cita.</small>
+                    <div class="row g-2 align-items-end">
+                      <div class="col-12 col-md-4 d-grid">
+                        <button type="button" class="btn btn-outline-secondary mb-0" id="tenant-pro-appointment-open-products-modal">Ver todos (con imágenes)</button>
+                      </div>
+                    </div>
+                    <small class="text-muted d-block mt-2" id="tenant-pro-appointment-extra-note">Cargando opciones de productos...</small>
+                    <div class="border rounded p-2 mt-2" id="tenant-pro-appointment-extra-list">
+                      <small class="text-muted">Aún no hay productos adicionales en esta cita.</small>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1225,6 +1238,28 @@
         <button type="button" class="btn btn-outline-dark d-none" id="tenant-pro-prev-step">Atrás</button>
         <button type="button" class="btn btn-dark d-none" id="tenant-pro-next-step">Continuar</button>
         <button type="button" class="btn btn-success d-none" id="tenant-pro-submit-order" disabled>Confirmar pedido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="tenantAppointmentProductsModal" tabindex="-1" aria-labelledby="tenantAppointmentProductsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="tenantAppointmentProductsModalLabel">Productos disponibles para agregar a la cita</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label mb-1">Buscar producto o variante</label>
+          <input type="text" id="tenant-appointment-products-modal-search" class="form-control" placeholder="Ej. malta, 150ml, shampoo...">
+          <small class="text-muted d-block mt-1" id="tenant-appointment-products-modal-note">Cargando catálogo...</small>
+        </div>
+        <div id="tenant-appointment-products-modal-list" class="row g-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
       </div>
     </div>
   </div>
@@ -1388,6 +1423,7 @@
     const showBsPricesInStorefront = @json((bool) ($showBsPricesInStorefront ?? false));
     const storefrontBsRateValue = @json((float) ($storefrontBsRateValue ?? 0));
     const tenantAppointmentAvailabilityEndpoint = `/${tenantSlug}/appointments/public-availability`;
+    const tenantProductQuickOptionsEndpoint = `/${tenantSlug}/products/quick-options`;
     const initialCsrfToken = @json(csrf_token());
     const googleMapsApiKey = @json(env('GOOGLE_MAPS_API_KEY'));
     const shopixDebug = true;
@@ -1485,6 +1521,18 @@
     const proAppointmentPaymentModeSelect = document.getElementById('tenant-pro-appointment-payment-mode');
     const proAppointmentSummaryWrap = document.getElementById('tenant-pro-appointment-summary');
     const proAppointmentSummaryText = document.getElementById('tenant-pro-appointment-summary-text');
+    const proAppointmentExtraProductsWrap = document.getElementById('tenant-pro-appointment-extra-products-wrap');
+    const proAppointmentExtraSearchInput = document.getElementById('tenant-pro-appointment-extra-search');
+    const proAppointmentExtraProductSelect = document.getElementById('tenant-pro-appointment-extra-product');
+    const proAppointmentExtraQtyInput = document.getElementById('tenant-pro-appointment-extra-qty');
+    const proAppointmentExtraAddButton = document.getElementById('tenant-pro-appointment-extra-add');
+    const proAppointmentOpenProductsModalButton = document.getElementById('tenant-pro-appointment-open-products-modal');
+    const proAppointmentExtraNote = document.getElementById('tenant-pro-appointment-extra-note');
+    const proAppointmentExtraList = document.getElementById('tenant-pro-appointment-extra-list');
+    const appointmentProductsModalElement = document.getElementById('tenantAppointmentProductsModal');
+    const appointmentProductsModalSearchInput = document.getElementById('tenant-appointment-products-modal-search');
+    const appointmentProductsModalNote = document.getElementById('tenant-appointment-products-modal-note');
+    const appointmentProductsModalList = document.getElementById('tenant-appointment-products-modal-list');
     const proPaymentStepNote = document.getElementById('tenant-pro-payment-step-note');
     const proOnSitePaymentNote = document.getElementById('tenant-pro-on-site-payment-note');
     const proSuccessMessage = document.getElementById('tenant-pro-success-message');
@@ -2030,6 +2078,11 @@
 
       if (type === 'open-auth') {
         openProCheckout({ authOnly: true });
+        return;
+      }
+
+      if (type === 'open-appointment-service') {
+        openProCheckoutForService(event?.detail || {});
       }
     });
 
@@ -2346,6 +2399,7 @@
         if (whatsappConsultButton) {
           whatsappConsultButton.disabled = true;
         }
+        renderAppointmentExtraProductsCartList();
         return;
       }
 
@@ -2375,6 +2429,8 @@
           </div>
         `;
       }).join('');
+
+      renderAppointmentExtraProductsCartList();
     }
 
     function addItem(item) {
@@ -2795,6 +2851,7 @@
     let catalogTenantOpeningTime = '';
     let catalogTenantClosingTime = '';
     let appointmentLockedServiceId = 0;
+    let appointmentCatalogLockedServiceId = 0;
     let appointmentStatusPollingInterval = null;
     let trackedAppointmentId = 0;
     let catalogAppointmentWeekStart = '';
@@ -2802,6 +2859,10 @@
     let catalogAppointmentSelectedTime = '';
     let catalogAppointmentView = 'week';
     let pendingCatalogAppointmentCheckout = false;
+    let appointmentAllowUnpaidReservation = true;
+    let appointmentExtraProducts = [];
+    let appointmentExtraSearchTimer = null;
+    let appointmentModalSearchTimer = null;
 
     function clearAppointmentStatusPolling() {
       if (appointmentStatusPollingInterval) {
@@ -2935,6 +2996,23 @@
       return appointmentCheckoutProfessionals.find(user => Number(user?.id || 0) === selectedId) || null;
     }
 
+    function getServiceAssignedUserIds(service) {
+      const idsFromArray = Array.isArray(service?.assigned_user_ids)
+        ? service.assigned_user_ids
+        : [];
+
+      const normalized = idsFromArray
+        .map((value) => Number(value || 0))
+        .filter((value) => value > 0);
+
+      if (normalized.length > 0) {
+        return Array.from(new Set(normalized));
+      }
+
+      const fallbackAssignedId = Number(service?.assigned_user_id || 0);
+      return fallbackAssignedId > 0 ? [fallbackAssignedId] : [];
+    }
+
     function resolveAppointmentServicePrice(service) {
       const candidates = [
         Number(service?.price || 0),
@@ -3031,6 +3109,233 @@
 
       proAppointmentSummaryWrap.classList.remove('d-none');
       proAppointmentSummaryText.textContent = summaryLines.join(' | ');
+    }
+
+    function renderAppointmentExtraProductOptions() {
+      if (!proAppointmentExtraProductSelect) {
+        return;
+      }
+
+      if (!Array.isArray(appointmentExtraProducts) || appointmentExtraProducts.length === 0) {
+        proAppointmentExtraProductSelect.innerHTML = '<option value="">No hay productos disponibles</option>';
+        return;
+      }
+
+      proAppointmentExtraProductSelect.innerHTML = [
+        '<option value="">Selecciona un producto</option>',
+        ...appointmentExtraProducts.map((row) => {
+          const variantLabel = String(row?.size || '').trim() ? ` · ${String(row.size).trim()}` : '';
+          const priceLabel = Number(row?.price || 0).toFixed(2);
+          const stockLabel = Number(row?.stock || 0).toFixed(0);
+          return `<option value="${Number(row?.id || 0)}">${escapeHtml(String(row?.product_name || 'Producto') + variantLabel)} · ${priceLabel} ${getBaseCurrencySymbol()} · Stock ${stockLabel}</option>`;
+        }),
+      ].join('');
+    }
+
+    function renderAppointmentExtraProductsCartList() {
+      if (!proAppointmentExtraList) {
+        return;
+      }
+
+      if (!isAppointmentCheckoutActive()) {
+        proAppointmentExtraList.innerHTML = '<small class="text-muted">Este resumen se activa cuando agendas una cita.</small>';
+        return;
+      }
+
+      const cart = getCart();
+      if (cart.length === 0) {
+        proAppointmentExtraList.innerHTML = '<small class="text-muted">Aún no hay productos adicionales en esta cita.</small>';
+        return;
+      }
+
+      const rowsHtml = cart.map((item, index) => {
+        const lineQty = Number(item?.qty || 0);
+        const linePrice = Number(item?.price || 0);
+        const lineTotal = lineQty * linePrice;
+        return `<div class="d-flex justify-content-between align-items-center py-1 border-bottom"><div class="small">${escapeHtml(String(item?.productName || 'Producto'))}${String(item?.variantSize || '').trim() ? ` · ${escapeHtml(String(item.variantSize))}` : ''}<br><span class="text-muted">x${lineQty.toFixed(0)} · ${linePrice.toFixed(2)} ${getBaseCurrencySymbol()}</span></div><div class="d-flex align-items-center gap-2"><div class="small fw-semibold">${lineTotal.toFixed(2)} ${getBaseCurrencySymbol()}</div><button type="button" class="btn btn-outline-danger btn-sm mb-0" data-appointment-extra-remove-index="${index}">Quitar</button></div></div>`;
+      }).join('');
+
+      proAppointmentExtraList.innerHTML = rowsHtml;
+    }
+
+    function renderAppointmentProductsCatalogModal() {
+      if (!appointmentProductsModalList) {
+        return;
+      }
+
+      const searchTerm = String(appointmentProductsModalSearchInput?.value || '').trim().toLowerCase();
+      const filtered = Array.isArray(appointmentExtraProducts)
+        ? appointmentExtraProducts.filter((row) => {
+            if (!searchTerm) {
+              return true;
+            }
+            const haystack = [
+              String(row?.product_name || ''),
+              String(row?.size || ''),
+            ].join(' ').toLowerCase();
+            return haystack.includes(searchTerm);
+          })
+        : [];
+
+      if (appointmentProductsModalNote) {
+        appointmentProductsModalNote.textContent = filtered.length > 0
+          ? `${filtered.length} variante(s) disponible(s).`
+          : 'No hay variantes para ese criterio.';
+      }
+
+      if (filtered.length === 0) {
+        appointmentProductsModalList.innerHTML = '<div class="col-12"><div class="border rounded p-3 text-muted small">No hay resultados disponibles.</div></div>';
+        return;
+      }
+
+      appointmentProductsModalList.innerHTML = filtered.map((row) => {
+        const variantId = Number(row?.id || 0);
+        const variantSize = String(row?.size || '').trim();
+        const stockValue = Number(row?.stock || 0);
+        const productImage = String(row?.product_image_src || row?.image_src || '/assets/img/shopix5.png');
+        const variantImage = String(row?.variant_image_src || row?.image_src || productImage);
+        return `
+          <div class="col-12 col-md-6 col-xl-4">
+            <div class="border rounded p-2 h-100 d-flex flex-column gap-2">
+              <div class="d-flex align-items-start gap-2">
+                <img src="${escapeHtml(productImage)}" alt="Producto" style="width:52px;height:52px;object-fit:cover;border-radius:8px;" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
+                <img src="${escapeHtml(variantImage)}" alt="Variante" style="width:52px;height:52px;object-fit:cover;border-radius:8px;" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
+                <div class="small">
+                  <div class="fw-semibold">${escapeHtml(String(row?.product_name || 'Producto'))}</div>
+                  <div class="text-muted">Variante: ${escapeHtml(variantSize || 'General')}</div>
+                  <div class="text-muted">Stock: ${stockValue.toFixed(0)}</div>
+                </div>
+              </div>
+              <div class="d-flex justify-content-between align-items-end gap-2 mt-auto">
+                <div class="small fw-semibold">${Number(row?.price || 0).toFixed(2)} ${getBaseCurrencySymbol()}</div>
+                <div class="d-flex gap-1 align-items-center">
+                  <input type="number" min="1" step="1" value="1" class="form-control form-control-sm" style="width:72px;" data-appointment-modal-qty="${variantId}">
+                  <button type="button" class="btn btn-dark btn-sm mb-0" data-appointment-modal-add-variant="${variantId}">Agregar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function addAppointmentVariantDirectly(variantId, qty = 1) {
+      if (!isAppointmentCheckoutActive()) {
+        return;
+      }
+
+      const selectedProduct = appointmentExtraProducts.find((row) => Number(row?.id || 0) === Number(variantId));
+      if (!selectedProduct) {
+        alert('No se encontró la variante seleccionada.');
+        return;
+      }
+
+      const normalizedQty = Math.max(1, Number(qty || 1));
+      const currentQtyInCart = getCart()
+        .filter((item) => Number(item?.variantId || 0) === Number(variantId))
+        .reduce((sum, item) => sum + Number(item?.qty || 0), 0);
+
+      if (normalizedQty + currentQtyInCart > Number(selectedProduct?.stock || 0)) {
+        alert('La cantidad supera el stock disponible para este producto.');
+        return;
+      }
+
+      addItem({
+        variantId: Number(variantId),
+        productId: Number(variantId),
+        productName: String(selectedProduct?.product_name || 'Producto'),
+        variantSize: String(selectedProduct?.size || ''),
+        imageSrc: selectedProduct?.variant_image_src || selectedProduct?.image_src || null,
+        price: Number(selectedProduct?.price || 0),
+        qty: normalizedQty,
+      });
+
+      if (proAppointmentExtraProductSelect) {
+        proAppointmentExtraProductSelect.value = String(Number(variantId));
+      }
+      renderAppointmentExtraProductsCartList();
+      updateProPaymentSummary();
+    }
+
+    async function loadAppointmentExtraProducts(searchTerm = '') {
+      if (!isAppointmentCheckoutActive()) {
+        return;
+      }
+
+      if (proAppointmentExtraNote) {
+        proAppointmentExtraNote.textContent = 'Consultando productos...';
+      }
+
+      const params = new URLSearchParams({
+        limit: '220',
+      });
+      const normalizedSearch = String(searchTerm || '').trim();
+      if (normalizedSearch !== '') {
+        params.set('q', normalizedSearch);
+      }
+
+      try {
+        const response = await fetch(`${tenantProductQuickOptionsEndpoint}?${params.toString()}`, {
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('quick_products_failed');
+        }
+
+        const payload = await response.json().catch(() => ({}));
+        appointmentExtraProducts = Array.isArray(payload?.variants) ? payload.variants : [];
+        renderAppointmentProductsCatalogModal();
+        if (proAppointmentExtraNote) {
+          proAppointmentExtraNote.textContent = appointmentExtraProducts.length > 0
+            ? `${appointmentExtraProducts.length} producto(s) disponible(s) para agregar a esta cita.`
+            : 'No encontramos productos con ese criterio de búsqueda.';
+        }
+      } catch (error) {
+        appointmentExtraProducts = [];
+        renderAppointmentProductsCatalogModal();
+        if (proAppointmentExtraNote) {
+          proAppointmentExtraNote.textContent = 'No se pudieron cargar los productos. Intenta nuevamente.';
+        }
+      }
+    }
+
+    function addSelectedAppointmentExtraProduct() {
+      if (!isAppointmentCheckoutActive()) {
+        return;
+      }
+
+      const variantId = Number(proAppointmentExtraProductSelect?.value || 0);
+      if (variantId <= 0) {
+        alert('Selecciona un producto adicional para agregar.');
+        return;
+      }
+
+      const selectedProduct = appointmentExtraProducts.find((row) => Number(row?.id || 0) === variantId);
+      if (!selectedProduct) {
+        alert('No se encontró el producto seleccionado. Recarga la lista e intenta nuevamente.');
+        return;
+      }
+
+      const qty = Math.max(1, Number(proAppointmentExtraQtyInput?.value || 1));
+      const currentQtyInCart = getCart()
+        .filter((item) => Number(item?.variantId || 0) === variantId)
+        .reduce((sum, item) => sum + Number(item?.qty || 0), 0);
+
+      if (qty + currentQtyInCart > Number(selectedProduct?.stock || 0)) {
+        alert('La cantidad supera el stock disponible para este producto.');
+        return;
+      }
+
+      addAppointmentVariantDirectly(variantId, qty);
+
+      if (proAppointmentExtraQtyInput) {
+        proAppointmentExtraQtyInput.value = '1';
+      }
+
+      renderAppointmentProductsCatalogModal();
     }
 
     function parseAppointmentMonth(value) {
@@ -3237,12 +3542,26 @@
     }
 
     function resolveCatalogAppointmentServiceId(professionalId) {
-      const byProfessional = appointmentCheckoutServices.find((service) => {
-        const assignedUserId = Number(service?.assigned_user_id || 0);
-        return assignedUserId <= 0 || assignedUserId === professionalId;
+      const normalizedProfessionalId = Number(professionalId || 0);
+      if (normalizedProfessionalId <= 0) {
+        return 0;
+      }
+
+      const exactMatch = appointmentCheckoutServices.find((service) => {
+        const assignedUserIds = getServiceAssignedUserIds(service);
+        return assignedUserIds.includes(normalizedProfessionalId);
       });
 
-      return Number(byProfessional?.id || appointmentCheckoutServices[0]?.id || 0);
+      if (exactMatch) {
+        return Number(exactMatch.id || 0);
+      }
+
+      const unassignedService = appointmentCheckoutServices.find((service) => {
+        const assignedUserIds = getServiceAssignedUserIds(service);
+        return assignedUserIds.length === 0;
+      });
+
+      return Number(unassignedService?.id || 0);
     }
 
     function markPendingCatalogAppointmentCheckout(value = true) {
@@ -3251,6 +3570,29 @@
 
     function hasPendingCatalogAppointmentCheckout() {
       return pendingCatalogAppointmentCheckout;
+    }
+
+    function openProCheckoutForService(payload = {}) {
+      const serviceId = Number(payload?.serviceId || payload?.service_id || 0);
+      if (serviceId <= 0) {
+        openProCheckout({ authOnly: true });
+        return;
+      }
+
+      const selectedDate = getCurrentLocalDateValue();
+      catalogAppointmentSelectedDate = selectedDate;
+      catalogAppointmentSelectedTime = '';
+
+      persistCatalogAppointmentSelection({
+        service_id: serviceId,
+        date: selectedDate,
+        start_time: '',
+        lock_service: true,
+        view: 'week',
+      });
+
+      markPendingCatalogAppointmentCheckout(true);
+      openProCheckout({ forceAppointment: true });
     }
 
     function normalizeAppointmentStartTimeValue(timeValue) {
@@ -3301,12 +3643,16 @@
 
     function persistCatalogAppointmentSlotSelection(selection = {}) {
       const hasStartTime = Object.prototype.hasOwnProperty.call(selection, 'start_time');
+      const persistedSelection = readCatalogAppointmentSelection();
       const selectedProfessionalId = Number(selection.user_id || getCatalogSelectedProfessionalId() || 0);
       const selectedDate = String(selection.date || catalogAppointmentSelectedDate || getCurrentLocalDateValue()).trim();
       const selectedStartTime = hasStartTime
         ? normalizeAppointmentStartTimeValue(selection.start_time || '')
         : normalizeAppointmentStartTimeValue(catalogAppointmentSelectedTime || '');
       const serviceId = Number(selection.service_id || resolveCatalogAppointmentServiceId(selectedProfessionalId) || 0);
+      const shouldLockService = Object.prototype.hasOwnProperty.call(selection, 'lock_service')
+        ? !!selection.lock_service
+        : !!persistedSelection?.lock_service;
 
       catalogAppointmentSelectedDate = selectedDate;
       catalogAppointmentSelectedTime = selectedStartTime;
@@ -3316,6 +3662,7 @@
         service_id: serviceId > 0 ? serviceId : null,
         date: selectedDate,
         start_time: selectedStartTime,
+        lock_service: shouldLockService,
         view: catalogAppointmentView,
       });
     }
@@ -3689,7 +4036,7 @@
             range.textContent = '-';
           }
           if (note) {
-            note.textContent = 'No hay servicios de citas configurados para mostrar agenda.';
+            note.textContent = 'El profesional seleccionado no tiene servicios de cita disponibles.';
           }
         });
         return;
@@ -3939,11 +4286,14 @@
       }
 
       const serviceId = Number(selection?.service_id || 0);
+      const lockService = !!selection?.lock_service;
       const userId = Number(selection?.user_id || 0);
       const date = String(selection?.date || '').trim();
       const startTime = normalizeAppointmentStartTimeValue(selection?.start_time || '');
 
-      if (serviceId > 0 && proAppointmentServiceSelect && appointmentLockedServiceId <= 0 && appointmentCheckoutServices.some(service => Number(service?.id || 0) === serviceId)) {
+      appointmentCatalogLockedServiceId = lockService && serviceId > 0 ? serviceId : 0;
+
+      if (serviceId > 0 && proAppointmentServiceSelect && appointmentCheckoutServices.some(service => Number(service?.id || 0) === serviceId)) {
         proAppointmentServiceSelect.value = String(serviceId);
       }
 
@@ -4004,7 +4354,10 @@
     }
 
     function syncAppointmentServiceSelectionFromCart() {
-      appointmentLockedServiceId = resolveLockedAppointmentServiceId();
+      const cartLockedServiceId = resolveLockedAppointmentServiceId();
+      appointmentLockedServiceId = cartLockedServiceId > 0
+        ? cartLockedServiceId
+        : (appointmentCatalogLockedServiceId > 0 ? appointmentCatalogLockedServiceId : 0);
 
       if (proAppointmentServiceSelect) {
         if (appointmentLockedServiceId > 0) {
@@ -4201,6 +4554,27 @@
       }
 
       proAppointmentSection?.classList.toggle('d-none', !isAppointment);
+      proAppointmentExtraProductsWrap?.classList.toggle('d-none', !isAppointment);
+
+      if (isAppointment) {
+        renderAppointmentExtraProductsCartList();
+        if (!Array.isArray(appointmentExtraProducts) || appointmentExtraProducts.length === 0) {
+          loadAppointmentExtraProducts(String(proAppointmentExtraSearchInput?.value || '').trim());
+        }
+      }
+
+      if (proAppointmentPaymentModeSelect) {
+        const onSiteOption = proAppointmentPaymentModeSelect.querySelector('option[value="on_site"]');
+        if (onSiteOption) {
+          onSiteOption.disabled = !appointmentAllowUnpaidReservation;
+          onSiteOption.hidden = !appointmentAllowUnpaidReservation;
+        }
+
+        if (!appointmentAllowUnpaidReservation && proAppointmentPaymentModeSelect.value === 'on_site') {
+          proAppointmentPaymentModeSelect.value = 'online';
+        }
+      }
+
       renderAppointmentSelectionSummary();
       syncAppointmentPaymentModeUi();
     }
@@ -4213,7 +4587,12 @@
       if (proAppointmentServiceSelect) {
         proAppointmentServiceSelect.innerHTML = [
           '<option value="">Selecciona un servicio</option>',
-          ...appointmentCheckoutServices.map(service => `<option value="${Number(service.id)}" data-assigned-user-id="${service.assigned_user_id ? Number(service.assigned_user_id) : ''}" data-product-variant-id="${service.product_variant_id ? Number(service.product_variant_id) : ''}">${escapeHtml(service.name || 'Servicio')}</option>`),
+          ...appointmentCheckoutServices.map(service => {
+            const assignedUserIds = getServiceAssignedUserIds(service);
+            const assignedPrimaryId = assignedUserIds.length > 0 ? Number(assignedUserIds[0]) : '';
+            const assignedIdsAttr = assignedUserIds.length > 0 ? assignedUserIds.join(',') : '';
+            return `<option value="${Number(service.id)}" data-assigned-user-id="${assignedPrimaryId}" data-assigned-user-ids="${escapeHtml(assignedIdsAttr)}" data-product-variant-id="${service.product_variant_id ? Number(service.product_variant_id) : ''}">${escapeHtml(service.name || 'Servicio')}</option>`;
+          }),
         ].join('');
       }
 
@@ -4271,6 +4650,7 @@
       }
 
       appointmentCheckoutEnabled = !!payload.enabled;
+      appointmentAllowUnpaidReservation = payload?.appointments_allow_unpaid_reservation !== false;
       appointmentCheckoutServices = Array.isArray(payload.services) ? payload.services : [];
       appointmentCheckoutProfessionals = Array.isArray(payload.professionals) ? payload.professionals : [];
 
@@ -4450,17 +4830,33 @@
       }
 
       const selectedOption = proAppointmentServiceSelect?.selectedOptions?.[0] || null;
-      const assignedUserId = Number(selectedOption?.dataset?.assignedUserId || 0);
+      const assignedIdsRaw = String(selectedOption?.dataset?.assignedUserIds || '').trim();
+      const assignedUserIds = assignedIdsRaw === ''
+        ? []
+        : assignedIdsRaw
+          .split(',')
+          .map((value) => Number(value || 0))
+          .filter((value) => value > 0);
+      const assignedUserId = assignedUserIds.length > 0
+        ? Number(assignedUserIds[0] || 0)
+        : Number(selectedOption?.dataset?.assignedUserId || 0);
 
       if (!proAppointmentUserSelect) {
         return;
       }
 
-      if (assignedUserId > 0) {
+      if (assignedUserIds.length === 1 || (assignedUserIds.length === 0 && assignedUserId > 0)) {
         proAppointmentUserSelect.value = String(assignedUserId);
         proAppointmentUserSelect.disabled = true;
       } else {
         proAppointmentUserSelect.disabled = false;
+        if (assignedUserIds.length > 1) {
+          const selectedUserId = Number(proAppointmentUserSelect.value || 0);
+          if (!assignedUserIds.includes(selectedUserId)) {
+            proAppointmentUserSelect.value = String(assignedUserIds[0] || '');
+          }
+        }
+
         const selectedUserId = Number(proAppointmentUserSelect.value || 0);
         if (selectedUserId <= 0 && appointmentCheckoutProfessionals.length === 1) {
           proAppointmentUserSelect.value = String(Number(appointmentCheckoutProfessionals[0]?.id || 0));
@@ -5662,6 +6058,7 @@
 
       await loadAppointmentCheckoutAvailability();
       if (isAppointmentCheckoutActive()) {
+        await loadAppointmentExtraProducts(String(proAppointmentExtraSearchInput?.value || '').trim());
         await applyCatalogAppointmentSelectionToCheckout();
       }
 
@@ -5675,12 +6072,17 @@
         return;
       }
 
-      if (isAppointmentCheckoutActive() && proAppointmentPaymentModeSelect && methods.length === 0) {
+      if (isAppointmentCheckoutActive() && proAppointmentPaymentModeSelect && methods.length === 0 && appointmentAllowUnpaidReservation) {
         proAppointmentPaymentModeSelect.value = 'on_site';
         const onlineOption = proAppointmentPaymentModeSelect.querySelector('option[value="online"]');
         if (onlineOption) {
           onlineOption.disabled = true;
         }
+      }
+
+      if (isAppointmentCheckoutActive() && methods.length === 0 && !appointmentAllowUnpaidReservation) {
+        alert('Esta tienda exige pago en línea para reservar citas y no tiene métodos de pago activos.');
+        return;
       }
 
       applyUserLocationToShippingForm(user, proShippingCountrySelect, proShippingStateSelect, proShippingCitySelect, proShippingAddressDetailInput, proShippingLatitudeInput, proShippingLongitudeInput, proShippingLocationStatus, proShippingDistanceInput);
@@ -5947,7 +6349,9 @@
       }
 
       const appointmentPaymentMode = String(proAppointmentPaymentModeSelect?.value || 'online');
-      const requiresOnlinePayment = !appointmentModeActive || appointmentPaymentMode === 'online';
+      const requiresOnlinePayment = !appointmentModeActive
+        || !appointmentAllowUnpaidReservation
+        || appointmentPaymentMode === 'online';
 
       let selectedAppointmentServiceId = null;
       let selectedAppointmentUserId = null;
@@ -6244,6 +6648,23 @@
           changeQty(index, Number(cart[index].qty) - 1);
         }
       }
+
+      const appointmentModalAddButton = event.target.closest('[data-appointment-modal-add-variant]');
+      if (appointmentModalAddButton) {
+        const variantId = Number(appointmentModalAddButton.getAttribute('data-appointment-modal-add-variant') || 0);
+        const qtyInput = appointmentModalAddButton.parentElement?.querySelector('[data-appointment-modal-qty]');
+        const qty = Math.max(1, Number(qtyInput?.value || 1));
+        addAppointmentVariantDirectly(variantId, qty);
+      }
+
+      const appointmentExtraRemoveButton = event.target.closest('[data-appointment-extra-remove-index]');
+      if (appointmentExtraRemoveButton) {
+        const index = Number(appointmentExtraRemoveButton.getAttribute('data-appointment-extra-remove-index') || -1);
+        if (index >= 0) {
+          removeItem(index);
+          renderAppointmentProductsCatalogModal();
+        }
+      }
     });
 
     tenantPackageFlavorRows?.addEventListener('input', event => {
@@ -6424,6 +6845,49 @@
       proAppointmentPaymentModeSelect?.addEventListener('change', () => {
         syncAppointmentPaymentModeUi();
         updateProPaymentSummary();
+      });
+
+      proAppointmentOpenProductsModalButton?.addEventListener('click', async () => {
+        if (!isAppointmentCheckoutActive()) {
+          return;
+        }
+
+        if (!Array.isArray(appointmentExtraProducts) || appointmentExtraProducts.length === 0) {
+          await loadAppointmentExtraProducts(String(proAppointmentExtraSearchInput?.value || '').trim());
+        }
+
+        renderAppointmentProductsCatalogModal();
+        if (appointmentProductsModalElement && typeof bootstrap !== 'undefined' && bootstrap?.Modal) {
+          bootstrap.Modal.getOrCreateInstance(appointmentProductsModalElement).show();
+        }
+      });
+
+      appointmentProductsModalSearchInput?.addEventListener('input', () => {
+        if (appointmentModalSearchTimer) {
+          clearTimeout(appointmentModalSearchTimer);
+        }
+
+        appointmentModalSearchTimer = setTimeout(() => {
+          renderAppointmentProductsCatalogModal();
+        }, 150);
+      });
+
+      proAppointmentExtraAddButton?.addEventListener('click', () => {
+        addSelectedAppointmentExtraProduct();
+      });
+
+      proAppointmentExtraSearchInput?.addEventListener('input', () => {
+        if (!isAppointmentCheckoutActive()) {
+          return;
+        }
+
+        if (appointmentExtraSearchTimer) {
+          clearTimeout(appointmentExtraSearchTimer);
+        }
+
+        appointmentExtraSearchTimer = setTimeout(() => {
+          loadAppointmentExtraProducts(String(proAppointmentExtraSearchInput.value || '').trim());
+        }, 280);
       });
 
       document.querySelectorAll('input[name="tenant-pro-delivery-type"]').forEach(input => {
@@ -6652,6 +7116,7 @@
     window.addEventListener('shopix-cart-updated', () => {
       cartDebug('event:shopix-cart-updated');
       renderCart();
+      renderAppointmentExtraProductsCartList();
       dumpCartDebugState('cart-updated-event');
     });
 

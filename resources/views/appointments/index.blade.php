@@ -260,7 +260,7 @@
         border: 1px solid rgba(15, 23, 42, 0.08);
         border-radius: 0.9rem;
         background: #f8fafc;
-        padding: 0.75rem;
+        padding: 0.6rem;
     }
 
     .appointment-payment-summary-grid {
@@ -273,21 +273,38 @@
         border-radius: 0.7rem;
         border: 1px solid rgba(148, 163, 184, 0.24);
         background: #ffffff;
-        padding: 0.45rem 0.55rem;
+        padding: 0.35rem 0.45rem;
     }
 
     .appointment-payment-summary-label {
         display: block;
         color: #64748b;
-        font-size: 0.72rem;
+        font-size: 0.67rem;
     }
 
     .appointment-payment-summary-value {
         display: block;
         color: #0f172a;
-        font-size: 0.95rem;
+        font-size: 0.88rem;
         font-weight: 700;
         line-height: 1.15;
+    }
+
+    .appointment-payment-summary-subvalue {
+        display: block;
+        margin-top: 0.08rem;
+        color: #64748b;
+        font-size: 0.66rem;
+        line-height: 1.2;
+    }
+
+    .appointment-payment-row {
+        background: #fbfdff;
+    }
+
+    .appointment-payment-row .form-label {
+        font-size: 0.73rem;
+        margin-bottom: 0.2rem;
     }
 
     .appointment-toggle-chip {
@@ -314,6 +331,28 @@
         font-weight: 700;
         line-height: 1.2;
         margin-bottom: 0.18rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .appointments-calendar-event-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.35rem;
+    }
+
+    .appointments-calendar-event-services-badge {
+        flex-shrink: 0;
+        font-size: 0.64rem;
+        font-weight: 700;
+        line-height: 1;
+        border-radius: 999px;
+        padding: 0.2rem 0.38rem;
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.28);
     }
 
     .appointments-calendar-event-meta {
@@ -340,6 +379,12 @@
     .appointment-inline-note {
         font-size: 0.8rem;
         color: #64748b;
+    }
+
+    .btn.is-loading,
+    button.is-loading {
+        opacity: 0.9;
+        pointer-events: none;
     }
 
     .appointment-badge-soft {
@@ -496,8 +541,9 @@
             <div class="appointments-stat-card">
                 <div class="appointments-stat-label">Servicios configurados</div>
                 <div class="appointments-stat-value">{{ $services->count() }}</div>
-                <div class="d-grid mt-2">
-                    <button type="button" class="btn btn-outline-dark btn-sm mb-0" data-bs-toggle="modal" data-bs-target="#appointmentServicesModal">Servicios</button>
+                <div class="d-grid gap-2 mt-2">
+                    <a href="{{ route('appointments.services.index') }}" class="btn btn-outline-dark btn-sm mb-0">Servicios</a>
+                    <a href="{{ route('appointments.customerControl.index') }}" class="btn btn-outline-secondary btn-sm mb-0">Control clientes</a>
                 </div>
             </div>
         </div>
@@ -650,8 +696,9 @@
             <div class="appointments-stat-card">
                 <div class="appointments-stat-label">Servicios configurados</div>
                 <div class="appointments-stat-value">{{ $services->count() }}</div>
-                <div class="d-grid mt-2">
-                    <button type="button" class="btn btn-outline-dark btn-sm mb-0" data-bs-dismiss="offcanvas" data-bs-toggle="modal" data-bs-target="#appointmentServicesModal">Servicios</button>
+                <div class="d-grid gap-2 mt-2">
+                    <a href="{{ route('appointments.services.index') }}" class="btn btn-outline-dark btn-sm mb-0" data-bs-dismiss="offcanvas">Servicios</a>
+                    <a href="{{ route('appointments.customerControl.index') }}" class="btn btn-outline-secondary btn-sm mb-0" data-bs-dismiss="offcanvas">Control clientes</a>
                 </div>
             </div>
             <div class="appointments-stat-card">
@@ -699,18 +746,67 @@
                                 <div class="col-12 col-lg-6">
                                     <label class="form-label">Servicios de la cita</label>
                                     <input type="hidden" name="appointment_service_id" id="appointmentPrimaryServiceInput" value="{{ old('appointment_service_id') }}">
-                                    <select name="appointment_service_ids[]" id="appointmentServiceSelect" class="form-control border border-1 p-2" required multiple size="5">
+                                    <select name="appointment_service_ids[]" id="appointmentServiceSelect" class="d-none" required multiple size="5" aria-hidden="true" tabindex="-1">
                                         @php
                                             $oldServiceIds = collect(old('appointment_service_ids', []))
                                                 ->map(fn ($value) => (string) $value)
                                                 ->values()
                                                 ->all();
                                         @endphp
-                                        @foreach($services as $service)
+                                        @foreach($activeServices as $service)
                                             <option value="{{ $service->id }}" {{ in_array((string) $service->id, $oldServiceIds, true) || (string) old('appointment_service_id') === (string) $service->id ? 'selected' : '' }}>{{ $service->display_name }} · {{ $service->duration_minutes }} min</option>
                                         @endforeach
                                     </select>
-                                    <small id="appointmentServiceMeta" class="appointment-inline-note d-block mt-1">Selecciona uno o varios servicios para la misma cita.</small>
+                                    <div id="appointmentServiceChecklist" class="border border-1 rounded p-2" style="max-height: 210px; overflow: auto;">
+                                        <div class="d-flex flex-column gap-2">
+                                            @foreach($activeServices as $service)
+                                                @php
+                                                    $isChecked = in_array((string) $service->id, $oldServiceIds, true) || (string) old('appointment_service_id') === (string) $service->id;
+                                                @endphp
+                                                <label class="d-flex align-items-start gap-2 border rounded p-2 mb-0" data-service-card="{{ $service->id }}">
+                                                    <input
+                                                        type="checkbox"
+                                                        class="form-check-input mt-1 appointment-service-check"
+                                                        data-service-id="{{ $service->id }}"
+                                                        {{ $isChecked ? 'checked' : '' }}
+                                                    >
+                                                    <span>
+                                                        <span class="fw-semibold d-block">{{ $service->display_name }}</span>
+                                                        <small class="text-muted d-block">{{ $service->duration_minutes }} min{{ !is_null($service->price) ? ' · ' . number_format((float) $service->price, 2) . ' $' : '' }}</small>
+                                                    </span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                    <small id="appointmentServiceMeta" class="appointment-inline-note d-block mt-1">Marca uno o varios servicios para la misma cita.</small>
+                                    <div class="d-none mt-2" id="appointmentServiceEditControlsWrap">
+                                        <div class="form-check mb-1">
+                                            <input class="form-check-input" type="checkbox" value="1" id="appointmentAllowServiceChangeCheck" name="allow_service_change">
+                                            <label class="form-check-label" for="appointmentAllowServiceChangeCheck">Cambiar servicio principal por otro</label>
+                                        </div>
+                                        <div class="form-check mb-1">
+                                            <input class="form-check-input" type="checkbox" value="1" id="appointmentAllowAdditionalServicesCheck" name="allow_additional_services">
+                                            <label class="form-check-label" for="appointmentAllowAdditionalServicesCheck">Agregar otro servicio a esta cita (suma tiempo)</label>
+                                        </div>
+                                        <div class="form-check d-none" id="appointmentRollNextAppointmentsWrap">
+                                            <input type="hidden" name="roll_next_appointments" value="0">
+                                            <input class="form-check-input" type="checkbox" value="1" id="appointmentRollNextAppointmentsCheck" name="roll_next_appointments">
+                                            <label class="form-check-label" for="appointmentRollNextAppointmentsCheck">Si hay solape, rodar citas siguientes y notificar clientes afectados</label>
+                                        </div>
+                                        <div class="alert alert-warning py-2 px-3 mt-2 mb-0 d-none" id="appointmentRollPreviewBox" role="status" aria-live="polite">
+                                            <div class="fw-semibold" id="appointmentRollPreviewTitle"></div>
+                                            <small class="d-block mt-1" id="appointmentRollPreviewDetail"></small>
+                                        </div>
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" value="1" id="appointmentKeepCurrentDateCheck">
+                                            <label class="form-check-label" for="appointmentKeepCurrentDateCheck">Mantener fecha actual de la cita</label>
+                                        </div>
+                                        <div class="form-check mt-1">
+                                            <input class="form-check-input" type="checkbox" value="1" id="appointmentKeepCurrentTimeCheck">
+                                            <label class="form-check-label" for="appointmentKeepCurrentTimeCheck">Mantener hora actual de la cita</label>
+                                        </div>
+                                        <small class="appointment-inline-note d-block mt-1">Para selección múltiple usa Ctrl/Cmd al hacer clic en los servicios.</small>
+                                    </div>
                                 </div>
                                 <div class="col-12 col-lg-6">
                                     <label class="form-label">Profesional</label>
@@ -724,12 +820,14 @@
                                 <div class="col-md-6 col-lg-4">
                                     <label class="form-label">Fecha</label>
                                     <input type="date" name="scheduled_date" id="appointmentDateInput" class="form-control border border-1 p-2" value="{{ old('scheduled_date', $selectedDate->toDateString()) }}" required>
+                                    <input type="hidden" id="appointmentDateInputLocked" value="">
                                 </div>
                                 <div class="col-md-6 col-lg-4">
                                     <label class="form-label">Hora disponible</label>
                                     <select name="start_time" id="appointmentSlotSelect" class="form-control border border-1 p-2" required>
                                         <option value="">Seleccione un servicio, profesional y fecha</option>
                                     </select>
+                                    <input type="hidden" id="appointmentSlotInputLocked" value="">
                                     @if((bool) ($tenant->appointments_first_come_enabled ?? false))
                                         <small class="appointment-inline-note d-block mt-1">Modo por orden de llegada activo: el sistema toma el primer horario libre.</small>
                                     @endif
@@ -828,11 +926,11 @@
                                 </div>
                                 <div class="col-12">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <label class="form-label mb-0">Consumibles utilizados</label>
-                                        <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="addAppointmentConsumptionBtn">Agregar consumible</button>
+                                        <label class="form-label mb-0">Consumibles y productos de venta</label>
+                                        <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="addAppointmentConsumptionBtn">Agregar item</button>
                                     </div>
                                     <div id="appointmentConsumptionsWrapper" class="d-flex flex-column gap-2"></div>
-                                    <small class="appointment-inline-note d-block mt-1">Registra solo los consumibles realmente usados en la atención.</small>
+                                    <small class="appointment-inline-note d-block mt-1">Aquí puedes registrar consumibles usados y productos adicionales vendidos durante la atención.</small>
                                 </div>
                             </div>
                         </div>
@@ -841,23 +939,24 @@
                             <div class="row g-2">
                                 <div class="col-12">
                                     <div class="appointment-payment-summary">
-                                        <div class="appointments-form-section-title mb-2">Pago de la cita</div>
                                         <div class="appointment-payment-summary-grid">
                                             <div class="appointment-payment-summary-item">
-                                                <span class="appointment-payment-summary-label">Precio servicio USD</span>
+                                                <span class="appointment-payment-summary-label">Total cita USD</span>
                                                 <span class="appointment-payment-summary-value" id="appointmentServicePriceUsd">0.00</span>
                                             </div>
                                             <div class="appointment-payment-summary-item">
-                                                <span class="appointment-payment-summary-label">Precio servicio Bs</span>
+                                                <span class="appointment-payment-summary-label">Total cita Bs</span>
                                                 <span class="appointment-payment-summary-value" id="appointmentServicePriceBs">0.00</span>
                                             </div>
                                             <div class="appointment-payment-summary-item">
                                                 <span class="appointment-payment-summary-label">Monto pagado</span>
                                                 <span class="appointment-payment-summary-value" id="appointmentPaidAmountLabel">0.00</span>
+                                                <span class="appointment-payment-summary-subvalue" id="appointmentPaidAmountSubLabel">0.00 Bs</span>
                                             </div>
                                             <div class="appointment-payment-summary-item">
                                                 <span class="appointment-payment-summary-label">Saldo pendiente</span>
                                                 <span class="appointment-payment-summary-value" id="appointmentPendingAmountLabel">0.00</span>
+                                                <span class="appointment-payment-summary-subvalue" id="appointmentPendingAmountSubLabel">0.00 Bs</span>
                                             </div>
                                         </div>
                                         <small class="appointment-inline-note d-block mt-2" id="appointmentFractionedBadge">Pago único o sin pago registrado.</small>
@@ -874,7 +973,11 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Monto pagado</label>
-                                    <input type="number" step="0.01" min="0" name="paid_amount" id="appointmentPaidAmountInput" class="form-control border border-1 p-2" value="{{ old('paid_amount') }}" placeholder="0.00">
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <input type="number" step="0.01" min="0" name="paid_amount" id="appointmentPaidAmountInput" class="form-control border border-1 p-2" value="{{ old('paid_amount') }}" placeholder="0.00">
+                                        <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="appointmentPayRemainingBtn">Pagar restante</button>
+                                    </div>
+                                    <small class="appointment-inline-note d-block mt-1" id="appointmentMainPaymentConversionHint">Abono en USD: 0.00 $</small>
                                 </div>
                                 <div class="col-md-6" id="appointmentPaymentReferenceGroup">
                                     <label class="form-label">Referencia de pago</label>
@@ -887,6 +990,20 @@
                                             <option value="{{ $statusKey }}" {{ old('payment_status', 'pending') === $statusKey ? 'selected' : '' }}>{{ $statusLabel }}</option>
                                         @endforeach
                                     </select>
+                                </div>
+                                <div class="col-12">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label mb-0">Pagos asociados a esta cita</label>
+                                        <button type="button" class="btn btn-outline-dark btn-sm mb-0" id="addAppointmentPaymentRowBtn">Agregar pago</button>
+                                    </div>
+                                    <div id="appointmentPaymentsWrapper" class="d-flex flex-column gap-2"></div>
+                                    <small class="appointment-inline-note d-block mt-1">Puedes registrar uno o varios pagos. El total pagado se calcula con todos los pagos de la lista.</small>
+                                </div>
+                                <div class="col-12 d-none" id="appointmentPaymentProofGroup">
+                                    <label class="form-label">Comprobante de pago (imagen)</label>
+                                    <input type="hidden" name="require_payment_proof" id="appointmentRequirePaymentProofInput" value="0">
+                                    <input type="file" name="payment_proof_image" id="appointmentPaymentProofInput" class="form-control border border-1 p-2" accept="image/jpeg,image/png,image/jpg,image/webp">
+                                    <small class="appointment-inline-note d-block mt-1" id="appointmentPaymentProofHint">Sube comprobante cuando el método lo requiera.</small>
                                 </div>
                             </div>
                         </div>
@@ -919,6 +1036,7 @@
                                 <option value="{{ $variant->id }}">{{ $variant->product->name ?? 'Servicio' }} · {{ $variant->size ?? 'Variante' }}</option>
                             @endforeach
                         </select>
+                        <small class="text-muted d-block mt-1">Al asociar esta variante a un servicio activo, deja de venderse de forma directa en la landing y se procesa solo por cita.</small>
                     </div>
                     <div class="col-12">
                         <label class="form-label">Nombre comercial</label>
@@ -941,13 +1059,13 @@
                         <input type="number" name="price" class="form-control border border-1 p-2" min="0" step="0.01" value="0">
                     </div>
                     <div class="col-md-8">
-                        <label class="form-label">Profesional asignado</label>
-                        <select name="user_id" class="form-control border border-1 p-2">
-                            <option value="">Cualquiera</option>
+                        <label class="form-label">Profesionales asignados</label>
+                        <select name="user_ids[]" class="form-control border border-1 p-2" multiple size="5">
                             @foreach($professionals as $professional)
                                 <option value="{{ $professional->id }}">{{ $professional->name }}</option>
                             @endforeach
                         </select>
+                        <small class="text-muted d-block mt-1">Puedes seleccionar varios profesionales. Si no seleccionas ninguno, el servicio queda disponible para cualquiera.</small>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Color</label>
@@ -957,6 +1075,116 @@
                         <button class="btn btn-outline-dark w-100 mb-0" type="submit">Guardar servicio</button>
                     </div>
                 </form>
+
+                <hr>
+                <h6 class="mb-2">Servicios creados</h6>
+                <div class="d-flex flex-column gap-2" style="max-height: 320px; overflow:auto;">
+                    @forelse($services as $service)
+                        @php
+                            $serviceAssignedIds = $service->assignedUsers->pluck('id')->map(fn($id) => (int) $id)->all();
+                            if (empty($serviceAssignedIds) && !empty($service->user_id)) {
+                                $serviceAssignedIds = [(int) $service->user_id];
+                            }
+                            $serviceAssignedNames = $service->assignedUsers->pluck('name')->filter()->values();
+                            if ($serviceAssignedNames->isEmpty() && $service->assignedUser) {
+                                $serviceAssignedNames = collect([$service->assignedUser->name]);
+                            }
+                        @endphp
+                        <details class="appointment-schedule-item">
+                            <summary class="d-flex justify-content-between align-items-center" style="cursor:pointer; list-style:none;">
+                                <div>
+                                    <div class="fw-semibold">{{ $service->display_name }}</div>
+                                    <div class="appointment-inline-note">
+                                        {{ (int) ($service->duration_minutes ?? 60) }} min · Buffer {{ (int) ($service->buffer_minutes ?? 0) }} min · {{ number_format((float) ($service->price ?? 0), 2) }} $
+                                    </div>
+                                </div>
+                                <span class="badge {{ (bool) ($service->is_active ?? true) ? 'bg-success' : 'bg-secondary' }}">
+                                    {{ (bool) ($service->is_active ?? true) ? 'Activo' : 'Inactivo' }}
+                                </span>
+                            </summary>
+
+                            <div class="mt-2">
+                                <form method="POST" action="{{ route('appointments.services.update', ['service' => $service->id]) }}" class="row g-2">
+                                    @csrf
+                                    @method('PUT')
+                                    <div class="col-12">
+                                        <label class="form-label">Producto de servicio</label>
+                                        <select name="product_variant_id" class="form-control border border-1 p-2" required>
+                                            @foreach($serviceVariants as $variant)
+                                                <option value="{{ $variant->id }}" {{ (int) $variant->id === (int) ($service->product_variant_id ?? 0) ? 'selected' : '' }}>{{ $variant->product->name ?? 'Servicio' }} · {{ $variant->size ?? 'Variante' }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Nombre comercial</label>
+                                        <input type="text" name="name" class="form-control border border-1 p-2" value="{{ $service->name }}" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Descripción</label>
+                                        <textarea name="description" class="form-control border border-1 p-2" rows="2">{{ $service->description }}</textarea>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Duración</label>
+                                        <input type="number" name="duration_minutes" class="form-control border border-1 p-2" min="15" step="15" value="{{ (int) ($service->duration_minutes ?? 60) }}" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Buffer</label>
+                                        <input type="number" name="buffer_minutes" class="form-control border border-1 p-2" min="0" step="5" value="{{ (int) ($service->buffer_minutes ?? 0) }}">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Precio</label>
+                                        <input type="number" name="price" class="form-control border border-1 p-2" min="0" step="0.01" value="{{ number_format((float) ($service->price ?? 0), 2, '.', '') }}">
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Profesionales asignados</label>
+                                        <select name="user_ids[]" class="form-control border border-1 p-2" multiple size="5">
+                                            @foreach($professionals as $professional)
+                                                <option value="{{ $professional->id }}" {{ in_array((int) $professional->id, $serviceAssignedIds, true) ? 'selected' : '' }}>{{ $professional->name }}</option>
+                                            @endforeach
+                                        </select>
+                                        <small class="text-muted d-block mt-1">
+                                            {{ $serviceAssignedNames->isNotEmpty() ? 'Asignados: ' . $serviceAssignedNames->join(', ') : 'Sin asignación específica (cualquiera).' }}
+                                        </small>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">Color</label>
+                                        <input type="color" name="color_hex" class="form-control form-control-color w-100" value="{{ $service->color_hex ?: '#0f172a' }}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Estado</label>
+                                        <select name="is_active" class="form-control border border-1 p-2">
+                                            <option value="1" {{ (bool) ($service->is_active ?? true) ? 'selected' : '' }}>Activo</option>
+                                            <option value="0" {{ !(bool) ($service->is_active ?? true) ? 'selected' : '' }}>Inactivo</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <button class="btn btn-dark w-100 mb-0" type="submit">Guardar cambios</button>
+                                    </div>
+                                </form>
+
+                                <div class="row g-2 mt-1">
+                                    <div class="col-12 col-md-6">
+                                        <form method="POST" action="{{ route('appointments.services.toggleStatus', ['service' => $service->id]) }}">
+                                            @csrf
+                                            <button class="btn btn-outline-secondary w-100 mb-0" type="submit">
+                                                {{ (bool) ($service->is_active ?? true) ? 'Inactivar servicio' : 'Activar servicio' }}
+                                            </button>
+                                        </form>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <form method="POST" action="{{ route('appointments.services.destroy', ['service' => $service->id]) }}" onsubmit="return confirm('¿Eliminar este servicio? Solo se puede si no tiene citas asociadas.');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button class="btn btn-outline-danger w-100 mb-0" type="submit">Eliminar servicio</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    @empty
+                        <div class="text-muted">Todavía no hay servicios configurados.</div>
+                    @endforelse
+                </div>
             </div>
         </div>
     </div>
@@ -1019,7 +1247,7 @@
                     <div class="col-12 col-md-6">
                         <label class="form-label">Servicio base</label>
                         <select name="appointment_service_id" class="form-control border border-1 p-2" required>
-                            @foreach($services as $service)
+                            @foreach($activeServices as $service)
                                 <option value="{{ $service->id }}">{{ $service->display_name }}</option>
                             @endforeach
                         </select>
@@ -1129,8 +1357,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const consumableVariants = @json($consumableVariantsPayload ?? []);
     const appointmentBsRate = Number(@json($bsRate ?? 0));
     const appointmentFirstComeEnabled = @json((bool) ($tenant->appointments_first_come_enabled ?? false));
+    const appointmentAllowUnpaidReservation = @json((bool) ($tenant->appointments_allow_unpaid_reservation ?? true));
 
     const serviceSelect = document.getElementById('appointmentServiceSelect');
+    const serviceChecklist = document.getElementById('appointmentServiceChecklist');
     const primaryServiceInput = document.getElementById('appointmentPrimaryServiceInput');
     const userSelect = document.getElementById('appointmentUserSelect');
     const dateInput = document.getElementById('appointmentDateInput');
@@ -1156,15 +1386,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const bookingTabConsumptionsButton = document.getElementById('appointment-tab-consumptions');
     const bookingTabPaymentsButton = document.getElementById('appointment-tab-payments');
     const serviceMeta = document.getElementById('appointmentServiceMeta');
+    const serviceEditControlsWrap = document.getElementById('appointmentServiceEditControlsWrap');
+    const allowServiceChangeCheck = document.getElementById('appointmentAllowServiceChangeCheck');
+    const allowAdditionalServicesCheck = document.getElementById('appointmentAllowAdditionalServicesCheck');
+    const rollNextAppointmentsWrap = document.getElementById('appointmentRollNextAppointmentsWrap');
+    const rollNextAppointmentsCheck = document.getElementById('appointmentRollNextAppointmentsCheck');
+    const rollPreviewBox = document.getElementById('appointmentRollPreviewBox');
+    const rollPreviewTitle = document.getElementById('appointmentRollPreviewTitle');
+    const rollPreviewDetail = document.getElementById('appointmentRollPreviewDetail');
+    const keepCurrentDateCheck = document.getElementById('appointmentKeepCurrentDateCheck');
+    const keepCurrentTimeCheck = document.getElementById('appointmentKeepCurrentTimeCheck');
+    const dateInputLocked = document.getElementById('appointmentDateInputLocked');
+    const slotInputLocked = document.getElementById('appointmentSlotInputLocked');
     const paymentMethodSelect = document.getElementById('appointmentPaymentMethodSelect');
     const paymentStatusSelect = document.getElementById('appointmentPaymentStatusSelect');
     const paidAmountInput = document.getElementById('appointmentPaidAmountInput');
+    const appointmentPayRemainingBtn = document.getElementById('appointmentPayRemainingBtn');
     const paymentReferenceGroup = document.getElementById('appointmentPaymentReferenceGroup');
     const paymentReferenceInput = document.getElementById('appointmentPaymentReferenceInput');
+    const appointmentPaymentsWrapper = document.getElementById('appointmentPaymentsWrapper');
+    const addAppointmentPaymentRowBtn = document.getElementById('addAppointmentPaymentRowBtn');
+    const mainPaymentConversionHint = document.getElementById('appointmentMainPaymentConversionHint');
+    const appointmentPaymentProofGroup = document.getElementById('appointmentPaymentProofGroup');
+    const appointmentPaymentProofInput = document.getElementById('appointmentPaymentProofInput');
+    const appointmentPaymentProofHint = document.getElementById('appointmentPaymentProofHint');
+    const appointmentRequirePaymentProofInput = document.getElementById('appointmentRequirePaymentProofInput');
     const servicePriceUsdLabel = document.getElementById('appointmentServicePriceUsd');
     const servicePriceBsLabel = document.getElementById('appointmentServicePriceBs');
+    const servicesSubtotalUsdLabel = document.getElementById('appointmentServicesSubtotalUsd');
+    const itemsSubtotalUsdLabel = document.getElementById('appointmentItemsSubtotalUsd');
+    const servicesSubtotalBsLabel = document.getElementById('appointmentServicesSubtotalBs');
+    const itemsSubtotalBsLabel = document.getElementById('appointmentItemsSubtotalBs');
     const paidAmountLabel = document.getElementById('appointmentPaidAmountLabel');
+    const paidAmountSubLabel = document.getElementById('appointmentPaidAmountSubLabel');
     const pendingAmountLabel = document.getElementById('appointmentPendingAmountLabel');
+    const pendingAmountSubLabel = document.getElementById('appointmentPendingAmountSubLabel');
     const fractionedBadge = document.getElementById('appointmentFractionedBadge');
     const consumptionsWrapper = document.getElementById('appointmentConsumptionsWrapper');
     const addConsumptionBtn = document.getElementById('addAppointmentConsumptionBtn');
@@ -1202,6 +1458,249 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeCalendarDate = (calendarDays.find((day) => day.is_today)?.date)
         || (dateInput?.value || '')
         || (calendarDays[0]?.date || '');
+    let currentEditingEventData = null;
+    let originalEditingDate = '';
+    let originalEditingStartTime = '';
+    let appointmentCommercialLocked = false;
+
+    const buttonLoadingState = new WeakMap();
+
+    function setButtonLoading(button, loadingText = 'Procesando...') {
+        if (!button || button.dataset.loadingActive === '1') {
+            return;
+        }
+
+        buttonLoadingState.set(button, {
+            html: button.innerHTML,
+            disabled: !!button.disabled,
+        });
+
+        const label = String(loadingText || button.dataset.loadingText || button.textContent || 'Procesando...').trim() || 'Procesando...';
+        button.dataset.loadingActive = '1';
+        button.disabled = true;
+        button.classList.add('is-loading');
+        button.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span><span>${label}</span>`;
+    }
+
+    function clearButtonLoading(button) {
+        if (!button) {
+            return;
+        }
+
+        const previous = buttonLoadingState.get(button);
+        if (!previous) {
+            button.dataset.loadingActive = '0';
+            button.classList.remove('is-loading');
+            return;
+        }
+
+        button.innerHTML = previous.html;
+        button.disabled = previous.disabled;
+        button.classList.remove('is-loading');
+        button.dataset.loadingActive = '0';
+        buttonLoadingState.delete(button);
+    }
+
+    function ensureSelectOption(selectElement, optionValue, optionLabel = '') {
+        if (!selectElement) {
+            return;
+        }
+
+        const value = String(optionValue || '').trim();
+        if (!value) {
+            return;
+        }
+
+        const exists = Array.from(selectElement.options || []).some((option) => String(option.value || '') === value);
+        if (exists) {
+            return;
+        }
+
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = optionLabel || value;
+        selectElement.appendChild(option);
+    }
+
+    function syncEditDateTimeLockState() {
+        const isEditing = Number(appointmentIdInput?.value || 0) > 0;
+        const lockDate = isEditing && !!keepCurrentDateCheck?.checked;
+        const lockTime = isEditing && !!keepCurrentTimeCheck?.checked;
+
+        if (keepCurrentDateCheck) {
+            keepCurrentDateCheck.disabled = !isEditing;
+        }
+
+        if (keepCurrentTimeCheck) {
+            keepCurrentTimeCheck.disabled = !isEditing;
+        }
+
+        if (dateInput && dateInputLocked) {
+            if (lockDate) {
+                const fixedDate = String(originalEditingDate || dateInput.value || '').trim();
+                if (fixedDate) {
+                    dateInput.value = fixedDate;
+                }
+                dateInput.name = '';
+                dateInput.disabled = true;
+                dateInput.classList.add('bg-light');
+                dateInputLocked.name = 'scheduled_date';
+                dateInputLocked.value = fixedDate;
+            } else {
+                dateInput.name = 'scheduled_date';
+                dateInput.disabled = false;
+                dateInput.classList.remove('bg-light');
+                dateInputLocked.name = '';
+            }
+        }
+
+        if (slotSelect && slotInputLocked) {
+            if (lockTime) {
+                const fixedTime = String(originalEditingStartTime || slotSelect.value || '').trim();
+                if (fixedTime) {
+                    ensureSelectOption(slotSelect, fixedTime, `${fixedTime} (hora actual de la cita)`);
+                    slotSelect.value = fixedTime;
+                }
+                slotSelect.name = '';
+                slotSelect.disabled = true;
+                slotSelect.classList.add('bg-light');
+                slotInputLocked.name = 'start_time';
+                slotInputLocked.value = fixedTime;
+            } else {
+                slotSelect.name = 'start_time';
+                slotSelect.disabled = false;
+                slotSelect.classList.remove('bg-light');
+                slotInputLocked.name = '';
+            }
+        }
+    }
+
+    function syncServiceSelectFromChecklist() {
+        if (!serviceSelect) {
+            return;
+        }
+
+        const checkedIds = Array.from(document.querySelectorAll('.appointment-service-check:checked'))
+            .map((input) => String(input.dataset.serviceId || '').trim())
+            .filter((value) => value !== '');
+
+        Array.from(serviceSelect.options || []).forEach((option) => {
+            option.selected = checkedIds.includes(String(option.value || ''));
+        });
+    }
+
+    function isServiceSelectionEditable() {
+        const isEditing = Number(appointmentIdInput?.value || 0) > 0;
+        if (!isEditing) {
+            return true;
+        }
+
+        if (appointmentCommercialLocked) {
+            return false;
+        }
+
+        return !!allowServiceChangeCheck?.checked || !!allowAdditionalServicesCheck?.checked;
+    }
+
+    function isCommercialEditionLockedByEvent(eventData = null) {
+        const statusKey = String(eventData?.status_key || '').toLowerCase();
+        const salesOrderId = Number(eventData?.sales_order_id || 0);
+        return statusKey === 'confirmed' || statusKey === 'completed' || salesOrderId > 0;
+    }
+
+    function syncCommercialEditState() {
+        const isEditing = Number(appointmentIdInput?.value || 0) > 0;
+        const lockEdition = isEditing && appointmentCommercialLocked;
+
+        if (allowServiceChangeCheck) {
+            if (lockEdition) {
+                allowServiceChangeCheck.checked = false;
+            }
+            allowServiceChangeCheck.disabled = lockEdition;
+        }
+
+        if (allowAdditionalServicesCheck) {
+            if (lockEdition) {
+                allowAdditionalServicesCheck.checked = false;
+            }
+            allowAdditionalServicesCheck.disabled = lockEdition;
+        }
+
+        if (rollNextAppointmentsCheck) {
+            if (lockEdition) {
+                rollNextAppointmentsCheck.checked = false;
+            }
+            rollNextAppointmentsCheck.disabled = lockEdition;
+        }
+
+        if (addConsumptionBtn) {
+            addConsumptionBtn.disabled = lockEdition;
+        }
+
+        Array.from(consumptionsWrapper?.querySelectorAll('select,input,button') || []).forEach((input) => {
+            input.disabled = lockEdition;
+        });
+    }
+
+    function syncServiceChecklistFromSelect() {
+        if (!serviceChecklist || !serviceSelect) {
+            return;
+        }
+
+        const selectedIds = Array.from(serviceSelect.selectedOptions || [])
+            .map((option) => String(option.value || '').trim())
+            .filter((value) => value !== '');
+
+        Array.from(document.querySelectorAll('.appointment-service-check')).forEach((input) => {
+            const serviceId = String(input.dataset.serviceId || '').trim();
+            input.checked = selectedIds.includes(serviceId);
+        });
+    }
+
+    function syncAppointmentServiceEditControls() {
+        const isEditing = Number(appointmentIdInput?.value || 0) > 0;
+        const allowChange = !!allowServiceChangeCheck?.checked;
+        const allowAdditional = !!allowAdditionalServicesCheck?.checked;
+        const canEditServices = !isEditing || allowChange || allowAdditional;
+
+        serviceEditControlsWrap?.classList.toggle('d-none', !isEditing);
+
+        if (serviceSelect) {
+            serviceSelect.disabled = !canEditServices;
+        }
+
+        Array.from(document.querySelectorAll('.appointment-service-check')).forEach((input) => {
+            input.disabled = !canEditServices;
+        });
+
+        if (!canEditServices) {
+            // Keep visual checklist aligned with canonical selected options from event data.
+            syncServiceChecklistFromSelect();
+        }
+
+        const showRollingToggle = isEditing && allowAdditional;
+        rollNextAppointmentsWrap?.classList.toggle('d-none', !showRollingToggle);
+
+        if (!showRollingToggle && rollNextAppointmentsCheck) {
+            rollNextAppointmentsCheck.checked = false;
+        }
+
+        if (!showRollingToggle) {
+            hideRollPreview();
+        }
+
+        if (!isEditing) {
+            if (keepCurrentDateCheck) {
+                keepCurrentDateCheck.checked = false;
+            }
+            if (keepCurrentTimeCheck) {
+                keepCurrentTimeCheck.checked = false;
+            }
+        }
+
+        syncEditDateTimeLockState();
+        syncCommercialEditState();
+    }
 
     function formatCalendarTitleDate(dateValue) {
         const normalized = String(dateValue || '').trim();
@@ -1275,6 +1774,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (appointmentIdInput) {
             appointmentIdInput.value = '';
         }
+        currentEditingEventData = null;
+        appointmentCommercialLocked = false;
+
+        if (allowServiceChangeCheck) {
+            allowServiceChangeCheck.checked = false;
+        }
+
+        if (allowAdditionalServicesCheck) {
+            allowAdditionalServicesCheck.checked = false;
+        }
+
+        if (rollNextAppointmentsCheck) {
+            rollNextAppointmentsCheck.checked = false;
+        }
+
+        if (keepCurrentDateCheck) {
+            keepCurrentDateCheck.checked = false;
+        }
+
+        if (keepCurrentTimeCheck) {
+            keepCurrentTimeCheck.checked = false;
+        }
+
+        originalEditingDate = '';
+        originalEditingStartTime = '';
+
+        hideRollPreview();
 
         workflowActionsWrap?.classList.add('d-none');
 
@@ -1290,6 +1816,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         setCreateCustomerMode(false);
+        syncAppointmentServiceEditControls();
         syncAssociatedSaleState();
         showBookingTab(bookingTabDataButton);
     }
@@ -1302,6 +1829,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         workflowActionsWrap?.classList.remove('d-none');
+        if (keepCurrentDateCheck) {
+            keepCurrentDateCheck.checked = true;
+        }
+        if (keepCurrentTimeCheck) {
+            keepCurrentTimeCheck.checked = true;
+        }
+        syncAppointmentServiceEditControls();
     }
 
     function normalizeWhatsappPhone(phoneValue) {
@@ -1436,13 +1970,219 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function syncPaymentSummary() {
+    function ensureCustomerOption(customerId, customerName = '', customerPhone = '') {
+        if (!customerSelect) {
+            return;
+        }
+
+        const normalizedId = Number(customerId || 0);
+        if (normalizedId <= 0) {
+            return;
+        }
+
+        const existingOption = Array.from(customerSelect.options || []).find((option) => Number(option.value || 0) === normalizedId);
+        if (existingOption) {
+            return;
+        }
+
+        const nameLabel = String(customerName || 'Cliente').trim() || 'Cliente';
+        const phoneLabel = String(customerPhone || '').trim();
+        const option = document.createElement('option');
+        option.value = String(normalizedId);
+        option.textContent = phoneLabel ? `${nameLabel} · ${phoneLabel}` : nameLabel;
+        customerSelect.appendChild(option);
+    }
+
+    function toMinutes(timeValue) {
+        const raw = String(timeValue || '').trim();
+        const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+        if (!match) {
+            return null;
+        }
+
+        const hours = Number(match[1]);
+        const minutes = Number(match[2]);
+        if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+            return null;
+        }
+
+        return (hours * 60) + minutes;
+    }
+
+    function formatMinutesToTime(totalMinutes) {
+        const normalized = Math.max(0, Number(totalMinutes || 0));
+        const hours = String(Math.floor(normalized / 60)).padStart(2, '0');
+        const minutes = String(normalized % 60).padStart(2, '0');
+        return `${hours}:${minutes}`;
+    }
+
+    function getSelectedServicesTotalMinutes() {
         const selectedServices = getSelectedServices();
-        const servicePriceUsd = selectedServices.reduce((carry, service) => carry + Number(service?.price || 0), 0);
-        const paidAmount = Number(paidAmountInput?.value || 0);
+        return Math.max(15, selectedServices.reduce((carry, service) => {
+            return carry + Number(service?.duration_minutes || 0) + Number(service?.buffer_minutes || 0);
+        }, 0));
+    }
+
+    function hideRollPreview() {
+        rollPreviewBox?.classList.add('d-none');
+        if (rollPreviewTitle) {
+            rollPreviewTitle.textContent = '';
+        }
+        if (rollPreviewDetail) {
+            rollPreviewDetail.textContent = '';
+        }
+    }
+
+    function updateRollPreview() {
+        const isEditing = Number(appointmentIdInput?.value || 0) > 0;
+        if (!isEditing || !rollNextAppointmentsCheck?.checked) {
+            hideRollPreview();
+            return;
+        }
+
+        const selectedDate = String(dateInput?.value || currentEditingEventData?.date || '').trim();
+        const selectedUserId = Number(userSelect?.value || currentEditingEventData?.user_id || 0);
+        const selectedStartTime = String(slotSelect?.value || currentEditingEventData?.start_time || '').trim();
+        const selectedServiceIds = getSelectedServiceIds();
+
+        if (!selectedDate || selectedUserId <= 0 || !selectedStartTime || !selectedServiceIds.length) {
+            hideRollPreview();
+            return;
+        }
+
+        const anchorStart = toMinutes(selectedStartTime);
+        if (anchorStart === null) {
+            hideRollPreview();
+            return;
+        }
+
+        let cursor = anchorStart + getSelectedServicesTotalMinutes();
+        const targetAppointmentId = Number(appointmentIdInput?.value || 0);
+
+        const sameLineAppointments = (Array.isArray(appointmentEvents) ? appointmentEvents : [])
+            .filter((event) => {
+                const eventId = Number(event?.id || 0);
+                const eventUserId = Number(event?.user_id || 0);
+                const eventDate = String(event?.date || '').trim();
+                const statusKey = String(event?.status_key || '').toLowerCase();
+
+                if (eventId <= 0 || eventId === targetAppointmentId) {
+                    return false;
+                }
+                if (eventUserId !== selectedUserId || eventDate !== selectedDate) {
+                    return false;
+                }
+                if (statusKey === 'cancelled' || statusKey === 'no_show') {
+                    return false;
+                }
+
+                return true;
+            })
+            .map((event) => {
+                const startMin = toMinutes(event?.start_time || '');
+                const explicitDuration = Number(event?.duration_minutes || 0);
+                const duration = explicitDuration > 0
+                    ? explicitDuration
+                    : (() => {
+                        const endMin = toMinutes(event?.end_time || '');
+                        if (startMin === null || endMin === null) {
+                            return 60;
+                        }
+                        return Math.max(15, endMin - startMin);
+                    })();
+
+                return {
+                    title: String(event?.title || 'Cita').trim(),
+                    customer: String(event?.customer || 'Cliente').trim(),
+                    startMin,
+                    duration: Math.max(15, Number(duration || 0)),
+                };
+            })
+            .filter((event) => event.startMin !== null && event.startMin >= anchorStart)
+            .sort((a, b) => Number(a.startMin) - Number(b.startMin));
+
+        const moved = [];
+        sameLineAppointments.forEach((event) => {
+            const originalStart = Number(event.startMin);
+            const originalEnd = originalStart + Number(event.duration);
+
+            if (originalStart < cursor) {
+                const newStart = cursor;
+                const newEnd = newStart + Number(event.duration);
+                moved.push({
+                    customer: event.customer,
+                    from: `${formatMinutesToTime(originalStart)}-${formatMinutesToTime(originalEnd)}`,
+                    to: `${formatMinutesToTime(newStart)}-${formatMinutesToTime(newEnd)}`,
+                });
+                cursor = newEnd;
+                return;
+            }
+
+            if (originalEnd > cursor) {
+                cursor = originalEnd;
+            }
+        });
+
+        rollPreviewBox?.classList.remove('d-none');
+        if (!moved.length) {
+            if (rollPreviewTitle) {
+                rollPreviewTitle.textContent = 'No se moverán citas con esta configuración.';
+            }
+            if (rollPreviewDetail) {
+                rollPreviewDetail.textContent = 'No hay solapes detectados para el profesional y fecha seleccionados.';
+            }
+            return;
+        }
+
+        const sample = moved
+            .slice(0, 3)
+            .map((item) => `${item.customer}: ${item.from} -> ${item.to}`)
+            .join(' | ');
+        const remaining = moved.length - 3;
+
+        if (rollPreviewTitle) {
+            rollPreviewTitle.textContent = `Se moverán ${moved.length} cita(s) en cascada.`;
+        }
+        if (rollPreviewDetail) {
+            rollPreviewDetail.textContent = remaining > 0
+                ? `${sample} | y ${remaining} cita(s) adicional(es).`
+                : sample;
+        }
+    }
+
+    function syncPaymentSummary() {
+        const totals = resolveAppointmentTotalsUsd();
+        const servicesTotalUsd = totals.servicesTotalUsd;
+        const consumptionsTotalUsd = totals.consumptionsTotalUsd;
+        const servicePriceUsd = totals.totalUsd;
+        const paidAmount = getTotalAppointmentPaidAmountFromInputs();
         const pendingAmount = Math.max(0, servicePriceUsd - paidAmount);
+        const servicesTotalBs = appointmentBsRate > 0 ? (servicesTotalUsd * appointmentBsRate) : 0;
+        const itemsTotalBs = appointmentBsRate > 0 ? (consumptionsTotalUsd * appointmentBsRate) : 0;
         const servicePriceBs = appointmentBsRate > 0 ? (servicePriceUsd * appointmentBsRate) : 0;
+        const paidAmountBs = appointmentBsRate > 0 ? (paidAmount * appointmentBsRate) : 0;
+        const pendingAmountBs = appointmentBsRate > 0 ? (pendingAmount * appointmentBsRate) : 0;
         const isFractioned = paidAmount > 0 && pendingAmount > 0;
+
+        if (servicesSubtotalUsdLabel) {
+            servicesSubtotalUsdLabel.textContent = `${servicesTotalUsd.toFixed(2)} $`;
+        }
+
+        if (itemsSubtotalUsdLabel) {
+            itemsSubtotalUsdLabel.textContent = `${consumptionsTotalUsd.toFixed(2)} $`;
+        }
+
+        if (servicesSubtotalBsLabel) {
+            servicesSubtotalBsLabel.textContent = appointmentBsRate > 0
+                ? `${servicesTotalBs.toFixed(2)} Bs`
+                : 'Sin tasa Bs';
+        }
+
+        if (itemsSubtotalBsLabel) {
+            itemsSubtotalBsLabel.textContent = appointmentBsRate > 0
+                ? `${itemsTotalBs.toFixed(2)} Bs`
+                : 'Sin tasa Bs';
+        }
 
         if (servicePriceUsdLabel) {
             servicePriceUsdLabel.textContent = `${servicePriceUsd.toFixed(2)} $`;
@@ -1458,9 +2198,34 @@ document.addEventListener('DOMContentLoaded', () => {
             paidAmountLabel.textContent = `${paidAmount.toFixed(2)} $`;
         }
 
+        if (paidAmountSubLabel) {
+            paidAmountSubLabel.textContent = appointmentBsRate > 0
+                ? `${paidAmountBs.toFixed(2)} Bs`
+                : 'Sin tasa Bs';
+        }
+
         if (pendingAmountLabel) {
             pendingAmountLabel.textContent = `${pendingAmount.toFixed(2)} $`;
         }
+
+        if (pendingAmountSubLabel) {
+            pendingAmountSubLabel.textContent = appointmentBsRate > 0
+                ? `${pendingAmountBs.toFixed(2)} Bs`
+                : 'Sin tasa Bs';
+        }
+
+        if (mainPaymentConversionHint) {
+            const mainAmount = parseMoneyValue(paidAmountInput?.value || 0);
+            const mainCurrency = resolvePaymentCurrencyFromSelect(paymentMethodSelect);
+            const mainAmountUsd = convertPaymentAmountToUsd(mainAmount, mainCurrency);
+            mainPaymentConversionHint.textContent = `Abono en ${mainCurrency}: ${mainAmount.toFixed(2)} · Equivalente USD: ${mainAmountUsd.toFixed(2)} $`;
+        }
+
+        appointmentPaymentRows().forEach((row) => {
+            syncPaymentRowReferenceRequirement(row);
+        });
+
+        syncPaymentProofRequirement();
 
         if (fractionedBadge) {
             fractionedBadge.textContent = isFractioned
@@ -1511,7 +2276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         adminWhatsappButton.classList.remove('d-none');
     }
 
-    async function runWorkflowAction(actionKey) {
+    async function runWorkflowAction(actionKey, triggerButton = null) {
         const appointmentId = Number(appointmentIdInput?.value || 0);
         if (appointmentId <= 0) {
             alert('Debes abrir una cita existente para usar esta acción.');
@@ -1541,6 +2306,7 @@ document.addEventListener('DOMContentLoaded', () => {
             workflowActionButtons.forEach((button) => {
                 button.disabled = true;
             });
+            setButtonLoading(triggerButton, 'Procesando...');
 
             const response = await fetch(endpoint, {
                 method: 'POST',
@@ -1568,6 +2334,7 @@ document.addEventListener('DOMContentLoaded', () => {
             workflowActionButtons.forEach((button) => {
                 button.disabled = false;
             });
+            clearButtonLoading(triggerButton);
         }
     }
 
@@ -1625,6 +2392,37 @@ document.addEventListener('DOMContentLoaded', () => {
         ].join('|');
     }
 
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function buildCompactServiceTitle(titleValue) {
+        const rawTitle = String(titleValue || '').trim();
+        if (rawTitle === '') {
+            return { primary: 'Servicio', extraCount: 0, full: 'Servicio' };
+        }
+
+        const parts = rawTitle
+            .split(' + ')
+            .map((part) => String(part || '').trim())
+            .filter((part) => part !== '');
+
+        if (!parts.length) {
+            return { primary: rawTitle, extraCount: 0, full: rawTitle };
+        }
+
+        return {
+            primary: parts[0],
+            extraCount: Math.max(0, parts.length - 1),
+            full: parts.join(' + '),
+        };
+    }
+
     function renderMonthView() {
         if (!monthList) {
             return;
@@ -1644,9 +2442,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const items = sortedEvents.map((event) => {
             const statusColor = resolveAppointmentStatusColor(event.status_key);
             const paymentColor = resolveAppointmentPaymentColor(event.payment_status_key);
+            const compactTitle = buildCompactServiceTitle(event.title);
+            const extraBadge = compactTitle.extraCount > 0
+                ? `<span class="appointments-calendar-event-services-badge">+${compactTitle.extraCount}</span>`
+                : '';
             return `
                 <div class="appointment-upcoming-item">
-                    <div class="fw-semibold">${event.title}</div>
+                    <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div class="fw-semibold">${escapeHtml(compactTitle.primary)}</div>
+                        ${extraBadge}
+                    </div>
+                    ${compactTitle.extraCount > 0 ? `<div class="appointment-inline-note">${escapeHtml(compactTitle.full)}</div>` : ''}
                     <div class="appointment-inline-note">${event.date} · ${event.start_time} - ${event.end_time} · ${event.professional}</div>
                     <div>${event.customer}</div>
                     <div class="appointments-calendar-event-indicators mt-1">
@@ -1768,6 +2574,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const card = document.createElement('button');
                 const statusColor = resolveAppointmentStatusColor(event.status_key);
                 const paymentColor = resolveAppointmentPaymentColor(event.payment_status_key);
+                const compactTitle = buildCompactServiceTitle(event.title);
+                const extraBadge = compactTitle.extraCount > 0
+                    ? `<span class="appointments-calendar-event-services-badge">+${compactTitle.extraCount}</span>`
+                    : '';
                 const eventKey = getCalendarEventKey(event);
                 const previousEvent = previousMap.get(eventKey);
                 const previousSignature = getCalendarEventSignature(previousEvent);
@@ -1777,11 +2587,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.style.top = `${(event.minutes_from_start / 60) * calendarHourHeight + 4}px`;
                 card.style.height = `${Math.max(54, (event.duration_minutes / 60) * calendarHourHeight - 8)}px`;
                 card.style.background = event.color_hex || '#0f172a';
+                card.title = `${compactTitle.full}\n${event.start_time} - ${event.end_time}\n${event.customer}`;
                 card.innerHTML = `
                     <span class="appointments-calendar-event-ribbon" style="background:${statusColor};"></span>
-                    <div class="appointments-calendar-event-title">${event.title}</div>
+                    <div class="appointments-calendar-event-title-row">
+                        <div class="appointments-calendar-event-title">${escapeHtml(compactTitle.primary)}</div>
+                        ${extraBadge}
+                    </div>
                     <div class="appointments-calendar-event-meta">${event.start_time} - ${event.end_time}</div>
-                    <div class="appointments-calendar-event-meta">${event.professional}</div>
                     <div class="appointments-calendar-event-meta">${event.customer}</div>
                     <div class="appointments-calendar-event-indicators">
                         <span class="appointment-state-chip"><span class="appointment-state-dot" style="background:${statusColor};"></span>${event.status}</span>
@@ -1900,6 +2713,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getSelectedServiceIds() {
+        if (!isServiceSelectionEditable()) {
+            return Array.from(serviceSelect?.selectedOptions || [])
+                .map((option) => Number(option.value || 0))
+                .filter((id) => id > 0);
+        }
+
+        const checkedIds = Array.from(document.querySelectorAll('.appointment-service-check:checked'))
+            .map((input) => Number(input.dataset.serviceId || 0))
+            .filter((id) => id > 0);
+
+        if (checkedIds.length > 0) {
+            return checkedIds;
+        }
+
         return Array.from(serviceSelect?.selectedOptions || [])
             .map((option) => Number(option.value || 0))
             .filter((id) => id > 0);
@@ -1938,8 +2765,12 @@ document.addEventListener('DOMContentLoaded', () => {
             serviceMeta.textContent = `${names} · ${totalMinutes} min · ${totalPrice.toFixed(2)} $`;
         }
 
-        if (selectedServices.length === 1 && selectedService.assigned_user_id && userSelect) {
-            userSelect.value = String(selectedService.assigned_user_id);
+        const assignedIds = Array.isArray(selectedService.assigned_user_ids)
+            ? selectedService.assigned_user_ids.map((id) => Number(id || 0)).filter((id) => id > 0)
+            : [];
+
+        if (selectedServices.length === 1 && assignedIds.length === 1 && userSelect) {
+            userSelect.value = String(assignedIds[0]);
         }
 
         syncAssociatedSaleState();
@@ -1947,11 +2778,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function buildConsumptionOptions(selectedId = '') {
-        const options = ['<option value="">Selecciona un consumible</option>'];
+        const options = ['<option value="">Selecciona un item</option>'];
+        const consumableGroup = [];
+        const saleGroup = [];
+
         consumableVariants.forEach((variant) => {
             const isSelected = String(selectedId) === String(variant.id) ? 'selected' : '';
-            options.push(`<option value="${variant.id}" ${isSelected}>${variant.label} · Stock ${Number(variant.stock || 0).toFixed(2)}</option>`);
+            const optionHtml = `<option value="${variant.id}" ${isSelected}>${variant.label} · Stock ${Number(variant.stock || 0).toFixed(2)}</option>`;
+            if (variant.is_consumable) {
+                consumableGroup.push(optionHtml);
+                return;
+            }
+
+            saleGroup.push(optionHtml);
         });
+
+        if (consumableGroup.length) {
+            options.push(`<optgroup label="Consumibles">${consumableGroup.join('')}</optgroup>`);
+        }
+
+        if (saleGroup.length) {
+            options.push(`<optgroup label="Productos de venta">${saleGroup.join('')}</optgroup>`);
+        }
+
         return options.join('');
     }
 
@@ -1962,7 +2811,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!meta) return;
         meta.textContent = selectedVariant
             ? `Costo ref. ${Number(selectedVariant.unit_cost || 0).toFixed(2)} · Stock ${Number(selectedVariant.stock || 0).toFixed(2)}`
-            : 'Selecciona el consumible usado en la cita.';
+            : 'Selecciona el item usado o vendido durante la cita.';
     }
 
     function addConsumptionRow(selectedId = '', quantity = '') {
@@ -1973,7 +2822,7 @@ document.addEventListener('DOMContentLoaded', () => {
         row.innerHTML = `
             <div class="row g-2 align-items-end">
                 <div class="col-12 col-md-7">
-                    <label class="form-label">Consumible</label>
+                    <label class="form-label">Item</label>
                     <select name="consumptions[${index}][variant_id]" class="form-control border border-1 p-2 appointment-consumption-variant">
                         ${buildConsumptionOptions(selectedId)}
                     </select>
@@ -1990,6 +2839,215 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         consumptionsWrapper.appendChild(row);
         updateConsumptionMeta(row);
+        syncCommercialEditState();
+    }
+
+    function clearConsumptionRows() {
+        if (!consumptionsWrapper) {
+            return;
+        }
+
+        consumptionsWrapper.innerHTML = '';
+    }
+
+    function appointmentPaymentRows() {
+        if (!appointmentPaymentsWrapper) {
+            return [];
+        }
+
+        return Array.from(appointmentPaymentsWrapper.querySelectorAll('.appointment-payment-row'));
+    }
+
+    function syncAppointmentPaymentRowsIndices() {
+        appointmentPaymentRows().forEach((row, index) => {
+            row.dataset.paymentIndex = String(index);
+            const methodSelect = row.querySelector('.appointment-payment-method');
+            const amountInput = row.querySelector('.appointment-payment-amount');
+            const referenceInput = row.querySelector('.appointment-payment-reference');
+            const statusSelect = row.querySelector('.appointment-payment-status');
+
+            if (methodSelect) methodSelect.name = `payment_entries[${index}][payment_method_id]`;
+            if (amountInput) amountInput.name = `payment_entries[${index}][paid_amount]`;
+            if (referenceInput) referenceInput.name = `payment_entries[${index}][payment_reference]`;
+            if (statusSelect) statusSelect.name = `payment_entries[${index}][payment_status]`;
+        });
+    }
+
+    function addAppointmentPaymentRow(initial = {}) {
+        if (!appointmentPaymentsWrapper || !paymentMethodSelect) {
+            return;
+        }
+
+        const row = document.createElement('div');
+        row.className = 'appointment-payment-row border rounded p-2';
+        row.innerHTML = `
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Método</label>
+                    <select class="form-control border border-1 p-2 appointment-payment-method">
+                        ${paymentMethodSelect.innerHTML}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Monto</label>
+                    <div class="d-flex gap-1 align-items-center">
+                        <input type="number" step="0.01" min="0" class="form-control border border-1 p-2 appointment-payment-amount" value="${Number(initial?.paid_amount || 0) > 0 ? Number(initial.paid_amount).toFixed(2) : ''}" placeholder="0.00">
+                        <button type="button" class="btn btn-outline-dark btn-sm mb-0 appointment-payment-fill-remaining">Restante</button>
+                    </div>
+                    <div class="appointment-inline-note mt-1 appointment-payment-conversion">Equivalente USD: 0.00 $</div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Referencia</label>
+                    <input type="text" class="form-control border border-1 p-2 appointment-payment-reference" value="${String(initial?.payment_reference || '').replace(/\"/g, '&quot;')}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Estado</label>
+                    <div class="d-flex gap-1 align-items-center">
+                        <select class="form-control border border-1 p-2 appointment-payment-status">
+                            ${paymentStatusSelect ? paymentStatusSelect.innerHTML : ''}
+                        </select>
+                        <button type="button" class="btn btn-outline-danger btn-sm mb-0 appointment-remove-payment-row">Quitar</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const methodSelect = row.querySelector('.appointment-payment-method');
+        const statusSelect = row.querySelector('.appointment-payment-status');
+
+        if (methodSelect && initial?.payment_method_id) {
+            methodSelect.value = String(initial.payment_method_id);
+        }
+        if (statusSelect && initial?.payment_status) {
+            statusSelect.value = String(initial.payment_status);
+        }
+
+        appointmentPaymentsWrapper.appendChild(row);
+        syncPaymentRowReferenceRequirement(row);
+        syncAppointmentPaymentRowsIndices();
+        syncCommercialEditState();
+    }
+
+    function clearAppointmentPaymentRows() {
+        if (!appointmentPaymentsWrapper) {
+            return;
+        }
+
+        appointmentPaymentsWrapper.innerHTML = '';
+    }
+
+    function parseMoneyValue(value) {
+        const normalized = String(value ?? '').trim().replace(',', '.');
+        const amount = Number(normalized);
+        return Number.isFinite(amount) ? amount : 0;
+    }
+
+    function resolvePaymentCurrencyFromSelect(selectElement) {
+        const selectedOption = selectElement?.selectedOptions?.[0] || null;
+        const code = String(selectedOption?.dataset?.currency || 'USD').trim().toUpperCase();
+        return code !== '' ? code : 'USD';
+    }
+
+    function convertPaymentAmountToUsd(amount, currencyCode) {
+        const value = Math.max(0, Number(amount || 0));
+        const currency = String(currencyCode || 'USD').trim().toUpperCase();
+        if (currency === 'BS') {
+            return appointmentBsRate > 0 ? value / appointmentBsRate : 0;
+        }
+        return value;
+    }
+
+    function convertUsdToCurrency(amountUsd, currencyCode) {
+        const value = Math.max(0, Number(amountUsd || 0));
+        const currency = String(currencyCode || 'USD').trim().toUpperCase();
+        if (currency === 'BS') {
+            return appointmentBsRate > 0 ? value * appointmentBsRate : 0;
+        }
+        return value;
+    }
+
+    function resolveAppointmentTotalsUsd() {
+        const selectedServices = getSelectedServices();
+        const servicesTotalUsd = selectedServices.reduce((carry, service) => carry + Number(service?.price || 0), 0);
+        const consumptionsTotalUsd = Array.from(consumptionsWrapper?.querySelectorAll('.appointment-consumption-row') || []).reduce((carry, row) => {
+            const select = row.querySelector('.appointment-consumption-variant');
+            const quantityInput = row.querySelector('input[name*="[quantity]"]');
+            const variantId = Number(select?.value || 0);
+            const quantity = parseMoneyValue(quantityInput?.value || 0);
+            if (variantId <= 0 || quantity <= 0) {
+                return carry;
+            }
+
+            const variant = consumableVariants.find((item) => Number(item.id) === variantId);
+            const unitCost = Number(variant?.unit_cost || 0);
+
+            return carry + (unitCost * quantity);
+        }, 0);
+
+        return {
+            servicesTotalUsd,
+            consumptionsTotalUsd,
+            totalUsd: servicesTotalUsd + consumptionsTotalUsd,
+        };
+    }
+
+    function getMainPaymentAmountUsd() {
+        const amount = parseMoneyValue(paidAmountInput?.value || 0);
+        const currency = resolvePaymentCurrencyFromSelect(paymentMethodSelect);
+        return convertPaymentAmountToUsd(amount, currency);
+    }
+
+    function getPaymentRowAmountUsd(row) {
+        const methodSelect = row?.querySelector('.appointment-payment-method');
+        const amountInput = row?.querySelector('.appointment-payment-amount');
+        const amount = parseMoneyValue(amountInput?.value || 0);
+        const currency = resolvePaymentCurrencyFromSelect(methodSelect);
+        return convertPaymentAmountToUsd(amount, currency);
+    }
+
+    function getTotalAppointmentPaidAmountFromInputs() {
+        const baseAmountUsd = getMainPaymentAmountUsd();
+        const rowAmountsUsd = appointmentPaymentRows().reduce((sum, row) => sum + getPaymentRowAmountUsd(row), 0);
+        return Math.max(0, baseAmountUsd + rowAmountsUsd);
+    }
+
+    function hasReferenceBasedPaymentWithAmount() {
+        const baseOption = paymentMethodSelect?.selectedOptions?.[0] || null;
+        const baseRequiresReference = baseOption?.dataset?.hasReference === '1';
+        const baseAmount = parseMoneyValue(paidAmountInput?.value || 0);
+        if (baseRequiresReference && baseAmount > 0) {
+            return true;
+        }
+
+        return appointmentPaymentRows().some((row) => {
+            const methodSelect = row.querySelector('.appointment-payment-method');
+            const option = methodSelect?.selectedOptions?.[0] || null;
+            const requiresReference = option?.dataset?.hasReference === '1';
+            const amount = parseMoneyValue(row.querySelector('.appointment-payment-amount')?.value || 0);
+            return requiresReference && amount > 0;
+        });
+    }
+
+    function syncPaymentProofRequirement() {
+        const requiresProof = hasReferenceBasedPaymentWithAmount();
+
+        if (appointmentRequirePaymentProofInput) {
+            appointmentRequirePaymentProofInput.value = requiresProof ? '1' : '0';
+        }
+
+        if (appointmentPaymentProofInput) {
+            appointmentPaymentProofInput.required = requiresProof;
+        }
+
+        if (appointmentPaymentProofGroup) {
+            appointmentPaymentProofGroup.classList.toggle('d-none', !requiresProof);
+        }
+
+        if (appointmentPaymentProofHint) {
+            appointmentPaymentProofHint.textContent = requiresProof
+                ? 'Este pago requiere comprobante. Sube una imagen (jpg, png o webp).'
+                : 'Sube comprobante solo cuando el método de pago lo requiera.';
+        }
     }
 
     function syncPaymentReferenceRequirement() {
@@ -2004,6 +3062,70 @@ document.addEventListener('DOMContentLoaded', () => {
                 paymentReferenceInput.value = paymentReferenceInput.value || '';
             }
         }
+    }
+
+    function syncPaymentRowReferenceRequirement(row) {
+        if (!row) {
+            return;
+        }
+
+        const methodSelect = row.querySelector('.appointment-payment-method');
+        const referenceInput = row.querySelector('.appointment-payment-reference');
+        const selectedOption = methodSelect?.selectedOptions?.[0] || null;
+        const requiresReference = selectedOption?.dataset?.hasReference === '1';
+
+        if (referenceInput) {
+            referenceInput.required = !!requiresReference;
+        }
+
+        const amountInput = row.querySelector('.appointment-payment-amount');
+        const conversionHint = row.querySelector('.appointment-payment-conversion');
+        const rowCurrency = resolvePaymentCurrencyFromSelect(methodSelect);
+        const rowAmount = parseMoneyValue(amountInput?.value || 0);
+        const rowAmountUsd = convertPaymentAmountToUsd(rowAmount, rowCurrency);
+        if (conversionHint) {
+            conversionHint.textContent = `Equivalente USD: ${rowAmountUsd.toFixed(2)} $`;
+        }
+    }
+
+    function fillMainPaymentWithRemaining() {
+        if (!paidAmountInput) {
+            return;
+        }
+
+        const totals = resolveAppointmentTotalsUsd();
+        const extraRowsPaidUsd = appointmentPaymentRows().reduce((sum, row) => sum + getPaymentRowAmountUsd(row), 0);
+        const pendingUsd = Math.max(0, totals.totalUsd - extraRowsPaidUsd);
+        const mainCurrency = resolvePaymentCurrencyFromSelect(paymentMethodSelect);
+        const pendingInCurrency = convertUsdToCurrency(pendingUsd, mainCurrency);
+        paidAmountInput.value = pendingInCurrency > 0 ? pendingInCurrency.toFixed(2) : '';
+        syncPaymentSummary();
+    }
+
+    function fillPaymentRowWithRemaining(row) {
+        if (!row) {
+            return;
+        }
+
+        const amountInput = row.querySelector('.appointment-payment-amount');
+        if (!amountInput) {
+            return;
+        }
+
+        const totals = resolveAppointmentTotalsUsd();
+        const rowCurrency = resolvePaymentCurrencyFromSelect(row.querySelector('.appointment-payment-method'));
+
+        const alreadyPaidUsd = getMainPaymentAmountUsd() + appointmentPaymentRows().reduce((sum, currentRow) => {
+            if (currentRow === row) {
+                return sum;
+            }
+            return sum + getPaymentRowAmountUsd(currentRow);
+        }, 0);
+
+        const pendingUsd = Math.max(0, totals.totalUsd - alreadyPaidUsd);
+        const pendingInCurrency = convertUsdToCurrency(pendingUsd, rowCurrency);
+        amountInput.value = pendingInCurrency > 0 ? pendingInCurrency.toFixed(2) : '';
+        syncPaymentSummary();
     }
 
     function roundToHourLabelFromOffset(offsetY) {
@@ -2035,9 +3157,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (eventData?.id && appointmentIdInput) {
             appointmentIdInput.value = String(eventData.id);
+            currentEditingEventData = eventData;
+            originalEditingDate = String(eventData?.date || date || '').trim();
+            originalEditingStartTime = String(eventData?.start_time || startTime || '').trim();
+            appointmentCommercialLocked = isCommercialEditionLockedByEvent(eventData);
             setBookingFormEditMode();
         } else {
             resetBookingFormMode();
+            appointmentCommercialLocked = false;
+        }
+
+        clearConsumptionRows();
+        clearAppointmentPaymentRows();
+        if (appointmentPaymentProofInput) {
+            appointmentPaymentProofInput.value = '';
         }
 
         if (serviceSelect) {
@@ -2048,16 +3181,18 @@ document.addEventListener('DOMContentLoaded', () => {
             Array.from(serviceSelect.options).forEach((option) => {
                 option.selected = preselectedServiceIds.includes(String(option.value || ''));
             });
+            syncServiceChecklistFromSelect();
         }
 
         if (eventData?.user_id && userSelect) {
             userSelect.value = String(eventData.user_id);
         }
 
-        if (eventData?.customer_id) {
-            const customerSelect = bookingForm?.querySelector('[name="customer_id"]');
+        const eventCustomerId = Number(eventData?.customer_id || 0);
+        if (eventCustomerId > 0) {
+            ensureCustomerOption(eventCustomerId, eventData?.customer || eventData?.contact_name || 'Cliente', eventData?.contact_phone || '');
             if (customerSelect) {
-                customerSelect.value = String(eventData.customer_id);
+                customerSelect.value = String(eventCustomerId);
             }
         }
 
@@ -2078,28 +3213,93 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 contactPhoneInput.value = splitPhone.local || '';
             }
-            if (paymentMethodSelect) paymentMethodSelect.value = eventData.payment_method_id ? String(eventData.payment_method_id) : '';
-            if (paidAmountInput) paidAmountInput.value = Number(eventData.paid_amount || 0) > 0 ? String(eventData.paid_amount) : '';
-            if (paymentReferenceInput) paymentReferenceInput.value = eventData.payment_reference || '';
-            if (paymentStatusSelect) paymentStatusSelect.value = eventData.payment_status_key || 'pending';
+            const existingPaymentEntries = Array.isArray(eventData.payment_entries) ? eventData.payment_entries : [];
+            const firstPaymentEntry = existingPaymentEntries[0] || null;
+
+            if (paymentMethodSelect) {
+                paymentMethodSelect.value = firstPaymentEntry?.payment_method_id
+                    ? String(firstPaymentEntry.payment_method_id)
+                    : (eventData.payment_method_id ? String(eventData.payment_method_id) : '');
+            }
+            if (paidAmountInput) {
+                const firstAmount = Number(firstPaymentEntry?.paid_amount || 0);
+                paidAmountInput.value = firstAmount > 0
+                    ? firstAmount.toFixed(2)
+                    : (Number(eventData.paid_amount || 0) > 0 ? String(eventData.paid_amount) : '');
+            }
+            if (paymentReferenceInput) {
+                paymentReferenceInput.value = String(firstPaymentEntry?.payment_reference || eventData.payment_reference || '');
+            }
+            if (paymentStatusSelect) {
+                paymentStatusSelect.value = String(firstPaymentEntry?.payment_status || eventData.payment_status_key || 'pending');
+            }
+
+            existingPaymentEntries.slice(1).forEach((entry) => addAppointmentPaymentRow(entry));
             if (appointmentStatusSelect) appointmentStatusSelect.value = eventData.status_key || 'scheduled';
             if (notesInput) notesInput.value = eventData.notes || '';
-            setCreateCustomerMode(false);
+
+            const existingConsumptions = Array.isArray(eventData.consumptions) ? eventData.consumptions : [];
+            existingConsumptions.forEach((item) => {
+                const variantId = Number(item?.variant_id || 0);
+                const quantity = Number(item?.quantity || 0);
+                if (variantId > 0 && quantity > 0) {
+                    addConsumptionRow(String(variantId), String(quantity));
+                }
+            });
+
+            if (eventCustomerId > 0) {
+                setCreateCustomerMode(false);
+                if (customerEmailInput) {
+                    customerEmailInput.value = String(eventData.customer_email || '');
+                }
+                if (customerDniInput) {
+                    customerDniInput.value = String(eventData.customer_dni || '');
+                }
+            } else {
+                const landingSource = String(eventData.source || '').toLowerCase() === 'landing';
+                setCreateCustomerMode(landingSource);
+                if (landingSource) {
+                    if (contactNameInput && !String(contactNameInput.value || '').trim()) {
+                        contactNameInput.value = String(eventData.customer || '').trim();
+                    }
+                    if (customerEmailInput) {
+                        customerEmailInput.value = String(eventData.customer_email || '');
+                    }
+                    if (customerDniInput) {
+                        customerDniInput.value = String(eventData.customer_dni || '');
+                    }
+                }
+            }
 
             syncAdminWhatsappLink(eventData);
             syncAssociatedSaleState(eventData);
         } else {
+            if (paymentMethodSelect) paymentMethodSelect.value = '';
+            if (paidAmountInput) paidAmountInput.value = '';
+            if (paymentReferenceInput) paymentReferenceInput.value = '';
+            if (paymentStatusSelect) paymentStatusSelect.value = 'pending';
             syncAdminWhatsappLink();
             syncAssociatedSaleState();
         }
 
         syncServiceMetadata();
         syncPaymentReferenceRequirement();
+        syncPaymentSummary();
         const slots = await loadSlots();
-        const selectedStart = pickClosestSlot(slots, eventData?.start_time || startTime);
-        if (slotSelect && selectedStart) {
-            slotSelect.value = selectedStart;
+        const eventStartTime = String(eventData?.start_time || startTime || '').trim();
+        const selectedStart = pickClosestSlot(slots, eventStartTime);
+        if (slotSelect) {
+            if (eventData?.id && eventStartTime) {
+                ensureSelectOption(slotSelect, eventStartTime, `${eventStartTime} (hora actual de la cita)`);
+                slotSelect.value = eventStartTime;
+            } else if (selectedStart) {
+                slotSelect.value = selectedStart;
+            }
         }
+
+        syncEditDateTimeLockState();
+
+        updateRollPreview();
 
         bookingModal?.show();
     }
@@ -2119,6 +3319,10 @@ document.addEventListener('DOMContentLoaded', () => {
             user_id: userSelect.value,
             date: dateInput.value,
         });
+        const editingAppointmentId = Number(appointmentIdInput?.value || 0);
+        if (editingAppointmentId > 0) {
+            params.set('appointment_id', String(editingAppointmentId));
+        }
         params.set('service_id', String(selectedServiceIds[0] || ''));
         selectedServiceIds.forEach((serviceId) => params.append('service_ids[]', String(serviceId)));
 
@@ -2142,11 +3346,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 slotSelect.appendChild(option);
             });
 
-            if (appointmentFirstComeEnabled && slots[0]?.start) {
+            const lockTime = Number(appointmentIdInput?.value || 0) > 0 && !!keepCurrentTimeCheck?.checked;
+            if (lockTime) {
+                const fixedTime = String(originalEditingStartTime || slotSelect.value || '').trim();
+                if (fixedTime) {
+                    ensureSelectOption(slotSelect, fixedTime, `${fixedTime} (hora actual de la cita)`);
+                    slotSelect.value = fixedTime;
+                }
+            }
+
+            if (appointmentFirstComeEnabled && slots[0]?.start && !lockTime) {
                 slotSelect.value = String(slots[0].start);
             }
 
-            slotSelect.disabled = appointmentFirstComeEnabled;
+            slotSelect.disabled = appointmentFirstComeEnabled && !lockTime;
+
+            syncEditDateTimeLockState();
 
             return slots;
         } catch (error) {
@@ -2204,6 +3419,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const removeBtn = event.target.closest('.appointment-remove-consumption');
         if (!removeBtn) return;
         removeBtn.closest('.appointment-consumption-row')?.remove();
+        syncPaymentSummary();
     });
 
     consumptionsWrapper?.addEventListener('change', (event) => {
@@ -2211,19 +3427,45 @@ document.addEventListener('DOMContentLoaded', () => {
         if (row) {
             updateConsumptionMeta(row);
         }
+        syncPaymentSummary();
     });
 
-    addConsumptionBtn?.addEventListener('click', () => addConsumptionRow());
+    consumptionsWrapper?.addEventListener('input', (event) => {
+        if (event.target.matches('input[name*="[quantity]"]')) {
+            syncPaymentSummary();
+        }
+    });
 
-    serviceSelect?.addEventListener('change', () => {
+    addConsumptionBtn?.addEventListener('click', () => {
+        addConsumptionRow();
+        syncPaymentSummary();
+    });
+
+    serviceChecklist?.addEventListener('change', (event) => {
+        if (!event.target.classList.contains('appointment-service-check')) {
+            return;
+        }
+
+        syncServiceSelectFromChecklist();
         syncServiceMetadata();
         loadSlots();
         syncAdminWhatsappLink();
         syncPaymentSummary();
+        updateRollPreview();
+    });
+
+    serviceSelect?.addEventListener('change', () => {
+        syncServiceChecklistFromSelect();
+        syncServiceMetadata();
+        loadSlots();
+        syncAdminWhatsappLink();
+        syncPaymentSummary();
+        updateRollPreview();
     });
     userSelect?.addEventListener('change', () => {
         loadSlots();
         syncAdminWhatsappLink();
+        updateRollPreview();
     });
     dateInput?.addEventListener('change', () => {
         loadSlots();
@@ -2232,11 +3474,55 @@ document.addEventListener('DOMContentLoaded', () => {
             applyCalendarView();
         }
         syncAdminWhatsappLink();
+        updateRollPreview();
     });
-    paymentMethodSelect?.addEventListener('change', syncPaymentReferenceRequirement);
+    paymentMethodSelect?.addEventListener('change', () => {
+        syncPaymentReferenceRequirement();
+        syncPaymentSummary();
+    });
     paidAmountInput?.addEventListener('input', syncPaymentSummary);
     paymentStatusSelect?.addEventListener('change', syncPaymentSummary);
-    slotSelect?.addEventListener('change', () => syncAdminWhatsappLink());
+    appointmentPayRemainingBtn?.addEventListener('click', fillMainPaymentWithRemaining);
+    addAppointmentPaymentRowBtn?.addEventListener('click', () => {
+        addAppointmentPaymentRow();
+        syncPaymentSummary();
+    });
+    appointmentPaymentsWrapper?.addEventListener('click', (event) => {
+        const removeBtn = event.target.closest('.appointment-remove-payment-row');
+        if (removeBtn) {
+            removeBtn.closest('.appointment-payment-row')?.remove();
+            syncAppointmentPaymentRowsIndices();
+            syncPaymentSummary();
+            return;
+        }
+
+        const fillBtn = event.target.closest('.appointment-payment-fill-remaining');
+        if (fillBtn) {
+            const row = fillBtn.closest('.appointment-payment-row');
+            fillPaymentRowWithRemaining(row);
+        }
+    });
+    appointmentPaymentsWrapper?.addEventListener('change', (event) => {
+        const row = event.target.closest('.appointment-payment-row');
+        if (!row) {
+            return;
+        }
+
+        if (event.target.classList.contains('appointment-payment-method')) {
+            syncPaymentRowReferenceRequirement(row);
+        }
+
+        syncPaymentSummary();
+    });
+    appointmentPaymentsWrapper?.addEventListener('input', (event) => {
+        if (event.target.classList.contains('appointment-payment-amount')) {
+            syncPaymentSummary();
+        }
+    });
+    slotSelect?.addEventListener('change', () => {
+        syncAdminWhatsappLink();
+        updateRollPreview();
+    });
     contactPhoneInput?.addEventListener('input', () => syncAdminWhatsappLink());
     contactNameInput?.addEventListener('input', () => syncAdminWhatsappLink());
     contactPhoneCodeInput?.addEventListener('change', () => syncAdminWhatsappLink());
@@ -2252,9 +3538,45 @@ document.addEventListener('DOMContentLoaded', () => {
         setCreateCustomerMode(!currentlyNew);
     });
 
+    allowServiceChangeCheck?.addEventListener('change', () => {
+        syncAppointmentServiceEditControls();
+        updateRollPreview();
+    });
+
+    allowAdditionalServicesCheck?.addEventListener('change', () => {
+        syncAppointmentServiceEditControls();
+        if (allowAdditionalServicesCheck.checked) {
+            alert('Ahora puedes seleccionar uno o más servicios adicionales. Si la duración solapa otras citas, activa el check para rodar citas siguientes y notificar clientes afectados.');
+        }
+        updateRollPreview();
+    });
+
+    keepCurrentDateCheck?.addEventListener('change', () => {
+        syncEditDateTimeLockState();
+        updateRollPreview();
+    });
+
+    keepCurrentTimeCheck?.addEventListener('change', () => {
+        syncEditDateTimeLockState();
+        updateRollPreview();
+    });
+
+    rollNextAppointmentsCheck?.addEventListener('change', () => {
+        updateRollPreview();
+    });
+
     bookingForm?.addEventListener('submit', (event) => {
+        if (isServiceSelectionEditable()) {
+            syncServiceSelectFromChecklist();
+        }
+
         const selectedServiceIds = getSelectedServiceIds();
-        if (!selectedServiceIds.length) {
+        const isEditing = Number(appointmentIdInput?.value || 0) > 0;
+        const canTemporarilySaveWithoutServices = isEditing
+            && !appointmentCommercialLocked
+            && !!allowServiceChangeCheck?.checked;
+
+        if (!selectedServiceIds.length && !canTemporarilySaveWithoutServices) {
             alert('Debes seleccionar al menos un servicio para agendar la cita.');
             showBookingTab(bookingTabDataButton);
             event.preventDefault();
@@ -2263,6 +3585,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (primaryServiceInput) {
             primaryServiceInput.value = String(selectedServiceIds[0]);
+        }
+
+        if (!appointmentAllowUnpaidReservation && !isEditing) {
+            const totals = resolveAppointmentTotalsUsd();
+            const paidAmountUsd = getTotalAppointmentPaidAmountFromInputs();
+            const pendingAmountUsd = Math.max(0, totals.totalUsd - paidAmountUsd);
+
+            if (pendingAmountUsd > 0.009) {
+                alert(`Para crear una cita nueva debes completar el pago total. Total: ${totals.totalUsd.toFixed(2)} USD · Pagado: ${paidAmountUsd.toFixed(2)} USD · Pendiente: ${pendingAmountUsd.toFixed(2)} USD.`);
+                showBookingTab(bookingTabPaymentsButton);
+                event.preventDefault();
+                return;
+            }
         }
 
         const createNewCustomer = String(createCustomerInput?.value || '0') === '1';
@@ -2307,7 +3642,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            runWorkflowAction(actionKey);
+            runWorkflowAction(actionKey, button);
+        });
+    });
+
+    // Global form submit loading: improves UX and blocks double submissions.
+    document.querySelectorAll('form').forEach((form) => {
+        form.addEventListener('submit', (event) => {
+            if (event.defaultPrevented) {
+                return;
+            }
+
+            if (form.dataset.submitting === '1') {
+                event.preventDefault();
+                return;
+            }
+
+            form.dataset.submitting = '1';
+
+            const submitter = event.submitter && form.contains(event.submitter)
+                ? event.submitter
+                : form.querySelector('button[type="submit"]');
+
+            const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
+            submitButtons.forEach((button) => {
+                button.disabled = true;
+            });
+
+            if (submitter && submitter.tagName === 'BUTTON') {
+                setButtonLoading(submitter, submitter.dataset.loadingText || 'Procesando...');
+            }
+
+            Array.from(form.querySelectorAll('button[type="button"],button:not([type])')).forEach((button) => {
+                button.disabled = true;
+            });
         });
     });
 
@@ -2341,9 +3709,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     syncServiceMetadata();
+    syncServiceChecklistFromSelect();
     syncPaymentReferenceRequirement();
     syncPaymentSummary();
     resetBookingFormMode();
+    syncAppointmentServiceEditControls();
     if (calendarCard && isMobileQuery.matches && !@json($selectedCalendarView)) {
         calendarView = 'day';
     }

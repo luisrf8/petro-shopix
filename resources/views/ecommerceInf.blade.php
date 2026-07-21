@@ -1598,7 +1598,11 @@
         <div class="products-main-grid">
           <div>
             <div class="products-summary">
-              <span id="products-counter">Mostrando {{ $productItems->count() }} resultado{{ $productItems->count() == 1 ? '' : 's' }}</span>
+              @php
+                $servicesCatalogCount = collect($appointmentCatalogServices ?? [])->count();
+                $initialCatalogCount = $productItems->count() + $servicesCatalogCount;
+              @endphp
+              <span id="products-counter">Mostrando {{ $initialCatalogCount }} resultado{{ $initialCatalogCount == 1 ? '' : 's' }}</span>
               <a href="{{ route('tenant.public.categories', ['tenant' => $tenant->slug]) }}" class="btn btn-outline-dark btn-sm px-3">
                 <i class="bi bi-grid me-1"></i>Ver todos los productos
               </a>
@@ -1644,6 +1648,81 @@
                     </div>
                   </div>
                 </a>
+              </div>
+            @endforeach
+
+            @foreach(($appointmentCatalogServices ?? []) as $appointmentService)
+              @php
+                $serviceVariant = $appointmentService->productVariant;
+                $serviceProduct = $serviceVariant?->product;
+                $serviceCategoryId = $serviceProduct?->category_id;
+                $serviceImage = isset($serviceProduct->images[0])
+                  ? (
+                    \App\Support\ImageStorage::url($serviceProduct->images[0]->path)
+                    ?? asset('assets/img/shopix5.png')
+                  )
+                  : null;
+                $serviceAssignedUsers = $appointmentService->assignedUsers;
+                $serviceAssignedUserNames = $serviceAssignedUsers->pluck('name')->filter()->values();
+                if ($serviceAssignedUserNames->isEmpty() && $appointmentService->assignedUser) {
+                  $serviceAssignedUserNames = collect([$appointmentService->assignedUser->name]);
+                }
+                $serviceDisplayPrice = (float) ($appointmentService->price ?? 0);
+                if ($serviceDisplayPrice <= 0 && $serviceVariant) {
+                  $serviceDisplayPrice = (float) ($serviceVariant->effective_price ?? $serviceVariant->price ?? 0);
+                }
+                $serviceDisplayPriceBs = $showBsPrices && $serviceDisplayPrice > 0
+                  ? $serviceDisplayPrice * $storefrontBsRate
+                  : null;
+                $serviceWhatsappUrl = !empty($projectWhatsappBaseUrl)
+                  ? $projectWhatsappBaseUrl . '&text=' . urlencode('Hola, quiero información para reservar el servicio "' . ($appointmentService->display_name ?? $appointmentService->name ?? 'Servicio') . '" que vi en la landing de Shopix.')
+                  : null;
+                $serviceActionLabel = ($isFreePlanTenant ?? false)
+                  ? 'Consultar por WhatsApp'
+                  : (($appointmentsEnabledForStorefront ?? false) ? 'Reservar cita' : 'Agenda no disponible');
+                $serviceActionDisabled = !($isFreePlanTenant ?? false) && !($appointmentsEnabledForStorefront ?? false);
+              @endphp
+              <div class="col-12 col-sm-6 col-lg-4 mb-4 product-item product-item-service"
+                   data-category="{{ $serviceCategoryId }}"
+                   data-name="{{ strtolower((string) ($appointmentService->display_name ?? $appointmentService->name ?? 'servicio')) }}">
+                <div class="card card-product h-100">
+                  @if($serviceImage)
+                    <img src="{{ $serviceImage }}" class="card-img-top landing-media-image" style="height: 300px; object-fit: cover;" alt="{{ $appointmentService->display_name ?? $appointmentService->name ?? 'Servicio' }}">
+                  @else
+                    <div class="d-flex align-items-center justify-content-center" style="height: 300px; background-color: #eee;">
+                      <i class="bi bi-scissors text-muted fs-1"></i>
+                    </div>
+                  @endif
+                  <div class="card-body text-start d-flex flex-column">
+                    <h5 class="fw-bold text-dark mb-1">{{ $appointmentService->display_name ?? $appointmentService->name ?? 'Servicio' }}</h5>
+                    <p class="text-muted small mb-2">{{ \Illuminate\Support\Str::limit((string) ($appointmentService->description ?? 'Servicio disponible por agenda.'), 72) }}</p>
+                    <p class="small mb-1">Duración: {{ (int) ($appointmentService->duration_minutes ?? 60) }} min</p>
+                    <p class="small text-muted mb-2">{{ $serviceAssignedUserNames->isNotEmpty() ? 'Profesional(es): ' . $serviceAssignedUserNames->join(', ') : 'Disponible con cualquier profesional activo' }}</p>
+                    @if($serviceDisplayPrice > 0)
+                      <p class="mb-0 mt-auto">
+                        <span class="price-neo-chip">
+                          <strong>{{ number_format($serviceDisplayPrice, 2) }}</strong>
+                          <span>{{ $baseCurrencySymbol }}</span>
+                        </span>
+                      </p>
+                      @if(!is_null($serviceDisplayPriceBs))
+                        <p class="text-muted small mb-0">Bs {{ number_format($serviceDisplayPriceBs, 2) }}</p>
+                      @endif
+                    @endif
+
+                    <button
+                      type="button"
+                      class="btn btn-outline-dark btn-sm mt-3 js-open-tenant-service"
+                      {{ $serviceActionDisabled ? 'disabled' : '' }}
+                      data-service-id="{{ (int) $appointmentService->id }}"
+                      data-service-name="{{ $appointmentService->display_name ?? $appointmentService->name ?? 'Servicio' }}"
+                      data-service-whatsapp-url="{{ $serviceWhatsappUrl ?? '' }}"
+                      data-service-free-plan="{{ ($isFreePlanTenant ?? false) ? '1' : '0' }}"
+                      data-service-appointments-enabled="{{ ($appointmentsEnabledForStorefront ?? false) ? '1' : '0' }}">
+                      {{ $serviceActionLabel }}
+                    </button>
+                  </div>
+                </div>
               </div>
             @endforeach
 
@@ -2008,6 +2087,43 @@
       }));
     }
 
+    function openServiceFlow(button) {
+      if (!button) {
+        return;
+      }
+
+      const isFreePlan = String(button.dataset.serviceFreePlan || '0') === '1';
+      const appointmentsEnabled = String(button.dataset.serviceAppointmentsEnabled || '0') === '1';
+      const whatsappUrl = String(button.dataset.serviceWhatsappUrl || '').trim();
+      const serviceId = Number(button.dataset.serviceId || 0);
+      const serviceName = String(button.dataset.serviceName || 'Servicio').trim();
+
+      if (isFreePlan) {
+        if (!whatsappUrl) {
+          alert('Esta tienda no tiene WhatsApp configurado para consultas de servicios.');
+          return;
+        }
+
+        window.open(whatsappUrl, '_blank', 'noopener');
+        return;
+      }
+
+      if (!appointmentsEnabled) {
+        alert('La agenda de citas no está disponible en este momento para este servicio.');
+        return;
+      }
+
+      if (serviceId <= 0) {
+        alert('No se pudo abrir el flujo de cita para este servicio.');
+        return;
+      }
+
+      sendCartCommand('open-appointment-service', {
+        serviceId,
+        serviceName,
+      });
+    }
+
     function addTenantPackageToCart(packageId) {
       const qtyInput = document.getElementById(`tenant-pack-qty-${packageId}`);
       const packQty = Math.max(1, parseInt(qtyInput?.value || '1', 10));
@@ -2130,6 +2246,12 @@
     if (searchInput) {
       searchInput.addEventListener('input', applyCatalogFilters);
     }
+
+    document.querySelectorAll('.js-open-tenant-service').forEach((button) => {
+      button.addEventListener('click', () => {
+        openServiceFlow(button);
+      });
+    });
 
     setActiveCategory('all');
     filterProjectCategoryCards('all');

@@ -259,9 +259,17 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::put('/seller-commissions/rate/{seller}', [SellerCommissionController::class, 'updateSellerRate'])->middleware('role.name:owner,admin,administrador')->name('seller-commissions.rate.update');
     Route::post('/seller-commissions/{commission}/mark-paid', [SellerCommissionController::class, 'markAsPaid'])->middleware('role.name:owner,admin,administrador')->name('seller-commissions.mark-paid');
     Route::get('/appointments', [AppointmentController::class, 'index'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.index');
+    Route::get('/appointments/customer-control', [AppointmentController::class, 'customerControlIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.customerControl.index');
+    Route::get('/appointments/customer-control/report/pdf', [AppointmentController::class, 'customerControlReportPdf'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.customerControl.report.pdf');
+    Route::get('/appointments/customer-control/{appointment}/pdf', [AppointmentController::class, 'customerControlAppointmentPdf'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.customerControl.appointment.pdf');
+    Route::post('/appointments/customer-control/{appointment}/evidence', [AppointmentController::class, 'customerControlStoreEvidence'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.customerControl.evidence.store');
+    Route::get('/appointments/services', [AppointmentController::class, 'servicesIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.services.index');
     Route::post('/appointments', [AppointmentController::class, 'store'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.store');
     Route::post('/appointments/{appointment}/workflow', [AppointmentController::class, 'workflowAction'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.workflow');
     Route::post('/appointments/services', [AppointmentController::class, 'storeService'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.services.store');
+    Route::put('/appointments/services/{service}', [AppointmentController::class, 'updateService'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.services.update');
+    Route::post('/appointments/services/{service}/toggle-status', [AppointmentController::class, 'toggleServiceStatus'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.services.toggleStatus');
+    Route::delete('/appointments/services/{service}', [AppointmentController::class, 'destroyService'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.services.destroy');
     Route::post('/appointments/schedules', [AppointmentController::class, 'storeSchedule'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.schedules.store');
     Route::post('/appointments/packages', [AppointmentController::class, 'storePackage'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.packages.store');
     Route::get('/appointments/available-slots', [AppointmentController::class, 'availableSlots'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.availableSlots');
@@ -413,6 +421,7 @@ Route::get('/{tenant:slug}', [TenantController::class, 'publicTenantindex'])->na
 Route::get('/{tenant:slug}/categorias', [TenantController::class, 'publicTenantCategory'])->name('tenant.public.categories');
 Route::get('/{tenant:slug}/payment-methods', [TenantController::class, 'publicTenantPaymentMethods'])->name('tenant.public.paymentMethods');
 Route::get('/{tenant:slug}/appointments/public-availability', [TenantController::class, 'publicTenantAppointmentAvailability'])->name('tenant.public.appointments.availability');
+Route::get('/{tenant:slug}/products/quick-options', [TenantController::class, 'publicTenantProductQuickOptions'])->name('tenant.public.productQuickOptions');
 Route::post('/{tenant:slug}/checkout/pro', [TenantController::class, 'publicTenantProCheckout'])->name('tenant.public.proCheckout');
 Route::post('/{tenant:slug}/scan-code', [TenantController::class, 'publicTenantResolveScanCode'])->name('tenant.public.scanCode');
 Route::get('/{tenant:slug}/{product}', [TenantController::class, 'publicTenantProduct'])->name('tenant.public.product');

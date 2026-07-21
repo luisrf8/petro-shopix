@@ -39,6 +39,12 @@ class AppointmentService extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function assignedUsers()
+    {
+        return $this->belongsToMany(User::class, 'appointment_service_user', 'appointment_service_id', 'user_id')
+            ->withTimestamps();
+    }
+
     public function productVariant()
     {
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');

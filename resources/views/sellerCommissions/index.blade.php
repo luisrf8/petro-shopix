@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Comisiones de Vendedores')
+@section('title', 'Comisiones de Ventas')
 
 @section('content')
 <div class="container-fluid py-2">
@@ -12,11 +12,11 @@
 
   @if($isAdminView)
   <div class="card mb-4">
-    <div class="card-header p-3 pb-0"><h6 class="mb-0">Porcentaje por vendedor</h6></div>
+    <div class="card-header p-3 pb-0"><h6 class="mb-0">Porcentaje por usuario de ventas</h6></div>
     <div class="card-body pt-2">
       <div class="table-responsive">
         <table class="table align-items-center mb-0">
-          <thead><tr><th>Vendedor</th><th>Comisión (%)</th><th>Acción</th></tr></thead>
+          <thead><tr><th>Usuario</th><th>Comisión (%)</th><th>Acción</th></tr></thead>
           <tbody>
             @forelse($sellers as $seller)
               <tr>
@@ -33,7 +33,7 @@
                 </td>
               </tr>
             @empty
-              <tr><td colspan="3" class="text-muted">No hay vendedores activos.</td></tr>
+              <tr><td colspan="3" class="text-muted">No hay usuarios elegibles para comisión.</td></tr>
             @endforelse
           </tbody>
         </table>
@@ -52,7 +52,7 @@
       <div class="px-3 pt-3">
         <form method="GET" class="row g-2 align-items-end">
           @if(!$isSellerOnlyView)
-          <div class="col-md-3"><label class="form-label">Vendedor</label><select name="seller_id" class="form-control border border-1 p-2"><option value="">Todos</option>@foreach($sellers as $seller)<option value="{{ $seller->id }}" {{ (int) $sellerId === (int) $seller->id ? 'selected' : '' }}>{{ $seller->name }}</option>@endforeach</select></div>
+          <div class="col-md-3"><label class="form-label">Usuario</label><select name="seller_id" class="form-control border border-1 p-2"><option value="">Todos</option>@foreach($sellers as $seller)<option value="{{ $seller->id }}" {{ (int) $sellerId === (int) $seller->id ? 'selected' : '' }}>{{ $seller->name }}</option>@endforeach</select></div>
           @endif
           <div class="col-md-2"><label class="form-label">Estado</label><select name="status" class="form-control border border-1 p-2"><option value="">Todos</option><option value="pending" {{ $status === 'pending' ? 'selected' : '' }}>Pendiente</option><option value="paid" {{ $status === 'paid' ? 'selected' : '' }}>Pagada</option></select></div>
           <div class="col-md-2"><label class="form-label">Desde</label><input type="date" name="date_from" value="{{ $dateFrom }}" class="form-control border border-1 p-2"></div>

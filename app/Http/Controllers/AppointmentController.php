@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Appointment;
 use App\Models\AppointmentConsumption;
+use App\Models\AppointmentImage;
 use App\Models\AppointmentService;
 use App\Models\AppointmentServiceItem;
 use App\Models\AppointmentPackage;
@@ -22,6 +23,8 @@ use App\Support\WorkflowNotifier;
 use App\Support\TenantPlanCapabilities;
 use App\Support\ImageStorage;
 use Carbon\Carbon;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,6 +36,39 @@ use Illuminate\Validation\Rule;
 
 class AppointmentController extends Controller
 {
+    public function servicesIndex(Request $request)
+    {
+        $user = auth()->user();
+        $tenant = Tenant::query()->findOrFail((int) $user->tenant_id);
+        $planCapabilities = TenantPlanCapabilities::forTenant($tenant);
+
+        if (!$planCapabilities->canAppointments()) {
+            return redirect()->route('dashboard')->with('warning', 'El módulo de citas está disponible a partir del plan Pro.');
+        }
+
+        $professionals = $this->appointmentUsersQuery((int) $tenant->id)->get();
+        $serviceVariants = $this->serviceVariantsQuery((int) $tenant->id)->get();
+        $services = AppointmentService::query()
+            ->with(['assignedUser', 'assignedUsers:id,name', 'productVariant.product'])
+            ->where('tenant_id', (int) $tenant->id)
+            ->orderByDesc('is_active')
+            ->orderBy('name')
+            ->get();
+
+        $activeTab = in_array((string) $request->query('tab', 'create'), ['create', 'created'], true)
+            ? (string) $request->query('tab', 'create')
+            : 'create';
+
+        return view('appointments.services', compact(
+            'tenant',
+            'planCapabilities',
+            'professionals',
+            'serviceVariants',
+            'services',
+            'activeTab'
+        ));
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
@@ -57,10 +93,13 @@ class AppointmentController extends Controller
         $serviceVariants = $this->serviceVariantsQuery((int) $tenant->id)->get();
         $consumableVariants = $this->consumableVariantsQuery((int) $tenant->id)->get();
         $services = AppointmentService::query()
-            ->with(['assignedUser', 'productVariant.product'])
+            ->with(['assignedUser', 'assignedUsers:id,name', 'productVariant.product'])
             ->where('tenant_id', (int) $tenant->id)
             ->orderBy('name')
             ->get();
+        $activeServices = $services
+            ->filter(fn (AppointmentService $service) => (bool) ($service->is_active ?? true))
+            ->values();
         $paymentMethods = PaymentMethod::query()
             ->with('currency')
             ->where('tenant_id', (int) $tenant->id)
@@ -115,14 +154,17 @@ class AppointmentController extends Controller
         $calendarBounds = $this->resolveCalendarBounds($scheduleRules, $calendarProfessionals->pluck('id')->all());
         $calendarEvents = $this->buildCalendarEvents($calendarAppointments, $calendarBounds['startHour']);
         $bsRate = TenantCurrency::resolveRateToBs((int) $tenant->id, 'USD');
-        $servicesPayload = $services->map(function (AppointmentService $service) {
+        $servicesPayload = $activeServices->map(function (AppointmentService $service) {
+            $assignedUserIds = $this->appointmentServiceAssignedUserIds($service);
+
             return [
                 'id' => (int) $service->id,
                 'name' => (string) $service->display_name,
                 'duration_minutes' => (int) ($service->duration_minutes ?? 60),
                 'buffer_minutes' => (int) ($service->buffer_minutes ?? 0),
                 'price' => (float) ($service->price ?? 0),
-                'assigned_user_id' => $service->user_id ? (int) $service->user_id : null,
+                'assigned_user_id' => !empty($assignedUserIds) ? (int) $assignedUserIds[0] : null,
+                'assigned_user_ids' => $assignedUserIds,
                 'product_variant_id' => $service->product_variant_id ? (int) $service->product_variant_id : null,
                 'product_label' => $service->productVariant && $service->productVariant->product
                     ? trim(($service->productVariant->product->name ?? 'Servicio') . ' · ' . ($service->productVariant->size ?? ''))
@@ -137,6 +179,7 @@ class AppointmentController extends Controller
                 'label' => trim(($variant->product->name ?? 'Consumible') . ' · ' . ($variant->size ?? '')),
                 'stock' => (float) ($variant->stock ?? 0),
                 'unit_cost' => (float) ($variant->effective_price ?? $variant->price ?? 0),
+                'is_consumable' => (bool) ($variant->product->is_consumable ?? false),
             ];
         })->values();
 
@@ -163,6 +206,7 @@ class AppointmentController extends Controller
             'professionals',
             'calendarProfessionals',
             'services',
+            'activeServices',
             'servicesPayload',
             'serviceVariants',
             'consumableVariants',
@@ -193,6 +237,7 @@ class AppointmentController extends Controller
             'service_id' => ['nullable', 'integer'],
             'service_ids' => ['nullable', 'array'],
             'service_ids.*' => ['integer'],
+            'appointment_id' => ['nullable', 'integer'],
             'date' => ['required', 'date'],
         ]);
 
@@ -213,8 +258,251 @@ class AppointmentController extends Controller
         return response()->json([
             'success' => true,
             'appointments_first_come_enabled' => (bool) ($tenant->appointments_first_come_enabled ?? false),
-            'slots' => $this->buildAvailableSlots($tenantId, $targetUser, $primaryService, $selectedDate, null, $totalMinutes),
+            'slots' => $this->buildAvailableSlots(
+                $tenantId,
+                $targetUser,
+                $primaryService,
+                $selectedDate,
+                !empty($validated['appointment_id']) ? (int) $validated['appointment_id'] : null,
+                $totalMinutes
+            ),
         ]);
+    }
+
+    public function customerControlIndex(Request $request)
+    {
+        $user = auth()->user();
+        $tenant = Tenant::query()->findOrFail((int) $user->tenant_id);
+        $planCapabilities = TenantPlanCapabilities::forTenant($tenant);
+
+        if (!$planCapabilities->canAppointments()) {
+            return redirect()->route('dashboard')->with('warning', 'El módulo de citas está disponible a partir del plan Pro.');
+        }
+
+        $customers = $this->customerUsersQuery((int) $tenant->id)
+            ->get(['id', 'name', 'phone_number', 'email', 'dni']);
+
+        $selectedCustomerId = (int) $request->query('customer_id', 0);
+        $selectedCustomer = $selectedCustomerId > 0
+            ? $customers->firstWhere('id', $selectedCustomerId)
+            : null;
+
+        $appointments = collect();
+        $salesOrders = collect();
+        $summary = [
+            'appointments_count' => 0,
+            'appointments_total_usd' => 0.0,
+            'sales_count' => 0,
+            'sales_total_usd' => 0.0,
+            'payments_total_usd' => 0.0,
+        ];
+
+        if ($selectedCustomer) {
+            $appointments = Appointment::query()
+                ->with([
+                    'service.productVariant.product',
+                    'serviceItems.service.productVariant.product',
+                    'assignedUser',
+                    'customer',
+                    'consumptions.variant.product',
+                    'images.uploadedBy',
+                    'paymentMethod.currency',
+                    'salesOrder.payments.payment',
+                ])
+                ->where('tenant_id', (int) $tenant->id)
+                ->where('customer_id', (int) $selectedCustomer->id)
+                ->orderByDesc('starts_at')
+                ->limit(250)
+                ->get();
+
+            $salesOrders = SalesOrder::query()
+                ->with([
+                    'details.variant.product',
+                    'payments.payment',
+                ])
+                ->where('tenant_id', (int) $tenant->id)
+                ->where('user_id', (int) $selectedCustomer->id)
+                ->orderByDesc('date')
+                ->orderByDesc('id')
+                ->limit(250)
+                ->get();
+
+            $summary['appointments_count'] = (int) $appointments->count();
+            $summary['appointments_total_usd'] = round((float) $appointments->sum(function (Appointment $appointment) {
+                return $this->calculateAppointmentServicesTotalPrice($appointment);
+            }), 2);
+            $summary['sales_count'] = (int) $salesOrders->count();
+            $summary['sales_total_usd'] = round((float) $salesOrders->sum(function (SalesOrder $order) {
+                $itemsSubtotal = (float) $order->details->sum('amount');
+                $delivery = (float) ($order->delivery_fee ?? 0);
+                return round($itemsSubtotal + $delivery, 2);
+            }), 2);
+            $summary['payments_total_usd'] = round((float) $salesOrders->sum(function (SalesOrder $order) {
+                return (float) $order->payments->sum('amount');
+            }), 2);
+        }
+
+        $bsRate = TenantCurrency::resolveRateToBs((int) $tenant->id, 'USD');
+
+        return view('appointments.customer-control', compact(
+            'tenant',
+            'planCapabilities',
+            'customers',
+            'selectedCustomerId',
+            'selectedCustomer',
+            'appointments',
+            'salesOrders',
+            'summary',
+            'bsRate'
+        ));
+    }
+
+    public function customerControlReportPdf(Request $request)
+    {
+        $user = auth()->user();
+        $tenant = Tenant::query()->findOrFail((int) $user->tenant_id);
+
+        $customerId = (int) $request->query('customer_id', 0);
+        if ($customerId <= 0) {
+            return redirect()->route('appointments.customerControl.index')->with('warning', 'Selecciona un cliente para generar el reporte.');
+        }
+
+        $customer = $this->customerUsersQuery((int) $tenant->id)
+            ->whereKey($customerId)
+            ->first();
+
+        if (!$customer) {
+            return redirect()->route('appointments.customerControl.index')->with('warning', 'El cliente seleccionado no pertenece a esta tienda.');
+        }
+
+        $appointments = Appointment::query()
+            ->with([
+                'service.productVariant.product',
+                'serviceItems.service.productVariant.product',
+                'assignedUser',
+                'customer',
+                'consumptions.variant.product',
+                'images.uploadedBy',
+                'paymentMethod.currency',
+                'salesOrder.payments.payment',
+            ])
+            ->where('tenant_id', (int) $tenant->id)
+            ->where('customer_id', $customerId)
+            ->orderByDesc('starts_at')
+            ->limit(400)
+            ->get();
+
+        $bsRate = TenantCurrency::resolveRateToBs((int) $tenant->id, 'USD');
+
+        $summary = [
+            'appointments_count' => (int) $appointments->count(),
+            'appointments_total_usd' => round((float) $appointments->sum(function (Appointment $appointment) {
+                return $this->calculateAppointmentServicesTotalPrice($appointment);
+            }), 2),
+            'evidences_count' => (int) $appointments->sum(fn (Appointment $appointment) => $appointment->images->count()),
+        ];
+
+        $html = view('appointments.pdf.customer-control-report', compact('tenant', 'customer', 'appointments', 'summary', 'bsRate'))->render();
+
+        $options = new Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'DejaVu Sans');
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        $filename = 'reporte_citas_cliente_' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', (string) ($customer->name ?? 'cliente')) . '_' . now()->format('Ymd_His') . '.pdf';
+
+        return response($dompdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
+        ]);
+    }
+
+    public function customerControlAppointmentPdf(Appointment $appointment)
+    {
+        $user = auth()->user();
+        $tenantId = (int) ($user->tenant_id ?? 0);
+
+        abort_unless((int) $appointment->tenant_id === $tenantId, 404);
+
+        $appointment->load([
+            'service.productVariant.product',
+            'serviceItems.service.productVariant.product',
+            'assignedUser',
+            'customer',
+            'consumptions.variant.product',
+            'images.uploadedBy',
+            'paymentMethod.currency',
+            'salesOrder.payments.payment',
+        ]);
+
+        $tenant = Tenant::query()->findOrFail($tenantId);
+        $bsRate = TenantCurrency::resolveRateToBs($tenantId, 'USD');
+        $appointmentTotal = $this->calculateAppointmentServicesTotalPrice($appointment);
+
+        $html = view('appointments.pdf.customer-appointment-detail', compact('tenant', 'appointment', 'appointmentTotal', 'bsRate'))->render();
+
+        $options = new Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('defaultFont', 'DejaVu Sans');
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        $filename = 'cita_' . (int) $appointment->id . '_' . now()->format('Ymd_His') . '.pdf';
+
+        return response($dompdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
+        ]);
+    }
+
+    public function customerControlStoreEvidence(Request $request, Appointment $appointment): RedirectResponse
+    {
+        $user = auth()->user();
+        $tenantId = (int) ($user->tenant_id ?? 0);
+
+        abort_unless((int) $appointment->tenant_id === $tenantId, 404);
+
+        $validated = $request->validate([
+            'notes' => ['nullable', 'string', 'max:8000'],
+            'caption' => ['nullable', 'string', 'max:255'],
+            'evidence_images' => ['nullable', 'array', 'max:6'],
+            'evidence_images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'customer_id' => ['nullable', 'integer'],
+        ]);
+
+        if ($request->has('notes')) {
+            $appointment->notes = trim((string) ($validated['notes'] ?? ''));
+            $appointment->save();
+        }
+
+        $caption = trim((string) ($validated['caption'] ?? ''));
+        $images = $request->file('evidence_images', []);
+
+        foreach ($images as $imageFile) {
+            if (!$imageFile) {
+                continue;
+            }
+
+            $storedPath = ImageStorage::storeUploadedImageAsWebp($imageFile, 'appointments/evidence');
+            AppointmentImage::create([
+                'tenant_id' => $tenantId,
+                'appointment_id' => (int) $appointment->id,
+                'uploaded_by_user_id' => (int) ($user->id ?? 0),
+                'image_path' => $storedPath,
+                'caption' => $caption !== '' ? $caption : null,
+            ]);
+        }
+
+        return redirect()
+            ->route('appointments.customerControl.index', ['customer_id' => (int) ($validated['customer_id'] ?? $appointment->customer_id)])
+            ->with('success', 'Control de cita actualizado con anotaciones e imágenes.');
     }
 
     public function storeService(Request $request): RedirectResponse
@@ -228,21 +516,22 @@ class AppointmentController extends Controller
             'price' => ['nullable', 'numeric', 'min:0'],
             'color_hex' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'user_id' => ['nullable', 'integer'],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['integer'],
             'product_variant_id' => ['required', 'integer'],
         ]);
 
-        $assignedUserId = !empty($validated['user_id'])
-            ? (int) $this->appointmentUsersQuery($tenantId)->whereKey((int) $validated['user_id'])->value('id')
-            : null;
+        $assignedUserIds = $this->normalizeAssignedUserIdsFromRequest($tenantId, $validated);
+        $primaryAssignedUserId = !empty($assignedUserIds) ? (int) $assignedUserIds[0] : null;
 
         $productVariant = $this->serviceVariantsQuery($tenantId)->whereKey((int) $validated['product_variant_id'])->firstOrFail();
         $resolvedPrice = isset($validated['price'])
             ? (float) $validated['price']
             : (float) ($productVariant->effective_price ?? $productVariant->price ?? 0);
 
-        AppointmentService::create([
+        $service = AppointmentService::create([
             'tenant_id' => $tenantId,
-            'user_id' => $assignedUserId,
+            'user_id' => $primaryAssignedUserId,
             'product_variant_id' => (int) $productVariant->id,
             'name' => trim((string) $validated['name']),
             'description' => $validated['description'] ?? null,
@@ -253,7 +542,95 @@ class AppointmentController extends Controller
             'is_active' => true,
         ]);
 
-        return back()->with('success', 'Servicio para citas creado correctamente.');
+        $this->syncAppointmentServiceAssignedUsers($service, $assignedUserIds);
+
+        return $this->redirectServicesPage('create')->with('success', 'Servicio para citas creado correctamente.');
+    }
+
+    public function updateService(Request $request, AppointmentService $service): RedirectResponse
+    {
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+
+        abort_unless((int) $service->tenant_id === $tenantId, 404);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'duration_minutes' => ['required', 'integer', 'min:15', 'max:480'],
+            'buffer_minutes' => ['nullable', 'integer', 'min:0', 'max:180'],
+            'price' => ['nullable', 'numeric', 'min:0'],
+            'color_hex' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'user_id' => ['nullable', 'integer'],
+            'user_ids' => ['nullable', 'array'],
+            'user_ids.*' => ['integer'],
+            'product_variant_id' => ['required', 'integer'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+
+        $assignedUserIds = $this->normalizeAssignedUserIdsFromRequest($tenantId, $validated);
+        $primaryAssignedUserId = !empty($assignedUserIds) ? (int) $assignedUserIds[0] : null;
+
+        $productVariant = $this->serviceVariantsQuery($tenantId)
+            ->whereKey((int) $validated['product_variant_id'])
+            ->firstOrFail();
+
+        $service->update([
+            'user_id' => $primaryAssignedUserId,
+            'product_variant_id' => (int) $productVariant->id,
+            'name' => trim((string) $validated['name']),
+            'description' => $validated['description'] ?? null,
+            'duration_minutes' => (int) $validated['duration_minutes'],
+            'buffer_minutes' => (int) ($validated['buffer_minutes'] ?? 0),
+            'price' => isset($validated['price']) ? (float) $validated['price'] : (float) ($service->price ?? 0),
+            'color_hex' => $validated['color_hex'] ?? '#0f172a',
+            'is_active' => array_key_exists('is_active', $validated) ? (bool) $validated['is_active'] : (bool) ($service->is_active ?? true),
+        ]);
+
+        $this->syncAppointmentServiceAssignedUsers($service, $assignedUserIds);
+
+        return $this->redirectServicesPage('created')->with('success', 'Servicio actualizado correctamente.');
+    }
+
+    public function toggleServiceStatus(AppointmentService $service): RedirectResponse
+    {
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+
+        abort_unless((int) $service->tenant_id === $tenantId, 404);
+
+        $service->is_active = !((bool) ($service->is_active ?? true));
+        $service->save();
+
+        return $this->redirectServicesPage('created')->with('success', $service->is_active
+            ? 'Servicio activado correctamente.'
+            : 'Servicio inactivado correctamente.');
+    }
+
+    public function destroyService(AppointmentService $service): RedirectResponse
+    {
+        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+
+        abort_unless((int) $service->tenant_id === $tenantId, 404);
+
+        $hasAppointments = Appointment::query()
+            ->where('tenant_id', $tenantId)
+            ->where('appointment_service_id', (int) $service->id)
+            ->exists();
+
+        $hasServiceItems = AppointmentServiceItem::query()
+            ->where('tenant_id', $tenantId)
+            ->where('appointment_service_id', (int) $service->id)
+            ->exists();
+
+        if ($hasAppointments || $hasServiceItems) {
+            return $this->redirectServicesPage('created')->withErrors([
+                'appointment_services' => 'No se puede eliminar este servicio porque ya tiene citas asociadas. Puedes inactivarlo.',
+            ]);
+        }
+
+        $this->syncAppointmentServiceAssignedUsers($service, []);
+        $service->delete();
+
+        return $this->redirectServicesPage('created')->with('success', 'Servicio eliminado correctamente.');
     }
 
     public function storeSchedule(Request $request): RedirectResponse
@@ -314,11 +691,15 @@ class AppointmentController extends Controller
     {
         $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         $tenant = Tenant::query()->findOrFail($tenantId);
+        $allowUnpaidReservation = (bool) ($tenant->appointments_allow_unpaid_reservation ?? true);
         $validated = $request->validate([
             'appointment_service_id' => ['nullable', 'integer'],
             'appointment_service_ids' => ['nullable', 'array'],
             'appointment_service_ids.*' => ['integer'],
             'appointment_id' => ['nullable', 'integer'],
+            'allow_service_change' => ['nullable', 'boolean'],
+            'allow_additional_services' => ['nullable', 'boolean'],
+            'roll_next_appointments' => ['nullable', 'boolean'],
             'user_id' => ['required', 'integer'],
             'scheduled_date' => ['required', 'date'],
             'start_time' => ['nullable', 'date_format:H:i'],
@@ -336,18 +717,20 @@ class AppointmentController extends Controller
             'paid_amount' => ['nullable', 'numeric', 'min:0'],
             'payment_reference' => ['nullable', 'string', 'max:255'],
             'payment_status' => ['nullable', Rule::in(array_keys(Appointment::PAYMENT_STATUSES))],
+            'require_payment_proof' => ['nullable', 'boolean'],
+            'payment_proof_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:5120'],
+            'payment_entries' => ['nullable', 'array'],
+            'payment_entries.*.payment_method_id' => ['nullable', 'integer'],
+            'payment_entries.*.paid_amount' => ['nullable', 'numeric', 'min:0'],
+            'payment_entries.*.payment_reference' => ['nullable', 'string', 'max:255'],
+            'payment_entries.*.payment_status' => ['nullable', Rule::in(array_keys(Appointment::PAYMENT_STATUSES))],
             'consumptions' => ['nullable', 'array'],
             'consumptions.*.variant_id' => ['nullable', 'integer'],
             'consumptions.*.quantity' => ['nullable', 'numeric', 'gt:0'],
         ]);
 
         $targetUser = $this->appointmentUsersQuery($tenantId)->whereKey((int) $validated['user_id'])->firstOrFail();
-        $selectedServices = $this->resolveAppointmentServicesFromPayload($tenantId, $targetUser, $validated);
-        if ($selectedServices->isEmpty()) {
-            return back()->withErrors(['appointment_service_ids' => 'Debes seleccionar al menos un servicio válido.'])->withInput();
-        }
-
-        $service = $selectedServices->first();
+        $payloadSelectedServices = $this->resolveAppointmentServicesFromPayload($tenantId, $targetUser, $validated);
         $editingAppointment = null;
 
         if (!empty($validated['appointment_id'])) {
@@ -357,33 +740,114 @@ class AppointmentController extends Controller
                 ->firstOrFail();
         }
 
-        $selectedDate = Carbon::parse($validated['scheduled_date']);
-        $totalMinutes = $this->calculateTotalAppointmentMinutes($selectedServices);
+        $isCommercialLocked = $editingAppointment
+            ? (
+                in_array((string) ($editingAppointment->status ?? ''), ['confirmed', 'completed'], true)
+                || !empty($editingAppointment->attendance_confirmed_at)
+                || (int) ($editingAppointment->sales_order_id ?? 0) > 0
+            )
+            : false;
 
-        $availableSlots = collect($this->buildAvailableSlots(
-            $tenantId,
-            $targetUser,
-            $service,
-            $selectedDate,
-            $editingAppointment?->id ? (int) $editingAppointment->id : null,
-            $totalMinutes
-        ));
+        $allowServiceChange = (bool) ($validated['allow_service_change'] ?? false);
+        $allowAdditionalServices = (bool) ($validated['allow_additional_services'] ?? false);
+        $rollNextAppointments = $this->resolveTruthyRequestFlag($request->input('roll_next_appointments', null));
+        $currentServices = collect();
+        $selectedServices = $payloadSelectedServices;
 
-        if ($availableSlots->isEmpty()) {
-            return back()->withErrors(['start_time' => 'No hay horarios disponibles para el profesional y servicios seleccionados.'])->withInput();
+        $originalStartAt = $editingAppointment?->starts_at ? $editingAppointment->starts_at->copy() : null;
+        $originalEndAt = $editingAppointment?->ends_at ? $editingAppointment->ends_at->copy() : null;
+
+        if ($editingAppointment) {
+            $currentServices = $this->resolveAppointmentServicesFromAppointment($editingAppointment);
+
+            if ($isCommercialLocked) {
+                $selectedServices = $currentServices;
+            } elseif (!$allowServiceChange && !$allowAdditionalServices) {
+                // Status/date/payment updates must keep all associated services as-is.
+                $selectedServices = $currentServices;
+            } elseif ($allowAdditionalServices && !$allowServiceChange) {
+                // Additive mode: preserve current services and append new ones only.
+                $merged = $currentServices->values();
+                $existingIds = $merged->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+                $payloadSelectedServices->each(function (AppointmentService $service) use (&$merged, &$existingIds) {
+                    $serviceId = (int) ($service->id ?? 0);
+                    if ($serviceId > 0 && !in_array($serviceId, $existingIds, true)) {
+                        $merged->push($service);
+                        $existingIds[] = $serviceId;
+                    }
+                });
+
+                $selectedServices = $merged;
+            } elseif ($allowServiceChange) {
+                // Change mode uses exactly payload selection, allowing temporary empty services.
+                $selectedServices = $payloadSelectedServices;
+            }
         }
 
+        if ($selectedServices->isEmpty() && !$editingAppointment) {
+            return back()->withErrors(['appointment_service_ids' => 'Debes seleccionar al menos un servicio válido.'])->withInput();
+        }
+
+        $invalidAssignedService = $selectedServices->first(function (AppointmentService $service) use ($targetUser) {
+            return !$this->appointmentServiceAllowsUserId($service, (int) $targetUser->id);
+        });
+
+        if ($invalidAssignedService) {
+            return back()->withErrors([
+                'appointment_service_ids' => 'Uno o más servicios seleccionados no están disponibles para el profesional indicado.',
+            ])->withInput();
+        }
+
+        $selectedDate = Carbon::parse($validated['scheduled_date']);
+        $service = $selectedServices->first();
         $firstComeEnabled = (bool) ($tenant->appointments_first_come_enabled ?? false);
         $requestedStart = trim((string) ($validated['start_time'] ?? ''));
-        if ($firstComeEnabled || $requestedStart === '') {
-            $requestedStart = (string) ($availableSlots->first()['start'] ?? '');
+        $isSameSlotAsCurrentAppointment = false;
+
+        if ($selectedServices->isEmpty()) {
+            $startAt = $editingAppointment?->starts_at?->copy() ?: Carbon::parse($selectedDate->toDateString() . ' ' . ($requestedStart ?: '08:00'));
+            $endAt = $editingAppointment?->ends_at?->copy() ?: $startAt->copy()->addMinutes(60);
+        } else {
+            $totalMinutes = $this->calculateTotalAppointmentMinutes($selectedServices);
+
+            $availableSlots = collect($this->buildAvailableSlots(
+                $tenantId,
+                $targetUser,
+                $service,
+                $selectedDate,
+                $editingAppointment?->id ? (int) $editingAppointment->id : null,
+                $totalMinutes
+            ));
+
+            if ($availableSlots->isEmpty()) {
+                return back()->withErrors(['start_time' => 'No hay horarios disponibles para el profesional y servicios seleccionados.'])->withInput();
+            }
+
+            if ($firstComeEnabled || $requestedStart === '') {
+                $requestedStart = (string) ($availableSlots->first()['start'] ?? '');
+            }
+
+            $startAt = Carbon::parse($selectedDate->toDateString() . ' ' . $requestedStart);
+            $endAt = (clone $startAt)->addMinutes($totalMinutes);
+
+            $isSameSlotAsCurrentAppointment = $editingAppointment
+                && optional($editingAppointment->starts_at)?->toDateString() === $selectedDate->toDateString()
+                && optional($editingAppointment->starts_at)?->format('H:i') === $startAt->format('H:i');
+
+            if (!$firstComeEnabled && !$availableSlots->firstWhere('start', $startAt->format('H:i')) && !($editingAppointment && $rollNextAppointments && $isSameSlotAsCurrentAppointment)) {
+                return back()->withErrors(['start_time' => 'La hora seleccionada no está disponible para ese profesional.'])->withInput();
+            }
         }
 
-        $startAt = Carbon::parse($selectedDate->toDateString() . ' ' . $requestedStart);
-        $endAt = (clone $startAt)->addMinutes($totalMinutes);
+        if (!$rollNextAppointments && $editingAppointment && $allowAdditionalServices && $originalStartAt && $originalEndAt && $selectedServices->isNotEmpty()) {
+            $sameSlot = $originalStartAt->toDateString() === $startAt->toDateString()
+                && $originalStartAt->format('H:i') === $startAt->format('H:i');
+            $extendedInPlace = $sameSlot && $endAt->greaterThan($originalEndAt);
 
-        if (!$firstComeEnabled && !$availableSlots->firstWhere('start', $startAt->format('H:i'))) {
-            return back()->withErrors(['start_time' => 'La hora seleccionada no está disponible para ese profesional.'])->withInput();
+            if ($extendedInPlace) {
+                $rollNextAppointments = true;
+            }
         }
 
         $normalizedContactPhone = $this->normalizePhoneWithCode(
@@ -393,10 +857,25 @@ class AppointmentController extends Controller
 
         $customerId = null;
         if (!empty($validated['customer_id'])) {
-            $customerId = (int) User::query()->where('tenant_id', $tenantId)->whereKey((int) $validated['customer_id'])->value('id');
+            $requestedCustomerId = (int) $validated['customer_id'];
+            $resolvedCustomer = User::query()->select(['id', 'tenant_id'])->whereKey($requestedCustomerId)->first();
+
+            if ($resolvedCustomer) {
+                $belongsToCurrentTenant = (int) ($resolvedCustomer->tenant_id ?? 0) === $tenantId;
+                $isExistingAppointmentCustomer = $editingAppointment
+                    && (int) ($editingAppointment->customer_id ?? 0) === (int) $resolvedCustomer->id;
+
+                if ($belongsToCurrentTenant || $isExistingAppointmentCustomer) {
+                    $customerId = (int) $resolvedCustomer->id;
+                }
+            }
         }
 
         $shouldCreateCustomer = (bool) ($validated['create_customer'] ?? false);
+        if (!$shouldCreateCustomer && !$customerId && $editingAppointment && (int) ($editingAppointment->customer_id ?? 0) > 0) {
+            $customerId = (int) $editingAppointment->customer_id;
+        }
+
         if (!$shouldCreateCustomer && !$customerId) {
             return back()->withErrors([
                 'customer_id' => 'Selecciona un cliente existente o activa la opción de cliente nuevo.',
@@ -448,38 +927,231 @@ class AppointmentController extends Controller
             }
         }
 
-        $paymentMethod = null;
-        if (!empty($validated['payment_method_id'])) {
-            $paymentMethod = PaymentMethod::query()
+        $bsRate = TenantCurrency::resolveRateToBs($tenantId, 'USD');
+        $rawPaymentEntries = collect();
+        $basePaymentAmount = isset($validated['paid_amount']) ? round(max(0, (float) $validated['paid_amount']), 2) : 0;
+        $basePaymentMethodId = (int) ($validated['payment_method_id'] ?? 0);
+        $basePaymentReference = trim((string) ($validated['payment_reference'] ?? ''));
+        $basePaymentStatus = (string) ($validated['payment_status'] ?? 'pending');
+
+        if ($basePaymentAmount > 0 || $basePaymentMethodId > 0 || $basePaymentReference !== '') {
+            $rawPaymentEntries->push([
+                'payment_method_id' => $basePaymentMethodId,
+                'paid_amount' => $basePaymentAmount,
+                'payment_reference' => $basePaymentReference,
+                'payment_status' => $basePaymentStatus,
+            ]);
+        }
+
+        foreach (($validated['payment_entries'] ?? []) as $entry) {
+            $entryMethodId = (int) ($entry['payment_method_id'] ?? 0);
+            $entryAmount = round(max(0, (float) ($entry['paid_amount'] ?? 0)), 2);
+            $entryReference = trim((string) ($entry['payment_reference'] ?? ''));
+            $entryStatus = (string) ($entry['payment_status'] ?? 'pending');
+
+            if ($entryAmount <= 0 && $entryMethodId <= 0 && $entryReference === '') {
+                continue;
+            }
+
+            $rawPaymentEntries->push([
+                'payment_method_id' => $entryMethodId,
+                'paid_amount' => $entryAmount,
+                'payment_reference' => $entryReference,
+                'payment_status' => $entryStatus,
+            ]);
+        }
+
+        $paymentMethodIds = $rawPaymentEntries
+            ->pluck('payment_method_id')
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn (int $value) => $value > 0)
+            ->unique()
+            ->values();
+
+        $paymentMethodsById = $paymentMethodIds->isEmpty()
+            ? collect()
+            : PaymentMethod::query()
                 ->with('currency')
                 ->where('tenant_id', $tenantId)
                 ->active()
-                ->whereKey((int) $validated['payment_method_id'])
-                ->firstOrFail();
+                ->whereIn('id', $paymentMethodIds->all())
+                ->get()
+                ->keyBy('id');
+
+        $paymentEntries = collect();
+        foreach ($rawPaymentEntries as $index => $entry) {
+            $entryAmount = round(max(0, (float) ($entry['paid_amount'] ?? 0)), 2);
+            if ($entryAmount <= 0) {
+                continue;
+            }
+
+            $entryMethodId = (int) ($entry['payment_method_id'] ?? 0);
+            if ($entryMethodId <= 0) {
+                return back()->withErrors([
+                    'payment_method_id' => 'Debes seleccionar un método de pago para cada monto registrado.',
+                ])->withInput();
+            }
+
+            /** @var PaymentMethod|null $entryPaymentMethod */
+            $entryPaymentMethod = $paymentMethodsById->get($entryMethodId);
+            if (!$entryPaymentMethod) {
+                return back()->withErrors([
+                    'payment_method_id' => 'Uno de los métodos de pago seleccionados no está disponible.',
+                ])->withInput();
+            }
+
+            $entryReference = trim((string) ($entry['payment_reference'] ?? ''));
+            if ($entryPaymentMethod->usesReference() && $entryReference === '') {
+                return back()->withErrors([
+                    'payment_reference' => 'Este método de pago requiere referencia.',
+                ])->withInput();
+            }
+
+            $entryCurrency = strtoupper(trim((string) ($entryPaymentMethod->currency->code ?? 'USD')));
+            $entryAmountUsd = $entryAmount;
+            if ($entryCurrency === 'BS') {
+                if ($bsRate <= 0) {
+                    return back()->withErrors([
+                        'paid_amount' => 'No hay tasa de cambio Bs configurada para convertir el pago.',
+                    ])->withInput();
+                }
+                $entryAmountUsd = round($entryAmount / $bsRate, 4);
+            }
+
+            $paymentEntries->push([
+                'payment_method_id' => (int) $entryPaymentMethod->id,
+                'payment_method_name' => (string) ($entryPaymentMethod->name ?? 'Método'),
+                'paid_amount' => $entryAmount,
+                'paid_amount_usd' => $entryAmountUsd,
+                'payment_reference' => $entryReference !== '' ? $entryReference : null,
+                'payment_currency' => $entryCurrency,
+                'exchange_rate' => $entryCurrency === 'BS' ? $bsRate : null,
+                'requires_proof' => (bool) $entryPaymentMethod->usesReference(),
+                'payment_status' => (string) ($entry['payment_status'] ?? 'pending'),
+                'recorded_at' => now()->toDateTimeString(),
+                'source' => 'admin_form',
+                'entry_index' => (int) $index,
+            ]);
         }
 
-        $paidAmount = isset($validated['paid_amount']) ? (float) $validated['paid_amount'] : null;
+        $requiresPaymentProof = $paymentEntries->contains(fn (array $entry) => (bool) ($entry['requires_proof'] ?? false));
+        $proofFile = $request->file('payment_proof_image');
+        if ($requiresPaymentProof && !$proofFile) {
+            return back()->withErrors([
+                'payment_proof_image' => 'Este pago requiere comprobante de imagen.',
+            ])->withInput();
+        }
+
+        $proofPath = null;
+        $proofUrl = null;
+        if ($proofFile) {
+            $proofPath = ImageStorage::storeUploadedImageAsWebp($proofFile, 'appointment_payment_proofs');
+            $proofUrl = ImageStorage::url($proofPath);
+        }
+
+        $paidAmount = round((float) $paymentEntries->sum('paid_amount_usd'), 2);
+        $primaryPaymentEntry = $paymentEntries->last();
+        $paymentMethod = $primaryPaymentEntry
+            ? $paymentMethodsById->get((int) ($primaryPaymentEntry['payment_method_id'] ?? 0))
+            : null;
+        $paymentReference = $primaryPaymentEntry['payment_reference'] ?? null;
         $paymentStatus = $validated['payment_status'] ?? ($paidAmount > 0 ? 'paid' : 'pending');
-        $paymentReference = trim((string) ($validated['payment_reference'] ?? '')) ?: null;
 
-        if ($paidAmount && !$paymentMethod) {
-            return back()->withErrors(['payment_method_id' => 'Debes seleccionar un método de pago para registrar el cobro.'])->withInput();
-        }
+        $notesBody = $this->stripAppointmentPaymentMetaLines((string) ($validated['notes'] ?? ''));
+        $paymentMetaLines = $paymentEntries->map(function (array $entry) use ($proofPath, $proofUrl) {
+            return '[APPOINTMENT_PAYMENT_META]' . json_encode([
+                'source' => (string) ($entry['source'] ?? 'admin_form'),
+                'entry_index' => (int) ($entry['entry_index'] ?? 0),
+                'payment_method_id' => (int) ($entry['payment_method_id'] ?? 0),
+                'payment_method_name' => (string) ($entry['payment_method_name'] ?? 'Método'),
+                'amount_registered' => (float) ($entry['paid_amount'] ?? 0),
+                'amount_usd' => (float) ($entry['paid_amount_usd'] ?? 0),
+                'currency_original' => (string) ($entry['payment_currency'] ?? 'USD'),
+                'currency_base' => 'USD',
+                'exchange_rate' => $entry['exchange_rate'] ?? null,
+                'reference' => $entry['payment_reference'] ?? null,
+                'payment_status' => (string) ($entry['payment_status'] ?? 'pending'),
+                'proof_path' => $proofPath,
+                'proof_url' => $proofUrl,
+                'recorded_at' => (string) ($entry['recorded_at'] ?? now()->toDateTimeString()),
+            ], JSON_UNESCAPED_UNICODE);
+        })->all();
 
-        if ($paymentMethod && $paymentMethod->usesReference() && $paidAmount > 0 && !$paymentReference) {
-            return back()->withErrors(['payment_reference' => 'Este método de pago requiere referencia.'])->withInput();
-        }
+        $compiledNotes = trim(implode("\n", array_filter([
+            trim($notesBody),
+            trim(implode("\n", $paymentMetaLines)),
+        ], fn ($value) => trim((string) $value) !== '')));
+        $compiledNotes = $compiledNotes !== '' ? $compiledNotes : null;
 
         $consumptions = collect($validated['consumptions'] ?? [])
             ->filter(fn ($item) => !empty($item['variant_id']) && !empty($item['quantity']))
             ->values();
 
-        $savedAppointment = null;
+        if ($isCommercialLocked && $editingAppointment) {
+            $consumptions = $editingAppointment->consumptions()
+                ->get(['product_variant_id as variant_id', 'quantity'])
+                ->map(function ($item) {
+                    return [
+                        'variant_id' => (int) ($item->variant_id ?? 0),
+                        'quantity' => (float) ($item->quantity ?? 0),
+                    ];
+                })
+                ->filter(fn ($item) => !empty($item['variant_id']) && !empty($item['quantity']))
+                ->values();
+        }
 
-        DB::transaction(function () use ($tenantId, $service, $selectedServices, $targetUser, $customerId, $validated, $startAt, $endAt, $paymentMethod, $paidAmount, $paymentStatus, $paymentReference, $consumptions, $editingAppointment, $normalizedContactPhone, &$savedAppointment) {
+        $servicesTotalUsd = round((float) $selectedServices->sum(function (AppointmentService $selectedService) {
+            return (float) ($selectedService->price ?? 0);
+        }), 4);
+        $consumptionsTotalUsd = 0.0;
+        if ($consumptions->isNotEmpty()) {
+            $variantIds = $consumptions
+                ->pluck('variant_id')
+                ->map(fn ($value) => (int) $value)
+                ->filter(fn (int $value) => $value > 0)
+                ->unique()
+                ->values();
+
+            $variantsById = $this->consumableVariantsQuery($tenantId)
+                ->whereIn('id', $variantIds->all())
+                ->get()
+                ->keyBy('id');
+
+            foreach ($consumptions as $item) {
+                $variantId = (int) ($item['variant_id'] ?? 0);
+                $quantity = round(max(0, (float) ($item['quantity'] ?? 0)), 2);
+                if ($variantId <= 0 || $quantity <= 0) {
+                    continue;
+                }
+
+                /** @var ProductVariant|null $variant */
+                $variant = $variantsById->get($variantId);
+                if (!$variant) {
+                    return back()->withErrors([
+                        'consumptions' => 'Uno de los consumibles seleccionados no está disponible.',
+                    ])->withInput();
+                }
+
+                $unitCost = (float) ($variant->effective_price ?? $variant->price ?? 0);
+                $consumptionsTotalUsd += round($unitCost * $quantity, 4);
+            }
+        }
+
+        $appointmentTotalUsd = round(max(0, $servicesTotalUsd + $consumptionsTotalUsd), 2);
+        if (!$allowUnpaidReservation && !$editingAppointment && $appointmentTotalUsd > 0 && ($paidAmount + 0.0001) < $appointmentTotalUsd) {
+            return back()->withErrors([
+                'paid_amount' => 'Para crear una cita nueva debes registrar el pago completo. Total cita: ' . number_format($appointmentTotalUsd, 2) . ' USD · Pagado: ' . number_format($paidAmount, 2) . ' USD.',
+            ])->withInput();
+        }
+
+        $savedAppointment = null;
+        $shiftedAppointmentsCount = 0;
+        $actor = auth()->user();
+
+        DB::transaction(function () use ($tenantId, $service, $selectedServices, $targetUser, $customerId, $validated, $startAt, $endAt, $paymentMethod, $paidAmount, $paymentStatus, $paymentReference, $consumptions, $editingAppointment, $normalizedContactPhone, $rollNextAppointments, $isCommercialLocked, $compiledNotes, &$savedAppointment, &$shiftedAppointmentsCount, $actor) {
             $appointmentPayload = [
                 'tenant_id' => $tenantId,
-                'appointment_service_id' => (int) $service->id,
+            'appointment_service_id' => $service ? (int) $service->id : null,
                 'user_id' => (int) $targetUser->id,
                 'customer_id' => $customerId,
                 'contact_name' => $validated['contact_name'] ?? null,
@@ -489,17 +1161,19 @@ class AppointmentController extends Controller
                 'status' => $validated['status'] ?? 'scheduled',
                 'payment_method_id' => $paymentMethod?->id,
                 'paid_amount' => $paidAmount,
-                'payment_currency' => $paymentMethod?->currency?->code,
+                'payment_currency' => 'USD',
                 'payment_reference' => $paymentReference,
                 'payment_status' => $paymentStatus,
                 'source' => 'admin',
-                'notes' => $validated['notes'] ?? null,
+                'notes' => $compiledNotes,
             ];
 
             if ($editingAppointment) {
                 $editingAppointment->fill($appointmentPayload);
                 $editingAppointment->save();
-                $editingAppointment->consumptions()->delete();
+                if (!$isCommercialLocked) {
+                    $editingAppointment->consumptions()->delete();
+                }
                 $appointment = $editingAppointment;
             } else {
                 $appointment = Appointment::create($appointmentPayload);
@@ -508,19 +1182,39 @@ class AppointmentController extends Controller
             $savedAppointment = $appointment;
             $this->syncAppointmentServiceItems($appointment, $selectedServices, $startAt);
 
-            foreach ($consumptions as $item) {
-                $variant = $this->consumableVariantsQuery($tenantId)->whereKey((int) $item['variant_id'])->firstOrFail();
-                $quantity = round((float) $item['quantity'], 2);
-                $unitCost = (float) ($variant->effective_price ?? $variant->price ?? 0);
+            if (!$isCommercialLocked) {
+                foreach ($consumptions as $item) {
+                    $variant = $this->consumableVariantsQuery($tenantId)->whereKey((int) $item['variant_id'])->firstOrFail();
+                    $quantity = round((float) $item['quantity'], 2);
+                    $unitCost = (float) ($variant->effective_price ?? $variant->price ?? 0);
 
-                AppointmentConsumption::create([
-                    'tenant_id' => $tenantId,
-                    'appointment_id' => (int) $appointment->id,
-                    'product_variant_id' => (int) $variant->id,
-                    'quantity' => $quantity,
-                    'unit_cost' => $unitCost,
-                    'amount' => round($quantity * $unitCost, 2),
-                ]);
+                    AppointmentConsumption::create([
+                        'tenant_id' => $tenantId,
+                        'appointment_id' => (int) $appointment->id,
+                        'product_variant_id' => (int) $variant->id,
+                        'quantity' => $quantity,
+                        'unit_cost' => $unitCost,
+                        'amount' => round($quantity * $unitCost, 2),
+                    ]);
+                }
+            }
+
+            $appointment->load(['consumptions']);
+            if ((string) ($appointment->payment_status ?? '') !== 'waived') {
+                $totalDue = $this->calculateAppointmentServicesTotalPrice($appointment);
+                $currentPaid = round(max(0, (float) ($appointment->paid_amount ?? 0)), 2);
+                $normalizedPaymentStatus = $currentPaid <= 0
+                    ? 'pending'
+                    : (($totalDue > 0 && $currentPaid + 0.0001 < $totalDue) ? 'partial' : 'paid');
+
+                if ((string) ($appointment->payment_status ?? '') !== $normalizedPaymentStatus) {
+                    $appointment->payment_status = $normalizedPaymentStatus;
+                    $appointment->save();
+                }
+            }
+
+            if ($editingAppointment && $rollNextAppointments) {
+                $shiftedAppointmentsCount = $this->shiftFollowingAppointmentsFromOverlap($appointment, $actor);
             }
         });
 
@@ -528,7 +1222,10 @@ class AppointmentController extends Controller
             ? 'Cita actualizada correctamente.'
             : 'Cita registrada correctamente.';
 
-        $actor = auth()->user();
+        if ($editingAppointment && $shiftedAppointmentsCount > 0) {
+            $message .= ' Se reprogramaron automáticamente ' . $shiftedAppointmentsCount . ' cita(s) siguientes y se notificó a los clientes afectados.';
+        }
+
         if ($savedAppointment && $actor) {
             $savedAppointment->refresh();
             $this->notifyAppointmentWorkflow(
@@ -868,9 +1565,10 @@ class AppointmentController extends Controller
             ->whereKey((int) $validated['appointment_service_id'])
             ->firstOrFail();
 
+        $defaultAssignedUserId = (int) ($this->appointmentServiceAssignedUserIds($service)[0] ?? 0);
         $targetUserId = !empty($validated['user_id'])
             ? (int) $this->appointmentUsersQuery($tenantId)->whereKey((int) $validated['user_id'])->value('id')
-            : (int) ($service->user_id ?? 0);
+            : $defaultAssignedUserId;
 
         if ($targetUserId <= 0) {
             return back()->withErrors(['user_id' => 'Debes seleccionar un profesional para crear el paquete de citas.'])->withInput();
@@ -962,7 +1660,7 @@ class AppointmentController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($appointment, $validated, $action, $note, $actor, $fromCustomer, $tenantId, $firstComeEnabled) {
+            DB::transaction(function () use ($appointment, $validated, $action, $note, $actor, $fromCustomer, $tenantId, $firstComeEnabled, $request) {
                 $appointment->loadMissing(['service', 'assignedUser', 'customer', 'paymentMethod.currency', 'salesOrder']);
 
                 switch ($action) {
@@ -1144,22 +1842,7 @@ class AppointmentController extends Controller
                             ? 'Pago parcial registrado en cita.'
                             : 'Pago confirmado en cita.');
 
-                        $paymentMeta = [
-                            'mode' => $paidAmountMode,
-                            'amount_registered' => $paidAmount,
-                            'amount_original' => $paymentAmountOriginal,
-                            'currency_original' => $paymentCurrencyOriginal !== '' ? $paymentCurrencyOriginal : null,
-                            'currency_base' => $paymentCurrency,
-                            'exchange_rate' => $exchangeRate,
-                            'proof_path' => $proofPath,
-                            'proof_url' => $proofUrl,
-                            'recorded_at' => now()->toDateTimeString(),
-                        ];
-
-                        $notePrefix = '[APPOINTMENT_PAYMENT_META]';
-                        $existingNotes = trim((string) ($appointment->notes ?? ''));
-                        $metaLine = $notePrefix . json_encode($paymentMeta, JSON_UNESCAPED_UNICODE);
-                        $appointment->notes = trim($existingNotes === '' ? $metaLine : ($existingNotes . "\n" . $metaLine));
+                        $appointment->notes = $this->stripAppointmentPaymentMetaLines((string) ($appointment->notes ?? ''));
 
                         $createSale = (bool) ($validated['create_sale'] ?? !$fromCustomer);
                         if ($createSale) {
@@ -1255,7 +1938,7 @@ class AppointmentController extends Controller
             return null;
         }
 
-        $appointment->loadMissing(['service.productVariant.product']);
+        $appointment->loadMissing(['service.productVariant.product', 'consumptions.variant.product']);
         $variant = $appointment->service?->productVariant;
 
         if (!$variant) {
@@ -1295,6 +1978,40 @@ class AppointmentController extends Controller
 
         $variant->stock = max(0, (float) $variant->stock - 1);
         $variant->save();
+
+        $appointment->consumptions
+            ->filter(function (AppointmentConsumption $consumption) {
+                return (int) ($consumption->product_variant_id ?? 0) > 0 && (float) ($consumption->quantity ?? 0) > 0;
+            })
+            ->each(function (AppointmentConsumption $consumption) use ($salesOrder) {
+                $consumptionVariant = $consumption->variant;
+                if (!$consumptionVariant) {
+                    return;
+                }
+
+                $quantity = round(max(0, (float) ($consumption->quantity ?? 0)), 2);
+                if ($quantity <= 0) {
+                    return;
+                }
+
+                $unitCost = round((float) ($consumption->unit_cost ?? $consumptionVariant->effective_price ?? $consumptionVariant->price ?? 0), 2);
+                $amount = round($quantity * $unitCost, 2);
+
+                if ($amount <= 0) {
+                    return;
+                }
+
+                SalesOrderDetail::create([
+                    'sales_order_id' => (int) $salesOrder->id,
+                    'product_variant_id' => (int) $consumptionVariant->id,
+                    'quantity' => $quantity,
+                    'price' => $unitCost,
+                    'amount' => $amount,
+                ]);
+
+                $consumptionVariant->stock = max(0, round((float) $consumptionVariant->stock - $quantity, 4));
+                $consumptionVariant->save();
+            });
 
         if ((float) ($appointment->paid_amount ?? 0) > 0) {
             Payment::create([
@@ -1346,6 +2063,112 @@ class AppointmentController extends Controller
         WorkflowNotifier::notifyTenantRoles((int) $appointment->tenant_id, ['owner', 'administrador', 'admin', 'vendedor'], $payload);
         WorkflowNotifier::notifyUser($appointment->customer, $payload);
         WorkflowNotifier::notifyUser($appointment->assignedUser, $payload);
+    }
+
+    private function shiftFollowingAppointmentsFromOverlap(Appointment $anchorAppointment, ?User $actor = null): int
+    {
+        $anchorAppointment->loadMissing(['assignedUser']);
+
+        $anchorStartAt = $anchorAppointment->starts_at ? $anchorAppointment->starts_at->copy() : null;
+        $anchorEndAt = $anchorAppointment->ends_at ? $anchorAppointment->ends_at->copy() : null;
+        if (!$anchorStartAt || !$anchorEndAt) {
+            return 0;
+        }
+
+        $followingAppointments = Appointment::query()
+            ->where('tenant_id', (int) $anchorAppointment->tenant_id)
+            ->where('user_id', (int) $anchorAppointment->user_id)
+            ->whereDate('starts_at', $anchorStartAt->toDateString())
+            ->where('id', '!=', (int) $anchorAppointment->id)
+            ->whereNotIn('status', ['cancelled', 'no_show'])
+            ->where('starts_at', '>=', $anchorStartAt)
+            ->orderBy('starts_at')
+            ->lockForUpdate()
+            ->get();
+
+        $cursor = $anchorEndAt->copy();
+        $shiftedCount = 0;
+
+        foreach ($followingAppointments as $affectedAppointment) {
+            $originalStartAt = $affectedAppointment->starts_at ? $affectedAppointment->starts_at->copy() : null;
+            $originalEndAt = $affectedAppointment->ends_at ? $affectedAppointment->ends_at->copy() : null;
+            if (!$originalStartAt || !$originalEndAt) {
+                continue;
+            }
+
+            $durationMinutes = max(15, $originalStartAt->diffInMinutes($originalEndAt));
+
+            if ($originalStartAt->lt($cursor)) {
+                $newStartAt = $cursor->copy();
+                $newEndAt = $newStartAt->copy()->addMinutes($durationMinutes);
+
+                $affectedAppointment->starts_at = $newStartAt;
+                $affectedAppointment->ends_at = $newEndAt;
+                $affectedAppointment->rescheduled_at = now();
+                $affectedAppointment->rescheduled_by_user_id = $actor ? (int) $actor->id : null;
+                $affectedAppointment->workflow_tag = 'auto_shifted';
+                $affectedAppointment->workflow_note = 'Cita reprogramada automáticamente por ajuste de duración en una cita previa.';
+                $affectedAppointment->save();
+
+                $serviceItems = $this->resolveAppointmentServicesFromAppointment($affectedAppointment);
+                if ($serviceItems->isNotEmpty()) {
+                    $this->syncAppointmentServiceItems($affectedAppointment, $serviceItems, $newStartAt);
+                }
+
+                if ($actor) {
+                    $this->notifyAppointmentAutoShift($affectedAppointment, $originalStartAt, $originalEndAt, $actor, $anchorAppointment);
+                }
+                $shiftedCount++;
+                $cursor = $newEndAt;
+                continue;
+            }
+
+            if ($originalEndAt->gt($cursor)) {
+                $cursor = $originalEndAt->copy();
+            }
+        }
+
+        return $shiftedCount;
+    }
+
+    private function notifyAppointmentAutoShift(Appointment $affectedAppointment, Carbon $oldStartAt, Carbon $oldEndAt, User $actor, Appointment $anchorAppointment): void
+    {
+        $affectedAppointment->loadMissing(['service', 'customer', 'assignedUser']);
+        $anchorAppointment->loadMissing(['service']);
+
+        $serviceLabel = (string) (optional($affectedAppointment->service)->display_name ?? optional($affectedAppointment->service)->name ?? 'Servicio');
+        $triggerServiceLabel = (string) (optional($anchorAppointment->service)->display_name ?? optional($anchorAppointment->service)->name ?? 'Servicio previo');
+        $customerLabel = (string) ($affectedAppointment->contact_name ?: optional($affectedAppointment->customer)->name ?: 'Cliente');
+        $newStartAt = $affectedAppointment->starts_at ? $affectedAppointment->starts_at->copy() : null;
+        $newEndAt = $affectedAppointment->ends_at ? $affectedAppointment->ends_at->copy() : null;
+
+        $payload = [
+            'title' => 'Cita reprogramada automáticamente',
+            'message' => 'Tu cita de ' . $serviceLabel
+                . ' fue movida por ajuste operativo en una cita previa (' . $triggerServiceLabel . '). '
+                . 'Horario anterior: ' . $oldStartAt->format('d/m/Y H:i') . ' - ' . $oldEndAt->format('H:i')
+                . '. Nuevo horario: ' . ($newStartAt ? $newStartAt->format('d/m/Y H:i') : '--')
+                . ' - ' . ($newEndAt ? $newEndAt->format('H:i') : '--') . '.',
+            'type' => 'warning',
+            'tenant_id' => (int) $affectedAppointment->tenant_id,
+            'order_id' => $affectedAppointment->sales_order_id ? (int) $affectedAppointment->sales_order_id : null,
+            'action' => 'appointment_auto_shifted',
+            'meta' => [
+                'appointment_id' => (int) $affectedAppointment->id,
+                'status' => (string) $affectedAppointment->status,
+                'payment_status' => (string) ($affectedAppointment->payment_status ?? 'pending'),
+                'customer' => $customerLabel,
+                'old_start' => $oldStartAt->toDateTimeString(),
+                'old_end' => $oldEndAt->toDateTimeString(),
+                'new_start' => $newStartAt?->toDateTimeString(),
+                'new_end' => $newEndAt?->toDateTimeString(),
+                'actor' => (string) ($actor->name ?? 'Sistema'),
+            ],
+        ];
+
+        WorkflowNotifier::notifyTenantRoles((int) $affectedAppointment->tenant_id, ['owner', 'administrador', 'admin', 'vendedor'], $payload);
+        WorkflowNotifier::notifyUser($affectedAppointment->customer, $payload);
+        WorkflowNotifier::notifyUser($affectedAppointment->assignedUser, $payload);
     }
 
     private function appointmentUsersQuery(int $tenantId)
@@ -1400,15 +2223,35 @@ class AppointmentController extends Controller
 
     private function consumableVariantsQuery(int $tenantId)
     {
+        $appointmentOnlyVariantIds = $this->appointmentOnlyVariantIdsForTenant($tenantId);
+
         return ProductVariant::query()
             ->with('product')
+            ->whereNotIn('id', $appointmentOnlyVariantIds)
             ->whereHas('product', function ($query) use ($tenantId) {
                 $query->where('tenant_id', $tenantId)
-                    ->where('is_active', true)
-                    ->where('is_consumable', true);
+                    ->where('is_active', true);
             })
             ->orderBy('product_id')
             ->orderBy('size');
+    }
+
+    private function appointmentOnlyVariantIdsForTenant(int $tenantId): array
+    {
+        if ($tenantId <= 0) {
+            return [];
+        }
+
+        return AppointmentService::query()
+            ->where('tenant_id', $tenantId)
+            ->where('is_active', true)
+            ->whereNotNull('product_variant_id')
+            ->pluck('product_variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function resolveCalendarBounds(Collection $rules, array $professionalIds): array
@@ -1453,10 +2296,13 @@ class AppointmentController extends Controller
                 'service_ids' => $serviceIds,
                 'user_id' => (int) ($appointment->user_id ?? 0),
                 'customer_id' => (int) ($appointment->customer_id ?? 0),
+                'source' => (string) ($appointment->source ?? ''),
                 'date' => $appointment->starts_at->toDateString(),
                 'title' => $this->resolveAppointmentDisplayName($appointment, $serviceItems),
                 'professional' => (string) ($appointment->assignedUser->name ?? 'Profesional'),
                 'customer' => (string) ($appointment->customer->name ?? $appointment->contact_name ?? 'Cliente sin registro'),
+                'customer_email' => (string) ($appointment->customer->email ?? ''),
+                'customer_dni' => (string) ($appointment->customer->dni ?? ''),
                 'start_time' => $appointment->starts_at->format('H:i'),
                 'end_time' => $appointment->ends_at->format('H:i'),
                 'minutes_from_start' => max(0, $startMinutes - ($startHour * 60)),
@@ -1471,15 +2317,94 @@ class AppointmentController extends Controller
                 'contact_phone' => (string) ($appointment->contact_phone ?: ($appointment->customer->phone_number ?? '')),
                 'paid_amount' => (float) ($appointment->paid_amount ?? 0),
                 'payment_currency' => (string) ($appointment->payment_currency ?? ''),
-                'color_hex' => (string) ($primaryService->color_hex ?? $appointment->service->color_hex ?? '#0f172a'),
-                'notes' => (string) ($appointment->notes ?? ''),
+                'payment_entries' => $this->resolveAppointmentPaymentEntries($appointment),
+                'color_hex' => (string) ($primaryService->color_hex ?? optional($appointment->service)->color_hex ?? '#0f172a'),
+                'notes' => $this->stripAppointmentPaymentMetaLines((string) ($appointment->notes ?? '')),
+                'consumptions' => $appointment->consumptions
+                    ->map(function (AppointmentConsumption $consumption) {
+                        return [
+                            'variant_id' => (int) ($consumption->product_variant_id ?? 0),
+                            'quantity' => round((float) ($consumption->quantity ?? 0), 2),
+                            'unit_cost' => round((float) ($consumption->unit_cost ?? 0), 2),
+                            'amount' => round((float) ($consumption->amount ?? 0), 2),
+                        ];
+                    })
+                    ->filter(fn (array $item) => (int) ($item['variant_id'] ?? 0) > 0 && (float) ($item['quantity'] ?? 0) > 0)
+                    ->values()
+                    ->all(),
             ];
         })->values()->all();
     }
 
+    private function stripAppointmentPaymentMetaLines(string $notes): string
+    {
+        $prefix = '[APPOINTMENT_PAYMENT_META]';
+
+        return collect(preg_split('/\r\n|\r|\n/', (string) $notes) ?: [])
+            ->map(fn ($line) => rtrim((string) $line))
+            ->filter(fn ($line) => !Str::startsWith(trim((string) $line), $prefix))
+            ->implode("\n");
+    }
+
+    private function resolveAppointmentPaymentEntries(Appointment $appointment): array
+    {
+        $prefix = '[APPOINTMENT_PAYMENT_META]';
+        $entries = collect();
+
+        $noteLines = preg_split('/\r\n|\r|\n/', (string) ($appointment->notes ?? '')) ?: [];
+        foreach ($noteLines as $line) {
+            $trimmed = trim((string) $line);
+            if (!Str::startsWith($trimmed, $prefix)) {
+                continue;
+            }
+
+            $json = trim((string) Str::after($trimmed, $prefix));
+            if ($json === '') {
+                continue;
+            }
+
+            $decoded = json_decode($json, true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+
+            $amount = round(max(0, (float) ($decoded['amount_registered'] ?? $decoded['amount'] ?? 0)), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $entries->push([
+                'payment_method_id' => isset($decoded['payment_method_id']) ? (int) $decoded['payment_method_id'] : null,
+                'payment_method_name' => (string) ($decoded['payment_method_name'] ?? $decoded['payment_method'] ?? ''),
+                'paid_amount' => $amount,
+                'paid_amount_usd' => round(max(0, (float) ($decoded['amount_usd'] ?? 0)), 4),
+                'payment_reference' => trim((string) ($decoded['reference'] ?? '')) ?: null,
+                'payment_currency' => (string) ($decoded['currency_original'] ?? $decoded['currency_base'] ?? $appointment->payment_currency ?? 'USD'),
+                'payment_status' => (string) ($decoded['payment_status'] ?? $appointment->payment_status ?? 'pending'),
+                'recorded_at' => (string) ($decoded['recorded_at'] ?? ''),
+                'source' => (string) ($decoded['source'] ?? 'legacy_meta'),
+            ]);
+        }
+
+        if ($entries->isEmpty() && (float) ($appointment->paid_amount ?? 0) > 0) {
+            $entries->push([
+                'payment_method_id' => $appointment->payment_method_id ? (int) $appointment->payment_method_id : null,
+                'payment_method_name' => (string) ($appointment->paymentMethod->name ?? ''),
+                'paid_amount' => round((float) ($appointment->paid_amount ?? 0), 2),
+                'payment_reference' => trim((string) ($appointment->payment_reference ?? '')) ?: null,
+                'payment_currency' => (string) ($appointment->payment_currency ?? 'USD'),
+                'payment_status' => (string) ($appointment->payment_status ?? 'pending'),
+                'recorded_at' => '',
+                'source' => 'legacy_top_level',
+            ]);
+        }
+
+        return $entries->values()->all();
+    }
+
     private function buildAvailableSlots(int $tenantId, User $targetUser, AppointmentService $service, Carbon $selectedDate, ?int $ignoreAppointmentId = null, ?int $totalDurationMinutes = null): array
     {
-        if ($service->user_id && (int) $service->user_id !== (int) $targetUser->id) {
+        if (!$this->appointmentServiceAllowsUserId($service, (int) $targetUser->id)) {
             return [];
         }
 
@@ -1638,7 +2563,7 @@ class AppointmentController extends Controller
         }
 
         $invalidAssigned = $ordered->first(function (AppointmentService $service) use ($targetUser) {
-            return $service->user_id && (int) $service->user_id !== (int) $targetUser->id;
+            return !$this->appointmentServiceAllowsUserId($service, (int) $targetUser->id);
         });
 
         if ($invalidAssigned) {
@@ -1692,6 +2617,114 @@ class AppointmentController extends Controller
         return (bool) $exists;
     }
 
+    private function appointmentServiceUserPivotTableExists(): bool
+    {
+        static $exists = null;
+
+        if ($exists !== null) {
+            return $exists;
+        }
+
+        try {
+            $exists = DB::getSchemaBuilder()->hasTable('appointment_service_user');
+        } catch (\Throwable $exception) {
+            $exists = false;
+        }
+
+        return (bool) $exists;
+    }
+
+    private function normalizeAssignedUserIdsFromRequest(int $tenantId, array $validated): array
+    {
+        $rawIds = collect($validated['user_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->values();
+
+        if ($rawIds->isEmpty() && !empty($validated['user_id'])) {
+            $rawIds = collect([(int) $validated['user_id']]);
+        }
+
+        if ($rawIds->isEmpty()) {
+            return [];
+        }
+
+        return $this->appointmentUsersQuery($tenantId)
+            ->whereIn('id', $rawIds->all())
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function syncAppointmentServiceAssignedUsers(AppointmentService $service, array $assignedUserIds): void
+    {
+        $normalizedIds = collect($assignedUserIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($this->appointmentServiceUserPivotTableExists()) {
+            $service->assignedUsers()->sync($normalizedIds);
+        }
+
+        $primaryAssignedUserId = !empty($normalizedIds) ? (int) $normalizedIds[0] : null;
+        if ((int) ($service->user_id ?? 0) !== (int) ($primaryAssignedUserId ?? 0)) {
+            $service->user_id = $primaryAssignedUserId;
+            $service->save();
+        }
+    }
+
+    private function appointmentServiceAssignedUserIds(AppointmentService $service): array
+    {
+        if ($this->appointmentServiceUserPivotTableExists()) {
+            $users = $service->relationLoaded('assignedUsers')
+                ? $service->assignedUsers
+                : $service->assignedUsers()->get(['users.id']);
+
+            $ids = collect($users)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn (int $id) => $id > 0)
+                ->unique()
+                ->values()
+                ->all();
+
+            if (!empty($ids)) {
+                return $ids;
+            }
+        }
+
+        $legacyUserId = (int) ($service->user_id ?? 0);
+        return $legacyUserId > 0 ? [$legacyUserId] : [];
+    }
+
+    private function appointmentServiceAllowsUserId(AppointmentService $service, int $userId): bool
+    {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        $assignedUserIds = $this->appointmentServiceAssignedUserIds($service);
+
+        if (empty($assignedUserIds)) {
+            return true;
+        }
+
+        return in_array($userId, $assignedUserIds, true);
+    }
+
+    private function redirectServicesPage(string $tab = 'create'): RedirectResponse
+    {
+        $resolvedTab = in_array($tab, ['create', 'created'], true) ? $tab : 'create';
+
+        return redirect()->route('appointments.services.index', ['tab' => $resolvedTab]);
+    }
+
     private function calculateTotalAppointmentMinutes(Collection $services): int
     {
         $total = (int) $services->sum(function (AppointmentService $service) {
@@ -1707,15 +2740,36 @@ class AppointmentController extends Controller
     private function calculateAppointmentServicesTotalPrice(Appointment $appointment): float
     {
         $services = $this->resolveAppointmentServicesFromAppointment($appointment);
-        $total = (float) $services->sum(function (AppointmentService $service) {
+        $servicesTotal = (float) $services->sum(function (AppointmentService $service) {
             return round((float) ($service->price ?? 0), 2);
         });
+
+        if ($servicesTotal <= 0) {
+            $servicesTotal = round((float) (optional($appointment->service)->price ?? 0), 2);
+        }
+
+        $consumptionsTotal = $appointment->relationLoaded('consumptions')
+            ? (float) $appointment->consumptions->sum(function (AppointmentConsumption $consumption) {
+                $amount = (float) ($consumption->amount ?? 0);
+                if ($amount > 0) {
+                    return round($amount, 2);
+                }
+
+                $quantity = (float) ($consumption->quantity ?? 0);
+                $unitCost = (float) ($consumption->unit_cost ?? 0);
+                return round(max(0, $quantity) * max(0, $unitCost), 2);
+            })
+            : (float) AppointmentConsumption::query()
+                ->where('appointment_id', (int) $appointment->id)
+                ->sum('amount');
+
+        $total = $servicesTotal + max(0, round($consumptionsTotal, 2));
 
         if ($total > 0) {
             return round($total, 2);
         }
 
-        return round((float) (optional($appointment->service)->price ?? 0), 2);
+        return 0.0;
     }
 
     private function isRescheduleDateTimeInPast(Carbon $startsAt): bool
@@ -1739,7 +2793,11 @@ class AppointmentController extends Controller
             ->values();
 
         if ($labels->isEmpty()) {
-            return (string) ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio');
+            if ($appointment->service) {
+                return (string) ($appointment->service->display_name ?? $appointment->service->name ?? 'Servicio');
+            }
+
+            return 'Sin servicios';
         }
 
         if ($labels->count() === 1) {
@@ -1800,6 +2858,34 @@ class AppointmentController extends Controller
         }
 
         return $digits;
+    }
+
+    private function resolveTruthyRequestFlag(mixed $value): bool
+    {
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                if ($this->resolveTruthyRequestFlag($item)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return ((float) $value) > 0;
+        }
+
+        $normalized = Str::lower(trim((string) ($value ?? '')));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return in_array($normalized, ['1', 'true', 'on', 'yes', 'si', 'sí'], true);
     }
 
     private function resolveCustomerRoleId(): int

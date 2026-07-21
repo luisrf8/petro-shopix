@@ -552,7 +552,34 @@ class ImageStorage
 
     private static function hasGoogleDriveConfiguration(): bool
     {
-        return self::hasGoogleDriveOAuthConfiguration() || self::hasGoogleDriveServiceAccountConfiguration();
+        return self::shouldAttemptGoogleDriveOAuth() || self::shouldAttemptGoogleDriveServiceAccount();
+    }
+
+    private static function googleDriveAuthMode(): string
+    {
+        $mode = Str::lower(trim((string) config('services.image_storage.google_drive_auth_mode', 'auto')));
+
+        return in_array($mode, ['auto', 'oauth', 'service_account'], true)
+            ? $mode
+            : 'auto';
+    }
+
+    private static function shouldAttemptGoogleDriveOAuth(): bool
+    {
+        if (self::googleDriveAuthMode() === 'service_account') {
+            return false;
+        }
+
+        return self::hasGoogleDriveOAuthConfiguration();
+    }
+
+    private static function shouldAttemptGoogleDriveServiceAccount(): bool
+    {
+        if (self::googleDriveAuthMode() === 'oauth') {
+            return false;
+        }
+
+        return self::hasGoogleDriveServiceAccountConfiguration();
     }
 
     private static function hasGoogleDriveServiceAccountConfiguration(): bool
@@ -742,25 +769,60 @@ class ImageStorage
 
     private static function buildDriveService(): Drive
     {
-        if (self::hasGoogleDriveOAuthConfiguration()) {
-            $client = new Client();
-            $client->setClientId(self::googleDriveOAuthClientId());
-            $client->setClientSecret(self::googleDriveOAuthClientSecret());
-            $client->addScope(Drive::DRIVE);
-            $client->setAccessType('offline');
+        $oauthFailureMessage = '';
+        $authMode = self::googleDriveAuthMode();
+        $canUseServiceAccount = self::shouldAttemptGoogleDriveServiceAccount();
 
-            $tokenData = $client->fetchAccessTokenWithRefreshToken(self::googleDriveOAuthRefreshToken());
-            if (is_array($tokenData) && isset($tokenData['error'])) {
-                $error = trim((string) ($tokenData['error_description'] ?? $tokenData['error'] ?? 'OAuth refresh token inválido.'));
-                throw new RuntimeException('No se pudo autenticar en Google Drive por OAuth: ' . $error);
+        if (self::shouldAttemptGoogleDriveOAuth()) {
+            try {
+                $client = new Client();
+                $client->setClientId(self::googleDriveOAuthClientId());
+                $client->setClientSecret(self::googleDriveOAuthClientSecret());
+                $client->addScope(Drive::DRIVE);
+                $client->setAccessType('offline');
+
+                $tokenData = $client->fetchAccessTokenWithRefreshToken(self::googleDriveOAuthRefreshToken());
+                if (is_array($tokenData) && isset($tokenData['error'])) {
+                    $error = trim((string) ($tokenData['error_description'] ?? $tokenData['error'] ?? 'OAuth refresh token inválido.'));
+                    throw new RuntimeException('No se pudo autenticar en Google Drive por OAuth: ' . $error);
+                }
+
+                return new Drive($client);
+            } catch (\Throwable $exception) {
+                $oauthFailureMessage = trim((string) $exception->getMessage());
+
+                if (!$canUseServiceAccount) {
+                    $error = $oauthFailureMessage !== '' ? $oauthFailureMessage : 'OAuth refresh token inválido.';
+                    throw new RuntimeException('No se pudo autenticar en Google Drive por OAuth: ' . $error, 0, $exception);
+                }
+
+                Log::warning('Google Drive OAuth falló. Se intentará service account.', [
+                    'error' => $oauthFailureMessage,
+                ]);
+            }
+        }
+
+        if (!$canUseServiceAccount) {
+            if ($oauthFailureMessage !== '') {
+                throw new RuntimeException('No se pudo autenticar en Google Drive por OAuth: ' . $oauthFailureMessage);
             }
 
-            return new Drive($client);
+            if ($authMode === 'oauth') {
+                throw new RuntimeException('GOOGLE_DRIVE_AUTH_MODE=oauth pero faltan variables OAuth requeridas.');
+            }
+
+            throw new RuntimeException('No hay credenciales validas de Google Drive para el modo configurado.');
         }
 
         $credentialsPath = self::resolveCredentialsPath((string) config('services.image_storage.google_drive_credentials', storage_path('app/credentials.json')));
 
         if (!is_file($credentialsPath)) {
+            if ($oauthFailureMessage !== '') {
+                throw new RuntimeException(
+                    'No se pudo autenticar en Google Drive por OAuth (' . $oauthFailureMessage . ') y tampoco existe el archivo de credenciales de service account: ' . $credentialsPath
+                );
+            }
+
             throw new RuntimeException('No existe el archivo de credenciales de Google Drive: ' . $credentialsPath);
         }
 
