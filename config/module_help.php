@@ -1,7 +1,15 @@
 <?php
 
 return [
-    'enabled' => env('MODULE_HELP_ENABLED', false),
+    'enabled' => env('MODULE_HELP_ENABLED', true),
+
+    'audience' => [
+        'allow_guests' => env('MODULE_HELP_ALLOW_GUESTS', true),
+        'role_allow_list' => env('MODULE_HELP_ROLE_ALLOW_LIST', ''),
+        'role_block_list' => env('MODULE_HELP_ROLE_BLOCK_LIST', ''),
+        'tenant_allow_list' => env('MODULE_HELP_TENANT_ALLOW_LIST', ''),
+        'tenant_block_list' => env('MODULE_HELP_TENANT_BLOCK_LIST', ''),
+    ],
 
     'fallback' => [
         'title' => 'Ayuda del modulo',
@@ -918,6 +926,480 @@ return [
                         'Completa los datos basicos para crear tu tienda.',
                         'Revisa la previsualizacion antes de enviar el registro.',
                     ],
+                ],
+            ],
+        ],
+        'profile' => [
+            'title' => 'Ayuda: Perfil',
+            'intro' => 'Aqui actualizas tus datos personales y preferencias de cuenta.',
+            'tour' => [
+                [
+                    'title' => 'Formulario de perfil',
+                    'description' => 'Actualiza nombre, correo y datos de contacto del usuario autenticado.',
+                    'selector' => 'form',
+                ],
+                [
+                    'title' => 'Guardar cambios',
+                    'description' => 'Aplica los cambios del perfil para la sesion actual.',
+                    'selector' => 'button[type="submit"]',
+                ],
+            ],
+            'sections' => [
+                [
+                    'heading' => 'Sugerencia',
+                    'items' => [
+                        'Actualiza datos de contacto para mejorar notificaciones y trazabilidad.',
+                    ],
+                ],
+            ],
+        ],
+        'customers.index' => [
+            'title' => 'Ayuda: Clientes',
+            'intro' => 'Gestiona la base de clientes para ventas, historial y seguimiento comercial.',
+            'wizard' => [
+                [
+                    'title' => 'Paso 1: Buscar cliente',
+                    'description' => 'Filtra por nombre, correo o telefono para ubicar registros rapidamente.',
+                    'selector' => 'input[type="search"], #searchCustomer, #searchInput',
+                    'action' => 'Escribe un criterio corto para reducir resultados.',
+                ],
+                [
+                    'title' => 'Paso 2: Crear cliente',
+                    'description' => 'Registra un nuevo cliente con datos de contacto y documento.',
+                    'selector' => '[data-bs-target*="Customer"], [data-bs-target*="customer"], button[data-bs-target]',
+                    'action' => 'Abre el modal de alta y completa los campos obligatorios.',
+                ],
+                [
+                    'title' => 'Paso 3: Gestionar estado',
+                    'description' => 'Activa o inactiva clientes segun politicas comerciales.',
+                    'selector' => 'table.table',
+                    'action' => 'Revisa acciones por fila para editar o cambiar estatus.',
+                ],
+            ],
+            'tour' => [
+                [
+                    'title' => 'Buscador de clientes',
+                    'description' => 'Ubica clientes por coincidencia de texto.',
+                    'selector' => 'input[type="search"], #searchCustomer, #searchInput',
+                ],
+                [
+                    'title' => 'Tabla principal',
+                    'description' => 'Consulta datos de clientes y acciones disponibles.',
+                    'selector' => 'table.table',
+                ],
+            ],
+            'sections' => [
+                [
+                    'heading' => 'Uso',
+                    'items' => [
+                        'Mantener clientes depurados mejora la calidad de ventas y reportes.',
+                    ],
+                ],
+            ],
+        ],
+        'accounts.receivable.index' => [
+            'title' => 'Ayuda: Cuentas por cobrar',
+            'intro' => 'Monitorea saldos pendientes, abonos y estado de cobranza por cliente.',
+            'tour' => [
+                [
+                    'title' => 'Resumen de cartera',
+                    'description' => 'Visualiza montos vencidos y pendientes por gestionar.',
+                    'selector' => '.card, .bg-gradient-dark',
+                ],
+                [
+                    'title' => 'Detalle de cuentas',
+                    'description' => 'Tabla con cliente, documento, saldo y acciones de cobro.',
+                    'selector' => 'table.table',
+                ],
+            ],
+            'sections' => [
+                [
+                    'heading' => 'Buenas practicas',
+                    'items' => [
+                        'Prioriza cobranzas por antiguedad y riesgo de mora.',
+                    ],
+                ],
+            ],
+        ],
+        'sales.paidPendingDeliveries.index' => [
+            'title' => 'Ayuda: Deliveries pagados pendientes',
+            'intro' => 'Lista ordenes cobradas que aun requieren preparacion o entrega final.',
+            'tour' => [
+                [
+                    'title' => 'Tabla de pendientes',
+                    'description' => 'Aqui controlas pedidos que faltan por despachar o entregar.',
+                    'selector' => 'table.table',
+                ],
+                [
+                    'title' => 'Acciones por orden',
+                    'description' => 'Ingresa al detalle para asignacion y seguimiento de entrega.',
+                    'selector' => 'a[href*="/sales/"]',
+                ],
+            ],
+            'sections' => [
+                [
+                    'heading' => 'Operacion',
+                    'items' => [
+                        'Usa esta cola para reducir tiempos entre pago y entrega.',
+                    ],
+                ],
+            ],
+        ],
+        'sales.orders.pendingDelivery' => [
+            'title' => 'Ayuda: Ordenes pendientes por entregar',
+            'intro' => 'Vista operativa para coordinar pedidos listos para delivery.',
+            'tour' => [
+                [
+                    'title' => 'Lista operativa',
+                    'description' => 'Ordenes disponibles para asignar y despachar.',
+                    'selector' => 'table.table',
+                ],
+                [
+                    'title' => 'Asignacion de reparto',
+                    'description' => 'Usa acciones por orden para definir responsable de entrega.',
+                    'selector' => 'form[action*="assign-delivery-user"], button[type="submit"]',
+                ],
+            ],
+        ],
+        'providers.index' => [
+            'title' => 'Ayuda: Proveedores',
+            'intro' => 'Administra proveedores para abastecimiento, pagos y trazabilidad de compras.',
+            'tour' => [
+                [
+                    'title' => 'Alta de proveedor',
+                    'description' => 'Registra datos fiscales, contacto y condiciones de compra.',
+                    'selector' => 'form',
+                ],
+                [
+                    'title' => 'Listado de proveedores',
+                    'description' => 'Consulta estado, datos y opciones de edicion.',
+                    'selector' => 'table.table',
+                ],
+            ],
+        ],
+        'store-expenses.index' => [
+            'title' => 'Ayuda: Gastos de tienda',
+            'intro' => 'Registra y controla egresos operativos para analisis financiero.',
+            'tour' => [
+                [
+                    'title' => 'Registro de gasto',
+                    'description' => 'Carga concepto, categoria, monto y fecha del egreso.',
+                    'selector' => 'form',
+                ],
+                [
+                    'title' => 'Historico de gastos',
+                    'description' => 'Revisa movimientos para control de caja y reportes.',
+                    'selector' => 'table.table',
+                ],
+            ],
+        ],
+        'accounts.payable.index' => [
+            'title' => 'Ayuda: Cuentas por pagar',
+            'intro' => 'Gestiona deudas con proveedores y registra pagos parciales o totales.',
+            'tour' => [
+                [
+                    'title' => 'Panel de deuda',
+                    'description' => 'Identifica facturas pendientes y vencimientos de pago.',
+                    'selector' => 'table.table',
+                ],
+                [
+                    'title' => 'Registrar pago',
+                    'description' => 'Usa acciones para cargar abonos y actualizar saldos.',
+                    'selector' => 'form[action*="accounts-payable"], [data-bs-target*="payment"]',
+                ],
+            ],
+        ],
+        'withholdings.islr.concepts.index' => [
+            'title' => 'Ayuda: Conceptos ISLR',
+            'intro' => 'Configura conceptos de retencion ISLR para operaciones de compra.',
+            'tour' => [
+                [
+                    'title' => 'Formulario de concepto',
+                    'description' => 'Define codigo, descripcion y porcentaje de retencion.',
+                    'selector' => 'form',
+                ],
+                [
+                    'title' => 'Tabla de conceptos',
+                    'description' => 'Consulta y ajusta conceptos existentes.',
+                    'selector' => 'table.table',
+                ],
+            ],
+        ],
+        'appointments.index' => [
+            'title' => 'Ayuda: Citas',
+            'intro' => 'Gestiona agenda, estados de servicio y flujo de atencion al cliente.',
+            'tour' => [
+                [
+                    'title' => 'Agenda del dia',
+                    'description' => 'Revisa citas por hora y estado de ejecucion.',
+                    'selector' => 'table.table, .timeline, .calendar',
+                ],
+                [
+                    'title' => 'Acciones de workflow',
+                    'description' => 'Marca avances del servicio (confirmar, iniciar, finalizar).',
+                    'selector' => 'form[action*="/workflow"], button[type="submit"]',
+                ],
+            ],
+        ],
+        'appointments.customerControl.index' => [
+            'title' => 'Ayuda: Control de clientes en citas',
+            'intro' => 'Da seguimiento operativo y evidencias por cita atendida.',
+            'tour' => [
+                [
+                    'title' => 'Listado de control',
+                    'description' => 'Consulta estado de atencion y avance por cliente.',
+                    'selector' => 'table.table',
+                ],
+                [
+                    'title' => 'Carga de evidencia',
+                    'description' => 'Adjunta pruebas del servicio realizado.',
+                    'selector' => 'form[action*="/evidence"], [data-bs-target*="evidence"]',
+                ],
+            ],
+        ],
+        'appointments.services.index' => [
+            'title' => 'Ayuda: Servicios de citas',
+            'intro' => 'Administra catalogo de servicios, duracion y disponibilidad.',
+            'tour' => [
+                [
+                    'title' => 'Nuevo servicio',
+                    'description' => 'Registra nombre, costo y parametros operativos.',
+                    'selector' => 'form',
+                ],
+                [
+                    'title' => 'Listado de servicios',
+                    'description' => 'Edita, activa o desactiva servicios publicados.',
+                    'selector' => 'table.table',
+                ],
+            ],
+        ],
+        'seller-commissions.index' => [
+            'title' => 'Ayuda: Comisiones de vendedores',
+            'intro' => 'Controla calculo, estado y pago de comisiones por vendedor.',
+            'tour' => [
+                [
+                    'title' => 'Resumen de comisiones',
+                    'description' => 'Visualiza montos acumulados y pendientes por cancelar.',
+                    'selector' => 'table.table, .card',
+                ],
+                [
+                    'title' => 'Acciones de pago',
+                    'description' => 'Marca comisiones como pagadas y actualiza tasas por vendedor.',
+                    'selector' => 'form[action*="mark-paid"], form[action*="/rate/"]',
+                ],
+            ],
+        ],
+        'seller-commissions.progress' => [
+            'title' => 'Ayuda: Mi progreso de comisiones',
+            'intro' => 'Vista personal del vendedor con avance de objetivos y comisiones.',
+            'tour' => [
+                [
+                    'title' => 'Indicadores personales',
+                    'description' => 'Revisa monto acumulado y metas del periodo.',
+                    'selector' => '.card, .progress',
+                ],
+                [
+                    'title' => 'Detalle de operaciones',
+                    'description' => 'Consulta ventas que impactan tu comision.',
+                    'selector' => 'table.table',
+                ],
+            ],
+        ],
+        'electronic.documents.index' => [
+            'title' => 'Ayuda: Documentos electronicos',
+            'intro' => 'Monitorea emision, estado y reintentos de documentos fiscales electronicos.',
+            'tour' => [
+                [
+                    'title' => 'Bandeja de documentos',
+                    'description' => 'Filtra por estado para detectar errores pendientes de accion.',
+                    'selector' => 'table.table',
+                ],
+                [
+                    'title' => 'Reintento de emision',
+                    'description' => 'Ejecuta reintentos sobre documentos fallidos.',
+                    'selector' => 'form[action*="/retry"], button[type="submit"]',
+                ],
+            ],
+        ],
+        'sales.electronic.documents.tenant' => [
+            'title' => 'Ayuda: Mis documentos electronicos',
+            'intro' => 'Consulta tu historial de documentos emitidos y su estado de procesamiento.',
+            'tour' => [
+                [
+                    'title' => 'Bandeja de documentos',
+                    'description' => 'Filtra por estatus para identificar rechazos, pendientes y emitidos.',
+                    'selector' => 'table.table, .card',
+                ],
+                [
+                    'title' => 'Acciones disponibles',
+                    'description' => 'Abre detalle o ejecuta acciones permitidas segun estado.',
+                    'selector' => 'button, a[href*="electronic"], form[action*="electronic"]',
+                ],
+            ],
+        ],
+        'projects.module.index' => [
+            'title' => 'Ayuda: Modulo de proyectos',
+            'intro' => 'Punto de entrada para nomina, proyectos y cotizaciones del modulo.',
+            'tour' => [
+                [
+                    'title' => 'Tarjetas de acceso',
+                    'description' => 'Desde aqui navegas a cada submodulo operativo.',
+                    'selector' => '.card, a[href*="/nomina"], a[href*="/proyectos"], a[href*="/cotizaciones"]',
+                ],
+            ],
+        ],
+        'projects.module.payroll.index' => [
+            'title' => 'Ayuda: Nomina',
+            'intro' => 'Gestiona personal, pagos y comprobantes del equipo.',
+            'tour' => [
+                [
+                    'title' => 'Equipo de trabajo',
+                    'description' => 'Administra integrantes y su estado operativo.',
+                    'selector' => 'table.table',
+                ],
+                [
+                    'title' => 'Registro de nomina',
+                    'description' => 'Carga nuevos pagos y genera comprobantes.',
+                    'selector' => 'form[action*="/payrolls"], a[href*="/comprobante"]',
+                ],
+            ],
+        ],
+        'projects.module.projects.index' => [
+            'title' => 'Ayuda: Proyectos',
+            'intro' => 'Administra proyectos activos, fases, tareas y asignaciones.',
+            'tour' => [
+                [
+                    'title' => 'Crear proyecto',
+                    'description' => 'Registra objetivo, alcance y visibilidad del proyecto.',
+                    'selector' => 'form[action*="/proyectos"], [data-bs-target*="project"]',
+                ],
+                [
+                    'title' => 'Listado de proyectos',
+                    'description' => 'Abre cada proyecto para gestionar fase, tareas y activos.',
+                    'selector' => 'table.table, .card',
+                ],
+            ],
+        ],
+        'projects.module.projects.show' => [
+            'title' => 'Ayuda: Detalle de proyecto',
+            'intro' => 'Gestiona fase, tareas, activos y equipo asignado del proyecto seleccionado.',
+            'tour' => [
+                [
+                    'title' => 'Resumen del proyecto',
+                    'description' => 'Consulta estado general, avance y visibilidad.',
+                    'selector' => '.card, .badge, .progress',
+                ],
+                [
+                    'title' => 'Tareas y asignaciones',
+                    'description' => 'Crea tareas y actualiza estado de ejecucion.',
+                    'selector' => 'form[action*="/tasks"], table.table',
+                ],
+                [
+                    'title' => 'Activos del proyecto',
+                    'description' => 'Adjunta evidencias y documentos de avance.',
+                    'selector' => 'form[action*="/assets"], a[href*="/assets/"]',
+                ],
+            ],
+        ],
+        'projects.module.quotations.index' => [
+            'title' => 'Ayuda: Cotizaciones',
+            'intro' => 'Administra cotizaciones y conversiones a proyecto, venta o inventario.',
+            'tour' => [
+                [
+                    'title' => 'Registro de cotizacion',
+                    'description' => 'Crea nuevas propuestas para clientes y seguimiento comercial.',
+                    'selector' => 'form[action*="/cotizaciones"], [data-bs-target*="quotation"]',
+                ],
+                [
+                    'title' => 'Acciones de conversion',
+                    'description' => 'Transforma la cotizacion en proyecto, venta o entrada de inventario.',
+                    'selector' => 'form[action*="to-project"], form[action*="to-sale"], form[action*="to-inventory-entry"]',
+                ],
+            ],
+        ],
+        'reports.index' => [
+            'title' => 'Ayuda: Reportes',
+            'intro' => 'Centro de reporteria para exportar analitica comercial, inventario y finanzas.',
+            'tour' => [
+                [
+                    'title' => 'Catalogo de reportes',
+                    'description' => 'Selecciona el reporte segun area de analisis requerida.',
+                    'selector' => '.card, a[href*="/reports/"]',
+                ],
+                [
+                    'title' => 'Exportaciones',
+                    'description' => 'Descarga reportes en PDF o Excel.',
+                    'selector' => 'a[href$="/pdf"], a[href$="/excel"]',
+                ],
+            ],
+        ],
+        'reports.csv.viewer' => [
+            'title' => 'Ayuda: Visor CSV',
+            'intro' => 'Previsualiza reportes CSV antes de descarga o analisis externo.',
+            'tour' => [
+                [
+                    'title' => 'Vista de datos',
+                    'description' => 'Tabla con contenido del archivo CSV seleccionado.',
+                    'selector' => 'table.table, .table-responsive',
+                ],
+            ],
+        ],
+        'tenant.payments.index' => [
+            'title' => 'Ayuda: Pagos de tenants',
+            'intro' => 'Supervisa solicitudes de pago, aprobaciones y fechas de corte de planes.',
+            'tour' => [
+                [
+                    'title' => 'Cola de pagos',
+                    'description' => 'Revisa pagos pendientes de aprobacion o rechazo.',
+                    'selector' => 'table.table',
+                ],
+                [
+                    'title' => 'Acciones de revision',
+                    'description' => 'Aprueba, rechaza o actualiza fecha de corte.',
+                    'selector' => 'form[action*="/approve"], form[action*="/reject"], form[action*="/cutoff"]',
+                ],
+            ],
+        ],
+        'documentation.index' => [
+            'title' => 'Ayuda: Documentacion tecnica',
+            'intro' => 'Consulta manuales tecnicos y descargas operativas del sistema.',
+            'tour' => [
+                [
+                    'title' => 'Listado de documentos',
+                    'description' => 'Selecciona el documento tecnico segun rol o proceso.',
+                    'selector' => 'table.table, .list-group, a[href*="/documentation/download/"]',
+                ],
+            ],
+        ],
+        'landing' => [
+            'title' => 'Ayuda: Landing principal',
+            'intro' => 'Presentacion inicial de Shopix con acceso a registro y directorio de tiendas.',
+            'tour' => [
+                [
+                    'title' => 'Propuesta de valor',
+                    'description' => 'Seccion introductoria de beneficios principales de la plataforma.',
+                    'selector' => 'header, .hero, .section-title',
+                ],
+                [
+                    'title' => 'Accion principal',
+                    'description' => 'Accede al flujo para crear tienda o explorar directorio.',
+                    'selector' => 'a[href*="create-tenant-user"], a[href*="/landings"], .btn',
+                ],
+            ],
+        ],
+        'landing.directory' => [
+            'title' => 'Ayuda: Directorio de tiendas',
+            'intro' => 'Explora tiendas y servicios publicados en Shopix desde una sola vista.',
+            'tour' => [
+                [
+                    'title' => 'Buscador global',
+                    'description' => 'Filtra tiendas por nombre, ciudad o actividad economica.',
+                    'selector' => 'input[type="search"], #directorySearchInput, .hero-search-input',
+                ],
+                [
+                    'title' => 'Tarjetas de tiendas',
+                    'description' => 'Entra a cada landing para ver productos, servicios y contacto.',
+                    'selector' => '.card, .tenant-card, a[href*="/"]',
                 ],
             ],
         ],

@@ -832,4 +832,5 @@
     });
 
 </script>
+@include('partials.module-help-client-tour')
 </html>

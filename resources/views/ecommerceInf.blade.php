@@ -2257,5 +2257,6 @@
     filterProjectCategoryCards('all');
     applyCatalogFilters();
   </script>
+  @include('partials.module-help-client-tour')
 </body>
 </html>

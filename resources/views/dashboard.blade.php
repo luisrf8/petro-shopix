@@ -68,6 +68,13 @@
                 max-width: 460px;
             }
 
+            .dashboard-tour-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.35rem;
+                margin-top: 0.65rem;
+            }
+
             .dashboard-url-shell {
                 display: flex;
                 align-items: center;
@@ -148,6 +155,11 @@
                     height: 1.9rem;
                     flex: 0 0 1.9rem;
                 }
+
+                .dashboard-tour-btn {
+                    width: 100%;
+                    justify-content: center;
+                }
             }
         </style>
         <div id="dashboardToastContainer" class="dashboard-toast-stack"></div>
@@ -226,14 +238,18 @@
             @else
       <div class="row">
         <div class="col-12">
-            <div class="dashboard-headline ms-1 ms-md-3">
+            <div class="dashboard-headline ms-1 ms-md-3" id="tour-dashboard-headline">
                 <div class="dashboard-title-wrap">
                     <h3 class="mb-0 h4 font-weight-bolder">{{ $user->name }}</h3>
                     <p class="mb-0">Datos y Análisis.</p>
+                    <button type="button" class="btn btn-outline-dark btn-sm mb-0 dashboard-tour-btn" id="startDashboardTourBtn">
+                        <i class="material-symbols-rounded" style="font-size:18px;">school</i>
+                        Recorrido rapido
+                    </button>
                 </div>
 
                 @if(!empty($tenantPublicUrl))
-                <div class="dashboard-store-url-inline">
+                <div class="dashboard-store-url-inline" id="tour-dashboard-store-url">
                     <div class="dashboard-url-shell">
                         <input type="text" class="form-control dashboard-url-input" id="dashboardStoreUrlInput" value="{{ $tenantPublicUrl }}" readonly>
                         <a href="{{ $tenantPublicUrl }}" target="_blank" rel="noopener" class="btn dashboard-url-icon-btn" aria-label="Abrir tienda" title="Abrir tienda">
@@ -286,7 +302,7 @@
       </div>
             <div class="row mt-5 mb-4">
                 <div class="col-12">
-                    <div class="card z-index-2">
+                    <div class="card z-index-2" id="tour-dashboard-financial-summary">
                         <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2 bg-transparent">
                             <div class="chart-neo-surface py-3 pe-1 ps-1">
                                 <div class="chart">
@@ -402,7 +418,7 @@
             </div>
             <div class="row mb-4">
                 <div class="col-lg-8 col-md-6 mb-md-0 mb-4">
-                    <div class="card mt-4">
+                    <div class="card mt-4" id="tour-dashboard-sales-table">
                         <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
                             <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
                                 <h6 class="text-white text-capitalize ps-3">VENTAS REALIZADAS</h6>
@@ -472,7 +488,7 @@
                     </div>
                 </div>
                 <div class="col-lg-4 col-md-6">
-                    <div class="card h-100">
+                    <div class="card h-100" id="tour-dashboard-purchase-timeline">
                         <div class="card-header pb-0">
                           <div class="pb-0 px-3 d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
@@ -537,6 +553,7 @@
         const topExpenseCategoryTotals = @json($topExpenseCategoryTotals);
         const dashboardStoreUrlInput = document.getElementById('dashboardStoreUrlInput');
         const dashboardCopyStoreUrlBtn = document.getElementById('dashboardCopyStoreUrlBtn');
+        const dashboardTourButton = document.getElementById('startDashboardTourBtn');
         const dashboardPlanDaysRemaining = {{ isset($currentPlanDaysRemaining) && !is_null($currentPlanDaysRemaining) ? (int) $currentPlanDaysRemaining : 'null' }};
 
         const chartTheme = {
@@ -654,6 +671,92 @@
                     showDashboardToast(`Tu plan vence en ${dashboardPlanDaysRemaining} días. Registra tu pago con anticipación en Gestión de Tienda.`, 'warning');
                 }
             }, 250);
+        }
+
+        const startDashboardTour = () => {
+            const driverFactory = window.driver?.js?.driver || window.driver;
+            if (typeof driverFactory !== 'function') {
+                showDashboardToast('No se pudo cargar el asistente guiado. Recarga la pagina e intenta otra vez.', 'error');
+                return;
+            }
+
+            const dashboardSteps = [
+                {
+                    element: '#tour-dashboard-headline',
+                    popover: {
+                        title: 'Bienvenido a tu Dashboard',
+                        description: 'Aqui ves un resumen rapido del estado de tu tienda y accesos clave.',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#tour-dashboard-store-url',
+                    popover: {
+                        title: 'Enlace publico de tu tienda',
+                        description: 'Desde aqui puedes abrir tu tienda online o copiar su URL para compartirla.',
+                        side: 'bottom',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#tour-dashboard-financial-summary',
+                    popover: {
+                        title: 'Resumen financiero',
+                        description: 'Compara cobros, gastos y utilidad para entender el rendimiento mensual.',
+                        side: 'top',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#tour-dashboard-sales-table',
+                    popover: {
+                        title: 'Ventas realizadas',
+                        description: 'Consulta ordenes recientes y entra rapido a crear una nueva venta.',
+                        side: 'top',
+                        align: 'start'
+                    }
+                },
+                {
+                    element: '#tour-dashboard-purchase-timeline',
+                    popover: {
+                        title: 'Compras realizadas',
+                        description: 'Revisa actividad de compras y entra directo al modulo de abastecimiento.',
+                        side: 'left',
+                        align: 'start'
+                    }
+                }
+            ].filter((step) => document.querySelector(step.element));
+
+            if (!dashboardSteps.length) {
+                showDashboardToast('No hay elementos disponibles para el recorrido en esta vista.', 'warning');
+                return;
+            }
+
+            const tour = driverFactory({
+                showProgress: true,
+                allowClose: true,
+                overlayColor: 'rgba(15, 23, 42, 0.72)',
+                nextBtnText: 'Siguiente',
+                prevBtnText: 'Anterior',
+                doneBtnText: 'Listo',
+                showButtons: ['next', 'previous', 'close'],
+                steps: dashboardSteps,
+            });
+
+            tour.drive();
+        };
+
+        if (dashboardTourButton) {
+            dashboardTourButton.addEventListener('click', startDashboardTour);
+
+            const dashboardTourKey = 'shopix_dashboard_tour_seen_v1';
+            if (localStorage.getItem(dashboardTourKey) !== '1') {
+                setTimeout(() => {
+                    startDashboardTour();
+                    localStorage.setItem(dashboardTourKey, '1');
+                }, 700);
+            }
         }
 
         var financialCtx = document.getElementById("financial-chart")?.getContext("2d");

@@ -2093,5 +2093,6 @@
       });
     });
   </script>
+  @include('partials.module-help-client-tour')
 </body>
 </html>

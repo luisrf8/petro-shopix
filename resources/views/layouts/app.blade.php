@@ -25,6 +25,7 @@
   <link href="{{ asset('assets/css/nucleo-svg.css') }}" rel="stylesheet">
   <!-- CSS Files -->
   <link href="{{ asset('assets/css/material-dashboard.css?v=3.2.0') }}" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.css" />
   <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Mi App')</title>
     <link rel="stylesheet" href="{{ asset('assets/css/material-dashboard.min.css') }}">
@@ -287,25 +288,116 @@
         -webkit-overflow-scrolling: touch;
         width: 100%;
       }
+
+      .shopix-admin-tour-launcher {
+        position: fixed;
+        right: 1rem;
+        bottom: 1rem;
+        z-index: 1090;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.55rem 0.95rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+        color: #f8fafc;
+        box-shadow: 0 14px 26px rgba(15, 23, 42, 0.28);
+      }
+
+      .shopix-admin-tour-launcher:hover,
+      .shopix-admin-tour-launcher:focus {
+        background: linear-gradient(135deg, #111827, #334155);
+        color: #f8fafc;
+      }
+
+      @media (max-width: 576px) {
+        .shopix-admin-tour-launcher {
+          right: 0.75rem;
+          left: 0.75rem;
+          bottom: 0.75rem;
+          justify-content: center;
+        }
+      }
     </style>
     @stack('styles')
 </head>
 <body class="bg-gray-100" id="d-body">
     @php
-      $moduleHelpEnabled = (bool) config('module_help.enabled', false);
+    $moduleHelpEnabled = (bool) config('module_help.enabled', false);
         $currentRouteName = optional(request()->route())->getName();
         $moduleHelpConfig = config('module_help', []);
-        $moduleHelpFallback = $moduleHelpConfig['fallback'] ?? [];
-      $moduleHelp = $moduleHelpEnabled
-        ? ($moduleHelpConfig['routes'][$currentRouteName] ?? $moduleHelpFallback)
-        : [];
+    $moduleHelpAudience = $moduleHelpConfig['audience'] ?? [];
+    $csvToList = static function ($value) {
+      if (is_array($value)) {
+        return array_values(array_filter(array_map(static fn ($item) => strtolower(trim((string) $item)), $value), static fn ($item) => $item !== ''));
+      }
+
+      $raw = trim((string) $value);
+      if ($raw === '') {
+        return [];
+      }
+
+      return array_values(array_filter(array_map(static fn ($item) => strtolower(trim((string) $item)), explode(',', $raw)), static fn ($item) => $item !== ''));
+    };
+    $csvToIntegerList = static function ($value) {
+      if (is_array($value)) {
+        return array_values(array_filter(array_map(static fn ($item) => (int) $item, $value), static fn ($item) => $item > 0));
+      }
+
+      $raw = trim((string) $value);
+      if ($raw === '') {
+        return [];
+      }
+
+      return array_values(array_filter(array_map(static fn ($item) => (int) trim((string) $item), explode(',', $raw)), static fn ($item) => $item > 0));
+    };
+    $authUser = auth()->user();
+    $isGuestUser = !$authUser;
+    $currentRoleName = strtolower(trim((string) optional(optional($authUser)->role)->name));
+    if ($currentRoleName === '' && $authUser && isset($authUser->role_id)) {
+      $currentRoleName = 'role:' . (int) $authUser->role_id;
+    }
+    $currentTenantId = (int) ($authUser->tenant_id ?? 0);
+    $allowGuests = (bool) ($moduleHelpAudience['allow_guests'] ?? true);
+    $roleAllowList = $csvToList($moduleHelpAudience['role_allow_list'] ?? []);
+    $roleBlockList = $csvToList($moduleHelpAudience['role_block_list'] ?? []);
+    $tenantAllowList = $csvToIntegerList($moduleHelpAudience['tenant_allow_list'] ?? []);
+    $tenantBlockList = $csvToIntegerList($moduleHelpAudience['tenant_block_list'] ?? []);
+    $moduleHelpAudienceAllowed = true;
+
+    if ($isGuestUser && !$allowGuests) {
+      $moduleHelpAudienceAllowed = false;
+    }
+
+    if ($moduleHelpAudienceAllowed && !$isGuestUser && !empty($roleAllowList) && !in_array($currentRoleName, $roleAllowList, true)) {
+      $moduleHelpAudienceAllowed = false;
+    }
+
+    if ($moduleHelpAudienceAllowed && !$isGuestUser && !empty($roleBlockList) && in_array($currentRoleName, $roleBlockList, true)) {
+      $moduleHelpAudienceAllowed = false;
+    }
+
+    if ($moduleHelpAudienceAllowed && !$isGuestUser && !empty($tenantAllowList) && !in_array($currentTenantId, $tenantAllowList, true)) {
+      $moduleHelpAudienceAllowed = false;
+    }
+
+    if ($moduleHelpAudienceAllowed && !$isGuestUser && !empty($tenantBlockList) && in_array($currentTenantId, $tenantBlockList, true)) {
+      $moduleHelpAudienceAllowed = false;
+    }
+
+    $moduleHelpEnabled = $moduleHelpEnabled && $moduleHelpAudienceAllowed;
+        $moduleHelpRoute = $moduleHelpConfig['routes'][$currentRouteName] ?? [];
+      $moduleHelp = $moduleHelpEnabled ? $moduleHelpRoute : [];
+      if ($moduleHelpEnabled && empty($moduleHelp)) {
+        $moduleHelp = [
+          'title' => 'Ayuda: ' . str_replace('.', ' / ', (string) ($currentRouteName ?: 'Modulo')),
+          'intro' => 'Recorrido contextual del modulo actual.',
+        ];
+      }
         $moduleWizard = $moduleHelp['wizard'] ?? [];
         $moduleTour = $moduleHelp['tour'] ?? [];
-        $helpPreferenceUrls = [
-            'show' => route('help.preferences.show'),
-            'global' => route('help.preferences.global'),
-            'route' => route('help.preferences.route'),
-        ];
     @endphp
       <aside class="sidenav navbar navbar-vertical navbar-expand-xs fixed-start ms-0 d-lg-block bg-white sidebar-full-height" id="sidenav-main">
         @include('layouts.navbar')
@@ -328,89 +420,12 @@
         @yield('content')
     </main>
 
-  @if(!empty($moduleHelp))
-    {{--
-    <button
-      class="btn btn-dark rounded-circle p-0 d-flex align-items-center justify-content-center"
-      type="button"
-      data-bs-toggle="offcanvas"
-      data-bs-target="#moduleHelpPanel"
-      aria-controls="moduleHelpPanel"
-      style="position: fixed; right: 1rem; bottom: 1rem; width: 52px; height: 52px; z-index: 1052;"
-      title="Ayuda del modulo"
-    >
-      <i class="material-symbols-rounded text-white">help</i>
+  @if($moduleHelpEnabled)
+    <button type="button" class="shopix-admin-tour-launcher" id="shopixStartAdminModuleTourBtn" aria-label="Iniciar recorrido guiado">
+      <i class="material-symbols-rounded" style="font-size:18px;">explore</i>
+      Recorrido rapido
     </button>
-    --}}
-
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="moduleHelpPanel" aria-labelledby="moduleHelpPanelLabel">
-      <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title" id="moduleHelpPanelLabel">{{ $moduleHelp['title'] ?? 'Ayuda del modulo' }}</h5>
-        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-      </div>
-      <div class="offcanvas-body">
-        @if(!empty($moduleHelp['intro']))
-          <p class="text-sm text-dark mb-4">{{ $moduleHelp['intro'] }}</p>
-        @endif
-
-        <div class="mb-4 d-grid gap-2">
-          <button type="button" class="btn btn-dark mb-0" id="startModuleWizard" @disabled(empty($moduleWizard))>
-            Iniciar Wizard con Stepper
-          </button>
-          <button type="button" class="btn btn-outline-dark mb-0" id="startModuleTour" @disabled(empty($moduleTour))>
-            Marcar Pasos en Pantalla
-          </button>
-          <div class="form-check mt-2">
-            <input class="form-check-input" type="checkbox" id="disableAutoHelpRoute">
-            <label class="form-check-label text-sm" for="disableAutoHelpRoute">
-              No volver a mostrar ayuda automatica en este modulo
-            </label>
-          </div>
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="disableAutoHelpGlobal">
-            <label class="form-check-label text-sm" for="disableAutoHelpGlobal">
-              No volver a mostrar ayuda automatica en todo el sistema
-            </label>
-          </div>
-          @if(empty($moduleWizard) && empty($moduleTour))
-            <small class="text-muted">Este modulo aun no tiene pasos guiados configurados.</small>
-          @endif
-        </div>
-
-        @foreach(($moduleHelp['sections'] ?? []) as $section)
-          <div class="mb-4">
-            <h6 class="text-uppercase text-xs text-dark font-weight-bolder mb-2">{{ $section['heading'] ?? 'Detalle' }}</h6>
-            <ul class="ps-3 mb-0">
-              @foreach(($section['items'] ?? []) as $item)
-                <li class="text-sm text-secondary mb-2">{{ $item }}</li>
-              @endforeach
-            </ul>
-          </div>
-        @endforeach
-      </div>
-    </div>
   @endif
-
-  <div class="module-wizard-backdrop" id="moduleWizardBackdrop"></div>
-  <div class="module-wizard-focus" id="moduleWizardFocus"></div>
-  <div class="card shadow module-wizard-tooltip" id="moduleWizardTooltip">
-    <div class="card-body p-3">
-      <div class="d-flex justify-content-between align-items-start mb-2">
-        <div>
-          <div class="text-xs text-muted" id="wizardInlineProgress"></div>
-          <h6 class="mb-0" id="wizardTooltipTitle">Paso guiado</h6>
-        </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary mb-0" id="closeModuleWizard">Cerrar</button>
-      </div>
-      <div id="wizardInlineSteps" class="d-flex flex-wrap gap-2 mb-2"></div>
-      <p class="text-sm mb-2" id="wizardInlineDescription"></p>
-      <div class="alert alert-light border text-sm py-2 px-3 mb-2" id="wizardInlineAction" role="status"></div>
-      <div class="d-flex justify-content-between">
-        <button type="button" class="btn btn-outline-secondary btn-sm mb-0" id="wizardPrevStep">Anterior</button>
-        <button type="button" class="btn btn-dark btn-sm mb-0" id="wizardNextStep">Siguiente</button>
-      </div>
-    </div>
-  </div>
 
     <!-- Scripts -->
     <script src="{{ asset('assets/js/core/popper.min.js') }}"></script>
@@ -418,162 +433,250 @@
     <script src="{{ asset('assets/js/plugins/perfect-scrollbar.min.js') }}"></script>
     <script src="{{ asset('assets/js/material-dashboard.min.js?v=3.2.0') }}"></script>
     <script src="{{ asset('assets/js/navbar.js') }}"></script>
-    @if(!empty($moduleHelp))
+    @if($moduleHelpEnabled)
       <script>
         document.addEventListener('DOMContentLoaded', function () {
-          const moduleHelp = @json($moduleHelp);
+          const moduleHelp = @json($moduleHelp ?? []);
           const currentRouteName = @json($currentRouteName);
-          const wizardSteps = Array.isArray(moduleHelp.wizard) ? moduleHelp.wizard : [];
-          const tourSteps = Array.isArray(moduleHelp.tour) ? moduleHelp.tour : [];
-          const canGuide = wizardSteps.length > 0 || tourSteps.length > 0;
-
+          const launchButton = document.getElementById('shopixStartAdminModuleTourBtn');
           const routeKey = currentRouteName || 'unknown_route';
-          const routeDisableKey = 'shopix_help_disable_route_' + routeKey;
-          const globalDisableKey = 'shopix_help_disable_global';
-          const promptedSessionKey = 'shopix_help_prompted_' + routeKey;
-          const preferenceUrls = @json($helpPreferenceUrls);
-          const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+          const seenKey = 'shopix_admin_tour_seen_' + routeKey;
 
-          const disableRouteCheckbox = document.getElementById('disableAutoHelpRoute');
-          const disableGlobalCheckbox = document.getElementById('disableAutoHelpGlobal');
-
-          const wizardBtn = document.getElementById('startModuleWizard');
-          const tourBtn = document.getElementById('startModuleTour');
-          const offcanvasEl = document.getElementById('moduleHelpPanel');
-          const offcanvasInstance = offcanvasEl ? bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl) : null;
-
-          const wizardBackdrop = document.getElementById('moduleWizardBackdrop');
-          const wizardFocus = document.getElementById('moduleWizardFocus');
-          const wizardTooltip = document.getElementById('moduleWizardTooltip');
-          const wizardProgress = document.getElementById('wizardInlineProgress');
-          const wizardTitle = document.getElementById('wizardTooltipTitle');
-          const wizardDescription = document.getElementById('wizardInlineDescription');
-          const wizardAction = document.getElementById('wizardInlineAction');
-          const wizardStepChips = document.getElementById('wizardInlineSteps');
-          const wizardPrev = document.getElementById('wizardPrevStep');
-          const wizardNext = document.getElementById('wizardNextStep');
-          const wizardClose = document.getElementById('closeModuleWizard');
-
-          let wizardIndex = 0;
-          let wizardActive = false;
-          let activeSteps = [];
-          let currentTarget = null;
-          let currentInlineNote = null;
-
-          function isRouteAutoHelpDisabled() {
-            return localStorage.getItem(routeDisableKey) === '1';
-          }
-
-          function isGlobalAutoHelpDisabled() {
-            return localStorage.getItem(globalDisableKey) === '1';
-          }
-
-          function setRouteDisabledLocal(disabled) {
-            if (disabled) {
-              localStorage.setItem(routeDisableKey, '1');
-            } else {
-              localStorage.removeItem(routeDisableKey);
+          const adminTourBlueprints = {
+            'dashboard': {
+              tour: [
+                { title: 'Resumen principal', description: 'Visualiza el estado general del negocio.', selector: '.dashboard-headline, .container-fluid' },
+                { title: 'Indicadores', description: 'Revisa las metricas clave del periodo.', selector: '.card h4, .card h6' },
+                { title: 'Accesos rapidos', description: 'Entra rapido a modulos operativos.', selector: '.card a[href]'}
+              ]
+            },
+            'notifications.index': {
+              tour: [
+                { title: 'Listado de notificaciones', description: 'Consulta avisos y eventos recientes.', selector: 'table.table, .list-group, .card' },
+                { title: 'Marcar como leida', description: 'Gestiona el estado de cada notificacion.', selector: 'form[action*="/notifications/"] button[type="submit"], button[data-action="read"]' }
+              ]
+            },
+            'categories.index': {
+              tour: [
+                { title: 'Crear categoria', description: 'Registra una nueva categoria para catalogo.', selector: 'form, [data-bs-target*="Category"], [data-bs-target*="category"]' },
+                { title: 'Tabla de categorias', description: 'Edita o activa/inactiva categorias.', selector: 'table.table' }
+              ]
+            },
+            'products.index': {
+              tour: [
+                { title: 'Filtro de categorias', description: 'Segmenta productos por categoria.', selector: '#categoriesContainer, .category-link' },
+                { title: 'Buscador', description: 'Ubica productos rapidamente.', selector: '#searchProduct, #searchInput, input[type="search"]' },
+                { title: 'Acciones de catalogo', description: 'Crea o importa productos del modulo.', selector: 'a[href="/createProduct"], [data-bs-target*="import"], #importCatalogForm' }
+              ]
+            },
+            'productItem': {
+              tour: [
+                { title: 'Detalle de producto', description: 'Administra imagenes, variantes y codigos.', selector: '.card, form, table.table' },
+                { title: 'Acciones del producto', description: 'Guarda cambios y ejecuta funciones de inventario.', selector: 'button[type="submit"], form[action*="products"], form[action*="variants"]' }
+              ]
+            },
+            'users': {
+              tour: [
+                { title: 'Busqueda de usuarios', description: 'Filtra por nombre o correo.', selector: '#searchUser, #searchInput, input[type="search"]' },
+                { title: 'Gestion de usuarios', description: 'Crea, edita y cambia estado de cuentas.', selector: '#userTableBody, table.table, .btn-edit-user, .toggle-status-btn' }
+              ]
+            },
+            'paymentMethods.index': {
+              tour: [
+                { title: 'Monedas y tasas', description: 'Controla tasas de cambio activas.', selector: '#currentDollarRate, [data-bs-target*="Rate"], [data-bs-target*="rate"]' },
+                { title: 'Metodos de pago', description: 'Registra y administra canales de cobro.', selector: '#createPaymentMethodForm, .btn-edit-method, table.table' }
+              ]
+            },
+            'sales': {
+              tour: [
+                { title: 'Construccion de venta', description: 'Selecciona productos y cantidades.', selector: '#itemSelector, .product-item, .category-link' },
+                { title: 'Cobro y cierre', description: 'Define metodos de pago y confirma la orden.', selector: '#paymentMethods, #purchaseForm, button[type="submit"]' }
+              ]
+            },
+            'sales.orders': {
+              tour: [
+                { title: 'Historial de ordenes', description: 'Consulta ventas realizadas y su estatus.', selector: 'table.table' },
+                { title: 'Acciones de orden', description: 'Abre detalle, reportes y documentos.', selector: 'a[href*="/sales/"], [data-bs-target*="report"], form[action*="sales-orders"]' }
+              ]
+            },
+            'sales.showByOrder': {
+              tour: [
+                { title: 'Detalle de orden', description: 'Visualiza items, pagos y estatus de despacho.', selector: '.card, table.table' },
+                { title: 'Funciones operativas', description: 'Ejecuta devoluciones, emision o cambios de estado.', selector: 'form[action*="/sales"], form[action*="/electronic"], button[type="submit"]' }
+              ]
+            },
+            'purchase': {
+              tour: [
+                { title: 'Selección de variantes', description: 'Arma la entrada con cantidades y costos.', selector: '#itemSelector, table.table' },
+                { title: 'Confirmacion de compra', description: 'Define proveedor, almacen y registra la entrada.', selector: '#warehouseId, #createOrder, #finalSummaryText' }
+              ]
+            },
+            'purchase.orders': {
+              tour: [
+                { title: 'Ordenes de compra', description: 'Consulta entradas por fecha, proveedor y total.', selector: 'table.table' },
+                { title: 'Detalle de compra', description: 'Abre la orden para auditoria completa.', selector: 'a[href*="/order/"]' }
+              ]
+            },
+            'warehouses.index': {
+              tour: [
+                { title: 'Alta de almacen', description: 'Crea almacenes y estructura operativa.', selector: 'form[action*="warehouses"], input[name="name"]' },
+                { title: 'Control de existencias', description: 'Revisa stock por almacen y variantes.', selector: 'table.table' }
+              ]
+            },
+            'materials.index': {
+              tour: [
+                { title: 'Paquetes y materiales', description: 'Configura combos y listas de materiales.', selector: '#materialPackageForm, #materialsRows, table.table' },
+                { title: 'Estado y codigos', description: 'Gestiona disponibilidad y generacion de codigos.', selector: 'form[action*="toggle-status"], form[action*="generate-codes"]' }
+              ]
+            },
+            'providers.index': {
+              tour: [
+                { title: 'Registro de proveedor', description: 'Crea y actualiza proveedores del negocio.', selector: 'form, [data-bs-target*="Provider"], [data-bs-target*="provider"]' },
+                { title: 'Listado de proveedores', description: 'Controla estado y acciones por fila.', selector: 'table.table, .toggle-status-btn' }
+              ]
+            },
+            'accounts.payable.index': {
+              tour: [
+                { title: 'Deudas por pagar', description: 'Monitorea cuentas abiertas por proveedor.', selector: 'table.table, .card' },
+                { title: 'Registro de pagos', description: 'Carga abonos o pagos totales.', selector: 'form[action*="/accounts-payable"], [data-bs-target*="payment"]' }
+              ]
+            },
+            'accounts.receivable.index': {
+              tour: [
+                { title: 'Cartera por cobrar', description: 'Supervisa saldos pendientes de clientes.', selector: 'table.table, .card' },
+                { title: 'Seguimiento de cobro', description: 'Gestiona estado y trazabilidad de pagos.', selector: 'a[href*="/sales/"], form[action*="receivable"]' }
+              ]
+            },
+            'store-expenses.index': {
+              tour: [
+                { title: 'Registro de egresos', description: 'Documenta gastos operativos de tienda.', selector: 'form' },
+                { title: 'Historial de gastos', description: 'Revisa y ajusta gastos registrados.', selector: 'table.table' }
+              ]
+            },
+            'reports.index': {
+              tour: [
+                { title: 'Centro de reportes', description: 'Selecciona reporte por area funcional.', selector: '.card, a[href*="/reports/"]' },
+                { title: 'Exportaciones', description: 'Descarga reportes en formatos disponibles.', selector: 'a[href$="/pdf"], a[href$="/excel"]' }
+              ]
+            },
+            'seller-commissions.index': {
+              tour: [
+                { title: 'Comisiones', description: 'Revisa montos por vendedor y estado de pago.', selector: 'table.table, .card' },
+                { title: 'Acciones de comision', description: 'Marca pagos o ajusta porcentaje por vendedor.', selector: 'form[action*="mark-paid"], form[action*="/rate/"]' }
+              ]
+            },
+            'appointments.index': {
+              tour: [
+                { title: 'Agenda de citas', description: 'Visualiza citas y su avance operativo.', selector: 'table.table, .card, .timeline' },
+                { title: 'Workflow de atencion', description: 'Ejecuta acciones de confirmacion y cierre.', selector: 'form[action*="/workflow"], button[type="submit"]' }
+              ]
+            },
+            'appointments.services.index': {
+              tour: [
+                { title: 'Catalogo de servicios', description: 'Crea y administra servicios de agenda.', selector: 'form, table.table' },
+                { title: 'Estado de servicios', description: 'Activa, edita o desactiva servicios.', selector: 'form[action*="/appointments/services"], .toggle-status-btn' }
+              ]
+            },
+            'projects.module.index': {
+              tour: [
+                { title: 'Modulos del area', description: 'Accede a nomina, proyectos y cotizaciones.', selector: 'a[href*="/nomina"], a[href*="/proyectos"], a[href*="/cotizaciones"], .card' }
+              ]
+            },
+            'projects.module.payroll.index': {
+              tour: [
+                { title: 'Gestion de nomina', description: 'Administra equipo y pagos del personal.', selector: 'table.table, form[action*="/payrolls"], form[action*="/team-members"]' },
+                { title: 'Comprobantes', description: 'Genera y consulta comprobantes de pago.', selector: 'a[href*="/comprobante"]' }
+              ]
+            },
+            'projects.module.projects.index': {
+              tour: [
+                { title: 'Listado de proyectos', description: 'Supervisa proyectos activos y fases.', selector: 'table.table, .card' },
+                { title: 'Alta de proyecto', description: 'Crea nuevos proyectos y parametros iniciales.', selector: 'form[action*="/proyectos"], [data-bs-target*="project"]' }
+              ]
+            },
+            'projects.module.projects.show': {
+              tour: [
+                { title: 'Detalle del proyecto', description: 'Gestiona avances, fases y visibilidad.', selector: '.card, .progress, .badge' },
+                { title: 'Tareas y activos', description: 'Registra tareas y evidencia del proyecto.', selector: 'form[action*="/tasks"], form[action*="/assets"], table.table' }
+              ]
+            },
+            'projects.module.quotations.index': {
+              tour: [
+                { title: 'Cotizaciones', description: 'Crea propuestas comerciales y realiza conversiones.', selector: 'form[action*="/cotizaciones"], table.table' },
+                { title: 'Conversion de cotizacion', description: 'Convierte a proyecto, venta o inventario.', selector: 'form[action*="to-project"], form[action*="to-sale"], form[action*="to-inventory-entry"]' }
+              ]
+            },
+            'electronic.documents.index': {
+              tour: [
+                { title: 'Bandeja electronica', description: 'Monitorea estado de documentos fiscales.', selector: 'table.table, .card' },
+                { title: 'Acciones de recuperacion', description: 'Reintenta documentos con error cuando aplique.', selector: 'form[action*="/retry"], button[type="submit"]' }
+              ]
+            },
+            'documentation.index': {
+              tour: [
+                { title: 'Documentacion tecnica', description: 'Consulta manuales y guias del sistema.', selector: 'table.table, .list-group, a[href*="/documentation/download/"]' }
+              ]
             }
-          }
+          };
 
-          function setGlobalDisabledLocal(disabled) {
-            if (disabled) {
-              localStorage.setItem(globalDisableKey, '1');
-            } else {
-              localStorage.removeItem(globalDisableKey);
+          function resolveDynamicRouteHelp(routeName) {
+            const exact = adminTourBlueprints[routeName] || null;
+            if (exact) {
+              return exact;
             }
-          }
 
-          async function saveGlobalPreference(disabled) {
-            try {
-              await fetch(preferenceUrls.global, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-CSRF-TOKEN': csrfToken,
-                  'Accept': 'application/json',
-                  'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({ disabled: disabled ? 1 : 0 }),
-              });
-            } catch (error) {
-              console.warn('No se pudo guardar preferencia global en servidor.', error);
+            if (routeName.startsWith('reports.')) {
+              return {
+                tour: [
+                  { title: 'Reporte solicitado', description: 'Aqui ejecutas la exportacion del reporte especifico.', selector: 'form, button[type="submit"], a[href$="/pdf"], a[href$="/excel"], .card' }
+                ]
+              };
             }
-          }
 
-          async function saveRoutePreference(disabled) {
-            try {
-              await fetch(preferenceUrls.route, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-CSRF-TOKEN': csrfToken,
-                  'Accept': 'application/json',
-                  'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({ route: routeKey, disabled: disabled ? 1 : 0 }),
-              });
-            } catch (error) {
-              console.warn('No se pudo guardar preferencia de modulo en servidor.', error);
+            if (routeName.startsWith('withholdings.')) {
+              return {
+                tour: [
+                  { title: 'Retenciones', description: 'Gestiona certificados, exportaciones y sincronizacion fiscal.', selector: 'table.table, form, button[type="submit"], a[href*="withholdings"]' }
+                ]
+              };
             }
-          }
 
-          async function hydratePreferencesFromServer() {
-            try {
-              const response = await fetch(preferenceUrls.show, {
-                method: 'GET',
-                headers: {
-                  'Accept': 'application/json',
-                  'X-Requested-With': 'XMLHttpRequest',
-                },
-              });
-
-              if (!response.ok) {
-                return;
-              }
-
-              const data = await response.json();
-              const disableGlobal = Boolean(data.disable_global);
-              const disabledRoutes = data.disabled_routes && typeof data.disabled_routes === 'object'
-                ? data.disabled_routes
-                : {};
-              const disableRoute = Boolean(disabledRoutes[routeKey]);
-
-              setGlobalDisabledLocal(disableGlobal);
-              setRouteDisabledLocal(disableRoute);
-
-              if (disableGlobalCheckbox) {
-                disableGlobalCheckbox.checked = disableGlobal;
-              }
-
-              if (disableRouteCheckbox) {
-                disableRouteCheckbox.checked = disableRoute;
-              }
-            } catch (error) {
-              console.warn('No se pudieron cargar preferencias de ayuda desde servidor.', error);
+            if (routeName.startsWith('sales.')) {
+              return {
+                tour: [
+                  { title: 'Operacion de ventas', description: 'Ejecuta acciones de venta segun el estado del documento.', selector: 'table.table, .card, form[action*="sales"], a[href*="sales"]' }
+                ]
+              };
             }
+
+            if (routeName.startsWith('tenant.')) {
+              return {
+                tour: [
+                  { title: 'Gestion de tenant', description: 'Administra configuracion y operacion del tenant actual.', selector: 'form, table.table, .card, button[type="submit"]' }
+                ]
+              };
+            }
+
+            return {
+              tour: [
+                { title: 'Flujo del modulo', description: 'Revisa las acciones principales disponibles en esta pantalla.', selector: 'main, form, table.table, button[type="submit"], a[href]' }
+              ]
+            };
           }
 
-          if (disableRouteCheckbox) {
-            disableRouteCheckbox.checked = isRouteAutoHelpDisabled();
-            disableRouteCheckbox.addEventListener('change', async function () {
-              const disabled = disableRouteCheckbox.checked;
-              setRouteDisabledLocal(disabled);
-              await saveRoutePreference(disabled);
-            });
-          }
-
-          if (disableGlobalCheckbox) {
-            disableGlobalCheckbox.checked = isGlobalAutoHelpDisabled();
-            disableGlobalCheckbox.addEventListener('change', async function () {
-              const disabled = disableGlobalCheckbox.checked;
-              setGlobalDisabledLocal(disabled);
-              await saveGlobalPreference(disabled);
-            });
-          }
+          const dynamicHelp = resolveDynamicRouteHelp(routeKey);
+          const wizardSteps = Array.isArray(moduleHelp.wizard) && moduleHelp.wizard.length
+            ? moduleHelp.wizard
+            : (Array.isArray(dynamicHelp.wizard) ? dynamicHelp.wizard : []);
+          const tourSteps = Array.isArray(moduleHelp.tour) && moduleHelp.tour.length
+            ? moduleHelp.tour
+            : (Array.isArray(dynamicHelp.tour) ? dynamicHelp.tour : []);
 
           function findTarget(selector) {
-            if (!selector) return null;
+            if (!selector) {
+              return null;
+            }
+
             try {
               return document.querySelector(selector);
             } catch (error) {
@@ -581,266 +684,63 @@
             }
           }
 
-          function clearCurrentVisuals() {
-            if (currentTarget) {
-              currentTarget.classList.remove('module-step-current');
-            }
+          function buildDriverSteps(mode) {
+            const source = mode === 'wizard'
+              ? (wizardSteps.length ? wizardSteps : tourSteps)
+              : (tourSteps.length ? tourSteps : wizardSteps);
 
-            if (currentInlineNote && currentInlineNote.parentNode) {
-              currentInlineNote.remove();
-            }
-
-            currentInlineNote = null;
-            currentTarget = null;
-          }
-
-          function buildStepInfo(step, index) {
-            const info = document.createElement('div');
-            info.className = 'module-step-inline-note';
-            info.innerHTML = `
-              <div class="fw-bold text-sm mb-1">Paso ${index + 1}: ${step.title || 'Paso guiado'}</div>
-              <p class="mb-1 text-sm">${step.description || ''}</p>
-              <p class="mb-0 text-sm"><strong>Accion:</strong> ${step.action || 'Completa este paso para continuar.'}</p>
-            `;
-            return info;
-          }
-
-          function getAvailableStep(index) {
-            for (let i = index; i < activeSteps.length; i += 1) {
-              const target = findTarget(activeSteps[i].selector || '');
-              if (target) {
-                return { index: i, step: activeSteps[i], target: target };
-              }
-            }
-
-            for (let i = index - 1; i >= 0; i -= 1) {
-              const target = findTarget(activeSteps[i].selector || '');
-              if (target) {
-                return { index: i, step: activeSteps[i], target: target };
-              }
-            }
-
-            return null;
-          }
-
-          function positionTooltip(targetRect) {
-            if (!wizardTooltip) return;
-
-            // const tooltipWidth = Math.min(
-            //   wizardTooltip.offsetWidth || 390,
-            //   Math.max(260, window.innerWidth - 16)
-            // );
-            // const tooltipHeight = wizardTooltip.offsetHeight || 240;
-            let top = targetRect.top;
-            let left = targetRect.right + 8;
-
-            // Prefer right side of highlight, then left side, then below as fallback.
-            // if (left + tooltipWidth > window.innerWidth - 8) {
-            //   left = targetRect.left - tooltipWidth - 8;
-            // }
-
-            // if (left < 8) {
-            //   left = targetRect.left;
-            //   top = targetRect.bottom;
-            // }
-
-            // if (left + tooltipWidth > window.innerWidth - 8) {
-            //   left = window.innerWidth - tooltipWidth - 8;
-            // }
-
-            // if (top + tooltipHeight > window.innerHeight - 8) {
-            //   top = Math.max(8, window.innerHeight - tooltipHeight - 8);
-            // }
-
-            // if (top < 8) {
-            //   top = 8;
-            // }
-
-            // wizardTooltip.style.top = top + 'px';
-            // wizardTooltip.style.left = left + 'px';
-          }
-
-          function syncSpotlightPosition() {
-            if (!wizardActive || !currentTarget) return;
-
-            const rect = currentTarget.getBoundingClientRect();
-            const padding = 8;
-
-            // if (wizardFocus) {
-            //   wizardFocus.style.top = Math.max(0, rect.top - padding) + 'px';
-            //   wizardFocus.style.left = Math.max(0, rect.left - padding) + 'px';
-            //   wizardFocus.style.width = Math.max(0, rect.width + (padding * 2)) + 'px';
-            //   wizardFocus.style.height = Math.max(0, rect.height + (padding * 2)) + 'px';
-            // }
-
-            if (wizardTooltip) {
-              positionTooltip(rect);
-            }
-          }
-
-          function renderStepChips() {
-            if (!wizardStepChips) return;
-            wizardStepChips.innerHTML = '';
-
-            activeSteps.forEach(function (step, idx) {
-              const target = findTarget(step.selector || '');
-              const chip = document.createElement('button');
-              chip.type = 'button';
-              chip.className = 'module-step-chip' + (idx === wizardIndex ? ' active' : '');
-              chip.textContent = String(idx + 1);
-              chip.title = step.title || ('Paso ' + (idx + 1));
-              chip.disabled = !target;
-              chip.addEventListener('click', function () {
-                wizardIndex = idx;
-                renderWizardOverlay(true);
+            return source
+              .filter(function (step) {
+                return Boolean(step && step.selector && findTarget(step.selector));
+              })
+              .map(function (step) {
+                const actionText = step.action ? '<br><br><strong>Accion:</strong> ' + step.action : '';
+                return {
+                  element: step.selector,
+                  popover: {
+                    title: step.title || 'Paso guiado',
+                    description: (step.description || 'Sigue este paso para continuar.') + actionText,
+                    side: 'bottom',
+                    align: 'start',
+                  }
+                };
               });
-              wizardStepChips.appendChild(chip);
-            });
           }
 
-          function renderWizardOverlay(scrollToCurrent) {
-            if (!activeSteps.length) return;
-
-            clearCurrentVisuals();
-
-            const available = getAvailableStep(wizardIndex);
-            if (!available) {
-              closeWizardOverlay();
+          function startDriverTour(mode, persistSeen) {
+            const driverFactory = window.driver?.js?.driver || window.driver;
+            if (typeof driverFactory !== 'function') {
               return;
             }
 
-            wizardIndex = available.index;
-            const currentStep = available.step;
-            const target = available.target;
-
-            wizardProgress.textContent = 'Paso ' + (wizardIndex + 1) + ' de ' + activeSteps.length;
-            wizardTitle.textContent = currentStep.title || 'Paso guiado';
-            wizardDescription.textContent = currentStep.description || '';
-            wizardAction.textContent = currentStep.action || 'Completa este paso para continuar.';
-            wizardPrev.disabled = wizardIndex === 0;
-            wizardNext.textContent = wizardIndex === activeSteps.length - 1 ? 'Finalizar' : 'Siguiente';
-
-            if (scrollToCurrent) {
-              target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const steps = buildDriverSteps(mode);
+            if (!steps.length) {
+              return;
             }
 
-            currentTarget = target;
-            currentTarget.classList.add('module-step-current');
+            const tour = driverFactory({
+              showProgress: true,
+              allowClose: true,
+              animate: true,
+              overlayColor: 'rgba(15, 23, 42, 0.72)',
+              nextBtnText: 'Siguiente',
+              prevBtnText: 'Anterior',
+              doneBtnText: 'Listo',
+              showButtons: ['next', 'previous', 'close'],
+              steps: steps,
+            });
 
-            const inlineNote = buildStepInfo(currentStep, wizardIndex);
-            currentTarget.insertAdjacentElement('afterend', inlineNote);
-            currentInlineNote = inlineNote;
-
-            if (wizardBackdrop) wizardBackdrop.style.display = 'block';
-            if (wizardFocus) {
-              wizardFocus.style.display = 'block';
-            }
-            if (wizardTooltip) {
-              wizardTooltip.style.display = 'block';
-            }
-            syncSpotlightPosition();
-
-            if (scrollToCurrent) {
-              setTimeout(syncSpotlightPosition, 260);
-              setTimeout(syncSpotlightPosition, 520);
-            }
-
-            renderStepChips();
-          }
-
-          function startWizardOverlay(mode) {
-            activeSteps = mode === 'tour'
-              ? (tourSteps.length ? tourSteps : wizardSteps)
-              : (wizardSteps.length ? wizardSteps : tourSteps);
-
-            if (!activeSteps.length) return;
-
-            wizardActive = true;
-            wizardIndex = 0;
-
-            if (offcanvasInstance) {
-              offcanvasInstance.hide();
-            }
-
-            renderWizardOverlay(true);
-          }
-
-          function closeWizardOverlay() {
-            wizardActive = false;
-            clearCurrentVisuals();
-            if (wizardBackdrop) wizardBackdrop.style.display = 'none';
-            if (wizardFocus) wizardFocus.style.display = 'none';
-            if (wizardTooltip) {
-              wizardTooltip.style.display = 'none';
-              wizardTooltip.style.top = '-9999px';
-              wizardTooltip.style.left = '-9999px';
+            tour.drive();
+            if (persistSeen) {
+              localStorage.setItem(seenKey, '1');
             }
           }
 
-          if (wizardBtn) {
-            wizardBtn.addEventListener('click', function () {
-              startWizardOverlay('wizard');
+          if (launchButton) {
+            launchButton.addEventListener('click', function () {
+              startDriverTour('tour', true);
             });
           }
-
-          if (tourBtn) {
-            tourBtn.addEventListener('click', function () {
-              startWizardOverlay('tour');
-            });
-          }
-
-          if (wizardPrev) {
-            wizardPrev.addEventListener('click', function () {
-              if (wizardIndex > 0) {
-                wizardIndex -= 1;
-                renderWizardOverlay(true);
-              }
-            });
-          }
-
-          if (wizardNext) {
-            wizardNext.addEventListener('click', function () {
-              if (wizardIndex < activeSteps.length - 1) {
-                wizardIndex += 1;
-                renderWizardOverlay(true);
-                return;
-              }
-              closeWizardOverlay();
-            });
-          }
-
-          if (wizardClose) {
-            wizardClose.addEventListener('click', closeWizardOverlay);
-          }
-
-          if (wizardBackdrop) {
-            wizardBackdrop.addEventListener('click', closeWizardOverlay);
-          }
-
-          hydratePreferencesFromServer().finally(function () {
-            if (
-              canGuide &&
-              offcanvasInstance &&
-              !isRouteAutoHelpDisabled() &&
-              !isGlobalAutoHelpDisabled() &&
-              !sessionStorage.getItem(promptedSessionKey)
-            ) {
-              sessionStorage.setItem(promptedSessionKey, '1');
-              setTimeout(function () {
-                offcanvasInstance.show();
-              }, 900);
-            }
-          });
-
-          window.addEventListener('resize', function () {
-            if (!wizardActive) return;
-            syncSpotlightPosition();
-          });
-
-          window.addEventListener('scroll', function () {
-            if (!wizardActive) return;
-            syncSpotlightPosition();
-          }, true);
         });
       </script>
     @endif
@@ -1391,6 +1291,7 @@
         }, true);
       })();
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.js.iife.js"></script>
     @stack('scripts')
 </body>
 </html>
