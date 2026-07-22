@@ -49,13 +49,28 @@ class AppointmentController extends Controller
         $professionals = $this->appointmentUsersQuery((int) $tenant->id)->get();
         $serviceVariants = $this->serviceVariantsQuery((int) $tenant->id)->get();
         $services = AppointmentService::query()
-            ->with(['assignedUser', 'assignedUsers:id,name', 'productVariant.product'])
+            ->with(['assignedUser', 'assignedUsers:id,name', 'productVariant.product.category'])
             ->where('tenant_id', (int) $tenant->id)
             ->orderByDesc('is_active')
             ->orderBy('name')
             ->get();
+        $activeServices = $services
+            ->filter(fn (AppointmentService $service) => (bool) ($service->is_active ?? true))
+            ->values();
+        $customers = $this->customerUsersQuery((int) $tenant->id)->get(['id', 'name']);
+        $packages = AppointmentPackage::query()
+            ->with([
+                'service:id,name,product_variant_id',
+                'service.productVariant:id,product_id,size',
+                'service.productVariant.product:id,name',
+                'sessions:id,appointment_package_id,session_number,status,scheduled_for',
+            ])
+            ->where('tenant_id', (int) $tenant->id)
+            ->orderByDesc('created_at')
+            ->limit(40)
+            ->get();
 
-        $activeTab = in_array((string) $request->query('tab', 'create'), ['create', 'created'], true)
+        $activeTab = in_array((string) $request->query('tab', 'create'), ['create', 'created', 'packages'], true)
             ? (string) $request->query('tab', 'create')
             : 'create';
 
@@ -65,6 +80,9 @@ class AppointmentController extends Controller
             'professionals',
             'serviceVariants',
             'services',
+            'activeServices',
+            'customers',
+            'packages',
             'activeTab'
         ));
     }
@@ -93,7 +111,7 @@ class AppointmentController extends Controller
         $serviceVariants = $this->serviceVariantsQuery((int) $tenant->id)->get();
         $consumableVariants = $this->consumableVariantsQuery((int) $tenant->id)->get();
         $services = AppointmentService::query()
-            ->with(['assignedUser', 'assignedUsers:id,name', 'productVariant.product'])
+            ->with(['assignedUser', 'assignedUsers:id,name', 'productVariant.product.category'])
             ->where('tenant_id', (int) $tenant->id)
             ->orderBy('name')
             ->get();
@@ -1553,6 +1571,8 @@ class AppointmentController extends Controller
             'sessions_count' => ['required', 'integer', 'min:1', 'max:60'],
             'repeat_every_weeks' => ['nullable', 'integer', 'min:1', 'max:12'],
             'preferred_day_of_week' => ['nullable', 'integer', Rule::in(array_keys(UserScheduleRule::WEEK_DAYS))],
+            'day_of_weeks' => ['nullable', 'array', 'min:1'],
+            'day_of_weeks.*' => ['integer', Rule::in(array_keys(UserScheduleRule::WEEK_DAYS))],
             'preferred_time' => ['nullable', 'date_format:H:i'],
             'price' => ['nullable', 'numeric', 'min:0'],
             'customer_id' => ['nullable', 'integer'],
@@ -1585,9 +1605,23 @@ class AppointmentController extends Controller
         $startDate = !empty($validated['start_date'])
             ? Carbon::parse((string) $validated['start_date'])->startOfDay()
             : now()->startOfDay();
+        $selectedDays = collect($validated['day_of_weeks'] ?? [])
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn ($value) => in_array($value, array_keys(UserScheduleRule::WEEK_DAYS), true))
+            ->unique()
+            ->sort()
+            ->values();
+
+        if ($selectedDays->isEmpty()) {
+            $fallbackDay = isset($validated['preferred_day_of_week'])
+                ? (int) $validated['preferred_day_of_week']
+                : (int) $startDate->dayOfWeek;
+
+            $selectedDays = collect([$fallbackDay]);
+        }
 
         $package = null;
-        DB::transaction(function () use (&$package, $tenantId, $validated, $service, $sessionsCount, $repeatEveryWeeks, $targetUser, $customerId, $startDate, $preferredTime) {
+        DB::transaction(function () use (&$package, $tenantId, $validated, $service, $sessionsCount, $repeatEveryWeeks, $targetUser, $customerId, $startDate, $preferredTime, $selectedDays) {
             $package = AppointmentPackage::create([
                 'tenant_id' => $tenantId,
                 'name' => trim((string) $validated['name']),
@@ -1595,23 +1629,65 @@ class AppointmentController extends Controller
                 'appointment_service_id' => (int) $service->id,
                 'sessions_count' => $sessionsCount,
                 'repeat_every_weeks' => $repeatEveryWeeks,
-                'preferred_day_of_week' => $validated['preferred_day_of_week'] ?? null,
+                'preferred_day_of_week' => (int) $selectedDays->first(),
                 'preferred_time' => $preferredTime,
                 'price' => isset($validated['price']) ? (float) $validated['price'] : (float) ($service->price ?? 0),
                 'is_active' => true,
             ]);
 
-            $dayOfWeek = isset($validated['preferred_day_of_week'])
-                ? (int) $validated['preferred_day_of_week']
-                : (int) $startDate->dayOfWeek;
+            $sessionDates = collect([$startDate->copy()]);
+            $cycle = 0;
 
-            $firstSessionDate = $startDate->copy();
-            while ((int) $firstSessionDate->dayOfWeek !== $dayOfWeek) {
-                $firstSessionDate->addDay();
+            while ($sessionDates->count() < $sessionsCount && $cycle < 400) {
+                $weekStart = $startDate->copy()->startOfWeek(Carbon::SUNDAY)->addWeeks($cycle * $repeatEveryWeeks);
+
+                foreach ($selectedDays as $dayOfWeek) {
+                    $candidateDate = $weekStart->copy()->addDays((int) $dayOfWeek)->startOfDay();
+                    if ($candidateDate->lte($startDate)) {
+                        continue;
+                    }
+
+                    $sessionDates->push($candidateDate);
+                    if ($sessionDates->count() >= $sessionsCount) {
+                        break;
+                    }
+                }
+
+                $cycle += 1;
             }
 
-            for ($index = 1; $index <= $sessionsCount; $index += 1) {
-                $sessionDate = $firstSessionDate->copy()->addWeeks(($index - 1) * $repeatEveryWeeks);
+            $sessionDates = $sessionDates
+                ->filter(fn ($date) => $date instanceof Carbon)
+                ->sortBy(fn (Carbon $date) => $date->timestamp)
+                ->values();
+
+            // Safety net: ensure the package always creates the exact number of sessions requested.
+            if ($sessionDates->count() < $sessionsCount) {
+                $firstDay = (int) $selectedDays->first();
+                $fallbackDate = $sessionDates->isNotEmpty()
+                    ? $sessionDates->last()->copy()->addWeeks($repeatEveryWeeks)
+                    : $startDate->copy();
+
+                while ((int) $fallbackDate->dayOfWeek !== $firstDay) {
+                    $fallbackDate->addDay();
+                }
+
+                while ($sessionDates->count() < $sessionsCount) {
+                    if ($fallbackDate->lte($startDate)) {
+                        $fallbackDate->addWeeks($repeatEveryWeeks);
+                        continue;
+                    }
+                    $sessionDates->push($fallbackDate->copy());
+                    $fallbackDate->addWeeks($repeatEveryWeeks);
+                }
+            }
+
+            if ($sessionDates->isEmpty()) {
+                $sessionDates->push($startDate->copy());
+            }
+
+            foreach ($sessionDates->take($sessionsCount)->values() as $index => $sessionDate) {
+                $sessionNumber = $index + 1;
                 $startAt = Carbon::parse($sessionDate->toDateString() . ' ' . $preferredTime);
                 $endAt = $startAt->copy()->addMinutes(max(15, (int) ($service->duration_minutes ?? 60)));
 
@@ -1626,21 +1702,23 @@ class AppointmentController extends Controller
                     'payment_status' => 'pending',
                     'source' => 'package',
                     'workflow_tag' => 'package:' . $package->id,
-                    'workflow_note' => 'Sesión ' . $index . ' de ' . $sessionsCount,
+                    'workflow_note' => 'Sesión ' . $sessionNumber . ' de ' . $sessionsCount,
                 ]);
 
                 AppointmentPackageSession::create([
                     'tenant_id' => $tenantId,
                     'appointment_package_id' => (int) $package->id,
                     'appointment_id' => (int) $appointment->id,
-                    'session_number' => $index,
+                    'session_number' => $sessionNumber,
                     'scheduled_for' => $startAt,
                     'status' => 'scheduled',
                 ]);
             }
         });
 
-        return back()->with('success', 'Paquete de citas creado correctamente con ' . $sessionsCount . ' sesiones.');
+        return redirect()
+            ->route('appointments.services.index', ['tab' => 'packages'])
+            ->with('success', 'Paquete de citas creado correctamente con ' . $sessionsCount . ' sesiones.');
     }
 
     private function applyWorkflowAction(Appointment $appointment, array $validated, User $actor, bool $fromCustomer, ?Request $request = null): array

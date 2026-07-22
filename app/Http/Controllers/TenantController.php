@@ -3718,7 +3718,7 @@ class TenantController extends Controller
     private function publicAppointmentServicesQuery(int $tenantId)
     {
         return AppointmentService::query()
-            ->with(['assignedUser:id,name', 'assignedUsers:id,name', 'productVariant.product'])
+            ->with(['assignedUser:id,name', 'assignedUsers:id,name', 'productVariant.product.category'])
             ->where('tenant_id', $tenantId)
             ->where(function ($query) {
                 $query->where('is_active', true)

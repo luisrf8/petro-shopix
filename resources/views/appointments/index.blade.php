@@ -1237,72 +1237,11 @@
                 </form>
 
                 <hr>
-                <h6 class="mb-2">Paquetes de citas</h6>
-                <form method="POST" action="{{ route('appointments.packages.store') }}" class="row g-2 mb-3">
-                    @csrf
-                    <div class="col-12 col-md-6">
-                        <label class="form-label">Nombre del paquete</label>
-                        <input type="text" name="name" class="form-control border border-1 p-2" placeholder="Ej: 10 sesiones de corte" required>
-                    </div>
-                    <div class="col-12 col-md-6">
-                        <label class="form-label">Servicio base</label>
-                        <select name="appointment_service_id" class="form-control border border-1 p-2" required>
-                            @foreach($activeServices as $service)
-                                <option value="{{ $service->id }}">{{ $service->display_name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label">N° de sesiones</label>
-                        <input type="number" name="sessions_count" min="1" max="60" value="10" class="form-control border border-1 p-2" required>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label">Cada (semanas)</label>
-                        <input type="number" name="repeat_every_weeks" min="1" max="12" value="1" class="form-control border border-1 p-2" required>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label">Día semanal</label>
-                        <select name="preferred_day_of_week" class="form-control border border-1 p-2">
-                            @foreach(
-                                \App\Models\UserScheduleRule::WEEK_DAYS as $dayIndex => $dayLabel
-                            )
-                                <option value="{{ $dayIndex }}">{{ $dayLabel }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label">Hora</label>
-                        <input type="time" name="preferred_time" class="form-control border border-1 p-2" value="09:00" required>
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <label class="form-label">Profesional</label>
-                        <select name="user_id" class="form-control border border-1 p-2" required>
-                            @foreach($professionals as $professional)
-                                <option value="{{ $professional->id }}">{{ $professional->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-12 col-md-4">
-                        <label class="form-label">Cliente (opcional)</label>
-                        <select name="customer_id" class="form-control border border-1 p-2">
-                            <option value="">Sin asignar</option>
-                            @foreach($customers as $customer)
-                                <option value="{{ $customer->id }}">{{ $customer->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label">Inicio</label>
-                        <input type="date" name="start_date" class="form-control border border-1 p-2" value="{{ now()->toDateString() }}" required>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label">Precio</label>
-                        <input type="number" name="price" min="0" step="0.01" value="0" class="form-control border border-1 p-2">
-                    </div>
-                    <div class="col-12">
-                        <button class="btn btn-outline-dark w-100 mb-0" type="submit">Crear paquete y agendar sesiones</button>
-                    </div>
-                </form>
+                <div class="alert alert-light border mb-3">
+                    <div class="fw-semibold">Paquetes de citas</div>
+                    <div class="appointment-inline-note">La creación de paquetes y selección de días de asistencia ahora está en Servicios, pestaña "Paquetes de sesiones".</div>
+                    <a href="{{ route('appointments.services.index', ['tab' => 'packages']) }}" class="btn btn-outline-dark btn-sm mt-2 mb-0">Ir a Paquetes de sesiones</a>
+                </div>
 
                 <div class="d-flex flex-column gap-2" style="max-height: 320px; overflow:auto;">
                     @forelse($scheduleRules as $rule)

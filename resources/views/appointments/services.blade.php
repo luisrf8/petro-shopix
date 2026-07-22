@@ -61,14 +61,27 @@
     <div class="card">
         <div class="card-body p-3 p-lg-4">
             @php
-                $tabCreateActive = ($activeTab ?? 'create') === 'create';
+                $resolvedTab = $activeTab ?? 'create';
+                if ($errors->any()) {
+                    if (old('sessions_count') || old('day_of_weeks') || old('preferred_day_of_week')) {
+                        $resolvedTab = 'packages';
+                    } elseif (old('name') || old('duration_minutes') || old('product_variant_id')) {
+                        $resolvedTab = 'create';
+                    }
+                }
+                $tabCreateActive = $resolvedTab === 'create';
+                $tabCreatedActive = $resolvedTab === 'created';
+                $tabPackagesActive = $resolvedTab === 'packages';
             @endphp
             <ul class="nav nav-tabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link {{ $tabCreateActive ? 'active' : '' }}" id="service-tab-create" data-bs-toggle="tab" data-bs-target="#service-pane-create" type="button" role="tab">Crear servicio</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link {{ !$tabCreateActive ? 'active' : '' }}" id="service-tab-created" data-bs-toggle="tab" data-bs-target="#service-pane-created" type="button" role="tab">Servicios creados</button>
+                    <button class="nav-link {{ $tabCreatedActive ? 'active' : '' }}" id="service-tab-created" data-bs-toggle="tab" data-bs-target="#service-pane-created" type="button" role="tab">Servicios creados</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link {{ $tabPackagesActive ? 'active' : '' }}" id="service-tab-packages" data-bs-toggle="tab" data-bs-target="#service-pane-packages" type="button" role="tab">Paquetes de sesiones</button>
                 </li>
             </ul>
 
@@ -124,7 +137,7 @@
                     </form>
                 </div>
 
-                <div class="tab-pane fade {{ !$tabCreateActive ? 'show active' : '' }}" id="service-pane-created" role="tabpanel" aria-labelledby="service-tab-created">
+                <div class="tab-pane fade {{ $tabCreatedActive ? 'show active' : '' }}" id="service-pane-created" role="tabpanel" aria-labelledby="service-tab-created">
                     <div class="row g-2 mb-3">
                         <div class="col-12 col-md-4">
                             <label class="form-label">Buscar</label>
@@ -255,6 +268,149 @@
                     </div>
 
                     <div id="servicesCreatedEmpty" class="alert alert-light border mt-3 d-none mb-0">No hay servicios que coincidan con los filtros.</div>
+                </div>
+
+                <div class="tab-pane fade {{ $tabPackagesActive ? 'show active' : '' }}" id="service-pane-packages" role="tabpanel" aria-labelledby="service-tab-packages">
+                    <div class="row g-3">
+                        <div class="col-12 col-xl-6">
+                            <div class="border rounded p-3 h-100">
+                                <h6 class="mb-2">Crear paquete y agendar sesiones</h6>
+                                <p class="text-muted mb-3">Define cuantas sesiones tendrá el paquete y en qué días de la semana asistirá el cliente.</p>
+                                <form method="POST" action="{{ route('appointments.packages.store') }}" class="row g-2">
+                                    @csrf
+                                    <div class="col-12">
+                                        <label class="form-label">Nombre del paquete</label>
+                                        <input type="text" name="name" class="form-control border border-1 p-2" value="{{ old('name') }}" placeholder="Ej: 10 sesiones de corte" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Servicio base</label>
+                                        <select name="appointment_service_id" class="form-control border border-1 p-2" required>
+                                            <option value="">Selecciona un servicio</option>
+                                            @foreach($activeServices as $service)
+                                                <option value="{{ $service->id }}" {{ (string) old('appointment_service_id') === (string) $service->id ? 'selected' : '' }}>{{ $service->display_name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">N° de sesiones</label>
+                                        <input type="number" name="sessions_count" min="1" max="60" value="{{ old('sessions_count', 10) }}" class="form-control border border-1 p-2" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">Cada (semanas)</label>
+                                        <input type="number" name="repeat_every_weeks" min="1" max="12" value="{{ old('repeat_every_weeks', 1) }}" class="form-control border border-1 p-2" required>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Días de asistencia</label>
+                                        @php
+                                            $oldDays = collect(old('day_of_weeks', old('preferred_day_of_week') !== null ? [old('preferred_day_of_week')] : []))
+                                                ->map(fn ($value) => (int) $value)
+                                                ->unique()
+                                                ->values()
+                                                ->all();
+                                        @endphp
+                                        <div class="d-flex flex-wrap gap-2 border border-1 rounded p-2">
+                                            @foreach(\App\Models\UserScheduleRule::WEEK_DAYS as $dayIndex => $dayLabel)
+                                                <label class="form-check form-check-inline mb-0 me-0 px-2 py-1 border rounded">
+                                                    <input
+                                                        class="form-check-input me-1"
+                                                        type="checkbox"
+                                                        name="day_of_weeks[]"
+                                                        value="{{ $dayIndex }}"
+                                                        {{ in_array((int) $dayIndex, $oldDays, true) ? 'checked' : '' }}
+                                                    >
+                                                    <span class="form-check-label">{{ $dayLabel }}</span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                        <small class="text-muted d-block mt-1">Puedes seleccionar uno o varios días. El sistema distribuirá las sesiones en esos días respetando la frecuencia semanal.</small>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">Hora</label>
+                                        <input type="time" name="preferred_time" class="form-control border border-1 p-2" value="{{ old('preferred_time', '09:00') }}" required>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">Inicio</label>
+                                        <input type="date" name="start_date" class="form-control border border-1 p-2" value="{{ old('start_date', now()->toDateString()) }}" required>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">Profesional</label>
+                                        <select name="user_id" class="form-control border border-1 p-2" required>
+                                            <option value="">Selecciona</option>
+                                            @foreach($professionals as $professional)
+                                                <option value="{{ $professional->id }}" {{ (string) old('user_id') === (string) $professional->id ? 'selected' : '' }}>{{ $professional->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label">Cliente (opcional)</label>
+                                        <select name="customer_id" class="form-control border border-1 p-2">
+                                            <option value="">Sin asignar</option>
+                                            @foreach($customers as $customer)
+                                                <option value="{{ $customer->id }}" {{ (string) old('customer_id') === (string) $customer->id ? 'selected' : '' }}>{{ $customer->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label">Precio</label>
+                                        <input type="number" name="price" min="0" step="0.01" value="{{ old('price', 0) }}" class="form-control border border-1 p-2">
+                                    </div>
+                                    <div class="col-12">
+                                        <button class="btn btn-dark w-100 mb-0" type="submit">Crear paquete y agendar sesiones</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-xl-6">
+                            <div class="border rounded p-3 h-100">
+                                <h6 class="mb-2">Paquetes creados recientemente</h6>
+                                <div class="d-flex flex-column gap-2" style="max-height: 70vh; overflow:auto;">
+                                    @forelse($packages as $package)
+                                        @php
+                                            $sessionTotal = (int) $package->sessions->count();
+                                            $sessionDone = (int) $package->sessions->where('status', 'completed')->count();
+                                            $sessionPending = (int) $package->sessions->where('status', 'scheduled')->count();
+                                            $sessionsOrdered = $package->sessions
+                                                ->sortBy(function ($session) {
+                                                    return optional($session->scheduled_for)->timestamp ?? 0;
+                                                })
+                                                ->values();
+                                            if ($sessionsOrdered->isEmpty()) {
+                                                $sessionsOrdered = $package->sessions->sortBy('session_number')->values();
+                                            }
+                                            $firstSession = optional($sessionsOrdered->first())->scheduled_for;
+                                            $lastSession = optional($sessionsOrdered->last())->scheduled_for;
+                                        @endphp
+                                        <div class="service-item">
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div>
+                                                    <div class="fw-semibold">{{ $package->name }}</div>
+                                                    <div class="service-note">
+                                                        {{ $package->service->display_name ?? $package->service->name ?? 'Servicio' }}
+                                                        · {{ (int) ($package->sessions_count ?? $sessionTotal) }} sesiones
+                                                        · cada {{ (int) ($package->repeat_every_weeks ?? 1) }} semana(s)
+                                                    </div>
+                                                    <div class="service-note">Precio: {{ number_format((float) ($package->price ?? 0), 2) }} $</div>
+                                                </div>
+                                                <span class="badge bg-secondary">{{ $sessionDone }}/{{ $sessionTotal }} completadas</span>
+                                            </div>
+                                            <div class="service-note mt-1">
+                                                Pendientes: {{ $sessionPending }}
+                                                @if($firstSession)
+                                                    · Primera: {{ \Carbon\Carbon::parse($firstSession)->format('d/m/Y H:i') }}
+                                                @endif
+                                                @if($lastSession)
+                                                    · Última: {{ \Carbon\Carbon::parse($lastSession)->format('d/m/Y H:i') }}
+                                                @endif
+                                            </div>
+                                        </div>
+                                    @empty
+                                        <div class="text-muted">Aún no hay paquetes creados.</div>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

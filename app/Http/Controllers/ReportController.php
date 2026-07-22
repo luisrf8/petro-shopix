@@ -92,7 +92,7 @@ class ReportController extends Controller
         $selectedIncomeCustomerId = (int) $request->query('income_customer_id', 0);
 
         $appointmentServices = AppointmentService::query()
-            ->with(['productVariant.product'])
+            ->with(['productVariant.product.category'])
             ->where('tenant_id', (int) $user->tenant_id)
             ->where('is_active', true)
             ->orderBy('name')

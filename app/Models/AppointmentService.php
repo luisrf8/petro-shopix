@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class AppointmentService extends Model
 {
@@ -57,12 +58,26 @@ class AppointmentService extends Model
 
     public function getDisplayNameAttribute(): string
     {
+        $categoryName = trim((string) ($this->productVariant?->product?->category?->name ?? ''));
+
         if ($this->name) {
-            return (string) $this->name;
+            $baseName = trim((string) $this->name);
+
+            if ($categoryName !== '' && !Str::contains(Str::lower($baseName), Str::lower($categoryName))) {
+                return $baseName . ' - ' . $categoryName;
+            }
+
+            return $baseName;
         }
 
         if ($this->productVariant && $this->productVariant->product) {
-            return trim(($this->productVariant->product->name ?? 'Servicio') . ' ' . ($this->productVariant->size ?? ''));
+            $baseName = trim(($this->productVariant->product->name ?? 'Servicio') . ' ' . ($this->productVariant->size ?? ''));
+
+            if ($categoryName !== '' && !Str::contains(Str::lower($baseName), Str::lower($categoryName))) {
+                return $baseName . ' - ' . $categoryName;
+            }
+
+            return $baseName;
         }
 
         return 'Servicio';

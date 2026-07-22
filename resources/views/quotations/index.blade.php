@@ -397,7 +397,7 @@
     })->values()->all();
 
     $appointmentServiceItems = collect($appointmentServices ?? [])->map(function ($service) {
-      $serviceName = trim((string) ($service->name ?? 'Servicio'));
+      $serviceName = trim((string) ($service->display_name ?? $service->name ?? 'Servicio'));
       $serviceDescription = trim((string) ($service->description ?? ''));
 
       return [
