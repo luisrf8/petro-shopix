@@ -314,10 +314,24 @@
 
       @media (max-width: 576px) {
         .shopix-admin-tour-launcher {
-          right: 0.75rem;
           left: 0.75rem;
+          right: auto;
           bottom: 0.75rem;
           justify-content: center;
+          width: 52px;
+          height: 52px;
+          min-width: 52px;
+          padding: 0;
+          gap: 0;
+          border-radius: 999px;
+        }
+
+        .shopix-admin-tour-launcher .shopix-admin-tour-launcher-label {
+          display: none;
+        }
+
+        .shopix-admin-tour-launcher .material-symbols-rounded {
+          font-size: 22px !important;
         }
       }
     </style>
@@ -423,7 +437,7 @@
   @if($moduleHelpEnabled)
     <button type="button" class="shopix-admin-tour-launcher" id="shopixStartAdminModuleTourBtn" aria-label="Iniciar recorrido guiado">
       <i class="material-symbols-rounded" style="font-size:18px;">explore</i>
-      Recorrido rapido
+      <span class="shopix-admin-tour-launcher-label">Recorrido rapido</span>
     </button>
   @endif
 
