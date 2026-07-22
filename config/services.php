@@ -70,6 +70,8 @@ return [
         'google_drive_oauth_refresh_token' => env('GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN', ''),
         'google_drive_folder_id' => env('GOOGLE_DRIVE_FOLDER_ID', ''),
         'google_drive_fallback_to_local_on_error' => env('GOOGLE_DRIVE_FALLBACK_TO_LOCAL_ON_ERROR', true),
+        'google_drive_http_timeout' => (int) env('GOOGLE_DRIVE_HTTP_TIMEOUT', 20),
+        'google_drive_connect_timeout' => (int) env('GOOGLE_DRIVE_CONNECT_TIMEOUT', 8),
     ],
 
     'thefactory_hka' => [

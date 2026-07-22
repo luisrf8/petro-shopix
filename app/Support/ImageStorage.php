@@ -20,6 +20,7 @@ class ImageStorage
     private const GOOGLE_FILE_ID_PATTERN = '/^[a-zA-Z0-9_-]{10,}$/';
     private const PAYMENT_PROOF_MAX_DIMENSION = 1600;
     private const PAYMENT_PROOF_TARGET_BYTES = 650000;
+    private const PRODUCT_IMAGE_MAX_DIMENSION = 2300;
 
     public static function provider(): string
     {
@@ -94,21 +95,37 @@ class ImageStorage
             return self::storeUploadedFile($file, $directory);
         }
 
+        if (!self::canSafelyDecodeImageFromBinary($binary)) {
+            // Keep original image when decoding would likely exceed PHP memory.
+            return self::storeUploadedFile($file, $directory);
+        }
+
         $resource = @imagecreatefromstring($binary);
         if ($resource === false) {
             return self::storeUploadedFile($file, $directory);
         }
 
+        // Downscale very large AI-generated images before encoding to avoid timeouts and high memory pressure.
+        $working = self::resizeResourceToMaxDimension(
+            $resource,
+            self::PRODUCT_IMAGE_MAX_DIMENSION,
+            self::PRODUCT_IMAGE_MAX_DIMENSION
+        );
+
         if (function_exists('imagepalettetotruecolor')) {
-            imagepalettetotruecolor($resource);
+            imagepalettetotruecolor($working);
         }
-        imagealphablending($resource, true);
-        imagesavealpha($resource, true);
+        imagealphablending($working, true);
+        imagesavealpha($working, true);
 
         ob_start();
-        $encoded = @imagewebp($resource, null, max(0, min(100, $quality)));
+        $encoded = @imagewebp($working, null, max(0, min(100, $quality)));
         $webpBinary = ob_get_clean();
-        imagedestroy($resource);
+
+        imagedestroy($working);
+        if ($working !== $resource) {
+            imagedestroy($resource);
+        }
 
         if ($encoded !== true || !is_string($webpBinary) || $webpBinary === '') {
             return self::storeUploadedFile($file, $directory);
@@ -776,6 +793,7 @@ class ImageStorage
         if (self::shouldAttemptGoogleDriveOAuth()) {
             try {
                 $client = new Client();
+                self::configureGoogleClientTimeouts($client);
                 $client->setClientId(self::googleDriveOAuthClientId());
                 $client->setClientSecret(self::googleDriveOAuthClientSecret());
                 $client->addScope(Drive::DRIVE);
@@ -827,12 +845,44 @@ class ImageStorage
         }
 
         $client = new Client();
+        self::configureGoogleClientTimeouts($client);
         $client->setAuthConfig($credentialsPath);
         $client->addScope(Drive::DRIVE);
         $client->setAccessType('offline');
         $client->setPrompt('select_account consent');
 
         return new Drive($client);
+    }
+
+    private static function configureGoogleClientTimeouts(Client $client): void
+    {
+        $timeout = max(8, (int) config('services.image_storage.google_drive_http_timeout', 20));
+        $connectTimeout = max(3, min($timeout - 1, (int) config('services.image_storage.google_drive_connect_timeout', 8)));
+
+        $client->setHttpClient(new GuzzleClient([
+            'timeout' => $timeout,
+            'connect_timeout' => $connectTimeout,
+        ]));
+    }
+
+    public static function userFacingUploadErrorMessage(\Throwable $exception): string
+    {
+        $reason = self::extractDriveErrorReason($exception);
+        if ($reason === 'storageQuotaExceeded') {
+            return 'Google Drive no pudo guardar la imagen: storageQuotaExceeded. Si usas service account, configura una carpeta en Shared Drive con permisos para la cuenta de servicio; o usa OAuth de usuario válido.';
+        }
+
+        $message = Str::lower(trim((string) $exception->getMessage()));
+
+        if (Str::contains($message, 'client secret is invalid')) {
+            return 'Google Drive OAuth está configurado pero el client secret es inválido. Actualiza GOOGLE_DRIVE_OAUTH_CLIENT_SECRET y luego limpia la caché de configuración.';
+        }
+
+        if (Str::contains($message, ['google drive', 'oauth', 'credential', 'quota', 'auth'])) {
+            return 'No se pudo subir la imagen a Google Drive por un problema de autenticación o cuota. Revisa las credenciales OAuth/Service Account y la carpeta destino.';
+        }
+
+        return 'No se pudo subir la imagen en este momento. Intenta nuevamente.';
     }
 
     private static function mimeFromExtension(string $extension): string

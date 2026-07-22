@@ -439,9 +439,11 @@ class ProductController extends Controller
                 'trace' => $exception->getTraceAsString(),
             ]);
 
+            $message = ImageStorage::userFacingUploadErrorMessage($exception);
+
             return response()->json([
                 'success' => false,
-                'message' => 'No se pudo crear el producto. Si adjuntaste imágenes, verifica el formato o intenta nuevamente.',
+                'message' => $message,
             ], 500);
         }
 
@@ -584,6 +586,7 @@ class ProductController extends Controller
             'variant_id' => 'nullable|exists:product_variants,id',
         ]);
 
+        try {
             $product = Product::findOrFail($productId);
             $variantId = $request->input('variant_id');
 
@@ -593,19 +596,28 @@ class ProductController extends Controller
                     ->firstOrFail();
                 $variantId = $variant->id;
             }
-    
+
             // Guardar la imagen en el almacenamiento
             $path = ImageStorage::storeUploadedImageAsWebp($request->file('image'), 'products');
-    
+
             // Asociar la imagen al producto
             ProductImage::create([
                 'product_id' => $productId,
                 'product_variant_id' => $variantId,
                 'path' => $path,
             ]);
-    
+
             return redirect()->back()->with('success', 'Imagen agregada correctamente.');
+        } catch (\Throwable $exception) {
+            Log::error('Error al agregar imagen de producto', [
+                'product_id' => (int) $productId,
+                'tenant_id' => (int) (auth()->user()->tenant_id ?? 0),
+                'error' => $exception->getMessage(),
+            ]);
+
+            return redirect()->back()->with('error', ImageStorage::userFacingUploadErrorMessage($exception));
         }
+    }
     
         // Función para eliminar una imagen
         public function removeImage($imageId)
