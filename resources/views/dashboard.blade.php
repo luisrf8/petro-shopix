@@ -366,7 +366,7 @@
                             <tbody class="">
                             @foreach($lowStockProducts as $product)
                                 <tr>
-                                <td>{{ $product->name }}</td>
+                                <td>{{ $product->display_name }}</td>
                                 <td class="text-center">{{ $product->total_stock }}</td>
                                 <td>
                                     <a href="/products" class="text-secondary font-weight-bold text-xs toggle-status-btn">Ver Detalles</a>

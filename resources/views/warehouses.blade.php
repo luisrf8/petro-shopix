@@ -129,7 +129,7 @@
                     <select name="product_variant_id" class="form-control border border-dark p-2 bg-white" required>
                       <option value="">Selecciona una variante</option>
                       @foreach($variants as $variant)
-                        <option value="{{ $variant->id }}">{{ $variant->product->name ?? 'Producto' }} - {{ $variant->size }} | Stock general: {{ number_format((float) $variant->stock, 2) }}</option>
+                        <option value="{{ $variant->id }}">{{ $variant->product->display_name ?? 'Producto' }} - {{ $variant->size }} | Stock general: {{ number_format((float) $variant->stock, 2) }}</option>
                       @endforeach
                     </select>
                   </div>
@@ -259,7 +259,7 @@
                     <td>{{ $movement->moved_at?->format('d/m/Y H:i') }}</td>
                     <td>{{ $movementTypes[$movement->movement_type] ?? $movement->movement_type }}</td>
                     <td>
-                      <div class="fw-semibold">{{ $movement->variant->product->name ?? 'Producto' }}</div>
+                      <div class="fw-semibold">{{ $movement->variant->product->display_name ?? 'Producto' }}</div>
                       <div class="text-xs text-muted">{{ $movement->variant->size ?? 'Variante' }}</div>
                     </td>
                     <td>{{ $movement->sourceWarehouse->name ?? 'No aplica' }}</td>
@@ -292,7 +292,7 @@
                           <label class="form-label">Producto / variante</label>
                           <select name="product_variant_id" class="form-control border border-dark p-2 bg-white" required>
                             @foreach($variants as $variant)
-                              <option value="{{ $variant->id }}" {{ (int) $movement->product_variant_id === (int) $variant->id ? 'selected' : '' }}>{{ $variant->product->name ?? 'Producto' }} - {{ $variant->size }}</option>
+                              <option value="{{ $variant->id }}" {{ (int) $movement->product_variant_id === (int) $variant->id ? 'selected' : '' }}>{{ $variant->product->display_name ?? 'Producto' }} - {{ $variant->size }}</option>
                             @endforeach
                           </select>
                         </div>
@@ -375,7 +375,7 @@
                     <tbody>
                       @forelse($warehouseItems as $stockItem)
                         <tr>
-                          <td>{{ $stockItem->variant->product->name ?? 'Producto' }}</td>
+                          <td>{{ $stockItem->variant->product->display_name ?? 'Producto' }}</td>
                           <td>{{ $stockItem->variant->size ?? 'Variante' }}</td>
                           <td class="text-end fw-semibold">{{ number_format((float) $stockItem->quantity, 2) }}</td>
                         </tr>
@@ -417,7 +417,7 @@
                   @foreach($product->variants as $variant)
                     @php $rowTotal = 0; @endphp
                     <tr>
-                      <td>{{ $product->name }}</td>
+                      <td>{{ $product->display_name }}</td>
                       <td>{{ $variant->size }}</td>
                       @foreach($warehouses as $warehouse)
                         @php

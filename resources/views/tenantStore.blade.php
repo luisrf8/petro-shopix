@@ -684,6 +684,25 @@
                                         <small class="text-muted d-block mt-1">Controla si la tienda puede ver el módulo de Proyectos.</small>
                                     </div>
 
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold d-block">Nomenclatura de productos y servicios</label>
+                                        <input type="hidden" name="show_product_category_suffix" value="0">
+                                        <div class="form-check form-switch">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                role="switch"
+                                                id="show_product_category_suffix"
+                                                name="show_product_category_suffix"
+                                                value="1"
+                                                {{ (bool) ($tenant->show_product_category_suffix ?? false) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="show_product_category_suffix">
+                                                Mostrar "Producto - Categoría" en listados
+                                            </label>
+                                        </div>
+                                        <small class="text-muted d-block mt-1">Si está activo, se agrega " - categoría" al nombre visible de productos y servicios en toda la tienda de este tenant.</small>
+                                    </div>
+
                                     @unless($freePlanOperationalLock)
                                     <div class="mb-3">
                                         <label class="form-label fw-bold d-block">Contribuyente especial</label>
@@ -1780,6 +1799,7 @@
         setFormCheckboxValue('#restrict_delivery_city_to_tenant', tenant.restrict_delivery_city_to_tenant);
         setFormCheckboxValue('#delivery_notifications_enabled', tenant.delivery_notifications_enabled);
         setFormCheckboxValue('#show_bs_prices_in_storefront', tenant.show_bs_prices_in_storefront);
+        setFormCheckboxValue('#show_product_category_suffix', tenant.show_product_category_suffix);
 
         await applyTenantLocationImport(tenant);
     }

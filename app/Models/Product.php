@@ -4,10 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Product extends Model
 {
     use HasFactory;
+
+    private static array $tenantCategorySuffixCache = [];
 
     protected $fillable = [
         'name',
@@ -52,8 +55,60 @@ class Product extends Model
     {
         return $this->hasMany(ProductVariant::class);
     }
+
+    public function tenant()
+    {
+        return $this->belongsTo(Tenant::class);
+    }
+
     public function taxes()
     {
         return $this->belongsToMany(Tax::class, 'product_tax');
+    }
+
+    public function getDisplayNameAttribute(): string
+    {
+        $baseName = trim((string) ($this->name ?? ''));
+        if ($baseName === '') {
+            return 'Producto';
+        }
+
+        if (!$this->shouldAppendCategorySuffix()) {
+            return $baseName;
+        }
+
+        $categoryName = trim((string) ($this->category?->name ?? ''));
+        if ($categoryName === '') {
+            return $baseName;
+        }
+
+        if (Str::contains(Str::lower($baseName), Str::lower($categoryName))) {
+            return $baseName;
+        }
+
+        return $baseName . ' - ' . $categoryName;
+    }
+
+    protected function shouldAppendCategorySuffix(): bool
+    {
+        $tenantId = (int) ($this->tenant_id ?? 0);
+        if ($tenantId <= 0) {
+            return false;
+        }
+
+        if (array_key_exists($tenantId, self::$tenantCategorySuffixCache)) {
+            return self::$tenantCategorySuffixCache[$tenantId];
+        }
+
+        if ($this->relationLoaded('tenant') && $this->tenant) {
+            $enabled = (bool) ($this->tenant->show_product_category_suffix ?? false);
+            self::$tenantCategorySuffixCache[$tenantId] = $enabled;
+            return $enabled;
+        }
+
+        $enabled = (bool) Tenant::query()->whereKey($tenantId)->value('show_product_category_suffix');
+        self::$tenantCategorySuffixCache[$tenantId] = $enabled;
+
+        return $enabled;
     }
 }

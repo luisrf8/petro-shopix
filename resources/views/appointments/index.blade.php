@@ -1033,7 +1033,7 @@
                         <select name="product_variant_id" id="appointmentServiceProductSelect" class="form-control border border-1 p-2" required>
                             <option value="">Selecciona un producto/variante</option>
                             @foreach($serviceVariants as $variant)
-                                <option value="{{ $variant->id }}">{{ $variant->product->name ?? 'Servicio' }} · {{ $variant->size ?? 'Variante' }}</option>
+                                <option value="{{ $variant->id }}">{{ $variant->product->display_name ?? 'Servicio' }} · {{ $variant->size ?? 'Variante' }}</option>
                             @endforeach
                         </select>
                         <small class="text-muted d-block mt-1">Al asociar esta variante a un servicio activo, deja de venderse de forma directa en la landing y se procesa solo por cita.</small>
@@ -1111,7 +1111,7 @@
                                         <label class="form-label">Producto de servicio</label>
                                         <select name="product_variant_id" class="form-control border border-1 p-2" required>
                                             @foreach($serviceVariants as $variant)
-                                                <option value="{{ $variant->id }}" {{ (int) $variant->id === (int) ($service->product_variant_id ?? 0) ? 'selected' : '' }}>{{ $variant->product->name ?? 'Servicio' }} · {{ $variant->size ?? 'Variante' }}</option>
+                                                <option value="{{ $variant->id }}" {{ (int) $variant->id === (int) ($service->product_variant_id ?? 0) ? 'selected' : '' }}>{{ $variant->product->display_name ?? 'Servicio' }} · {{ $variant->size ?? 'Variante' }}</option>
                                             @endforeach
                                         </select>
                                     </div>

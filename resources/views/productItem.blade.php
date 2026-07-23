@@ -213,7 +213,7 @@
                     </div>
                     <!-- Product details -->
                     <div class="mx-4 product-meta">
-                      <h2><strong>{{ $product->name }}</strong></h2>
+                      <h2><strong>{{ $product->display_name }}</strong></h2>
                       <p class="mb-1"><strong>Categoría:</strong> {{ $product->category->name }}</p>
                       <p class="mb-1"><strong>Descripción:</strong> {{ $product->description }}</p>
                       <p class="mb-2"><strong>Descuento del producto:</strong> {{ number_format((float) ($product->discount_percentage ?? 0), 2) }}%</p>
@@ -385,7 +385,7 @@
                               id="variantPreview-{{ $variant->id }}"
                               class="variant-preview-trigger"
                               data-variant-image-preview="{{ $variant->id }}"
-                              data-image-label="{{ $product->name }} · {{ $variant->size }}"
+                              data-image-label="{{ $product->display_name }} · {{ $variant->size }}"
                               style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid #d1d5db;"
                             >
                             <small class="text-muted">Precio final: {{ number_format($effectivePrice, 2) }} $</small>
@@ -406,7 +406,7 @@
                                 class="btn btn-outline-danger btn-sm open-variant-management-btn"
                                 data-variant-id="{{ $variant->id }}"
                                 data-variant-size="{{ $variant->size }}"
-                                data-variant-name="{{ $product->name }}"
+                                data-variant-name="{{ $product->display_name }}"
                               >Eliminar / reasignar</button>
                               <button type="button" class="btn btn-outline-secondary btn-sm open-qr-modal-btn" data-qr-title="QR variante {{ $variant->size }}" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="showVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Ver QR</button>
                               <button type="button" class="btn btn-outline-secondary btn-sm download-qr-btn" data-qr-url="{{ route('variants.qrImage', $variant->id) }}" data-qr-filename="variante-{{ $variant->id }}-qr.png" id="downloadVariantQrBtn-{{ $variant->id }}" {{ empty($variant->qr_code) ? 'disabled' : '' }}>Descargar QR</button>

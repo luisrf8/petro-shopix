@@ -10,6 +10,8 @@ class AppointmentService extends Model
 {
     use HasFactory;
 
+    private static array $tenantCategorySuffixCache = [];
+
     protected $fillable = [
         'tenant_id',
         'user_id',
@@ -59,11 +61,12 @@ class AppointmentService extends Model
     public function getDisplayNameAttribute(): string
     {
         $categoryName = trim((string) ($this->productVariant?->product?->category?->name ?? ''));
+        $shouldAppendCategory = $this->shouldAppendCategorySuffix();
 
         if ($this->name) {
             $baseName = trim((string) $this->name);
 
-            if ($categoryName !== '' && !Str::contains(Str::lower($baseName), Str::lower($categoryName))) {
+            if ($shouldAppendCategory && $categoryName !== '' && !Str::contains(Str::lower($baseName), Str::lower($categoryName))) {
                 return $baseName . ' - ' . $categoryName;
             }
 
@@ -73,7 +76,7 @@ class AppointmentService extends Model
         if ($this->productVariant && $this->productVariant->product) {
             $baseName = trim(($this->productVariant->product->name ?? 'Servicio') . ' ' . ($this->productVariant->size ?? ''));
 
-            if ($categoryName !== '' && !Str::contains(Str::lower($baseName), Str::lower($categoryName))) {
+            if ($shouldAppendCategory && $categoryName !== '' && !Str::contains(Str::lower($baseName), Str::lower($categoryName))) {
                 return $baseName . ' - ' . $categoryName;
             }
 
@@ -81,5 +84,28 @@ class AppointmentService extends Model
         }
 
         return 'Servicio';
+    }
+
+    protected function shouldAppendCategorySuffix(): bool
+    {
+        $tenantId = (int) ($this->tenant_id ?? 0);
+        if ($tenantId <= 0) {
+            return false;
+        }
+
+        if (array_key_exists($tenantId, self::$tenantCategorySuffixCache)) {
+            return self::$tenantCategorySuffixCache[$tenantId];
+        }
+
+        if ($this->relationLoaded('tenant') && $this->tenant) {
+            $enabled = (bool) ($this->tenant->show_product_category_suffix ?? false);
+            self::$tenantCategorySuffixCache[$tenantId] = $enabled;
+            return $enabled;
+        }
+
+        $enabled = (bool) Tenant::query()->whereKey($tenantId)->value('show_product_category_suffix');
+        self::$tenantCategorySuffixCache[$tenantId] = $enabled;
+
+        return $enabled;
     }
 }

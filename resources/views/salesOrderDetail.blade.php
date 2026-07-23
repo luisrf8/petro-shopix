@@ -103,7 +103,7 @@
       $publicDeliveryPdfUrl = route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']);
       $orderProductsSummary = $order->details
         ->map(function ($detail) {
-          $productName = trim((string) ($detail->variant->product->name ?? 'Producto'));
+          $productName = trim((string) ($detail->variant->product->display_name ?? 'Producto'));
           $quantity = (float) ($detail->quantity ?? 0);
           if ($quantity <= 0) {
             $quantity = 1;
@@ -426,7 +426,7 @@
                       $detailDiscountUnitPrice = $detailQty > 0 ? round($detailDiscountAmount / $detailQty, 2) : 0.0;
                     @endphp
                     <tr>
-                      <td data-label="Producto">{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
+                      <td data-label="Producto">{{ $detalle->variant->product->display_name ?? 'Sin nombre' }}</td>
                       <td data-label="Cantidad">{{ $detalle->quantity }}</td>
                       <td data-label="Variante">{{ $detalle->variant->size ?? '' }}</td>
                       @unless($isDeliveryOnlyView)
@@ -1862,7 +1862,7 @@
                                             $returnIsDecimal = strtolower(trim((string) ($detalle->variant->quantity_input_mode ?? 'integer'))) === 'decimal';
                                           @endphp
                                           <tr>
-                                            <td data-label="Producto">{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
+                                            <td data-label="Producto">{{ $detalle->variant->product->display_name ?? 'Sin nombre' }}</td>
                                             <td data-label="Cantidad">{{ $detailQuantityText }} {{ $returnUnitTypeLabel }}</td>
                                             <td data-label="Devolver">
                                                   <input type="number" class="form-control return-quantity border border-1 border-radius-lg p-2" 

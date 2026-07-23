@@ -199,16 +199,49 @@ class SaleController extends Controller
             'change_paid_in_bs' => 'nullable|boolean',
             'change_rate_to_bs' => 'nullable|numeric|min:0',
             'dollarRate' => 'nullable|numeric|min:0',
+            'request_uid' => 'nullable|string|max:100',
         ]);
 
         $tenantId = (int) (optional(auth()->user())->tenant_id ?? $request->tenant_id);
         $createNewCustomer = (bool) ($validated['create_new_customer'] ?? false);
         $customerId = null;
         $createdCustomerTemporaryPassword = null;
+        $requestUid = trim((string) ($validated['request_uid'] ?? ''));
+        $saleRequestLockKey = null;
+        $saleRequestCompletedKey = null;
+        $saleRequestLockAcquired = false;
+        $saleRequestCompleted = false;
 
         if ($tenantId <= 0) {
             return response()->json(['error' => 'No se pudo determinar la tienda para registrar la venta.'], 422);
         }
+
+        if ($requestUid !== '') {
+            $safeRequestUid = preg_replace('/[^A-Za-z0-9\-_.:]/', '', $requestUid);
+            if ($safeRequestUid === '') {
+                $safeRequestUid = $requestUid;
+            }
+
+            $saleRequestLockKey = 'sales:admin:request:lock:' . $tenantId . ':' . $safeRequestUid;
+            $saleRequestCompletedKey = 'sales:admin:request:done:' . $tenantId . ':' . $safeRequestUid;
+
+            $cachedCompletedPayload = Cache::get($saleRequestCompletedKey);
+            if (is_array($cachedCompletedPayload)) {
+                $cachedCompletedPayload['idempotent_replay'] = true;
+                return response()->json($cachedCompletedPayload, 200);
+            }
+
+            if (!Cache::add($saleRequestLockKey, 'processing', 120)) {
+                return response()->json([
+                    'error' => 'Esta venta ya se está procesando. Espera unos segundos antes de reintentar.',
+                    'code' => 'sale_request_in_progress',
+                ], 409);
+            }
+
+            $saleRequestLockAcquired = true;
+        }
+
+        try {
 
         if ($createNewCustomer) {
             $customerPayload = $validated['customer_new'] ?? [];
@@ -430,6 +463,8 @@ class SaleController extends Controller
 
         $itemsSubtotal = 0.0;
 
+        DB::beginTransaction();
+
         // Crear orden de venta
         $salesOrder = SalesOrder::create([
             'user_id' => $customerId,
@@ -487,11 +522,7 @@ class SaleController extends Controller
             $productVariant->save();
         }
 
-        try {
-            $deliveryPricing = DeliveryManager::calculate($tienda, $deliveryType, $itemsSubtotal, $deliveryDistanceKm);
-        } catch (\RuntimeException $exception) {
-            return response()->json(['error' => $exception->getMessage()], 422);
-        }
+        $deliveryPricing = DeliveryManager::calculate($tienda, $deliveryType, $itemsSubtotal, $deliveryDistanceKm);
         $salesOrder->delivery_fee = $deliveryPricing['fee'];
         $salesOrder->delivery_fee_mode = $deliveryPricing['mode'];
         $salesOrder->delivery_distance_km = $deliveryPricing['distance_km'];
@@ -516,18 +547,18 @@ class SaleController extends Controller
                     ->find($paymentDetail['methodId']);
 
                 if (!$paymentMethod) {
-                    return response()->json(['error' => 'Uno de los métodos de pago seleccionados está inactivo o no pertenece a esta tienda.'], 422);
+                    throw new \RuntimeException('Uno de los métodos de pago seleccionados está inactivo o no pertenece a esta tienda.');
                 }
 
                 $requiresReference = $paymentMethod->usesReference();
                 $reference = trim((string) ($paymentDetail['reference'] ?? ''));
 
                 if ($requiresReference && $reference === '') {
-                    return response()->json(['error' => 'El método de pago ' . $paymentMethod->name . ' requiere una referencia.'], 422);
+                    throw new \RuntimeException('El método de pago ' . $paymentMethod->name . ' requiere una referencia.');
                 }
 
                 if ($paymentMethod->requiresProofImage() && !$request->hasFile("payments.$index.proof_image")) {
-                    return response()->json(['error' => 'El método de pago ' . $paymentMethod->name . ' requiere comprobante.'], 422);
+                    throw new \RuntimeException('El método de pago ' . $paymentMethod->name . ' requiere comprobante.');
                 }
 
                 $amountOriginal = round(max(0, (float) ($paymentDetail['amount_original'] ?? $paymentDetail['amount'] ?? 0)), 2);
@@ -586,11 +617,7 @@ class SaleController extends Controller
         $changeDueBase = round(max(0, $approvedPaymentsTotalBase - $totalWithIgtf), 2);
 
         if ($markPaymentsPaid && $approvedPaymentsTotalBase + 0.0001 < $totalWithIgtf) {
-            return response()->json([
-                'error' => 'Los pagos aprobados no cubren el total de la venta incluyendo IGTF.',
-                'required_total' => $totalWithIgtf,
-                'approved_total' => round($approvedPaymentsTotalBase, 2),
-            ], 422);
+            throw new \RuntimeException('Los pagos aprobados no cubren el total de la venta incluyendo IGTF.');
         }
 
         $changeRateToBs = max(0, (float) ($validated['change_rate_to_bs'] ?? $dollarRate));
@@ -694,7 +721,9 @@ class SaleController extends Controller
             $hkaDispatchGuide = null;
         }
 
-        return response()->json([
+        DB::commit();
+
+        $responsePayload = [
             'message' => $approvedPayments->isNotEmpty()
                 ? 'Venta registrada exitosamente con pagos aprobados.'
                 : 'Venta registrada sin pagos aprobados (PDF no generado).',
@@ -716,7 +745,41 @@ class SaleController extends Controller
                 'hka_dispatch_guide_number' => $hkaDispatchGuide?->numero_documento,
                 'hka_dispatch_guide_control' => $hkaDispatchGuide?->numero_control,
                 'created_customer_temporary_password' => $createdCustomerTemporaryPassword,
-        ], 200);
+        ];
+
+        if ($saleRequestCompletedKey) {
+            Cache::put($saleRequestCompletedKey, $responsePayload, now()->addMinutes(10));
+        }
+
+        if ($saleRequestLockKey) {
+            Cache::forget($saleRequestLockKey);
+        }
+        $saleRequestCompleted = true;
+
+        return response()->json($responsePayload, 200);
+        } catch (\Throwable $exception) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+
+            Log::warning('No se pudo completar el registro de la venta administrativa.', [
+                'tenant_id' => $tenantId,
+                'request_uid' => $requestUid,
+                'error' => $exception->getMessage(),
+            ]);
+
+            $isKnownBusinessError = $exception instanceof \RuntimeException;
+
+            return response()->json([
+                'error' => $isKnownBusinessError
+                    ? $exception->getMessage()
+                    : 'No se pudo confirmar la venta. Verifica el estado de la orden antes de reintentar.',
+            ], $isKnownBusinessError ? 422 : 500);
+        } finally {
+            if ($saleRequestLockAcquired && !$saleRequestCompleted && $saleRequestLockKey) {
+                Cache::forget($saleRequestLockKey);
+            }
+        }
     }
 
     private function resolveIgtfRate(): float

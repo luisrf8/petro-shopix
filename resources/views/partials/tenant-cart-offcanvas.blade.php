@@ -1333,7 +1333,7 @@
               'variant_size' => (string) ($variant->size ?? ''),
               'variant_stock' => (float) ($variant->stock ?? 0),
               'variant_price' => $variantBasePrice * ((100 - $variantProductDiscount) / 100) * ((100 - $variantOwnDiscount) / 100),
-              'product_name' => $variant->product->name ?? 'Producto',
+              'product_name' => $variant->product->display_name ?? 'Producto',
               'image_src' => $variantImagePath
                 ? (\App\Support\ImageStorage::url($variantImagePath) ?? asset('assets/img/shopix5.png'))
                 : ($productImagePath
@@ -1361,7 +1361,7 @@
           'variant_size' => (string) ($item->variant->size ?? ''),
           'variant_stock' => (float) ($item->variant->stock ?? 0),
           'variant_price' => (float) $effectivePrice,
-          'product_name' => $item->variant->product->name ?? 'Producto',
+          'product_name' => $item->variant->product->display_name ?? 'Producto',
           'image_src' => $itemVariantImagePath
             ? (\App\Support\ImageStorage::url($itemVariantImagePath) ?? asset('assets/img/shopix5.png'))
             : ($itemProductImagePath
@@ -1375,7 +1375,7 @@
                 'variant_size' => (string) ($item->variant->size ?? ''),
                 'variant_stock' => (float) ($item->variant->stock ?? 0),
                 'variant_price' => (float) $effectivePrice,
-                'product_name' => $item->variant->product->name ?? 'Producto',
+                'product_name' => $item->variant->product->display_name ?? 'Producto',
                 'image_src' => $itemVariantImagePath
                   ? (\App\Support\ImageStorage::url($itemVariantImagePath) ?? asset('assets/img/shopix5.png'))
                   : ($itemProductImagePath

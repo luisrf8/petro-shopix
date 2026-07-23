@@ -275,7 +275,7 @@
             $inactiveSuffix = !(bool) ($product->is_active ?? true) ? ' [INACTIVO]' : '';
             return [
                 'id' => (int) $variant->id,
-                'label' => trim(($product->name ?? 'Producto') . ' - ' . ($variant->size ?? 'Sin variante') . $inactiveSuffix),
+                'label' => trim(($product->display_name ?? 'Producto') . ' - ' . ($variant->size ?? 'Sin variante') . $inactiveSuffix),
                 'default_price' => (float) ($variant->price ?? 0),
                 'stock' => (float) ($variant->stock ?? 0),
             ];

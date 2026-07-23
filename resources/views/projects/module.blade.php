@@ -152,7 +152,7 @@
       <select class="form-control border border-1 p-2 js-item-variant" data-name="product_variant_id">
         <option value="">Ítem libre (sin producto)</option>
         @foreach($productVariants as $variant)
-          <option value="{{ $variant->id }}" data-product-id="{{ $variant->product_id }}" data-product-name="{{ $variant->product->name ?? 'Producto' }}" data-variant-name="{{ $variant->size }}" data-price="{{ number_format((float) $variant->price, 2, '.', '') }}">{{ $variant->product->name ?? 'Producto' }} - {{ $variant->size }}</option>
+          <option value="{{ $variant->id }}" data-product-id="{{ $variant->product_id }}" data-product-name="{{ $variant->product->display_name ?? 'Producto' }}" data-variant-name="{{ $variant->size }}" data-price="{{ number_format((float) $variant->price, 2, '.', '') }}">{{ $variant->product->display_name ?? 'Producto' }} - {{ $variant->size }}</option>
         @endforeach
       </select>
     </td>

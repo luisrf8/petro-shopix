@@ -488,6 +488,7 @@ class TenantController extends Controller
             'restrict_delivery_city_to_tenant' => filter_var($tenantInput['restrict_delivery_city_to_tenant'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'delivery_notifications_enabled' => filter_var($tenantInput['delivery_notifications_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'show_bs_prices_in_storefront' => filter_var($tenantInput['show_bs_prices_in_storefront'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'show_product_category_suffix' => filter_var($tenantInput['show_product_category_suffix'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'social_profiles' => $this->normalizeSocialProfiles($tenantInput['social_profiles'] ?? ($seed['social_profiles'] ?? [])),
             'color_primary' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($tenantInput['color_primary'] ?? '')) ? strtoupper((string) $tenantInput['color_primary']) : null,
             'color_secondary' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($tenantInput['color_secondary'] ?? '')) ? strtoupper((string) $tenantInput['color_secondary']) : null,
@@ -1855,7 +1856,8 @@ class TenantController extends Controller
             'delivery_fixed_fee' => 'nullable|numeric|min:0',
             'delivery_fee_per_km' => 'nullable|numeric|min:0',
             'delivery_notifications_enabled' => 'nullable|boolean',
-                'show_bs_prices_in_storefront' => 'nullable|boolean',
+            'show_bs_prices_in_storefront' => 'nullable|boolean',
+            'show_product_category_suffix' => 'nullable|boolean',
         ]);
 
         if (array_key_exists('economic_activity', $validated)) {
@@ -2012,6 +2014,7 @@ class TenantController extends Controller
             'delivery_fee_per_km' => $validated['delivery_fee_per_km'] ?? $tenant->delivery_fee_per_km,
             'delivery_notifications_enabled' => $validated['delivery_notifications_enabled'] ?? $tenant->delivery_notifications_enabled,
             'show_bs_prices_in_storefront' => $validated['show_bs_prices_in_storefront'] ?? $tenant->show_bs_prices_in_storefront,
+            'show_product_category_suffix' => $validated['show_product_category_suffix'] ?? $tenant->show_product_category_suffix,
         ];
 
         $tenantData = $this->filterTenantPayloadToExistingColumns($tenantData);
@@ -2157,6 +2160,7 @@ class TenantController extends Controller
                 'delivery_fee_per_km' => 'nullable|numeric|min:0',
                 'delivery_notifications_enabled' => 'nullable|boolean',
                 'show_bs_prices_in_storefront' => 'nullable|boolean',
+                'show_product_category_suffix' => 'nullable|boolean',
                 'import_payload' => 'nullable|string',
             ]);
 
@@ -2384,6 +2388,10 @@ class TenantController extends Controller
 
             if (Schema::hasColumn('tenants', 'show_bs_prices_in_storefront')) {
                 $tenantUpdatePayload['show_bs_prices_in_storefront'] = $request->boolean('show_bs_prices_in_storefront');
+            }
+
+            if (Schema::hasColumn('tenants', 'show_product_category_suffix')) {
+                $tenantUpdatePayload['show_product_category_suffix'] = $request->boolean('show_product_category_suffix');
             }
 
             $tenantUpdatePayload = $this->filterTenantPayloadToExistingColumns($tenantUpdatePayload);

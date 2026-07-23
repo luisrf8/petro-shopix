@@ -63,7 +63,7 @@
                     </td>
                     <td>
                         @forelse($appointment->consumptions as $consumption)
-                            • {{ $consumption->variant->product->name ?? 'Item' }} x{{ number_format((float) ($consumption->quantity ?? 0), 2) }}<br>
+                            • {{ $consumption->variant->product->display_name ?? 'Item' }} x{{ number_format((float) ($consumption->quantity ?? 0), 2) }}<br>
                         @empty
                             Sin items
                         @endforelse

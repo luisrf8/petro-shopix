@@ -471,7 +471,7 @@
                             <tbody>
                                 @foreach($order->details as $detalle)
                                     <tr>
-                                        <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
+                                        <td>{{ $detalle->variant->product->display_name ?? 'Sin nombre' }}</td>
                                         <td>{{ $detalle->quantity }}</td>
                                         <td>{{ $detalle->variant->size ?? 'General' }}</td>
                                         <td>{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</td>

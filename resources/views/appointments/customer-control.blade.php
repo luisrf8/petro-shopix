@@ -127,7 +127,7 @@
                                         @else
                                             @foreach($appointment->consumptions as $consumption)
                                                 <div class="text-xs">
-                                                    {{ $consumption->variant->product->name ?? 'Item' }}{{ !empty($consumption->variant->size) ? ' · ' . $consumption->variant->size : '' }}
+                                                    {{ $consumption->variant->product->display_name ?? 'Item' }}{{ !empty($consumption->variant->size) ? ' · ' . $consumption->variant->size : '' }}
                                                     · x{{ number_format((float) ($consumption->quantity ?? 0), 2) }}
                                                 </div>
                                             @endforeach
@@ -212,7 +212,7 @@
                                             @else
                                                 @foreach($order->details as $detail)
                                                     <div class="text-xs">
-                                                        {{ $detail->variant->product->name ?? 'Producto' }}{{ !empty($detail->variant->size) ? ' · ' . $detail->variant->size : '' }}
+                                                        {{ $detail->variant->product->display_name ?? 'Producto' }}{{ !empty($detail->variant->size) ? ' · ' . $detail->variant->size : '' }}
                                                         · x{{ number_format((float) ($detail->quantity ?? 0), 2) }}
                                                     </div>
                                                 @endforeach
@@ -300,7 +300,7 @@
                                         <div class="mb-2">
                                             <div class="text-xs text-muted">Consumos / productos usados</div>
                                             @forelse($appointment->consumptions as $consumption)
-                                                <div class="text-sm">• {{ $consumption->variant->product->name ?? 'Item' }}{{ !empty($consumption->variant->size) ? ' · ' . $consumption->variant->size : '' }} · x{{ number_format((float) ($consumption->quantity ?? 0), 2) }}</div>
+                                                <div class="text-sm">• {{ $consumption->variant->product->display_name ?? 'Item' }}{{ !empty($consumption->variant->size) ? ' · ' . $consumption->variant->size : '' }} · x{{ number_format((float) ($consumption->quantity ?? 0), 2) }}</div>
                                             @empty
                                                 <div class="text-sm text-muted">Sin consumos registrados</div>
                                             @endforelse

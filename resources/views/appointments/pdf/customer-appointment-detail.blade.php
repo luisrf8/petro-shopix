@@ -68,7 +68,7 @@
             <tbody>
                 @forelse($appointment->consumptions as $consumption)
                     <tr>
-                        <td>{{ $consumption->variant->product->name ?? 'Item' }}{{ !empty($consumption->variant->size) ? ' · ' . $consumption->variant->size : '' }}</td>
+                        <td>{{ $consumption->variant->product->display_name ?? 'Item' }}{{ !empty($consumption->variant->size) ? ' · ' . $consumption->variant->size : '' }}</td>
                         <td>{{ number_format((float) ($consumption->quantity ?? 0), 2) }}</td>
                         <td>{{ number_format((float) ($consumption->amount ?? 0), 2) }}</td>
                     </tr>

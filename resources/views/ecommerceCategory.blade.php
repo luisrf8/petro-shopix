@@ -1335,7 +1335,7 @@
 
           <div class="row" id="products-container">
             @foreach($products as $product)
-              <div class="col-12 col-sm-6 col-md-4 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
+              <div class="col-12 col-sm-6 col-md-4 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->display_name) }}">
                 <a href="{{ route('tenant.public.product', [
                     'tenant' => $tenant->slug,
                     'product' => $product->slug,
@@ -1353,10 +1353,10 @@
                     </div>
                     <div class="card-body product-card-body text-start">
                       <div class="product-card-copy">
-                        <h5 class="product-card-title fw-bold">{{ $product->name }}</h5>
+                        <h5 class="product-card-title fw-bold">{{ $product->display_name }}</h5>
                         <p class="product-card-description">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta tienda.', 84) }}</p>
                       </div>
-                      <div class="product-variant-strip" aria-label="Variantes disponibles de {{ $product->name }}">
+                      <div class="product-variant-strip" aria-label="Variantes disponibles de {{ $product->display_name }}">
                         @foreach ($product->variants->take(2) as $variant)
                           @php
                             $productDiscount = (float) ($product->discount_percentage ?? 0);

@@ -1610,7 +1610,7 @@
 
             <div class="row" id="products-container">
             @foreach($productItems as $product)
-              <div class="col-12 col-sm-6 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->name) }}">
+              <div class="col-12 col-sm-6 col-lg-4 mb-4 product-item" data-category="{{ $product->category_id }}" data-name="{{ strtolower($product->display_name) }}">
                 <a href="{{ route('tenant.public.product', ['tenant' => $tenant->slug, 'product' => $product->slug]) }}" class="text-decoration-none d-block h-100">
                   <div class="card card-product h-100">
                     @php
@@ -1632,7 +1632,7 @@
                       </div>
                     @endif
                     <div class="card-body text-start">
-                      <h5 class="fw-bold text-dark mb-1">{{ $product->name }}</h5>
+                      <h5 class="fw-bold text-dark mb-1">{{ $product->display_name }}</h5>
                       <p class="text-muted small mb-0">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta tienda.', 72) }}</p>
                       @if(!is_null($displayPrice))
                         <p class="mb-0 mt-2">

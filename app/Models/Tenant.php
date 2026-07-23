@@ -72,6 +72,7 @@ class Tenant extends Model
         'delivery_fee_per_km',
         'delivery_notifications_enabled',
         'show_bs_prices_in_storefront',
+        'show_product_category_suffix',
     ];
 
     protected $casts = [
@@ -90,6 +91,7 @@ class Tenant extends Model
         'delivery_fee_per_km' => 'float',
         'delivery_notifications_enabled' => 'boolean',
         'show_bs_prices_in_storefront' => 'boolean',
+        'show_product_category_suffix' => 'boolean',
     ];
 
     // Relaciones

@@ -1544,6 +1544,7 @@
 
                     <div id="summaryContainer" class="mt-3 sale-section-card"></div>
                     <span class="text-danger paymentMessage"></span>
+                    <div id="saleSubmitStatus" class="small mt-2" aria-live="polite"></div>
 
                     <div class="sale-step-actions w-100 align-items-center">
                         <button type="button" class="btn btn-secondary mt-3" id="backToStep2">Atrás</button>
@@ -1888,7 +1889,7 @@
                                     'variant_size' => (string) ($variant->size ?? ''),
                                     'variant_stock' => (float) ($variant->stock ?? 0),
                                     'variant_price' => $variantBasePrice * ((100 - $variantProductDiscount) / 100) * ((100 - $variantOwnDiscount) / 100),
-                                    'product_name' => $variant->product->name ?? 'Producto',
+                                    'product_name' => $variant->product->display_name ?? 'Producto',
                                     'image_src' => $variantImagePath
                                         ? (\App\Support\ImageStorage::url($variantImagePath) ?? asset('assets/img/shopix5.png'))
                                         : ($productImagePath
@@ -1919,7 +1920,7 @@
                             'quantity_input_mode' => (string) ($item->variant->quantity_input_mode ?? 'integer'),
                             'min_sale_quantity' => (float) ($item->variant->min_sale_quantity ?? 1),
                             'variant_price' => (float) $effectivePrice,
-                            'product_name' => $item->variant->product->name ?? 'Producto',
+                            'product_name' => $item->variant->product->display_name ?? 'Producto',
                             'image_src' => $itemVariantImagePath
                                 ? (\App\Support\ImageStorage::url($itemVariantImagePath) ?? asset('assets/img/shopix5.png'))
                                 : ($itemProductImagePath
@@ -1936,7 +1937,7 @@
                                     'quantity_input_mode' => (string) ($item->variant->quantity_input_mode ?? 'integer'),
                                     'min_sale_quantity' => (float) ($item->variant->min_sale_quantity ?? 1),
                                     'variant_price' => (float) $effectivePrice,
-                                    'product_name' => $item->variant->product->name ?? 'Producto',
+                                    'product_name' => $item->variant->product->display_name ?? 'Producto',
                                     'image_src' => $itemVariantImagePath
                                         ? (\App\Support\ImageStorage::url($itemVariantImagePath) ?? asset('assets/img/shopix5.png'))
                                         : ($itemProductImagePath
@@ -4477,8 +4478,29 @@ function updateQuantity(id, newQty) {
 
         updateCreateCustomerVisibility();
         
+        let saleSubmitInProgress = false;
+        let activeSaleRequestUid = null;
+
         document.getElementById('confirmPurchase').addEventListener('click', async function () {
+    if (saleSubmitInProgress) {
+        return;
+    }
+
+    saleSubmitInProgress = true;
     const button = this;
+    const statusNode = document.getElementById('saleSubmitStatus');
+    const setSaleSubmitStatus = (message, tone = 'muted') => {
+        if (!statusNode) {
+            return;
+        }
+
+        const toneClass = tone === 'success'
+            ? 'text-success'
+            : (tone === 'danger' ? 'text-danger' : 'text-muted');
+
+        statusNode.className = `small mt-2 ${toneClass}`;
+        statusNode.textContent = message || '';
+    };
 
     // Activar loading
     button.disabled = true;
@@ -4487,6 +4509,7 @@ function updateQuantity(id, newQty) {
         <span class="spinner-border spinner-border-sm me-2"></span>
         Procesando...
     `;
+    setSaleSubmitStatus('Procesando venta. No cierres esta ventana hasta ver el resultado.', 'muted');
 
         const saleSubmitOverlay = document.getElementById('saleSubmitOverlay');
         const setSaleSubmitOverlayVisible = (isVisible) => {
@@ -4603,7 +4626,10 @@ function updateQuantity(id, newQty) {
     };
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const requestUid = activeSaleRequestUid || `sale-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    activeSaleRequestUid = requestUid;
     const formData = new FormData();
+    appendFormDataValue(formData, 'request_uid', requestUid);
     appendFormDataValue(formData, 'customer_existing_id', summary.customer_existing_id);
     appendFormDataValue(formData, 'items', summary.items);
     appendFormDataValue(formData, 'tenant_id', summary.tenant_id);
@@ -4678,12 +4704,22 @@ function updateQuantity(id, newQty) {
             const bodyLooksLike413 = /413\s+Request\s+Entity\s+Too\s+Large/i.test(bodyText);
 
             if (response.status === 413 || bodyLooksLike413) {
-                throw new Error('La solicitud es demasiado grande (413). Reduce el tamaño de los comprobantes e intenta de nuevo.');
+                const uploadError = new Error('La solicitud es demasiado grande (413). Reduce el tamaño de los comprobantes e intenta de nuevo.');
+                uploadError.httpStatus = 413;
+                throw uploadError;
+            }
+
+            if (response.status === 409) {
+                const duplicatedError = new Error(payload?.message || 'La venta ya se está procesando. Espera unos segundos y vuelve a intentar.');
+                duplicatedError.httpStatus = 409;
+                throw duplicatedError;
             }
 
             const serverMessage = payload?.message || payload?.error || bodyText;
             const fallbackMessage = `Error al confirmar la compra (HTTP ${response.status}).`;
-            throw new Error(serverMessage || fallbackMessage);
+            const httpError = new Error(serverMessage || fallbackMessage);
+            httpError.httpStatus = response.status;
+            throw httpError;
         })
         .then(data => {
             let successMessage = data.message || 'Compra confirmada con éxito.';
@@ -4691,11 +4727,13 @@ function updateQuantity(id, newQty) {
                 successMessage += `\n\nCliente creado con contraseña temporal: ${data.created_customer_temporary_password}.`;
                 successMessage += '\nDebe iniciar sesión en la landing y cambiarla en Mi perfil.';
             }
+            setSaleSubmitStatus('Venta confirmada correctamente. Redirigiendo al listado de órdenes...', 'success');
             alert(successMessage);
 
             selectedItems = [];
             recalcSubtotals();
             clearSalesCartStorage();
+            activeSaleRequestUid = null;
 
             if (data.hka_dispatch_guide_download_url) {
                 setTimeout(() => {
@@ -4711,6 +4749,13 @@ function updateQuantity(id, newQty) {
         })
         .catch(error => {
             console.error('Error:', error);
+            setSaleSubmitStatus(error.message || 'No se pudo confirmar la venta.', 'danger');
+
+            // Si fue error funcional/validación, permite que el siguiente intento genere una nueva solicitud.
+            if (Number(error?.httpStatus || 0) >= 400 && Number(error?.httpStatus || 0) < 500 && Number(error?.httpStatus || 0) !== 409) {
+                activeSaleRequestUid = null;
+            }
+
             alert(error.message || 'Error al confirmar la compra.');
         })
         .finally(() => {
@@ -4718,6 +4763,7 @@ function updateQuantity(id, newQty) {
             button.disabled = false;
             button.innerHTML = originalText;
             setSaleSubmitOverlayVisible(false);
+            saleSubmitInProgress = false;
         });
 });
 

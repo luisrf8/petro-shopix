@@ -107,7 +107,7 @@
                 $lineDiscount = max(0, $lineBase - $lineSubtotal);
             @endphp
             <tr>
-                <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }} | {{ $detalle->taxes->count() > 0 ? '(G)' : '(E)' }}</td>
+                <td>{{ $detalle->variant->product->display_name ?? 'Sin nombre' }} | {{ $detalle->taxes->count() > 0 ? '(G)' : '(E)' }}</td>
                 <td>{{ $detalle->quantity }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
                 <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($lineBase), 2) }}</td>

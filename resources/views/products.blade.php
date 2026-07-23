@@ -508,7 +508,7 @@
         @endphp
         @php
           $productSearchTerms = collect([
-            $product->name,
+            $product->display_name,
             $product->description,
             optional($product->category)->name,
           ])->merge($product->variants->map(function ($variant) {
@@ -522,7 +522,7 @@
         @endphp
         <div class="product-item col-12 col-md-6 col-xl-3 mb-2" data-search="{{ \Illuminate\Support\Str::lower($productSearchTerms) }}">
           <div class="product-card-clean">
-              <a href="{{ route('productItem', $product->id) }}" class="product-thumb-clean" aria-label="Abrir producto {{ $product->name }}">
+              <a href="{{ route('productItem', $product->id) }}" class="product-thumb-clean" aria-label="Abrir producto {{ $product->display_name }}">
                 @if($productCoverImage)
                   <span class="product-image-spinner" aria-hidden="true">
                     <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
@@ -541,7 +541,7 @@
 
               <div class="product-main-clean">
                 <div class="product-head-clean">
-                  <h6 class="product-title-clean text-truncate mb-0">{{ $product->name }}</h6>
+                  <h6 class="product-title-clean text-truncate mb-0">{{ $product->display_name }}</h6>
                   @if(!$productsIsSellerRole)
                     <a href="{{ route('productItem', $product->id) }}" class="edit-link-clean">
                       <i class="material-symbols-rounded text-sm">edit</i>Editar

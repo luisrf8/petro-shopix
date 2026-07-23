@@ -39,7 +39,7 @@
         <tbody>
             @forelse($rows as $row)
                 <tr>
-                    <td>{{ $row->product->name ?? 'N/A' }}</td>
+                    <td>{{ $row->product->display_name ?? 'N/A' }}</td>
                     <td>{{ $row->product->category->name ?? 'N/A' }}</td>
                     <td>{{ $row->size ?: 'N/A' }}</td>
                     <td class="num">{{ number_format($row->stock) }}</td>

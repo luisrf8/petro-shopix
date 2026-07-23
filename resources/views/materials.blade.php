@@ -297,7 +297,7 @@
       @foreach($productItems as $product)
         @foreach($product->variants as $variant)
           "{{ $variant->id }}": {
-            name: @json($product->name),
+            name: @json($product->display_name),
             size: @json($variant->size),
             stock: @json($variant->stock),
             image: @json((isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'))),
@@ -321,7 +321,7 @@
           $productQuantityMode = $productQuantityModes->count() === 1 ? (string) $productQuantityModes->first() : 'decimal';
         @endphp
         "{{ $product->id }}": {
-          name: @json($product->name),
+          name: @json($product->display_name),
           stock: @json((float) $product->variants->sum('stock')),
           image: @json((isset($product->images[0]) ? (\App\Support\ImageStorage::url($product->images[0]->path) ?? asset('assets/img/shopix5.png')) : asset('assets/img/shopix5.png'))),
           unit_type: @json($productUnitValue),
@@ -335,7 +335,7 @@
       <option value="">Selecciona variante...</option>
       @foreach($productItems as $product)
         @foreach($product->variants as $variant)
-          <option value="{{ $variant->id }}">{{ $product->name }} - {{ $variant->size }} (Stock: {{ $variant->stock }})</option>
+          <option value="{{ $variant->id }}">{{ $product->display_name }} - {{ $variant->size }} (Stock: {{ $variant->stock }})</option>
         @endforeach
       @endforeach
     `;
@@ -343,7 +343,7 @@
     const productOptions = `
       <option value="">Selecciona producto...</option>
       @foreach($productItems as $product)
-          <option value="{{ $product->id }}">{{ $product->name }} (Stock total: {{ number_format((float) $product->variants->sum('stock'), 2, '.', '') }})</option>
+          <option value="{{ $product->id }}">{{ $product->display_name }} (Stock total: {{ number_format((float) $product->variants->sum('stock'), 2, '.', '') }})</option>
       @endforeach
     `;
 

@@ -365,7 +365,7 @@
       : [];
 
     $productVariantItems = $productVariants->map(function ($variant) {
-      $productName = $variant->product->name ?? 'Producto';
+      $productName = $variant->product->display_name ?? 'Producto';
       $variantName = $variant->size ?? 'Variante';
       $variantBarcode = trim((string) ($variant->barcode ?? ''));
       $variantQrCode = trim((string) ($variant->qr_code ?? ''));

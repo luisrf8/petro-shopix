@@ -415,7 +415,7 @@
                 }
             @endphp
             <tr>
-                <td>{{ $detalle->variant->product->name ?? 'Sin nombre' }}</td>
+                <td>{{ $detalle->variant->product->display_name ?? 'Sin nombre' }}</td>
                 <td class="qty-cell">{{ $lineQuantityText }} {{ $unitTypeLabel }}</td>
                 <td>{{ $detalle->variant->size ?? '' }}</td>
                 <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineUnitPrice) }}</td>

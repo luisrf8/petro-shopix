@@ -62,7 +62,7 @@
 
       $whatsappNumber = preg_replace('/\D+/', '', (string) (($tenant->phone_code ?? '') . ($tenant->phone_number ?? '')));
       $projectWhatsappUrl = $whatsappNumber !== ''
-        ? 'https://wa.me/' . $whatsappNumber . '?text=' . urlencode('Hola, quiero cotizar un proyecto relacionado con el producto ' . $product->name . ' que vi en su landing de Shopix.')
+        ? 'https://wa.me/' . $whatsappNumber . '?text=' . urlencode('Hola, quiero cotizar un proyecto relacionado con el producto ' . $product->display_name . ' que vi en su landing de Shopix.')
         : null;
 
     [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
@@ -1151,7 +1151,7 @@
         <div class="product-detail-layout">
           <div class="product-meta-card">
             <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
-              <h2 class="h4 fw-bold mb-0">{{ $product->name }}</h2>
+              <h2 class="h4 fw-bold mb-0">{{ $product->display_name }}</h2>
             </div>
             <p class="product-meta-subtitle">{{ $product->description }}</p>
           </div>
@@ -1170,7 +1170,7 @@
                     <div class="product-gallery-slide" data-gallery-slide data-index="{{ $index }}" data-image-src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}">
                       <img
                         src="{{ \App\Support\ImageStorage::url($image->path) ?? asset('assets/img/shopix5.png') }}"
-                        alt="Imagen {{ $index + 1 }} de {{ $product->name }}"
+                        alt="Imagen {{ $index + 1 }} de {{ $product->display_name }}"
                       >
                     </div>
                   @endforeach
@@ -1280,7 +1280,7 @@
                           data-price="{{ number_format($effectiveVariantPrice, 2, '.', '') }}"
                           data-price-bs="{{ !is_null($effectiveVariantPriceBs) ? number_format($effectiveVariantPriceBs, 2, '.', '') : '' }}"
                           data-stock="{{ $variant->stock }}"
-                          data-product-name="{{ $product->name }}"
+                          data-product-name="{{ $product->display_name }}"
                           data-image-src="{{ $variantImageUrl }}"
                           {{ $variant->stock <= 0 ? 'disabled' : '' }}
                       >
