@@ -27,7 +27,7 @@
     <div class="card-body">
       <div class="row g-4">
         <div class="col-12">
-          <div class="card border h-100">
+          <div class="card border h-100" id="payrollTeamCard">
             <div class="card-header pb-0 d-flex align-items-center justify-content-between">
               <h6 class="mb-0">Equipo de trabajo</h6>
               <button class="btn btn-outline-secondary btn-sm mb-0"
@@ -45,7 +45,7 @@
               </div>
 
               <div class="table-responsive">
-                <table class="table table-sm align-items-center mb-0">
+                <table class="table table-sm align-items-center mb-0" id="payrollTeamTable">
                   <thead><tr><th>Nombre</th><th>Rol</th><th>Contacto</th><th>Estado</th><th>Acciones</th></tr></thead>
                   <tbody>
                     @forelse($teamMembers as $member)
@@ -120,7 +120,7 @@
         </div>
 
         <div class="col-12">
-          <div class="card border h-100">
+          <div class="card border h-100" id="payrollPaymentsCard">
             <div class="card-header pb-0 d-flex align-items-center justify-content-between">
               <h6 class="mb-0">Registro de pagos</h6>
               <button class="btn btn-outline-secondary btn-sm mb-0"
@@ -150,7 +150,7 @@
                 <div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-dark w-100 mb-0" type="submit">Filtrar</button></div>
               </form>
               <div class="d-flex justify-content-end mb-3">
-                <button type="button" class="btn btn-dark mb-0" data-bs-toggle="modal" data-bs-target="#payrollPaymentModal">Registrar nuevo pago</button>
+                <button type="button" class="btn btn-dark mb-0" id="payrollOpenPaymentModalBtn" data-bs-toggle="modal" data-bs-target="#payrollPaymentModal">Registrar nuevo pago</button>
               </div>
 
               <div class="table-responsive">

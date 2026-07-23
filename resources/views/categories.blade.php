@@ -134,7 +134,7 @@
               <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
                 <h6 class="text-white text-capitalize ps-3">CATEGORÍAS</h6>
                 @if(!$categoriesIsSellerRole)
-                  <div class="py-1 px-3 text-end " data-bs-toggle="modal" data-bs-target="#createCategoryModal">
+                  <div id="categoriesCreateTrigger" class="py-1 px-3 text-end " data-bs-toggle="modal" data-bs-target="#createCategoryModal">
                     <label class="text-white">
                       + Agregar Categoría
                     </label>

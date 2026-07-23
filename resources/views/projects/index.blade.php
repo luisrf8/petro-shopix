@@ -65,6 +65,14 @@
     display: flex;
     flex-direction: column;
     min-height: 100%;
+    cursor: pointer;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+
+  .project-list-card:hover {
+    transform: translateY(-2px);
+    border-color: #b8c9e6;
+    box-shadow: 0 12px 28px rgba(17, 43, 92, .08);
   }
 
   .project-list-card.is-featured {
@@ -186,6 +194,27 @@
     justify-content: space-between;
     gap: .5rem;
     align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .project-actions-view {
+    min-width: 130px;
+  }
+
+  .project-phase-form {
+    display: inline-flex;
+    gap: .45rem;
+    align-items: center;
+    margin-left: auto;
+  }
+
+  .project-phase-form .form-control {
+    min-width: 120px;
+  }
+
+  .project-phase-submit {
+    min-width: 102px;
+    white-space: nowrap;
   }
 
   .project-actions .btn {
@@ -323,7 +352,7 @@
               $progress = $tasksTotal > 0 ? (int) round(($tasksDone / $tasksTotal) * 100) : 0;
             @endphp
 
-            <article class="project-list-card {{ $isFeatured ? 'is-featured' : 'is-compact' }}">
+            <article class="project-list-card {{ $isFeatured ? 'is-featured' : 'is-compact' }}" data-project-url="{{ route('projects.module.projects.show', $project) }}" tabindex="0" role="link" aria-label="Abrir proyecto {{ $project->name }}">
               <div class="project-cover">
                 <span class="project-phase-chip">{{ $phaseLabel }}</span>
                 <span class="project-phase-chip" style="left: .8rem; right: auto; background: {{ $project->is_public_landing ? '#d9f99d' : '#e5e7eb' }}; color: {{ $project->is_public_landing ? '#355e00' : '#4b5563' }};">{{ $project->is_public_landing ? 'PUBLICO' : 'INTERNO' }}</span>
@@ -345,15 +374,15 @@
                 </div>
 
                 <div class="project-actions">
-                  <a href="{{ route('projects.module.projects.show', $project) }}" class="btn btn-outline-primary btn-sm mb-0">Ver Proyecto</a>
-                  <form method="POST" action="{{ route('projects.module.projects.phase', $project) }}" class="d-flex gap-2 align-items-center">
+                  <a href="{{ route('projects.module.projects.show', $project) }}" class="btn btn-primary btn-sm mb-0 project-actions-view" data-project-open-link>Ver Proyecto</a>
+                  <form method="POST" action="{{ route('projects.module.projects.phase', $project) }}" class="project-phase-form" data-project-phase-form>
                     @csrf
-                    <select name="phase" class="form-control border border-1 p-2 form-control-sm">
+                    <select name="phase" class="form-control border border-1 p-2 form-control-sm" aria-label="Seleccionar fase del proyecto {{ $project->name }}">
                       <option value="inicio" {{ $project->phase === 'inicio' ? 'selected' : '' }}>Inicio</option>
                       <option value="desarrollo" {{ $project->phase === 'desarrollo' ? 'selected' : '' }}>Desarrollo</option>
                       <option value="fin" {{ $project->phase === 'fin' ? 'selected' : '' }}>Fin</option>
                     </select>
-                    <button class="btn btn-outline-dark btn-sm mb-0" type="submit">Actualizar</button>
+                    <button class="btn btn-outline-dark btn-sm mb-0 project-phase-submit" type="submit">Actualizar</button>
                   </form>
                 </div>
               </div>
@@ -374,3 +403,69 @@
   </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const interactiveSelector = 'a, button, input, select, textarea, label, form';
+  const cards = document.querySelectorAll('.project-list-card[data-project-url]');
+
+  cards.forEach(function (card) {
+    const destination = card.getAttribute('data-project-url');
+    if (!destination) {
+      return;
+    }
+
+    card.addEventListener('click', function (event) {
+      if (event.target.closest(interactiveSelector)) {
+        return;
+      }
+      window.location.href = destination;
+    });
+
+    card.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+      if (event.target.closest(interactiveSelector)) {
+        return;
+      }
+      event.preventDefault();
+      window.location.href = destination;
+    });
+  });
+
+  document.querySelectorAll('[data-project-open-link]').forEach(function (link) {
+    link.addEventListener('click', function (event) {
+      event.stopPropagation();
+    });
+  });
+
+  document.querySelectorAll('[data-project-phase-form]').forEach(function (form) {
+    const select = form.querySelector('select[name="phase"]');
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (!select || !submitButton) {
+      return;
+    }
+
+    const initialPhase = select.value;
+
+    form.addEventListener('click', function (event) {
+      event.stopPropagation();
+    });
+
+    form.addEventListener('submit', function () {
+      submitButton.disabled = true;
+      submitButton.textContent = 'Guardando...';
+    });
+
+    select.addEventListener('change', function () {
+      if (select.value === initialPhase) {
+        return;
+      }
+      form.requestSubmit();
+    });
+  });
+});
+</script>
+@endpush

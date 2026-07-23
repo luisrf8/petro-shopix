@@ -16,7 +16,7 @@
     <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
       <div class="bg-gradient-dark shadow-dark border-radius-lg pt-3 pb-3 d-flex justify-content-between align-items-center">
         <h6 class="text-white text-capitalize ps-3 mb-0">Registro de gastos de la tienda</h6>
-        <button type="button" class="btn btn-sm btn-light mb-0 me-3" data-bs-toggle="modal" data-bs-target="#createExpenseModal">+ Registrar gasto</button>
+        <button type="button" class="btn btn-sm btn-light mb-0 me-3" id="storeExpenseCreateTrigger" data-bs-toggle="modal" data-bs-target="#createExpenseModal">+ Registrar gasto</button>
       </div>
     </div>
     <div class="card-body px-0 pb-2">
@@ -31,7 +31,7 @@
       </div>
 
       <div class="table-responsive p-3">
-        <table class="table align-items-center mb-0">
+        <table class="table align-items-center mb-0" id="storeExpensesTable">
           <thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Proveedor</th><th>Moneda</th><th>Monto original</th><th>Tasa Bs</th><th>Monto Bs</th><th>Estado</th><th>Registrado por</th><th>Acciones</th></tr></thead>
           <tbody>
             @forelse($expenses as $expense)

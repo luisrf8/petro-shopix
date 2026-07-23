@@ -289,55 +289,61 @@ return [
             'intro' => 'Configura cuentas y formas de cobro para ventas.',
             'wizard' => [
                 [
-                    'title' => 'Paso 1: Revisa tasa actual',
-                    'description' => 'Verifica el valor actual del dolar antes de operar.',
-                    'selector' => '#currentDollarRate',
-                    'action' => 'Confirma la tasa visible para conversiones de moneda.',
+                    'title' => 'Paso 1: Revisa tasas actuales',
+                    'description' => 'Verifica los valores actuales de USD y EUR antes de operar.',
+                    'selector' => '#currentDollarRate, #currentEuroRate',
+                    'action' => 'Confirma las tasas visibles para conversiones de moneda.',
                 ],
                 [
-                    'title' => 'Paso 2: Actualiza tasa si aplica',
-                    'description' => 'Abre el modal para registrar una nueva tasa.',
-                    'selector' => '[data-bs-target="#updateDollarRateModal"]',
-                    'action' => 'Si hubo cambio de mercado, actualiza la tasa del dia.',
+                    'title' => 'Paso 2: Historial y actualizacion',
+                    'description' => 'Consulta el historico y actualiza tasas cuando aplique.',
+                    'selector' => '[data-bs-target="#rateHistoryModal"], [data-bs-target="#updateDollarRateModal"], [data-bs-target="#updateEuroRateModal"]',
+                    'action' => 'Abre historial o actualiza la tasa del dia segun mercado.',
                 ],
                 [
-                    'title' => 'Paso 3: Crear metodo de pago',
+                    'title' => 'Paso 3: Configura monedas',
+                    'description' => 'Revisa las monedas habilitadas y define la moneda madre.',
+                    'selector' => '#paymentCurrenciesCard, #paymentCurrenciesList, #updateBaseCurrencyForm',
+                    'action' => 'Selecciona la moneda madre y guarda el cambio si es necesario.',
+                ],
+                [
+                    'title' => 'Paso 4: Crear metodo de pago',
                     'description' => 'Registra cuentas y datos bancarios por moneda.',
-                    'selector' => '#createPaymentMethodForm',
-                    'action' => 'Completa nombre, moneda, beneficiario y QR.',
+                    'selector' => '#createPaymentMethodTrigger, #createPaymentMethodModal',
+                    'action' => 'Abre Nuevo Metodo de Pago y completa nombre, moneda, beneficiario y QR.',
                 ],
                 [
-                    'title' => 'Paso 4: Editar o activar',
-                    'description' => 'Administra disponibilidad de cada metodo.',
-                    'selector' => '.btn-edit-method',
+                    'title' => 'Paso 5: Editar o activar',
+                    'description' => 'Administra disponibilidad de cada metodo registrado.',
+                    'selector' => '#paymentMethodsList .btn-edit-method, #paymentMethodsList .toggle-status-btn',
                     'action' => 'Edita datos o usa Inactivar/Activar segun corresponda.',
                 ],
             ],
             'tour' => [
                 [
-                    'title' => 'Tasa actual',
-                    'description' => 'Valor usado para conversiones VES/USD.',
-                    'selector' => '#currentDollarRate',
+                    'title' => 'Tasas actuales',
+                    'description' => 'Valores usados para conversiones VES/USD y VES/EUR.',
+                    'selector' => '#currentDollarRate, #currentEuroRate',
                 ],
                 [
-                    'title' => 'Actualizar tasa',
-                    'description' => 'Boton para abrir el modal de tasa del dolar.',
-                    'selector' => '[data-bs-target="#updateDollarRateModal"]',
+                    'title' => 'Historial y actualizacion',
+                    'description' => 'Desde aqui consultas historico y actualizas tasas.',
+                    'selector' => '[data-bs-target="#rateHistoryModal"], [data-bs-target="#updateDollarRateModal"], [data-bs-target="#updateEuroRateModal"]',
                 ],
                 [
                     'title' => 'Monedas',
-                    'description' => 'Listado de monedas habilitadas.',
-                    'selector' => '.card .card-header h6',
+                    'description' => 'Listado de monedas habilitadas y selector de moneda madre.',
+                    'selector' => '#paymentCurrenciesCard, #paymentCurrenciesList, #updateBaseCurrencyForm',
                 ],
                 [
                     'title' => 'Nuevo metodo',
                     'description' => 'Abre formulario para crear metodo de pago.',
-                    'selector' => '[data-bs-target="#createPaymentMethodModal"]',
+                    'selector' => '#createPaymentMethodTrigger',
                 ],
                 [
                     'title' => 'Gestion de metodos',
                     'description' => 'Edita datos y activa/inactiva metodos existentes.',
-                    'selector' => '.btn-edit-method',
+                    'selector' => '#paymentMethodsList .btn-edit-method, #paymentMethodsList .toggle-status-btn',
                 ],
             ],
             'sections' => [
@@ -355,10 +361,10 @@ return [
             'intro' => 'Modulo para registrar ventas y construir el pedido del cliente.',
             'wizard' => [
                 [
-                    'title' => 'Paso 1: Filtrar categoria',
-                    'description' => 'Selecciona una categoria para reducir productos visibles.',
-                    'selector' => '#categoriesContainer',
-                    'action' => 'Usa las tarjetas de categorias para iniciar el flujo.',
+                    'title' => 'Paso 1: Flujo por etapas',
+                    'description' => 'La venta avanza en 3 pantallas: Seleccion, Pago y Confirmacion.',
+                    'selector' => '#saleFlowStepper, [data-sale-step="1"], [data-sale-step="2"], [data-sale-step="3"]',
+                    'action' => 'Empieza en Seleccion y avanza con Siguiente hasta Confirmacion.',
                 ],
                 [
                     'title' => 'Paso 2: Buscar/escanear',
@@ -373,23 +379,23 @@ return [
                     'action' => 'Selecciona variantes con stock para construir el pedido.',
                 ],
                 [
-                    'title' => 'Paso 4: Metodo de pago',
-                    'description' => 'En el paso 2 defines los metodos y montos de pago.',
-                    'selector' => '#paymentMethods',
-                    'action' => 'Distribuye el total entre uno o varios metodos.',
+                    'title' => 'Paso 4: Ir a pagina de pago',
+                    'description' => 'Cuando tengas productos seleccionados, avanza a la segunda pantalla.',
+                    'selector' => '#toStep2, [data-sale-step="2"]',
+                    'action' => 'Haz clic en Siguiente para abrir el Paso 2: Metodos de pago.',
                 ],
                 [
-                    'title' => 'Paso 5: Confirmar venta',
-                    'description' => 'Revisa resumen y finaliza la orden.',
-                    'selector' => '#purchaseForm',
-                    'action' => 'Completa los pasos y confirma para emitir la venta.',
+                    'title' => 'Paso 5: Metodo de pago y confirmacion',
+                    'description' => 'En la pagina 2 registras pagos y luego pasas a la pagina 3 para confirmar.',
+                    'selector' => '#step2:not(.d-none) #paymentMethods, #toStep3, [data-sale-step="3"], #step3:not(.d-none) #summaryContainer, #step3:not(.d-none) #confirmPurchase',
+                    'action' => 'Completa pagos, pulsa Siguiente y finalmente Confirmar en el Paso 3.',
                 ],
             ],
             'tour' => [
                 [
-                    'title' => 'Categorias de venta',
-                    'description' => 'Filtra productos por categoria.',
-                    'selector' => '#categoriesContainer',
+                    'title' => 'Flujo de Venta',
+                    'description' => 'Este stepper muestra las 3 paginas del proceso: Seleccion, Pago y Confirmacion.',
+                    'selector' => '#saleFlowStepper, [data-sale-step="1"], [data-sale-step="2"], [data-sale-step="3"]',
                 ],
                 [
                     'title' => 'Buscador de productos',
@@ -407,9 +413,14 @@ return [
                     'selector' => '#itemSelector',
                 ],
                 [
-                    'title' => 'Metodos de pago',
-                    'description' => 'Define como se cancela la venta.',
-                    'selector' => '#paymentMethods',
+                    'title' => 'Paso 2: Metodos de pago',
+                    'description' => 'Tras seleccionar items, avanza a la segunda pagina para registrar pagos.',
+                    'selector' => '#toStep2, [data-sale-step="2"], #step2:not(.d-none) #paymentMethods',
+                ],
+                [
+                    'title' => 'Paso 3: Confirmacion',
+                    'description' => 'Desde la segunda pagina avanza a Confirmacion para revisar resumen y finalizar.',
+                    'selector' => '#toStep3, [data-sale-step="3"], #step3:not(.d-none) #summaryContainer, #step3:not(.d-none) #confirmPurchase',
                 ],
             ],
             'sections' => [
@@ -1084,12 +1095,12 @@ return [
                 [
                     'title' => 'Registro de gasto',
                     'description' => 'Carga concepto, categoria, monto y fecha del egreso.',
-                    'selector' => 'form',
+                    'selector' => '#storeExpenseCreateTrigger, [data-bs-target="#createExpenseModal"], #createExpenseModal',
                 ],
                 [
                     'title' => 'Historico de gastos',
                     'description' => 'Revisa movimientos para control de caja y reportes.',
-                    'selector' => 'table.table',
+                    'selector' => '#storeExpensesTable, table.table, .table-responsive',
                 ],
             ],
         ],
@@ -1130,14 +1141,19 @@ return [
             'intro' => 'Gestiona agenda, estados de servicio y flujo de atencion al cliente.',
             'tour' => [
                 [
-                    'title' => 'Agenda del dia',
-                    'description' => 'Revisa citas por hora y estado de ejecucion.',
-                    'selector' => 'table.table, .timeline, .calendar',
+                    'title' => 'Resumen de citas',
+                    'description' => 'Consulta profesionales activos, servicios configurados y citas de la semana.',
+                    'selector' => '.appointments-top-cards-row, #appointmentsWeekCountValue, #appointmentsWeekRangeNote',
                 ],
                 [
-                    'title' => 'Acciones de workflow',
-                    'description' => 'Marca avances del servicio (confirmar, iniciar, finalizar).',
-                    'selector' => 'form[action*="/workflow"], button[type="submit"]',
+                    'title' => 'Filtros y navegacion',
+                    'description' => 'Filtra por fecha/profesional y cambia entre vista de dia, semana o mes.',
+                    'selector' => '#appointmentsFiltersToggleButton, #appointmentsFiltersCollapse, [data-calendar-view], #appointmentsWeekRangeTitle',
+                ],
+                [
+                    'title' => 'Calendario de agenda',
+                    'description' => 'Aqui ves los bloques de citas por hora y dia para gestionar la agenda.',
+                    'selector' => '#appointmentsCalendarCard, #appointmentsCalendarScroll, .appointments-calendar-grid, .appointments-calendar-day-column',
                 ],
             ],
         ],
@@ -1164,12 +1180,17 @@ return [
                 [
                     'title' => 'Nuevo servicio',
                     'description' => 'Registra nombre, costo y parametros operativos.',
-                    'selector' => 'form',
+                    'selector' => '#service-tab-create, #service-pane-create, #appointmentServiceCreateForm',
                 ],
                 [
-                    'title' => 'Listado de servicios',
-                    'description' => 'Edita, activa o desactiva servicios publicados.',
-                    'selector' => 'table.table',
+                    'title' => 'Servicios creados',
+                    'description' => 'Revisa filtros y edita/activa/inactiva servicios existentes.',
+                    'selector' => '#service-tab-created, #service-pane-created, #servicesCreatedList, #servicesFilterSearch',
+                ],
+                [
+                    'title' => 'Paquetes de sesiones',
+                    'description' => 'Configura paquetes y frecuencia de asistencia para clientes.',
+                    'selector' => '#service-tab-packages, #service-pane-packages, form[action*="/appointments/packages"]',
                 ],
             ],
         ],
@@ -1255,12 +1276,12 @@ return [
                 [
                     'title' => 'Equipo de trabajo',
                     'description' => 'Administra integrantes y su estado operativo.',
-                    'selector' => 'table.table',
+                    'selector' => '#payrollTeamCard, #payroll-team-content, #payrollTeamTable, [data-bs-target="#teamMemberModal"]',
                 ],
                 [
                     'title' => 'Registro de nomina',
                     'description' => 'Carga nuevos pagos y genera comprobantes.',
-                    'selector' => 'form[action*="/payrolls"], a[href*="/comprobante"]',
+                    'selector' => '#payrollPaymentsCard, [data-section-toggle="payroll-payments-content"], #payroll-payments-content, #payrollOpenPaymentModalBtn, #payrollPaymentModal',
                 ],
             ],
         ],
@@ -1287,7 +1308,7 @@ return [
                 [
                     'title' => 'Resumen del proyecto',
                     'description' => 'Consulta estado general, avance y visibilidad.',
-                    'selector' => '.card, .badge, .progress',
+                    'selector' => '.project-show-hero, .project-meta-pills, .project-roadmap',
                 ],
                 [
                     'title' => 'Tareas y asignaciones',
@@ -1406,6 +1427,29 @@ return [
         'tenant.public' => [
             'title' => 'Ayuda: Tienda publica',
             'intro' => 'Vista publica del tenant para explorar productos y comprar.',
+            'tour' => [
+                [
+                    'title' => 'Inicio y navegacion',
+                    'description' => 'Desde esta barra puedes entrar al catalogo, contacto e inicio de sesion cliente.',
+                    'selector' => '.landing-header, #landingNavbar, [data-shopix-open-auth], .tenant-main-nav-btn',
+                ],
+                [
+                    'title' => 'Hero y accesos rapidos',
+                    'description' => 'Este bloque resume la tienda y te deja ir a catalogo, WhatsApp o ubicacion.',
+                    'selector' => '.hero, .hero-copy-shell, .hero-actions, a[href*="/categorias"]',
+                ],
+                [
+                    'title' => 'Catalogo principal',
+                    'description' => 'Aqui filtras productos y tambien puedes consultar servicios para cita cuando esten habilitados.',
+                    'selector' => '#productos, #product-search, #products-container, .category-link, .js-open-tenant-service',
+                ],
+                [
+                    'title' => 'Iniciar sesion y completar pago o cita',
+                    'description' => 'Pulsa Entrar para identificarte. Luego agrega al carrito para continuar al checkout y pagar, o usa Reservar cita/WhatsApp para gestionar agenda de servicios.',
+                    'selector' => '[data-shopix-open-auth], [data-bs-target="#tenantCartOffcanvas"], .js-open-tenant-service, [href*="whatsapp"]',
+                    'action' => '1) Inicia sesion. 2) Compra por carrito y checkout o agenda una cita segun el servicio.',
+                ],
+            ],
             'sections' => [
                 [
                     'heading' => 'Que hacer',
@@ -1419,6 +1463,29 @@ return [
         'tenant.public.categories' => [
             'title' => 'Ayuda: Categorias publicas',
             'intro' => 'Muestra productos agrupados por categoria para el cliente final.',
+            'tour' => [
+                [
+                    'title' => 'Navegacion del catalogo',
+                    'description' => 'Estos accesos te permiten volver, abrir categorias y entrar con tu cuenta cliente.',
+                    'selector' => '.landing-header, #landingNavbar, .tenant-main-nav-btn, [data-shopix-open-auth]',
+                ],
+                [
+                    'title' => 'Filtros y busqueda',
+                    'description' => 'Usa los filtros por categoria y el buscador para localizar productos rapido.',
+                    'selector' => '.filters-panel, #product-search-desktop, #product-search-results, .category-link',
+                ],
+                [
+                    'title' => 'Resultados y detalle',
+                    'description' => 'Desde cada tarjeta puedes abrir el detalle del producto y elegir su variante.',
+                    'selector' => '#products-container, .product-item, .product-card-link',
+                ],
+                [
+                    'title' => 'Login y flujo de pago o cita',
+                    'description' => 'Inicia sesion desde Entrar. Para compras agrega al carrito y finaliza pago en checkout; para servicios usa Reservar cita cuando este disponible.',
+                    'selector' => '[data-shopix-open-auth], [data-bs-target="#tenantCartOffcanvas"], [data-shopix-catalog-appointment], .js-open-tenant-service',
+                    'action' => 'Primero autentica tu cuenta, luego completa compra o agenda segun el tipo de producto/servicio.',
+                ],
+            ],
             'sections' => [
                 [
                     'heading' => 'Acciones',
@@ -1432,6 +1499,29 @@ return [
         'tenant.public.product' => [
             'title' => 'Ayuda: Producto publico',
             'intro' => 'Detalle de producto para seleccionar variantes y cantidad.',
+            'tour' => [
+                [
+                    'title' => 'Navegacion y acceso cliente',
+                    'description' => 'Desde aqui puedes volver al catalogo y entrar con tu cuenta cliente.',
+                    'selector' => '.landing-header, #product-back-link, [data-shopix-open-auth], .tenant-main-nav-btn',
+                ],
+                [
+                    'title' => 'Galeria del producto',
+                    'description' => 'Revisa imagenes del producto y abre vista completa si necesitas mas detalle.',
+                    'selector' => '.product-gallery-shell, #product-gallery-track, #product-gallery-fullscreen',
+                ],
+                [
+                    'title' => 'Seleccion de variante',
+                    'description' => 'Elige talla/presentacion disponible antes de continuar con compra o cotizacion.',
+                    'selector' => '#variants-container, .variant-button, #selected-variant-indicator',
+                ],
+                [
+                    'title' => 'Iniciar sesion y continuar a pago o cita',
+                    'description' => 'Inicia sesion con Entrar. Si ves Agregar al carrito, continua al checkout para el pago; si aplica cotizacion/servicio, usa WhatsApp para coordinar o gestionar cita.',
+                    'selector' => '[data-shopix-open-auth], #add-to-cart-button, #whatsapp-button, [data-bs-target="#tenantCartOffcanvas"]',
+                    'action' => 'Selecciona variante, autentica tu cuenta y finaliza por checkout o coordinacion por WhatsApp segun el flujo activo.',
+                ],
+            ],
             'sections' => [
                 [
                     'heading' => 'Acciones',

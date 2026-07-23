@@ -472,7 +472,7 @@
             },
             'categories.index': {
               tour: [
-                { title: 'Crear categoria', description: 'Registra una nueva categoria para catalogo.', selector: 'form, [data-bs-target*="Category"], [data-bs-target*="category"]' },
+                { title: 'Crear categoria', description: 'Registra una nueva categoria para catalogo.', selector: '#categoriesCreateTrigger, [data-bs-target="#createCategoryModal"]' },
                 { title: 'Tabla de categorias', description: 'Edita o activa/inactiva categorias.', selector: 'table.table' }
               ]
             },
@@ -483,10 +483,23 @@
                 { title: 'Acciones de catalogo', description: 'Crea o importa productos del modulo.', selector: 'a[href="/createProduct"], [data-bs-target*="import"], #importCatalogForm' }
               ]
             },
+            'createProductItem': {
+              tour: [
+                { title: 'Formulario de creacion', description: 'Aqui se construye el producto completo con datos generales e inventario.', selector: '#createProductForm, .product-builder, .builder-hero' },
+                { title: 'Informacion general', description: 'Completa nombre, categoria, descripcion y descuento del producto.', selector: '#productName, #categorySelector, #productDescription, #productDiscount' },
+                { title: 'Imagen principal del producto', description: 'Carga fotos generales del producto o usa IA para generarlas.', selector: '#productImages, #imagePreview, #openCreateProductAiBtn' },
+                { title: 'Impuesto aplicable', description: 'Selecciona la alicuota de impuesto para este producto.', selector: '#taxCardsContainer, .selectable-tax, #taxInputs' },
+                { title: 'Variantes del producto', description: 'Agrega y completa variantes con precio, stock, unidad e imagen propia.', selector: '#addVariantBtn, #variantContainer, #variantContainer .variant-row, #variantContainer input[name="variantName[]"], #variantContainer input[name="variantPrice[]"], #variantContainer input[name="variantStock[]"]', action: 'Haz clic en Agregar variante y completa al menos una variante valida.' },
+                { title: 'Crear producto', description: 'Cuando todo este completo, finaliza el registro del producto.', selector: '#createProductForm button[type="submit"]', action: 'Haz clic en Crear producto para guardar.' }
+              ]
+            },
             'productItem': {
               tour: [
-                { title: 'Detalle de producto', description: 'Administra imagenes, variantes y codigos.', selector: '.card, form, table.table' },
-                { title: 'Acciones del producto', description: 'Guarda cambios y ejecuta funciones de inventario.', selector: 'button[type="submit"], form[action*="products"], form[action*="variants"]' }
+                { title: 'Detalle de producto', description: 'Revisa el producto antes de crear su nueva variante.', selector: '.product-detail-card, #mainImage' },
+                { title: 'Pestana de variantes', description: 'Aqui se administran las presentaciones y stock del producto.', selector: '#productInventoryTabs, #variants-tab, #variants-tab-pane', action: 'Confirma que estas en la pestana Variantes.' },
+                { title: 'Agregar variante', description: 'Inicia una variante nueva para este producto.', selector: '#addVariantBtn', action: 'Haz clic en Agregar Variante.' },
+                { title: 'Completar datos', description: 'Completa los campos de la nueva variante: nombre, precio, stock y codigo de barras.', selector: '#newVariantContainer, #newVariantContainer .new-variant-row, [data-new-size], [data-new-price], [data-new-stock], [data-new-barcode]' },
+                { title: 'Guardar variante nueva', description: 'Guarda todas las variantes nuevas cargadas en esta seccion.', selector: '#saveVariantsBtn', action: 'Haz clic en Guardar variantes nuevas para finalizar.' }
               ]
             },
             'users': {

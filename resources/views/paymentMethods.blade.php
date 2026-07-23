@@ -286,11 +286,11 @@
       </div>
       <!-- Monedas Section -->
       <div class="col-md-12 mb-lg-0 mb-4">
-        <div class="card mt-4 mb-4">
+        <div class="card mt-4 mb-4" id="paymentCurrenciesCard">
           <div class="card-header pb-0 p-3">
             <div class="row">
               <div class="col-6 d-flex align-items-center">
-                <h6 class="mb-0">Monedas</h6>
+                <h6 class="mb-0" id="paymentCurrenciesTitle">Monedas</h6>
               </div>
               <div class="col-6 text-end">
                 <!-- <button class="btn bg-gradient-black mb-0" data-bs-toggle="modal" data-bs-target="#createCurrencyModal">
@@ -301,7 +301,7 @@
           </div>
           <div class="card-body p-3">
             <!-- Lista de Monedas -->
-            <div class="pm-currency-row">
+            <div class="pm-currency-row" id="paymentCurrenciesList">
               @foreach($currencies as $currency)
                 <div class="pm-currency-col">
                   <div class="pm-currency-chip">
@@ -363,20 +363,20 @@
 
       <!-- Métodos de Pago Section -->
       <div class="col-md-12 mb-lg-0 mb-4">
-        <div class="card mt-4">
+        <div class="card mt-4" id="paymentMethodsCard">
           <div class="card-header pb-0 p-3">
             <div class="row">
               <div class="col-6 d-flex align-items-center">
                 <h6 class="mb-0">Métodos de Pago</h6>
               </div>
               <div class="col-6 text-end">
-                <button class="btn bg-gradient-black mb-0" data-bs-toggle="modal" data-bs-target="#createPaymentMethodModal">
+                <button class="btn bg-gradient-black mb-0" id="createPaymentMethodTrigger" data-bs-toggle="modal" data-bs-target="#createPaymentMethodModal">
                   <i class="material-symbols-rounded text-sm">add</i>&nbsp;&nbsp;Nuevo Método de Pago
                 </button>
               </div>
             </div>
           </div>
-          <div class="card-body p-3">
+          <div class="card-body p-3" id="paymentMethodsList">
             @foreach($groupedPaymentMethods as $currencyName => $methods)
               <h6 class="mb-2">{{ $currencyName }}</h6>
               <div class="row g-2">
