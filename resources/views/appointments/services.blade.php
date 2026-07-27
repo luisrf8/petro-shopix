@@ -3,6 +3,7 @@
 @section('title', 'Servicios de Citas')
 
 @push('styles')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
 <style>
     .services-shell .card {
         border-radius: 1rem;
@@ -28,6 +29,31 @@
     .service-item .service-note {
         font-size: 0.86rem;
         color: #64748b;
+    }
+
+    .services-shell .select2-container {
+        width: 100% !important;
+    }
+
+    .services-shell .select2-container--default .select2-selection--single {
+        min-height: calc(1.5em + 1rem + 2px);
+        border: 1px solid #d2d6da;
+        border-radius: 0.5rem;
+        padding: 0.25rem 0.35rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .services-shell .select2-container--default .select2-selection--single .select2-selection__rendered {
+        color: #344767;
+        line-height: 1.5;
+        padding-left: 0.25rem;
+        padding-right: 1.35rem;
+    }
+
+    .services-shell .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 100%;
+        right: 0.5rem;
     }
 </style>
 @endpush
@@ -91,7 +117,7 @@
                         @csrf
                         <div class="col-12">
                             <label class="form-label">Producto de servicio</label>
-                            <select name="product_variant_id" class="form-control border border-1 p-2" required>
+                            <select name="product_variant_id" class="form-control border border-1 p-2 js-service-variant-select" required>
                                 <option value="">Selecciona un producto/variante</option>
                                 @foreach($serviceVariants as $variant)
                                     <option value="{{ $variant->id }}">{{ $variant->product->display_name ?? 'Servicio' }} · {{ $variant->size ?? 'Variante' }}</option>
@@ -194,7 +220,7 @@
                                         @method('PUT')
                                         <div class="col-12">
                                             <label class="form-label">Producto de servicio</label>
-                                            <select name="product_variant_id" class="form-control border border-1 p-2" required>
+                                            <select name="product_variant_id" class="form-control border border-1 p-2 js-service-variant-select" required>
                                                 @foreach($serviceVariants as $variant)
                                                     <option value="{{ $variant->id }}" {{ (int) $variant->id === (int) ($service->product_variant_id ?? 0) ? 'selected' : '' }}>{{ $variant->product->display_name ?? 'Servicio' }} · {{ $variant->size ?? 'Variante' }}</option>
                                                 @endforeach
@@ -419,8 +445,42 @@
 @endsection
 
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    function initializeServiceVariantSelects(scope = document) {
+        if (!window.jQuery || !window.jQuery.fn?.select2) {
+            return;
+        }
+
+        const selects = Array.from(scope.querySelectorAll('.js-service-variant-select'));
+        selects.forEach((selectElement) => {
+            const $select = window.jQuery(selectElement);
+
+            if ($select.data('select2')) {
+                $select.select2('destroy');
+            }
+
+            $select.select2({
+                width: '100%',
+                placeholder: 'Selecciona un producto/variante',
+                allowClear: false,
+                language: {
+                    noResults: () => 'Sin resultados',
+                    searching: () => 'Buscando...'
+                }
+            });
+        });
+    }
+
+    initializeServiceVariantSelects();
+
+    document.querySelectorAll('[data-bs-toggle="tab"]').forEach((tabButton) => {
+        tabButton.addEventListener('shown.bs.tab', () => {
+            initializeServiceVariantSelects();
+        });
+    });
+
     const searchInput = document.getElementById('servicesFilterSearch');
     const statusSelect = document.getElementById('servicesFilterStatus');
     const professionalSelect = document.getElementById('servicesFilterProfessional');

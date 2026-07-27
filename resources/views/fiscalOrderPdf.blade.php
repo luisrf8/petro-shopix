@@ -96,6 +96,8 @@
             @php
                 $lineSubtotal = (float) ($detalle->amount ?? 0);
                 $lineBase = (float) ($detalle->line_subtotal_before_discount ?? 0);
+                $detailProductName = $detalle->custom_product_name ?? ($detalle->variant->product->display_name ?? 'Sin nombre');
+                $detailVariantLabel = $detalle->custom_variant_code ?? ($detalle->variant->size ?? '');
                 if ($lineBase <= 0) {
                     $lineBase = $lineSubtotal + (float) ($detalle->line_discount_amount ?? 0);
                 }
@@ -107,9 +109,9 @@
                 $lineDiscount = max(0, $lineBase - $lineSubtotal);
             @endphp
             <tr>
-                <td>{{ $detalle->variant->product->display_name ?? 'Sin nombre' }} | {{ $detalle->taxes->count() > 0 ? '(G)' : '(E)' }}</td>
+                <td>{{ $detailProductName }} | {{ $detalle->taxes->count() > 0 ? '(G)' : '(E)' }}</td>
                 <td>{{ $detalle->quantity }}</td>
-                <td>{{ $detalle->variant->size ?? '' }}</td>
+                <td>{{ $detailVariantLabel }}</td>
                 <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($lineBase), 2) }}</td>
                 <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($detalle->price), 2) }}</td>
                 <td>{{ $emissionCurrencySymbol }}{{ number_format($displayAmount($lineDiscount), 2) }}</td>

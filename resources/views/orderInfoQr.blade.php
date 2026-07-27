@@ -470,10 +470,14 @@
                             </thead>
                             <tbody>
                                 @foreach($order->details as $detalle)
+                                    @php
+                                        $detailProductName = $detalle->custom_product_name ?? ($detalle->variant->product->display_name ?? 'Sin nombre');
+                                        $detailVariantLabel = $detalle->custom_variant_code ?? ($detalle->variant->size ?? 'General');
+                                    @endphp
                                     <tr>
-                                        <td>{{ $detalle->variant->product->display_name ?? 'Sin nombre' }}</td>
+                                        <td>{{ $detailProductName }}</td>
                                         <td>{{ $detalle->quantity }}</td>
-                                        <td>{{ $detalle->variant->size ?? 'General' }}</td>
+                                        <td>{{ $detailVariantLabel }}</td>
                                         <td>{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->price, 2) }}</td>
                                         <td>{{ $orderCurrencySymbol ?? '$' }}{{ number_format($detalle->amount, 2) }}</td>
                                     </tr>

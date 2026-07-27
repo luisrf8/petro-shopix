@@ -16,6 +16,7 @@ use App\Models\MaterialPackage;
 use App\Models\SalesReturn;
 use App\Models\SalesReturnItem;
 use App\Models\Appointment;
+use App\Models\StoreExpense;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Support\Facades\Cache;
@@ -350,6 +351,7 @@ class SaleController extends Controller
 
         $globalDiscountPercentage = max(0, min(100, (float) ($validated['global_discount_percentage'] ?? 0)));
         $globalDiscountAmountRequested = max(0, (float) ($validated['global_discount_amount'] ?? 0));
+        $isAdminUser = (bool) (auth()->user()?->hasStoreRole('owner', 'admin', 'administrador') ?? false);
 
         $preparedLines = [];
         $lineSubtotalBeforeDiscountTotal = 0.0;
@@ -357,6 +359,117 @@ class SaleController extends Controller
 
         // Preparar renglones y validar descuentos/stock antes de persistir
         foreach ($itemsSelected as $item) {
+            $itemType = Str::lower(trim((string) ($item['item_type'] ?? 'catalog')));
+
+            if ($itemType === 'custom_non_inventory') {
+                if (!$isAdminUser) {
+                    return response()->json(['error' => 'Solo administradores u owner pueden agregar productos manuales NI.'], 403);
+                }
+
+                $customProductName = trim((string) ($item['custom_product_name'] ?? $item['productName'] ?? ''));
+                if ($customProductName === '') {
+                    return response()->json(['error' => 'Debes indicar el nombre del producto manual NI.'], 422);
+                }
+
+                if (mb_strlen($customProductName) > 255) {
+                    return response()->json(['error' => 'El nombre del producto manual NI supera el máximo permitido.'], 422);
+                }
+
+                $customVariantSuffix = trim((string) ($item['custom_variant_suffix'] ?? $item['custom_variant_label'] ?? ''));
+                $customVariantSuffixNormalized = Str::upper((string) preg_replace('/[^A-Za-z0-9\-_]+/', '-', $customVariantSuffix));
+                $customVariantSuffixNormalized = trim($customVariantSuffixNormalized, '-_ ');
+                if ($customVariantSuffixNormalized === '') {
+                    return response()->json(['error' => 'Debes indicar el tipo de variante después del prefijo NI.'], 422);
+                }
+
+                $customVariantCode = 'NI-' . $customVariantSuffixNormalized;
+                $customVariantLabel = trim((string) ($item['custom_variant_label'] ?? $customVariantSuffixNormalized));
+                if ($customVariantLabel === '') {
+                    $customVariantLabel = $customVariantSuffixNormalized;
+                }
+
+                $customQuantityInputMode = ProductVariant::normalizeQuantityInputMode((string) ($item['custom_quantity_input_mode'] ?? $item['quantity_input_mode'] ?? 'integer'));
+                $customMinSaleQuantity = ProductVariant::normalizeMinSaleQuantity($item['custom_min_sale_quantity'] ?? $item['min_sale_quantity'] ?? 1, $customQuantityInputMode);
+                $rawQuantity = (float) ($item['quantity'] ?? 0);
+                $quantity = $customQuantityInputMode === 'decimal'
+                    ? round($rawQuantity, 2)
+                    : (float) round($rawQuantity);
+
+                if ($customQuantityInputMode === 'integer' && abs($rawQuantity - round($rawQuantity)) > 0.00001) {
+                    return response()->json(['error' => 'La variante ' . $customVariantCode . ' solo permite cantidades enteras.'], 422);
+                }
+
+                if ($customQuantityInputMode === 'decimal' && abs($rawQuantity - round($rawQuantity, 2)) > 0.00001) {
+                    return response()->json(['error' => 'La variante ' . $customVariantCode . ' solo permite hasta 2 decimales en la cantidad.'], 422);
+                }
+
+                if ($quantity <= 0) {
+                    return response()->json(['error' => 'Cantidad inválida para el producto manual NI: ' . $customProductName], 422);
+                }
+
+                if ($quantity < $customMinSaleQuantity) {
+                    return response()->json([
+                        'error' => 'La variante ' . $customVariantCode . ' tiene una venta mínima de ' . number_format($customMinSaleQuantity, 2, '.', '') . '.',
+                    ], 422);
+                }
+
+                if (in_array($deliveryType, ['delivery', 'shipping'], true) && abs($quantity - 1.0) > 0.00001) {
+                    return response()->json(['error' => 'Las ventas con delivery/envío solo permiten cantidad exacta de 1 por ítem.'], 422);
+                }
+
+                $saleUnitPrice = round((float) ($item['price'] ?? 0), 2);
+                if ($saleUnitPrice <= 0) {
+                    return response()->json(['error' => 'Debes indicar un precio de venta válido para el producto manual NI: ' . $customProductName], 422);
+                }
+
+                $purchaseUnitPrice = round((float) ($item['purchase_price'] ?? 0), 2);
+                if ($purchaseUnitPrice <= 0) {
+                    return response()->json(['error' => 'Debes indicar un precio de compra válido para el producto manual NI: ' . $customProductName], 422);
+                }
+
+                $customUnitType = ProductVariant::normalizeUnitType((string) ($item['custom_unit_type'] ?? $item['unit_type'] ?? 'unidad'));
+
+                $lineDiscountPercentage = max(0, min(100, (float) ($item['line_discount_percentage'] ?? 0)));
+                $lineDiscountAmountRequested = max(0, (float) ($item['line_discount_amount'] ?? 0));
+
+                if (($lineDiscountPercentage > 0 || $lineDiscountAmountRequested > 0 || $globalDiscountPercentage > 0 || $globalDiscountAmountRequested > 0)
+                    && !$isAdminUser) {
+                    return response()->json(['error' => 'Solo los administradores pueden aplicar descuentos.'], 403);
+                }
+
+                $lineSubtotalBeforeDiscount = round($saleUnitPrice * $quantity, 2);
+                $lineSubtotalAfterCatalogDiscount = $lineSubtotalBeforeDiscount;
+                $lineSubtotalAfterPercentageDiscount = round($lineSubtotalAfterCatalogDiscount * ((100 - $lineDiscountPercentage) / 100), 2);
+                $lineDiscountAmountApplied = min($lineDiscountAmountRequested, $lineSubtotalAfterPercentageDiscount);
+                $lineSubtotalAfterLineDiscount = round(max(0, $lineSubtotalAfterPercentageDiscount - $lineDiscountAmountApplied), 2);
+
+                $preparedLines[] = [
+                    'item' => $item,
+                    'is_custom_non_inventory' => true,
+                    'custom_product_name' => $customProductName,
+                    'custom_variant_code' => $customVariantCode,
+                    'custom_variant_label' => $customVariantLabel,
+                    'custom_unit_type' => $customUnitType,
+                    'custom_quantity_input_mode' => $customQuantityInputMode,
+                    'custom_min_sale_quantity' => $customMinSaleQuantity,
+                    'custom_description' => trim((string) ($item['custom_description'] ?? '')),
+                    'custom_sale_unit_price' => $saleUnitPrice,
+                    'custom_purchase_unit_price' => $purchaseUnitPrice,
+                    'quantity' => $quantity,
+                    'quantity_input_mode' => $customQuantityInputMode,
+                    'taxes' => is_array($item['taxes'] ?? null) ? $item['taxes'] : [],
+                    'line_subtotal_before_discount' => $lineSubtotalBeforeDiscount,
+                    'line_subtotal_after_line_discount' => $lineSubtotalAfterLineDiscount,
+                    'line_discount_amount' => round(max(0, $lineSubtotalBeforeDiscount - $lineSubtotalAfterLineDiscount), 2),
+                    'global_discount_allocated' => 0.0,
+                    'product_variant' => null,
+                ];
+
+                $lineSubtotalBeforeDiscountTotal += $lineSubtotalBeforeDiscount;
+                $lineSubtotalAfterLineDiscountTotal += $lineSubtotalAfterLineDiscount;
+                continue;
+            }
+
             $productVariant = ProductVariant::with('product')->find($item['id']);
             if (!$productVariant) {
                 return response()->json(['error' => 'Variante no encontrada: ' . $item['id']], 400);
@@ -405,7 +518,7 @@ class SaleController extends Controller
             $lineDiscountAmountRequested = max(0, (float) ($item['line_discount_amount'] ?? 0));
 
             if (($lineDiscountPercentage > 0 || $lineDiscountAmountRequested > 0 || $globalDiscountPercentage > 0 || $globalDiscountAmountRequested > 0)
-                && !((bool) (auth()->user()?->isAdmin() ?? false))) {
+                && !$isAdminUser) {
                 return response()->json(['error' => 'Solo los administradores pueden aplicar descuentos.'], 403);
             }
 
@@ -490,10 +603,21 @@ class SaleController extends Controller
             $lineSubtotalFinal = round(max(0, $lineSubtotalAfterLineDiscount - (float) $line['global_discount_allocated']), 2);
             $unitPrice = $quantity > 0 ? round($lineSubtotalFinal / $quantity, 2) : 0.0;
             $lineDiscountAmount = round(max(0, $lineSubtotalBeforeDiscount - $lineSubtotalFinal), 2);
+            $isCustomNonInventoryLine = (bool) ($line['is_custom_non_inventory'] ?? false);
+            $resolvedVariantId = $isCustomNonInventoryLine ? null : (int) ($line['item']['id'] ?? 0);
 
             $salesDetail = SalesOrderDetail::create([
                 'sales_order_id' => $salesOrder->id,
-                'product_variant_id' => $line['item']['id'],
+                'product_variant_id' => $resolvedVariantId,
+                'is_custom_item' => $isCustomNonInventoryLine,
+                'custom_product_name' => $isCustomNonInventoryLine ? trim((string) ($line['custom_product_name'] ?? 'Producto manual NI')) : null,
+                'custom_variant_code' => $isCustomNonInventoryLine ? trim((string) ($line['custom_variant_code'] ?? '')) : null,
+                'custom_variant_label' => $isCustomNonInventoryLine ? trim((string) ($line['custom_variant_label'] ?? '')) : null,
+                'custom_unit_type' => $isCustomNonInventoryLine ? trim((string) ($line['custom_unit_type'] ?? 'unidad')) : null,
+                'custom_quantity_input_mode' => $isCustomNonInventoryLine ? trim((string) ($line['custom_quantity_input_mode'] ?? 'integer')) : null,
+                'custom_min_sale_quantity' => $isCustomNonInventoryLine ? (float) ($line['custom_min_sale_quantity'] ?? 1) : null,
+                'custom_purchase_unit_price' => $isCustomNonInventoryLine ? (float) ($line['custom_purchase_unit_price'] ?? 0) : null,
+                'custom_description' => $isCustomNonInventoryLine ? trim((string) ($line['custom_description'] ?? '')) : null,
                 'quantity' => $quantity,
                 'price' => $unitPrice,
                 'amount' => $lineSubtotalFinal,
@@ -517,9 +641,53 @@ class SaleController extends Controller
                 }
             }
 
-            $productVariant = $line['product_variant'];
-            $productVariant->stock -= $quantity;
-            $productVariant->save();
+            if (!$isCustomNonInventoryLine) {
+                $productVariant = $line['product_variant'];
+                $productVariant->stock -= $quantity;
+                $productVariant->save();
+            }
+
+            if ($isCustomNonInventoryLine) {
+                $purchaseLineAmountBase = round(max(0, (float) ($line['custom_purchase_unit_price'] ?? 0)) * max(0, $quantity), 2);
+
+                if ($purchaseLineAmountBase > 0) {
+                    $expenseCurrencyCode = TenantCurrency::normalizeCurrencyCode($saleCurrencyCode);
+                    $expenseRateToBs = $expenseCurrencyCode === 'BS'
+                        ? 1.0
+                        : max(0, (float) $saleRateToBs);
+
+                    if ($expenseCurrencyCode !== 'BS' && $expenseRateToBs <= 0) {
+                        $expenseRateToBs = max(0, (float) TenantCurrency::resolveRateToBs($tenantId, $expenseCurrencyCode));
+                    }
+
+                    if ($expenseCurrencyCode === 'BS') {
+                        $expenseRateToBs = 1.0;
+                    }
+
+                    if ($expenseRateToBs <= 0) {
+                        $expenseRateToBs = 1.0;
+                    }
+
+                    $expenseAmountBs = round($purchaseLineAmountBase * $expenseRateToBs, 2);
+
+                    StoreExpense::create([
+                        'tenant_id' => $tenantId,
+                        'title' => 'Costo de compra venta #' . $salesOrder->id . ' - ' . trim((string) ($line['custom_product_name'] ?? 'Producto manual NI')),
+                        'category' => 'Costo de venta',
+                        'description' => 'Gasto generado por producto manual NI asociado a la venta #' . $salesOrder->id . '.',
+                        'amount' => $expenseAmountBs,
+                        'currency_code' => $expenseCurrencyCode,
+                        'amount_original' => $purchaseLineAmountBase,
+                        'exchange_rate_to_bs' => $expenseRateToBs,
+                        'amount_bs' => $expenseAmountBs,
+                        'spent_at' => now()->toDateString(),
+                        'payment_method' => 'Salida por venta administrativa',
+                        'provider_name' => 'Producto manual NI',
+                        'status' => 'paid',
+                        'created_by' => auth()->id(),
+                    ]);
+                }
+            }
         }
 
         $deliveryPricing = DeliveryManager::calculate($tienda, $deliveryType, $itemsSubtotal, $deliveryDistanceKm);
@@ -1136,6 +1304,11 @@ class SaleController extends Controller
         $user = auth()->user();
         $tenant = Tenant::find($user->tenant_id);
         $isSeller = (bool) ($user?->hasStoreRole('seller') ?? false);
+        $ordersSearch = trim((string) request()->input('q', ''));
+        $ordersSearchNormalized = mb_strtolower($ordersSearch);
+        $statusFilter = trim((string) request()->input('status', ''));
+        $deliveryFilter = trim((string) request()->input('delivery', ''));
+        $documentFilter = trim((string) request()->input('document', ''));
 
         $salesOrdersQuery = SalesOrder::with([
             'user', 
@@ -1149,6 +1322,69 @@ class SaleController extends Controller
 
         if ($isSeller) {
             $salesOrdersQuery->where('sales_rep_user_id', (int) $user->id);
+        }
+
+        if ($ordersSearch !== '') {
+            $salesOrdersQuery->where(function ($query) use ($ordersSearch, $ordersSearchNormalized) {
+                $query->whereRaw('CAST(id AS CHAR) LIKE ?', ['%' . $ordersSearch . '%'])
+                    ->orWhereRaw('LOWER(date) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                    ->orWhereHas('user', function ($userQuery) use ($ordersSearchNormalized) {
+                        $userQuery->whereRaw('LOWER(name) LIKE ?', ['%' . $ordersSearchNormalized . '%']);
+                    })
+                    ->orWhereHas('salesRepresentative', function ($salesRepQuery) use ($ordersSearchNormalized) {
+                        $salesRepQuery->whereRaw('LOWER(name) LIKE ?', ['%' . $ordersSearchNormalized . '%']);
+                    })
+                    ->orWhereHas('electronicDocuments', function ($docQuery) use ($ordersSearchNormalized) {
+                        $docQuery->whereRaw('LOWER(numero_documento) LIKE ?', ['%' . $ordersSearchNormalized . '%']);
+                    })
+                    ->orWhereHas('details', function ($detailQuery) use ($ordersSearch, $ordersSearchNormalized) {
+                        $detailQuery->whereRaw('CAST(product_variant_id AS CHAR) LIKE ?', ['%' . $ordersSearch . '%'])
+                            ->orWhereRaw('LOWER(custom_variant_code) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                            ->orWhereRaw('LOWER(custom_variant_label) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                            ->orWhereRaw('LOWER(custom_product_name) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                            ->orWhereHas('variant', function ($variantQuery) use ($ordersSearchNormalized) {
+                                $variantQuery->whereRaw('LOWER(size) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                                    ->orWhereRaw('LOWER(barcode) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                                    ->orWhereRaw('LOWER(qr_code) LIKE ?', ['%' . $ordersSearchNormalized . '%']);
+                            });
+                    });
+            });
+        }
+
+        if ($statusFilter !== '') {
+            $statusMap = [
+                'En Proceso' => 0,
+                'Aprobado' => 1,
+                'Negado' => 2,
+            ];
+
+            if (array_key_exists($statusFilter, $statusMap)) {
+                $salesOrdersQuery->where('status', $statusMap[$statusFilter]);
+            }
+        }
+
+        if ($deliveryFilter !== '') {
+            $deliveryFilterNormalized = mb_strtolower($deliveryFilter);
+            if ($deliveryFilterNormalized === 'tienda') {
+                $salesOrdersQuery->whereRaw('LOWER(preference) LIKE ?', ['%tienda%']);
+            } elseif ($deliveryFilterNormalized === 'delivery') {
+                $salesOrdersQuery->where(function ($query) {
+                    $query->whereRaw('LOWER(preference) LIKE ?', ['%delivery%'])
+                        ->orWhereRaw('LOWER(preference) LIKE ?', ['%envio%'])
+                        ->orWhereRaw('LOWER(preference) LIKE ?', ['%envío%']);
+                });
+            }
+        }
+
+        if ($documentFilter !== '') {
+            $documentMap = [
+                'Factura digital' => 'electronic_invoice',
+                'Orden de entrega' => 'delivery_note',
+            ];
+
+            if (array_key_exists($documentFilter, $documentMap)) {
+                $salesOrdersQuery->where('document_issue_mode', $documentMap[$documentFilter]);
+            }
         }
 
         $salesOrders = $salesOrdersQuery
@@ -1174,7 +1410,7 @@ class SaleController extends Controller
             ? $this->buildPendingDispatchGuideAlertData($salesOrders->getCollection(), $tenant)
             : null;
     
-        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView', 'pendingDispatchGuideAlert'));
+        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView', 'pendingDispatchGuideAlert', 'ordersSearch', 'statusFilter', 'deliveryFilter', 'documentFilter'));
     }
 
     public function sendPendingDispatchGuidesReport(Request $request)
@@ -1220,13 +1456,18 @@ class SaleController extends Controller
         $user = auth()->user();
         $tenant = Tenant::find($user->tenant_id);
         $planCapabilities = TenantPlanCapabilities::forTenant($tenant);
+        $ordersSearch = trim((string) request()->input('q', ''));
+        $ordersSearchNormalized = mb_strtolower($ordersSearch);
+        $statusFilter = trim((string) request()->input('status', ''));
+        $deliveryFilter = trim((string) request()->input('delivery', ''));
+        $documentFilter = trim((string) request()->input('document', ''));
 
         if (!$planCapabilities->canPendingOrders() || !$planCapabilities->allowsDeliveryOperations()) {
             return redirect()->route('sales.orders')
                 ->with('warning', 'El plan actual no permite gestionar pedidos pendientes de delivery.');
         }
 
-        $salesOrders = SalesOrder::with(['user', 'salesRepresentative', 'details', 'details.variant', 'payments', 'electronicDocuments', 'returns.items'])
+        $salesOrdersQuery = SalesOrder::with(['user', 'salesRepresentative', 'details', 'details.variant', 'payments', 'electronicDocuments', 'returns.items'])
             ->where('tenant_id', $user->tenant_id)
             ->whereIn('deliver_status', [0, 3])
             ->where(function ($query) {
@@ -1234,7 +1475,72 @@ class SaleController extends Controller
                     ->orWhereHas('payments', function ($paymentQuery) {
                         $paymentQuery->where('status', 1);
                     });
-            })
+            });
+
+        if ($ordersSearch !== '') {
+            $salesOrdersQuery->where(function ($query) use ($ordersSearch, $ordersSearchNormalized) {
+                $query->whereRaw('CAST(id AS CHAR) LIKE ?', ['%' . $ordersSearch . '%'])
+                    ->orWhereRaw('LOWER(date) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                    ->orWhereHas('user', function ($userQuery) use ($ordersSearchNormalized) {
+                        $userQuery->whereRaw('LOWER(name) LIKE ?', ['%' . $ordersSearchNormalized . '%']);
+                    })
+                    ->orWhereHas('salesRepresentative', function ($salesRepQuery) use ($ordersSearchNormalized) {
+                        $salesRepQuery->whereRaw('LOWER(name) LIKE ?', ['%' . $ordersSearchNormalized . '%']);
+                    })
+                    ->orWhereHas('electronicDocuments', function ($docQuery) use ($ordersSearchNormalized) {
+                        $docQuery->whereRaw('LOWER(numero_documento) LIKE ?', ['%' . $ordersSearchNormalized . '%']);
+                    })
+                    ->orWhereHas('details', function ($detailQuery) use ($ordersSearch, $ordersSearchNormalized) {
+                        $detailQuery->whereRaw('CAST(product_variant_id AS CHAR) LIKE ?', ['%' . $ordersSearch . '%'])
+                            ->orWhereRaw('LOWER(custom_variant_code) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                            ->orWhereRaw('LOWER(custom_variant_label) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                            ->orWhereRaw('LOWER(custom_product_name) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                            ->orWhereHas('variant', function ($variantQuery) use ($ordersSearchNormalized) {
+                                $variantQuery->whereRaw('LOWER(size) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                                    ->orWhereRaw('LOWER(barcode) LIKE ?', ['%' . $ordersSearchNormalized . '%'])
+                                    ->orWhereRaw('LOWER(qr_code) LIKE ?', ['%' . $ordersSearchNormalized . '%']);
+                            });
+                    });
+            });
+        }
+
+        if ($statusFilter !== '') {
+            $statusMap = [
+                'En Proceso' => 0,
+                'Aprobado' => 1,
+                'Negado' => 2,
+            ];
+
+            if (array_key_exists($statusFilter, $statusMap)) {
+                $salesOrdersQuery->where('status', $statusMap[$statusFilter]);
+            }
+        }
+
+        if ($deliveryFilter !== '') {
+            $deliveryFilterNormalized = mb_strtolower($deliveryFilter);
+            if ($deliveryFilterNormalized === 'tienda') {
+                $salesOrdersQuery->whereRaw('LOWER(preference) LIKE ?', ['%tienda%']);
+            } elseif ($deliveryFilterNormalized === 'delivery') {
+                $salesOrdersQuery->where(function ($query) {
+                    $query->whereRaw('LOWER(preference) LIKE ?', ['%delivery%'])
+                        ->orWhereRaw('LOWER(preference) LIKE ?', ['%envio%'])
+                        ->orWhereRaw('LOWER(preference) LIKE ?', ['%envío%']);
+                });
+            }
+        }
+
+        if ($documentFilter !== '') {
+            $documentMap = [
+                'Factura digital' => 'electronic_invoice',
+                'Orden de entrega' => 'delivery_note',
+            ];
+
+            if (array_key_exists($documentFilter, $documentMap)) {
+                $salesOrdersQuery->where('document_issue_mode', $documentMap[$documentFilter]);
+            }
+        }
+
+        $salesOrders = $salesOrdersQuery
             ->orderBy('id', 'desc')
             ->paginate(20)
             ->withQueryString();
@@ -1255,7 +1561,7 @@ class SaleController extends Controller
         $pageTitle = 'PEDIDOS PENDIENTES DE ENTREGA';
         $isPendingDeliveryView = true;
 
-        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView'));
+        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView', 'ordersSearch', 'statusFilter', 'deliveryFilter', 'documentFilter'));
     }
 
     public function viewReceivables()
@@ -2083,6 +2389,8 @@ class SaleController extends Controller
 
     private function ensureAssociatedPdfAssets(SalesOrder $order, bool $generateMissing = true, string $requestedType = 'delivery'): array
     {
+        $order->loadMissing(['details']);
+
         $invoiceRelative = 'orders/factura-' . $order->id . '.pdf';
         $deliveryRelative = 'orders/' . $this->resolveInternalDispatchFilename((int) $order->id);
         $legacyDeliveryRelative = 'orders/NotaEntrega-' . $order->id . '.pdf';
@@ -2093,9 +2401,16 @@ class SaleController extends Controller
 
         $deliveryExists = $this->storedPdfExistsAndReadable($deliveryRelative);
         $invoiceExists = $this->storedPdfExistsAndReadable($invoiceRelative);
+        $hasCustomOrManualLines = $order->details->contains(function ($detail) {
+            return (bool) ($detail->is_custom_item ?? false) || is_null($detail->product_variant_id);
+        });
         $shouldGenerateForRequestedType = $requestedType === 'delivery'
             ? !$deliveryExists
             : (!$invoiceExists || !$deliveryExists);
+
+        if ($hasCustomOrManualLines) {
+            $shouldGenerateForRequestedType = true;
+        }
 
         if ($generateMissing && $shouldGenerateForRequestedType) {
             $lockKey = 'pdf-assets-order-' . (int) $order->id;

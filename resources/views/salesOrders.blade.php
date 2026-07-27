@@ -149,31 +149,34 @@
                 <div class="sales-orders-filters">
                   <div class="row g-2">
                     <div class="col-12 col-md-4">
-                      <input type="text" id="salesOrdersSearchInput" class="form-control border border-1 p-2" placeholder="Buscar por orden, factura, usuario o fecha...">
+                      <input type="text" id="salesOrdersSearchInput" class="form-control border border-1 p-2" value="{{ $ordersSearch ?? '' }}" placeholder="Buscar por orden, factura, usuario, fecha o codigo de variante...">
                     </div>
                     <div class="col-6 col-md-2">
                       <select id="salesOrdersStatusFilter" class="form-control border border-1 p-2">
                         <option value="">Estado (todos)</option>
-                        <option value="En Proceso">En Proceso</option>
-                        <option value="Aprobado">Aprobado</option>
-                        <option value="Negado">Negado</option>
+                        <option value="En Proceso" {{ ($statusFilter ?? '') === 'En Proceso' ? 'selected' : '' }}>En Proceso</option>
+                        <option value="Aprobado" {{ ($statusFilter ?? '') === 'Aprobado' ? 'selected' : '' }}>Aprobado</option>
+                        <option value="Negado" {{ ($statusFilter ?? '') === 'Negado' ? 'selected' : '' }}>Negado</option>
                       </select>
                     </div>
                     <div class="col-6 col-md-2">
                       <select id="salesOrdersDeliveryFilter" class="form-control border border-1 p-2">
                         <option value="">Entrega (todas)</option>
-                        <option value="Tienda">Tienda</option>
-                        <option value="delivery">delivery</option>
+                        <option value="Tienda" {{ ($deliveryFilter ?? '') === 'Tienda' ? 'selected' : '' }}>Tienda</option>
+                        <option value="delivery" {{ ($deliveryFilter ?? '') === 'delivery' ? 'selected' : '' }}>delivery</option>
                       </select>
                     </div>
                     <div class="col-6 col-md-2">
                       <select id="salesOrdersDocumentFilter" class="form-control border border-1 p-2">
                         <option value="">Documento (todos)</option>
-                        <option value="Factura digital">Factura digital</option>
-                        <option value="Orden de entrega">Orden de entrega</option>
+                        <option value="Factura digital" {{ ($documentFilter ?? '') === 'Factura digital' ? 'selected' : '' }}>Factura digital</option>
+                        <option value="Orden de entrega" {{ ($documentFilter ?? '') === 'Orden de entrega' ? 'selected' : '' }}>Orden de entrega</option>
                       </select>
                     </div>
-                    <div class="col-6 col-md-2">
+                    <div class="col-6 col-md-1">
+                      <button type="button" id="salesOrdersSearchButton" class="btn btn-dark w-100 mb-0">Buscar</button>
+                    </div>
+                    <div class="col-6 col-md-1">
                       <button type="button" id="salesOrdersClearFilters" class="btn btn-outline-dark w-100 mb-0">Limpiar</button>
                     </div>
                   </div>
@@ -208,10 +211,28 @@
                           $userLabel = $order->user ? $order->user->name : 'Usuario no asignado';
                           $salesRepLabel = $order->salesRepresentative ? $order->salesRepresentative->name : 'No registrado';
                           $deliveryLabel = (string) ($order->preference ?? '');
+                          $variantSearchTokens = $order->details
+                            ->map(function ($detail) {
+                              $variant = $detail->variant;
+                              $tokens = [
+                                (string) ($detail->product_variant_id ?? ''),
+                                (string) ($variant?->size ?? ''),
+                                (string) ($variant?->barcode ?? ''),
+                                (string) ($variant?->qr_code ?? ''),
+                              ];
+
+                              return trim(implode(' ', array_filter($tokens, fn ($token) => $token !== '')));
+                            })
+                            ->filter(fn ($token) => $token !== '')
+                            ->unique()
+                            ->implode(' ');
                         @endphp
                         <tr>
                           <td>
                             <div class="fw-semibold">#{{ $order->id }}</div>
+                            @if($variantSearchTokens !== '')
+                              <span class="d-none">{{ $variantSearchTokens }}</span>
+                            @endif
                             @if($order->has_annulled_invoice ?? false)
                               <span class="badge bg-gradient-danger mt-1">Orden con factura anulada</span>
                             @endif
@@ -413,42 +434,56 @@
     }
 
     function setupSalesOrdersFilters() {
-      const tableBody = document.getElementById('salesOrdersTableBody');
       const searchInput = document.getElementById('salesOrdersSearchInput');
       const statusFilter = document.getElementById('salesOrdersStatusFilter');
       const deliveryFilter = document.getElementById('salesOrdersDeliveryFilter');
       const documentFilter = document.getElementById('salesOrdersDocumentFilter');
       const clearBtn = document.getElementById('salesOrdersClearFilters');
+      const searchBtn = document.getElementById('salesOrdersSearchButton');
 
-      if (!tableBody || !searchInput || !statusFilter || !deliveryFilter || !documentFilter || !clearBtn) {
+      if (!searchInput || !statusFilter || !deliveryFilter || !documentFilter || !clearBtn || !searchBtn) {
         return;
       }
 
-      const rows = Array.from(tableBody.querySelectorAll('tr'));
+      const navigateWithServerFilters = () => {
+        const rawValue = String(searchInput.value || '').trim();
+        const rawStatus = String(statusFilter.value || '').trim();
+        const rawDelivery = String(deliveryFilter.value || '').trim();
+        const rawDocument = String(documentFilter.value || '').trim();
+        const params = new URLSearchParams(window.location.search);
 
-      const normalize = (value) => String(value || '').toLowerCase().trim();
+        if (rawValue) {
+          params.set('q', rawValue);
+        } else {
+          params.delete('q');
+        }
 
-      const applyFilters = () => {
-        const query = normalize(searchInput.value);
-        const statusValue = normalize(statusFilter.value);
-        const deliveryValue = normalize(deliveryFilter.value);
-        const documentValue = normalize(documentFilter.value);
+        if (rawStatus) {
+          params.set('status', rawStatus);
+        } else {
+          params.delete('status');
+        }
 
-        rows.forEach((row) => {
-          const rowText = normalize(row.textContent);
-          const cells = row.querySelectorAll('td');
+        if (rawDelivery) {
+          params.set('delivery', rawDelivery);
+        } else {
+          params.delete('delivery');
+        }
 
-          const statusText = normalize(cells[8]?.textContent || '');
-          const deliveryText = normalize(cells[4]?.textContent || '');
-          const documentText = normalize(cells[6]?.textContent || '');
+        if (rawDocument) {
+          params.set('document', rawDocument);
+        } else {
+          params.delete('document');
+        }
 
-          const matchesQuery = !query || rowText.includes(query);
-          const matchesStatus = !statusValue || statusText.includes(statusValue);
-          const matchesDelivery = !deliveryValue || deliveryText.includes(deliveryValue);
-          const matchesDocument = !documentValue || documentText.includes(documentValue);
+        params.delete('page');
 
-          row.style.display = matchesQuery && matchesStatus && matchesDelivery && matchesDocument ? '' : 'none';
-        });
+        sessionStorage.setItem(salesOrdersPaginationKey, '1');
+        setSalesOrdersSkeletonVisible(true);
+
+        const queryString = params.toString();
+        const nextUrl = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname;
+        window.location.assign(nextUrl);
       };
 
       const clearFilters = () => {
@@ -456,13 +491,23 @@
         statusFilter.value = '';
         deliveryFilter.value = '';
         documentFilter.value = '';
-        applyFilters();
+
+        const params = new URLSearchParams(window.location.search);
+        params.delete('q');
+        params.delete('status');
+        params.delete('delivery');
+        params.delete('document');
+        params.delete('page');
+
+        sessionStorage.setItem(salesOrdersPaginationKey, '1');
+        setSalesOrdersSkeletonVisible(true);
+
+        const queryString = params.toString();
+        const nextUrl = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname;
+        window.location.assign(nextUrl);
       };
 
-      searchInput.addEventListener('input', applyFilters);
-      statusFilter.addEventListener('change', applyFilters);
-      deliveryFilter.addEventListener('change', applyFilters);
-      documentFilter.addEventListener('change', applyFilters);
+      searchBtn.addEventListener('click', navigateWithServerFilters);
       clearBtn.addEventListener('click', clearFilters);
     }
 

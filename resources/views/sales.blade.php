@@ -996,7 +996,7 @@
 
                     <div class="sale-section-card">
                         <div class="row g-3 mb-3">
-                            <div class="col-12 col-lg-6">
+                            <div class="col-12 col-lg-4">
                                 <div class="sale-toolbar-card h-100 mb-0">
                                     <h6 class="mb-2">Buscar producto</h6>
                                     <form method="GET" action="{{ route('sales') }}" id="salesProductSearchForm" class="d-flex gap-2 align-items-center">
@@ -1012,13 +1012,25 @@
                                 </div>
                             </div>
 
-                            <div class="col-12 col-lg-6">
+                            <div class="col-12 col-lg-4">
                                 <div class="sale-toolbar-card h-100 mb-0">
                                     <h6 class="mb-2">Agregar por QR / Código de barras</h6>
                                     <div class="d-flex gap-2 flex-wrap">
                                         <input type="text" id="scanCodeInput" class="form-control border border-1 p-2 bg-white" placeholder="Escanea o pega el código">
                                         <button type="button" class="btn btn-dark mb-0" id="scanCodeBtn">Agregar</button>
                                         <button type="button" class="btn btn-outline-dark mb-0" id="openQrScannerBtn" data-bs-toggle="modal" data-bs-target="#scanQrModal">Escanear con cámara</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-lg-4">
+                                <div class="sale-toolbar-card h-100 mb-0 d-flex flex-column justify-content-between">
+                                    <div>
+                                        <h6 class="mb-2">Producto manual NI</h6>
+                                        <p class="text-sm text-muted mb-2">Registra un producto puntual y su costo de compra para asociarlo a esta venta.</p>
+                                    </div>
+                                    <div>
+                                        <button type="button" class="btn btn-outline-dark mb-0 w-100" id="openNonInventoryItemModalBtn" data-bs-toggle="modal" data-bs-target="#nonInventoryItemModal">+ Agregar producto manual NI</button>
                                     </div>
                                 </div>
                             </div>
@@ -1656,6 +1668,77 @@
     </div>
 </div>
 
+<div class="modal fade" id="nonInventoryItemModal" tabindex="-1" aria-labelledby="nonInventoryItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="nonInventoryItemModalLabel">Agregar producto manual NI</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form id="nonInventoryItemForm">
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="nonInventoryProductName" class="form-label mb-1">Nombre del producto</label>
+                            <input type="text" id="nonInventoryProductName" class="form-control border border-1 p-2 bg-white" maxlength="255" placeholder="Ej: Repuesto especial" required>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label for="nonInventoryVariantSuffix" class="form-label mb-1">Código NI (después de NI-)</label>
+                            <input type="text" id="nonInventoryVariantSuffix" class="form-control border border-1 p-2 bg-white" maxlength="80" placeholder="Ej: CABLE-ESP" required>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label for="nonInventoryVariantLabel" class="form-label mb-1">Etiqueta de variante</label>
+                            <input type="text" id="nonInventoryVariantLabel" class="form-control border border-1 p-2 bg-white" maxlength="120" placeholder="Ej: Cable especial" required>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label for="nonInventoryUnitType" class="form-label mb-1">Unidad de medida</label>
+                            <select id="nonInventoryUnitType" class="form-select border border-1 p-2 bg-white" required>
+                                @foreach(\App\Models\ProductVariant::UNIT_TYPE_OPTIONS as $unitOption)
+                                    <option value="{{ $unitOption }}">{{ $unitOption }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label for="nonInventoryQuantityMode" class="form-label mb-1">Tipo de cantidad</label>
+                            <select id="nonInventoryQuantityMode" class="form-select border border-1 p-2 bg-white" required>
+                                <option value="integer" selected>Solo enteros</option>
+                                <option value="decimal">Permite decimales</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label for="nonInventorySalePrice" class="form-label mb-1">Precio de venta ({{ $baseCurrencyCode ?? 'USD' }})</label>
+                            <input type="number" id="nonInventorySalePrice" class="form-control border border-1 p-2 bg-white" min="0.01" step="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label for="nonInventoryPurchasePrice" class="form-label mb-1">Precio de compra ({{ $baseCurrencyCode ?? 'USD' }})</label>
+                            <input type="number" id="nonInventoryPurchasePrice" class="form-control border border-1 p-2 bg-white" min="0.01" step="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label for="nonInventoryMinSaleQuantity" class="form-label mb-1">Cantidad mínima de venta</label>
+                            <input type="number" id="nonInventoryMinSaleQuantity" class="form-control border border-1 p-2 bg-white" min="0.01" step="1" value="1" required>
+                        </div>
+                        <div class="col-12 col-md-3">
+                            <label for="nonInventoryQuantity" class="form-label mb-1">Cantidad</label>
+                            <input type="number" id="nonInventoryQuantity" class="form-control border border-1 p-2 bg-white" min="1" step="1" value="1" required>
+                        </div>
+                        <div class="col-12">
+                            <label for="nonInventoryDescription" class="form-label mb-1">Descripción (opcional)</label>
+                            <textarea id="nonInventoryDescription" class="form-control border border-1 p-2 bg-white" rows="2" maxlength="500" placeholder="Notas del producto puntual"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <small class="text-muted">Este producto se agrega al carrito para completar la venta. No crea producto ni variante de inventario; solo registra su costo de compra como gasto asociado.</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-dark">Agregar al carrito</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="packageFlavorModal" tabindex="-1" aria-labelledby="packageFlavorModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
@@ -1733,6 +1816,18 @@
                 id: parsedId,
                 productName: String(rawItem.productName || 'Producto'),
                 productSize: String(rawItem.productSize || ''),
+                item_type: String(rawItem.item_type || 'catalog'),
+                custom_product_name: String(rawItem.custom_product_name || rawItem.productName || 'Producto'),
+                custom_variant_suffix: String(rawItem.custom_variant_suffix || ''),
+                custom_variant_label: String(rawItem.custom_variant_label || ''),
+                custom_variant_code: String(rawItem.custom_variant_code || ''),
+                custom_unit_type: String(rawItem.custom_unit_type || rawItem.unit_type || 'unidad'),
+                custom_quantity_input_mode: String(rawItem.custom_quantity_input_mode || rawItem.quantity_input_mode || 'integer') === 'decimal' ? 'decimal' : 'integer',
+                custom_min_sale_quantity: Number(rawItem.custom_min_sale_quantity || rawItem.min_sale_quantity || 1) > 0
+                    ? Number(rawItem.custom_min_sale_quantity || rawItem.min_sale_quantity || 1)
+                    : 1,
+                custom_description: String(rawItem.custom_description || ''),
+                purchase_price: Number(rawItem.purchase_price || 0),
                 price: parsedPrice,
                 stock: Number.isFinite(Number(rawItem.stock)) ? Number(rawItem.stock) : 999999,
                 quantity: parsedQuantity,
@@ -1967,6 +2062,12 @@
         @endphp
         const materialPackages = @json($materialPackagesPayload);
         let pendingPackageSelection = null;
+        const NON_INVENTORY_ITEM_TYPE = 'custom_non_inventory';
+
+        function buildNonInventoryItemId() {
+            const randomChunk = Math.random().toString(36).slice(2, 10);
+            return `custom_${Date.now()}_${randomChunk}`;
+        }
 
         function calculateTaxRateFromTaxes(taxes) {
             return (taxes || []).reduce((sum, tax) => sum + (parseFloat(tax.rate) || 0), 0);
@@ -2298,6 +2399,178 @@
 
         function addMaterialPackageToSale(packageId) {
             openPackageFlavorModal(packageId);
+        }
+
+        function resetNonInventoryItemForm() {
+            const form = document.getElementById('nonInventoryItemForm');
+            if (!form) {
+                return;
+            }
+
+            form.reset();
+            const quantityInput = document.getElementById('nonInventoryQuantity');
+            const quantityModeInput = document.getElementById('nonInventoryQuantityMode');
+            const minSaleQuantityInput = document.getElementById('nonInventoryMinSaleQuantity');
+            if (quantityInput) {
+                quantityInput.value = '1';
+                quantityInput.step = '1';
+                quantityInput.min = '1';
+            }
+            if (minSaleQuantityInput) {
+                minSaleQuantityInput.value = '1';
+                minSaleQuantityInput.step = '1';
+                minSaleQuantityInput.min = '1';
+            }
+            if (quantityModeInput) {
+                quantityModeInput.value = 'integer';
+            }
+        }
+
+        function closeNonInventoryItemModal() {
+            const modalElement = document.getElementById('nonInventoryItemModal');
+            if (!modalElement) {
+                return;
+            }
+
+            bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+
+            // Defensive cleanup for browsers that keep backdrop after fast modal transitions.
+            setTimeout(() => {
+                cleanupModalVisualState();
+            }, 60);
+        }
+
+        function addNonInventoryItemToCart() {
+            const nameInput = document.getElementById('nonInventoryProductName');
+            const salePriceInput = document.getElementById('nonInventorySalePrice');
+            const purchasePriceInput = document.getElementById('nonInventoryPurchasePrice');
+            const quantityInput = document.getElementById('nonInventoryQuantity');
+            const variantSuffixInput = document.getElementById('nonInventoryVariantSuffix');
+            const variantLabelInput = document.getElementById('nonInventoryVariantLabel');
+            const unitTypeInput = document.getElementById('nonInventoryUnitType');
+            const quantityModeInput = document.getElementById('nonInventoryQuantityMode');
+            const minSaleQuantityInput = document.getElementById('nonInventoryMinSaleQuantity');
+            const descriptionInput = document.getElementById('nonInventoryDescription');
+
+            const productName = String(nameInput?.value || '').trim();
+            const salePrice = roundMoney(salePriceInput?.value);
+            const purchasePrice = roundMoney(purchasePriceInput?.value);
+            const variantSuffixRaw = String(variantSuffixInput?.value || '').trim();
+            const variantSuffix = variantSuffixRaw
+                .toUpperCase()
+                .replace(/[^A-Z0-9\-_]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+            const variantLabel = String(variantLabelInput?.value || variantSuffixRaw || variantSuffix).trim();
+            const unitType = String(unitTypeInput?.value || 'unidad').trim() || 'unidad';
+            const quantityInputMode = String(quantityModeInput?.value || 'integer').trim() === 'decimal' ? 'decimal' : 'integer';
+            const minSaleQuantity = normalizeSaleQuantity(minSaleQuantityInput?.value || '1', quantityInputMode);
+            const quantity = normalizeSaleQuantity(quantityInput?.value || '1', quantityInputMode);
+            const customDescription = String(descriptionInput?.value || '').trim();
+            const customVariantCode = `NI-${variantSuffix}`;
+
+            if (!productName) {
+                alert('Debes indicar el nombre del producto manual NI.');
+                return false;
+            }
+
+            if (!variantSuffix) {
+                alert('Debes indicar el código de variante después de NI-.');
+                return false;
+            }
+
+            if (!variantLabel) {
+                alert('Debes indicar la etiqueta de la variante NI.');
+                return false;
+            }
+
+            if (salePrice <= 0) {
+                alert('Debes indicar un precio de venta válido.');
+                return false;
+            }
+
+            if (purchasePrice <= 0) {
+                alert('Debes indicar un precio de compra válido.');
+                return false;
+            }
+
+            if (quantity === null || quantity <= 0) {
+                alert('Debes indicar una cantidad válida.');
+                return false;
+            }
+
+            if (minSaleQuantity === null || minSaleQuantity <= 0) {
+                alert('Debes indicar una cantidad mínima de venta válida.');
+                return false;
+            }
+
+            if (quantityInputMode === 'integer' && Math.abs(quantity - Math.round(quantity)) > 0.00001) {
+                alert('Esta variante NI solo permite cantidades enteras.');
+                return false;
+            }
+
+            if (quantity < minSaleQuantity) {
+                alert(`La cantidad debe ser mayor o igual a la venta mínima (${Number(minSaleQuantity).toFixed(2)}).`);
+                return false;
+            }
+
+            const itemId = buildNonInventoryItemId();
+            selectedItems.push({
+                id: itemId,
+                item_type: NON_INVENTORY_ITEM_TYPE,
+                custom_product_name: productName,
+                custom_variant_suffix: variantSuffix,
+                custom_variant_label: variantLabel,
+                custom_variant_code: customVariantCode,
+                custom_unit_type: unitType,
+                custom_quantity_input_mode: quantityInputMode,
+                custom_min_sale_quantity: minSaleQuantity,
+                custom_description: customDescription,
+                purchase_price: purchasePrice,
+                productName,
+                productSize: `(${customVariantCode})`,
+                price: salePrice,
+                stock: 999999,
+                quantity,
+                quantity_input_mode: quantityInputMode,
+                unit_type: unitType,
+                min_sale_quantity: minSaleQuantity,
+                line_discount_percentage: 0,
+                imageSrc: '/assets/img/shopix5.png',
+                taxes: [],
+                taxRate: 0,
+                taxAmount: 0,
+                totalPrice: salePrice,
+            });
+
+            recalcSubtotals();
+            renderCart();
+
+            closeNonInventoryItemModal();
+            resetNonInventoryItemForm();
+            return true;
+        }
+
+        function syncNonInventoryQuantityInputs() {
+            const quantityModeInput = document.getElementById('nonInventoryQuantityMode');
+            const quantityInput = document.getElementById('nonInventoryQuantity');
+            const minSaleQuantityInput = document.getElementById('nonInventoryMinSaleQuantity');
+            if (!quantityModeInput || !quantityInput || !minSaleQuantityInput) {
+                return;
+            }
+
+            const isDecimal = String(quantityModeInput.value || 'integer') === 'decimal';
+            quantityInput.step = isDecimal ? '0.01' : '1';
+            quantityInput.min = isDecimal ? '0.01' : '1';
+            minSaleQuantityInput.step = isDecimal ? '0.01' : '1';
+            minSaleQuantityInput.min = isDecimal ? '0.01' : '1';
+
+            if (!isDecimal) {
+                quantityInput.value = String(Math.max(1, Math.round(Number(quantityInput.value || 1))));
+                minSaleQuantityInput.value = String(Math.max(1, Math.round(Number(minSaleQuantityInput.value || 1))));
+            } else {
+                quantityInput.value = String(Math.max(0.01, Number(quantityInput.value || 1)).toFixed(2));
+                minSaleQuantityInput.value = String(Math.max(0.01, Number(minSaleQuantityInput.value || 1)).toFixed(2));
+            }
         }
 
         function addFixedOnlyMaterialPackageToSale(pkg, packQty) {
@@ -2701,6 +2974,13 @@ function updateQuantity(id, newQty) {
                 const totalWithTaxText = `${totalWithTaxAmount.toFixed(2)} ${baseCurrencyCode}`;
                 const subtotalBsText = baseRateToBs > 0 ? `Bs ${(subtotalAmount * baseRateToBs).toFixed(2)}` : 'Bs N/D';
                 const totalWithTaxBsText = baseRateToBs > 0 ? `Bs ${(totalWithTaxAmount * baseRateToBs).toFixed(2)}` : 'Bs N/D';
+                const isNonInventoryItem = String(item.item_type || '') === NON_INVENTORY_ITEM_TYPE;
+                const purchaseCostText = isNonInventoryItem
+                    ? `<p class="cart-line-meta">Costo compra: ${Number(item.purchase_price || 0).toFixed(2)} ${baseCurrencyCode}</p>`
+                    : '';
+                const nonInventoryBadge = isNonInventoryItem
+                    ? `<p class="cart-line-meta text-warning">Producto manual NI (${item.custom_variant_code || ''})</p>`
+                    : '';
 
                 const textDiv = document.createElement('div');
                 textDiv.className = 'cart-line-head';
@@ -2708,7 +2988,9 @@ function updateQuantity(id, newQty) {
                     <img class="cart-line-thumb" src="${item.imageSrc || '/assets/img/shopix5.png'}" alt="${item.productName}" onerror="this.onerror=null;this.src='/assets/img/shopix5.png';">
                     <div class="cart-line-copy">
                         <p class="cart-line-title">${item.productName} ${item.productSize}</p>
+                        ${nonInventoryBadge}
                         <p class="cart-line-meta">Subtotal: ${subtotalText} | ${subtotalBsText}</p>
+                        ${purchaseCostText}
                         <p class="cart-line-tax">Impuestos: ${taxSummary || 'No aplica'}</p>
                         <p class="cart-line-total">Total con impuestos: ${totalWithTaxText} | ${totalWithTaxBsText}</p>
                     </div>
@@ -3272,6 +3554,18 @@ function updateQuantity(id, newQty) {
         }
 
         document.getElementById('scanCodeBtn')?.addEventListener('click', addByScanCode);
+        document.getElementById('nonInventoryItemForm')?.addEventListener('submit', function (event) {
+            event.preventDefault();
+            addNonInventoryItemToCart();
+        });
+        document.getElementById('nonInventoryQuantityMode')?.addEventListener('change', syncNonInventoryQuantityInputs);
+        document.getElementById('nonInventoryItemModal')?.addEventListener('hidden.bs.modal', () => {
+            resetNonInventoryItemForm();
+
+            setTimeout(() => {
+                cleanupModalVisualState();
+            }, 60);
+        });
         document.getElementById('confirmPackageFlavorBtn')?.addEventListener('click', confirmPackageFlavorSelection);
         document.getElementById('packageFlavorModal')?.addEventListener('hidden.bs.modal', () => {
             pendingPackageSelection = null;
@@ -3317,6 +3611,8 @@ function updateQuantity(id, newQty) {
                 addByScanCode();
             }, 160);
         });
+
+        syncNonInventoryQuantityInputs();
         document.getElementById('scanCodeInput')?.addEventListener('paste', function () {
             if (scanCodeDebounceTimer) {
                 clearTimeout(scanCodeDebounceTimer);

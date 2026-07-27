@@ -9,7 +9,7 @@ class SalesOrderDetail extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['sales_order_id', 'product_variant_id', 'quantity', 'price', 'amount', 'line_subtotal_before_discount', 'line_discount_amount',
+    protected $fillable = ['sales_order_id', 'product_variant_id', 'is_custom_item', 'custom_product_name', 'custom_variant_code', 'custom_variant_label', 'custom_unit_type', 'custom_quantity_input_mode', 'custom_min_sale_quantity', 'custom_purchase_unit_price', 'custom_description', 'quantity', 'price', 'amount', 'line_subtotal_before_discount', 'line_discount_amount',
         'tax_name',
         'tax_rate', 'tax_amount'
     ];
@@ -22,6 +22,9 @@ class SalesOrderDetail extends Model
         'line_discount_amount' => 'float',
         'tax_rate' => 'float',
         'tax_amount' => 'float',
+        'is_custom_item' => 'bool',
+        'custom_min_sale_quantity' => 'float',
+        'custom_purchase_unit_price' => 'float',
     ];
 
     // En el modelo SalesOrderDetail

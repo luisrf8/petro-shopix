@@ -103,13 +103,19 @@
       $publicDeliveryPdfUrl = route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']);
       $orderProductsSummary = $order->details
         ->map(function ($detail) {
-          $productName = trim((string) ($detail->variant->product->display_name ?? 'Producto'));
+          $productName = trim((string) ($detail->custom_product_name ?? ($detail->variant->product->display_name ?? 'Producto')));
+          $variantCode = trim((string) ($detail->custom_variant_code ?? ($detail->variant->size ?? '')));
           $quantity = (float) ($detail->quantity ?? 0);
           if ($quantity <= 0) {
             $quantity = 1;
           }
 
-          return $productName . ' x' . rtrim(rtrim(number_format($quantity, 2, '.', ''), '0'), '.');
+          $lineLabel = $productName;
+          if ($variantCode !== '') {
+            $lineLabel .= ' (' . $variantCode . ')';
+          }
+
+          return $lineLabel . ' x' . rtrim(rtrim(number_format($quantity, 2, '.', ''), '0'), '.');
         })
         ->filter(fn ($line) => $line !== '')
         ->implode(', ');
@@ -426,9 +432,13 @@
                       $detailDiscountUnitPrice = $detailQty > 0 ? round($detailDiscountAmount / $detailQty, 2) : 0.0;
                     @endphp
                     <tr>
-                      <td data-label="Producto">{{ $detalle->variant->product->display_name ?? 'Sin nombre' }}</td>
+                      @php
+                        $detailProductName = $detalle->custom_product_name ?? ($detalle->variant->product->display_name ?? 'Sin nombre');
+                        $detailVariantLabel = $detalle->custom_variant_code ?? ($detalle->variant->size ?? '');
+                      @endphp
+                      <td data-label="Producto">{{ $detailProductName }}</td>
                       <td data-label="Cantidad">{{ $detalle->quantity }}</td>
-                      <td data-label="Variante">{{ $detalle->variant->size ?? '' }}</td>
+                      <td data-label="Variante">{{ $detailVariantLabel }}</td>
                       @unless($isDeliveryOnlyView)
                       <td data-label="Precio Inicial"><span class="amount-chip">{{ $formatDualAmount((float) $detailOriginalUnitPrice, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span></td>
                       <td data-label="Descuento"><span class="amount-chip">{{ $formatDualAmount((float) $detailDiscountUnitPrice, $orderCurrencyCode ?? ($order->sale_currency_code ?? 'USD')) }}</span></td>
@@ -1836,7 +1846,8 @@
                                   <tbody>
                                       @foreach($order->details as $detalle)
                                           @php
-                                            $returnUnitTypeRaw = strtolower(trim((string) ($detalle->variant->unit_type ?? 'unidad')));
+                                            $hasVariantForReturn = !is_null($detalle->product_variant_id) && !is_null($detalle->variant);
+                                            $returnUnitTypeRaw = strtolower(trim((string) ($detalle->custom_unit_type ?? ($detalle->variant->unit_type ?? 'unidad'))));
                                             $returnUnitTypeMap = [
                                               'unidad' => 'und',
                                               'kg' => 'kg',
@@ -1859,12 +1870,15 @@
                                             $detailQuantityText = (abs($detailQuantityRaw - round($detailQuantityRaw)) > 0.00001)
                                               ? rtrim(rtrim(number_format($detailQuantityRaw, 2, '.', ''), '0'), '.')
                                               : (string) ((int) round($detailQuantityRaw));
-                                            $returnIsDecimal = strtolower(trim((string) ($detalle->variant->quantity_input_mode ?? 'integer'))) === 'decimal';
+                                            $returnIsDecimal = strtolower(trim((string) ($detalle->custom_quantity_input_mode ?? ($detalle->variant->quantity_input_mode ?? 'integer')))) === 'decimal';
+                                            $returnProductName = $detalle->custom_product_name ?? ($detalle->variant->product->display_name ?? 'Sin nombre');
+                                            $returnVariantLabel = $detalle->custom_variant_code ?? ($detalle->variant->size ?? '');
                                           @endphp
                                           <tr>
-                                            <td data-label="Producto">{{ $detalle->variant->product->display_name ?? 'Sin nombre' }}</td>
+                                            <td data-label="Producto">{{ $returnProductName }} {{ $returnVariantLabel ? '(' . $returnVariantLabel . ')' : '' }}</td>
                                             <td data-label="Cantidad">{{ $detailQuantityText }} {{ $returnUnitTypeLabel }}</td>
                                             <td data-label="Devolver">
+                                              @if($hasVariantForReturn)
                                                   <input type="number" class="form-control return-quantity border border-1 border-radius-lg p-2" 
                                                       data-id="{{ $detalle->variant->id }}" 
                                                       data-max="{{ $detalle->quantity }}" 
@@ -1874,13 +1888,20 @@
                                                       max="{{ $detalle->quantity }}"
                                                       step="{{ $returnIsDecimal ? '0.01' : '1' }}"
                                                       inputmode="{{ $returnIsDecimal ? 'decimal' : 'numeric' }}">
+                                              @else
+                                                  <span class="text-muted">No aplica</span>
+                                              @endif
                                               </td>
                                             <td data-label="Destino">
-                                              <select class="form-select border border-1 border-radius-lg p-2 return-disposition" data-id="{{ $detalle->variant->id }}">
-                                                <option value="resalable">Apto para venta</option>
-                                                <option value="damaged">Merma / dañado</option>
-                                                <option value="no_physical_return">No retorna físicamente</option>
-                                              </select>
+                                              @if($hasVariantForReturn)
+                                                <select class="form-select border border-1 border-radius-lg p-2 return-disposition" data-id="{{ $detalle->variant->id }}">
+                                                  <option value="resalable">Apto para venta</option>
+                                                  <option value="damaged">Merma / dañado</option>
+                                                  <option value="no_physical_return">No retorna físicamente</option>
+                                                </select>
+                                              @else
+                                                <span class="text-muted">No aplica</span>
+                                              @endif
                                             </td>
                                           </tr>
                                       @endforeach

@@ -387,7 +387,13 @@
                 $lineTotal = (float) ($detalle->amount ?? 0);
                 $lineQuantity = (float) ($detalle->quantity ?? 0);
                 $lineUnitPrice = (float) ($detalle->price ?? 0);
-                $unitTypeRaw = strtolower(trim((string) ($detalle->variant->unit_type ?? 'unidad')));
+                $detailProductName = trim((string) ($detalle->custom_product_name ?? ($detalle->variant->product->display_name ?? 'Sin nombre')));
+                $detailVariantLabel = trim((string) ($detalle->custom_variant_code ?? $detalle->custom_variant_label ?? ($detalle->variant->size ?? '')));
+                if ($detailVariantLabel === '' && (bool) ($detalle->is_custom_item ?? false)) {
+                    $detailVariantLabel = 'NI';
+                }
+
+                $unitTypeRaw = strtolower(trim((string) ($detalle->custom_unit_type ?? ($detalle->variant->unit_type ?? 'unidad'))));
                 $unitTypeMap = [
                     'unidad' => 'und',
                     'kg' => 'kg',
@@ -415,9 +421,9 @@
                 }
             @endphp
             <tr>
-                <td>{{ $detalle->variant->product->display_name ?? 'Sin nombre' }}</td>
+                <td>{{ $detailProductName }}</td>
                 <td class="qty-cell">{{ $lineQuantityText }} {{ $unitTypeLabel }}</td>
-                <td>{{ $detalle->variant->size ?? '' }}</td>
+                <td>{{ $detailVariantLabel }}</td>
                 <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineUnitPrice) }}</td>
                 <td class="amount-cell">{{ $formatBsOrderAmount($lineUnitPrice) }}</td>
                 <td class="amount-cell">{{ $formatOrderCurrencyAmount($lineTotal) }}</td>
