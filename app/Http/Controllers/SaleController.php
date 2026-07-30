@@ -179,7 +179,7 @@ class SaleController extends Controller
             'customer_existing_id' => 'nullable|integer|required_unless:create_new_customer,1',
             'customer_new' => 'nullable|array',
             'customer_new.name' => 'required_if:create_new_customer,1|string|max:255',
-            'customer_new.email' => 'required_if:create_new_customer,1|email|unique:users,email',
+            'customer_new.email' => 'nullable|email|max:255|unique:users,email',
             'customer_new.phone_code' => ['nullable', 'string', 'max:10', 'regex:/^\+?[0-9]{1,4}$/'],
             'customer_new.phone_number' => 'required_if:create_new_customer,1|string|max:20',
             'customer_new.dni' => 'required_if:create_new_customer,1|string|max:100',

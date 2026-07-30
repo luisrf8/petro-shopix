@@ -965,6 +965,21 @@
                                     </div>
                                 </div>
                                 <div class="row mb-4">
+                                    <div class="col-md-6">
+                                        <label for="logo_chip_background" class="form-label fw-bold">Fondo del cuadro del logo</label>
+                                        <select
+                                            name="logo_chip_background"
+                                            id="logo_chip_background"
+                                            class="form-control p-2 border border-radius-lg">
+                                            <option value="white" {{ ($tenant->logo_chip_background ?? 'white') === 'white' ? 'selected' : '' }}>Blanco (natural)</option>
+                                            <option value="primary" {{ ($tenant->logo_chip_background ?? '') === 'primary' ? 'selected' : '' }}>Color primario</option>
+                                            <option value="secondary" {{ ($tenant->logo_chip_background ?? '') === 'secondary' ? 'selected' : '' }}>Color secundario</option>
+                                            <option value="accent" {{ ($tenant->logo_chip_background ?? '') === 'accent' ? 'selected' : '' }}>Tercero (acento)</option>
+                                        </select>
+                                        <small class="text-muted">Define el color del fondo del recuadro del logo en la tienda pública.</small>
+                                    </div>
+                                </div>
+                                <div class="row mb-4">
                                     <div class="col-md-4">
                                         <label for="tiktok" class="form-label fw-bold">TikTok</label>
                                         <input type="text"
@@ -1775,6 +1790,7 @@
         setValue('#color_primary', tenant.color_primary);
         setValue('#color_secondary', tenant.color_secondary);
         setValue('#color_accent', tenant.color_accent);
+        setValue('#logo_chip_background', tenant.logo_chip_background);
         setValue('select[name="delivery_fee_mode"]', tenant.delivery_fee_mode);
         setValue('input[name="delivery_fixed_fee"]', tenant.delivery_fixed_fee);
         setValue('input[name="delivery_fee_per_km"]', tenant.delivery_fee_per_km);

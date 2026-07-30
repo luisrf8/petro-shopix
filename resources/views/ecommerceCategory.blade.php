@@ -32,6 +32,14 @@
     $tenantColorPrimary = $normalizeTenantHex($tenant->color_primary ?? null, '#0F172A');
     $tenantColorSecondary = $normalizeTenantHex($tenant->color_secondary ?? null, '#334155');
     $tenantColorAccent = $normalizeTenantHex($tenant->color_accent ?? null, '#38BDF8');
+    $logoChipBackgroundPreference = strtolower(trim((string) ($tenant->logo_chip_background ?? 'white')));
+    $logoChipBackgroundMap = [
+      'white' => '#FFFFFF',
+      'primary' => $tenantColorPrimary,
+      'secondary' => $tenantColorSecondary,
+      'accent' => $tenantColorAccent,
+    ];
+    $tenantLogoChipBackground = $logoChipBackgroundMap[$logoChipBackgroundPreference] ?? '#FFFFFF';
     $baseCurrencyCode = strtoupper((string) ($baseCurrencyCode ?? ($tenant->base_currency ?? 'USD')));
     $baseCurrencyCode = in_array($baseCurrencyCode, ['USD', 'EUR'], true) ? $baseCurrencyCode : 'USD';
     $baseCurrencySymbol = (string) ($baseCurrencySymbol ?? ($baseCurrencyCode === 'EUR' ? '€' : '$'));
@@ -69,6 +77,7 @@
       --tenant-primary: {{ $tenantColorPrimary }};
       --tenant-secondary: {{ $tenantColorSecondary }};
       --tenant-accent: {{ $tenantColorAccent }};
+      --tenant-logo-chip-bg: {{ $tenantLogoChipBackground }};
       --tenant-primary-rgb: {{ $tenantPrimaryR }}, {{ $tenantPrimaryG }}, {{ $tenantPrimaryB }};
       --tenant-secondary-rgb: {{ $tenantSecondaryR }}, {{ $tenantSecondaryG }}, {{ $tenantSecondaryB }};
       --tenant-accent-rgb: {{ $tenantAccentR }}, {{ $tenantAccentG }}, {{ $tenantAccentB }};
@@ -156,7 +165,7 @@
 
     .tenant-logo-chip {
       border: 1px solid rgba(255, 255, 255, 0.75) !important;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96)) !important;
+      background: var(--tenant-logo-chip-bg) !important;
       border-radius: 12px !important;
       transition: background 0.25s ease, border-color 0.25s ease;
       box-shadow: none;
@@ -164,7 +173,7 @@
 
     .landing-header.is-scrolled .tenant-logo-chip {
       border-color: #d6e0ef !important;
-      background: #ffffff !important;
+      background: var(--tenant-logo-chip-bg) !important;
     }
 
     .tenant-logo-image {

@@ -1418,10 +1418,6 @@
                                 <input type="text" id="newCustomerName" class="form-control border border-1 p-2 bg-white" placeholder="Nombre del cliente">
                             </div>
                             <div class="col-12 col-md-6">
-                                <label for="newCustomerEmail" class="form-label mb-1">Correo</label>
-                                <input type="email" id="newCustomerEmail" class="form-control border border-1 p-2 bg-white" placeholder="correo@ejemplo.com">
-                            </div>
-                            <div class="col-12 col-md-6">
                                 <label for="newCustomerPhone" class="form-label mb-1">Teléfono</label>
                                 <div class="row g-2">
                                     <div class="col-4">
@@ -4313,7 +4309,6 @@ function updateQuantity(id, newQty) {
             const selectedCustomerOption = existingCustomerSelect?.options?.[existingCustomerSelect.selectedIndex] || null;
             const selectedCustomerLabel = (selectedCustomerOption?.textContent || '').trim();
             const newCustomerName = (document.getElementById('newCustomerName')?.value || '').trim();
-            const newCustomerEmail = (document.getElementById('newCustomerEmail')?.value || '').trim();
             const newCustomerPhone = (document.getElementById('newCustomerPhone')?.value || '').trim();
             const newCustomerDni = (document.getElementById('newCustomerDni')?.value || '').trim();
             const deliveryReceiverName = (document.getElementById('deliveryReceiverName')?.value || '').trim();
@@ -4377,7 +4372,6 @@ function updateQuantity(id, newQty) {
                 customerDataDiv.innerHTML = `
                     <strong>Datos cliente nuevo:</strong><br>
                     Nombre: ${newCustomerName || 'No indicado'}<br>
-                    Correo: ${newCustomerEmail || 'No indicado'}<br>
                     Teléfono: ${newCustomerPhone || 'No indicado'}<br>
                     DNI: ${newCustomerDni || 'No indicado'}
                 `;
@@ -4644,7 +4638,7 @@ function updateQuantity(id, newQty) {
             newCustomerForm.classList.toggle('d-none', !shouldCreateNewCustomer);
             existingCustomerForm.classList.toggle('d-none', shouldCreateNewCustomer);
 
-            ['newCustomerName', 'newCustomerEmail', 'newCustomerPhone', 'newCustomerDni'].forEach(fieldId => {
+            ['newCustomerName', 'newCustomerPhone', 'newCustomerDni'].forEach(fieldId => {
                 const field = document.getElementById(fieldId);
                 if (field) {
                     field.required = shouldCreateNewCustomer;
@@ -4750,7 +4744,7 @@ function updateQuantity(id, newQty) {
             input.addEventListener('change', updateCreateCustomerVisibility);
         });
 
-        ['newCustomerName', 'newCustomerEmail', 'newCustomerPhone', 'newCustomerDni'].forEach(fieldId => {
+        ['newCustomerName', 'newCustomerPhone', 'newCustomerDni'].forEach(fieldId => {
             document.getElementById(fieldId)?.addEventListener('input', function () {
                 if (!document.getElementById('step3').classList.contains('d-none')) {
                     renderSummary();
@@ -4826,7 +4820,6 @@ function updateQuantity(id, newQty) {
     const deliveryContext = getAdminDeliveryChargeContext(true);
     const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
     const newCustomerName = (document.getElementById('newCustomerName')?.value || '').trim();
-    const newCustomerEmail = (document.getElementById('newCustomerEmail')?.value || '').trim();
     const newCustomerPhone = (document.getElementById('newCustomerPhone')?.value || '').trim();
     const newCustomerDni = (document.getElementById('newCustomerDni')?.value || '').trim();
     const newCustomerRetentionAgent = document.getElementById('newCustomerRetentionAgent')?.checked || false;
@@ -4866,17 +4859,8 @@ function updateQuantity(id, newQty) {
     }
 
     if (shouldCreateNewCustomer) {
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!newCustomerName || !newCustomerEmail || !newCustomerPhone || !newCustomerDni) {
-            alert('Para crear un cliente nuevo debes completar nombre, correo, teléfono y DNI.');
-            button.disabled = false;
-            button.innerHTML = originalText;
-                setSaleSubmitOverlayVisible(false);
-            return;
-        }
-
-        if (!emailPattern.test(newCustomerEmail)) {
-            alert('El correo del nuevo cliente no es válido.');
+        if (!newCustomerName || !newCustomerPhone || !newCustomerDni) {
+            alert('Para crear un cliente nuevo debes completar nombre, teléfono y DNI.');
             button.disabled = false;
             button.innerHTML = originalText;
                 setSaleSubmitOverlayVisible(false);
@@ -4908,7 +4892,7 @@ function updateQuantity(id, newQty) {
         customer_new: shouldCreateNewCustomer
             ? {
                 name: newCustomerName,
-                email: newCustomerEmail,
+                email: newCustomerName ? null : null,
                 phone_code: document.getElementById('newCustomerPhoneCode')?.value || '+58',
                 phone_number: newCustomerPhone,
                 dni: newCustomerDni,

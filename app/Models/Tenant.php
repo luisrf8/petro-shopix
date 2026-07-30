@@ -36,6 +36,7 @@ class Tenant extends Model
         'color_primary',
         'color_secondary',
         'color_accent',
+        'logo_chip_background',
         'country',
         'state',
         'city',

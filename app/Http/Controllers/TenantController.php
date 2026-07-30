@@ -493,6 +493,9 @@ class TenantController extends Controller
             'color_primary' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($tenantInput['color_primary'] ?? '')) ? strtoupper((string) $tenantInput['color_primary']) : null,
             'color_secondary' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($tenantInput['color_secondary'] ?? '')) ? strtoupper((string) $tenantInput['color_secondary']) : null,
             'color_accent' => preg_match('/^#[0-9A-Fa-f]{6}$/', (string) ($tenantInput['color_accent'] ?? '')) ? strtoupper((string) $tenantInput['color_accent']) : null,
+            'logo_chip_background' => in_array((string) ($tenantInput['logo_chip_background'] ?? ''), ['white', 'primary', 'secondary', 'accent'], true)
+                ? (string) $tenantInput['logo_chip_background']
+                : 'white',
         ];
 
         $socialProfiles = is_array($normalizedTenant['social_profiles'] ?? null) ? $normalizedTenant['social_profiles'] : [];
@@ -2130,6 +2133,7 @@ class TenantController extends Controller
                 'color_primary'   => 'nullable|string|max:7',
                 'color_secondary' => 'nullable|string|max:7',
                 'color_accent'    => 'nullable|string|max:7',
+                'logo_chip_background' => ['nullable', 'string', Rule::in(['white', 'primary', 'secondary', 'accent'])],
                 'country'         => 'nullable|exists:countries,id',
                 'state'           => 'nullable|exists:states,id',
                 'city'            => 'nullable|exists:cities,id',
@@ -2352,6 +2356,7 @@ class TenantController extends Controller
                 'color_primary'   => $validated['color_primary'] ?? $tenant->color_primary,
                 'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
                 'color_accent'    => $validated['color_accent'] ?? $tenant->color_accent,
+                'logo_chip_background' => $validated['logo_chip_background'] ?? ($tenant->logo_chip_background ?? 'white'),
                 'country'         => $validated['country'] ?? $tenant->country,
                 'state'           => $validated['state'] ?? $tenant->state,
                 'city'            => $validated['city'] ?? $tenant->city,
