@@ -247,7 +247,8 @@ class SaleController extends Controller
         if ($createNewCustomer) {
             $customerPayload = $validated['customer_new'] ?? [];
             $customerRoleId = $this->resolveCustomerRoleId();
-            $defaultCustomerPassword = '12345678';
+            $normalizedCustomerDni = trim((string) ($customerPayload['dni'] ?? ''));
+            $defaultCustomerPassword = $normalizedCustomerDni;
 
             $createdCustomer = User::create([
                 'name' => trim((string) ($customerPayload['name'] ?? 'Cliente')),
@@ -256,7 +257,7 @@ class SaleController extends Controller
                     (string) ($customerPayload['phone_number'] ?? ''),
                     $customerPayload['phone_code'] ?? null
                 ),
-                'dni' => trim((string) ($customerPayload['dni'] ?? '')),
+                'dni' => $normalizedCustomerDni,
                 'is_retention_agent' => (bool) ($customerPayload['is_retention_agent'] ?? false),
                 'password' => Hash::make($defaultCustomerPassword),
                 'tenant_id' => $tenantId,
