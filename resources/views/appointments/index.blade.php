@@ -1881,7 +1881,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (customerEmailInput) {
-            customerEmailInput.required = isEnabled;
+            customerEmailInput.required = false;
         }
 
         if (customerDniInput) {
@@ -3543,10 +3543,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (createNewCustomer) {
             const contactName = String(contactNameInput?.value || '').trim();
             const contactPhone = String(contactPhoneInput?.value || '').trim();
-            const contactEmail = String(customerEmailInput?.value || '').trim();
             const contactDni = String(customerDniInput?.value || '').trim();
-            if (!contactName || !contactPhone || !contactEmail || !contactDni) {
-                alert('Si seleccionas "Cliente nuevo", debes completar nombre, correo, teléfono y DNI.');
+            if (!contactName || !contactPhone || !contactDni) {
+                alert('Si seleccionas "Cliente nuevo", debes completar nombre, teléfono y DNI. El correo es opcional.');
                 showBookingTab(bookingTabDataButton);
                 event.preventDefault();
                 return;

@@ -123,7 +123,7 @@
                     <td>
                       <div class="d-flex flex-column">
                         <span class="font-weight-bold text-sm">{{ $customer->name }}</span>
-                        <span class="text-xs text-secondary">{{ $customer->email }}</span>
+                        <span class="text-xs text-secondary">{{ $customer->email ?: '-' }}</span>
                       </div>
                     </td>
                     <td>{{ $customer->phone_number ?: '-' }}</td>
@@ -195,7 +195,7 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Correo</label>
-            <input type="email" name="email" class="form-control border border-1 p-2" required>
+            <input type="email" name="email" class="form-control border border-1 p-2">
           </div>
           <div class="mb-3">
             <label class="form-label">Teléfono</label>
@@ -243,7 +243,7 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Correo</label>
-            <input type="email" name="email" id="editCustomerEmail" class="form-control border border-1 p-2" required>
+            <input type="email" name="email" id="editCustomerEmail" class="form-control border border-1 p-2">
           </div>
           <div class="mb-3">
             <label class="form-label">Teléfono</label>

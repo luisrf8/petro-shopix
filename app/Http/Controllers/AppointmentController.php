@@ -726,7 +726,7 @@ class AppointmentController extends Controller
             'contact_name' => ['required_without:customer_id', 'nullable', 'string', 'max:255'],
             'contact_phone' => ['required_without:customer_id', 'nullable', 'string', 'max:30'],
             'contact_phone_code' => ['nullable', 'string', 'max:10', 'regex:/^\+?[0-9]{1,4}$/'],
-            'customer_email' => ['required_if:create_customer,1', 'nullable', 'email', 'max:255'],
+            'customer_email' => ['nullable', 'email', 'max:255'],
             'customer_dni' => ['required_if:create_customer,1', 'nullable', 'string', 'max:100'],
             'is_retention_agent' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],
@@ -925,14 +925,10 @@ class AppointmentController extends Controller
             }
 
             if (!$customerId) {
-                if ($customerEmail === '') {
-                    $customerEmail = 'cliente.' . $tenantId . '.' . now()->format('YmdHis') . '.' . random_int(100, 999) . '@shopix.local';
-                }
-
                 $customerRoleId = $this->resolveCustomerRoleId();
                 $newCustomer = User::query()->create([
                     'name' => $customerName,
-                    'email' => $customerEmail,
+                    'email' => $customerEmail !== '' ? $customerEmail : null,
                     'password' => Hash::make(Str::random(32)),
                     'role_id' => $customerRoleId,
                     'tenant_id' => $tenantId,
