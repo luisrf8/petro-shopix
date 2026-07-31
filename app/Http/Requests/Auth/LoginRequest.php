@@ -29,6 +29,7 @@ class LoginRequest extends FormRequest
         return [
             'login' => ['required_without:email', 'string'],
             'email' => ['nullable', 'string'],
+            'login_type' => ['nullable', 'in:name,email,dni'],
             'password' => ['required', 'string'],
         ];
     }
@@ -82,7 +83,8 @@ class LoginRequest extends FormRequest
     public function throttleKey(): string
     {
         $identifier = (string) ($this->input('login') ?? $this->input('email') ?? '');
+        $loginType = (string) ($this->input('login_type') ?? 'auto');
 
-        return Str::transliterate(Str::lower($identifier).'|'.$this->ip());
+        return Str::transliterate(Str::lower($loginType.'|'.$identifier.'|'.$this->ip()));
     }
 }

@@ -1437,6 +1437,9 @@
             <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="#" data-shopix-open-auth><i class="bi bi-person-circle"></i> Entrar</a>
             </li>
+            <li class="nav-item">
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="https://shopixve.com/landings"><i class="bi bi-shop-window"></i> Shopix</a>
+            </li>
             @include('partials.tenant-cart-nav')
           </ul>
         </div>

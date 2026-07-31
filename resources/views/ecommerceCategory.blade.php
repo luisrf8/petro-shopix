@@ -1226,6 +1226,9 @@
                 <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ $mapsUrl }}" target="_blank" rel="noopener noreferrer"><i class="bi bi-geo-alt"></i> Ver dirección</a>
               </li>
             @endif
+            <li class="nav-item">
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="https://shopixve.com/landings"><i class="bi bi-shop-window"></i> Shopix</a>
+            </li>
             @include('partials.tenant-cart-nav')
             <li class="nav-item">
               <a class="btn landing-nav-link tenant-main-nav-btn" href="{{ route('tenant.public', ['tenant' => $tenant->slug]) }}"><i class="bi bi-arrow-left"></i> Volver</a>

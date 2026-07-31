@@ -163,9 +163,16 @@
 
                         <form id="shopix-login-form" class="row g-3" novalidate>
                             @csrf
-                            <div class="col-12">
-                                <label for="login" class="form-label login-field-label">Correo, teléfono o usuario</label>
-                                <input type="text" class="form-control login-input" id="login" name="login" placeholder="Ingresa correo, teléfono o usuario" required>
+                            <label for="login_type" class="form-label login-field-label">Tipo de inicio de sesión</label>
+                            <div class="col-3">
+                                <select class="form-select login-input" id="login_type" name="login_type" required>
+                                    <option value="name" selected>Nombre</option>
+                                    <option value="email">Correo</option>
+                                    <option value="dni">DNI</option>
+                                </select>
+                            </div>
+                            <div class="col-9">
+                                <input type="text" class="form-control login-input" id="login" name="login" placeholder="Nombre" required>
                             </div>
                             <div class="col-12">
                                 <label for="password" class="form-label login-field-label">Contraseña</label>
@@ -193,9 +200,24 @@
         const loginForm = document.getElementById('shopix-login-form');
         const submitButton = document.getElementById('shopix-login-submit');
         const loginAlert = document.getElementById('login-alert');
+        const loginTypeSelect = document.getElementById('login_type');
+        const loginInput = document.getElementById('login');
         const adminPasswordInput = document.getElementById('password');
         const adminPasswordToggle = document.getElementById('toggleAdminPassword');
         const adminPasswordToggleIcon = document.getElementById('toggleAdminPasswordIcon');
+
+        function syncLoginPlaceholder() {
+            if (!loginTypeSelect || !loginInput) return;
+
+            const placeholderByType = {
+                name: 'Nombre',
+                email: 'Correo electrónico',
+                dni: 'DNI o cédula',
+            };
+
+            const selectedType = String(loginTypeSelect.value || 'name');
+            loginInput.placeholder = placeholderByType[selectedType] || 'Nombre';
+        }
 
         adminPasswordToggle?.addEventListener('click', function () {
             if (!adminPasswordInput) return;
@@ -205,6 +227,9 @@
             adminPasswordToggleIcon?.classList.toggle('bi-eye', !isHidden);
             adminPasswordToggleIcon?.classList.toggle('bi-eye-slash', isHidden);
         });
+
+        loginTypeSelect?.addEventListener('change', syncLoginPlaceholder);
+        syncLoginPlaceholder();
 
         function showLoginError(message) {
             if (!loginAlert) return;

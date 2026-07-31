@@ -2592,6 +2592,18 @@ class TenantController extends Controller
         return view('ecommerceProduct', compact('tenant', 'product', 'cartEnabled', 'projectQuoteOnlyMode', 'cartPlanName', 'baseCurrencyCode', 'baseCurrencySymbol', 'showBsPrices', 'storefrontBsRate'));
     }
 
+    public function publicTenantCustomerPortal(Tenant $tenant)
+    {
+        $this->abortIfTenantInactiveForPublic($tenant);
+
+        return view('tenantCustomerPortal', compact('tenant'));
+    }
+
+    public function publicCustomerPortalGeneral()
+    {
+        return view('customerPortal');
+    }
+
     public function publicTenantPaymentMethods(Tenant $tenant)
     {
         $this->abortIfTenantInactiveForPublic($tenant);

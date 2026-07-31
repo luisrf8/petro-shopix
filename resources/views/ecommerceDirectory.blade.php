@@ -59,6 +59,89 @@
       padding: 0.42rem 0.9rem;
     }
 
+    .directory-navbar-actions {
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .directory-navbar-actions .nav-item {
+      display: flex;
+      align-items: center;
+    }
+
+    .directory-navbar-actions .landing-nav-link {
+      border: 1px solid #e2e8f0;
+      background: rgba(248, 250, 252, 0.92);
+      color: #0f172a;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.5rem 0.95rem;
+      font-weight: 700;
+      transition: all 0.2s ease;
+    }
+
+    .directory-navbar-actions .directory-icon-btn {
+      width: 44px;
+      min-width: 44px;
+      padding: 0;
+      font-size: 1.02rem;
+    }
+
+    .directory-user-menu {
+      border-radius: 14px;
+      border: 1px solid #dbe4f0;
+      box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+      padding: 0.35rem;
+      min-width: 240px;
+    }
+
+    .directory-user-menu .dropdown-item {
+      border-radius: 10px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.52rem 0.66rem;
+    }
+
+    .directory-user-menu .dropdown-item i {
+      width: 1.2rem;
+      text-align: center;
+    }
+
+    .directory-user-menu-header {
+      border-radius: 10px;
+      border: 1px solid #dbeafe;
+      background: #eff6ff;
+      padding: 0.52rem 0.66rem;
+      margin-bottom: 0.32rem;
+      font-size: 0.88rem;
+      color: #1e3a8a;
+      font-weight: 700;
+    }
+
+    .directory-navbar-actions .landing-nav-link:hover {
+      border-color: #c7d2fe;
+      background: #ffffff;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+    }
+
+    .directory-navbar-actions #directory-client-login-btn {
+      border-color: #0f172a;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #ffffff;
+    }
+
+    .directory-navbar-actions #directory-client-login-btn:hover {
+      border-color: #0f172a;
+      background: linear-gradient(135deg, #111827, #1f2937);
+      color: #ffffff;
+    }
+
     .hero {
       position: relative;
       padding-top: 4.2rem;
@@ -155,20 +238,65 @@
       font-weight: 600;
     }
 
-    .directory-session-chip {
+    .directory-user-toggle {
       display: inline-flex;
       align-items: center;
-      gap: 0.45rem;
-      border: 1px solid rgba(37, 99, 235, 0.18);
+      gap: 0.5rem;
+      border: 1px solid rgba(37, 99, 235, 0.22);
       border-radius: 999px;
-      padding: 0.45rem 0.8rem;
-      background: rgba(239, 246, 255, 0.9);
-      color: #1d4ed8;
-      font-weight: 700;
+      padding: 0.5rem 0.92rem;
+      background: linear-gradient(135deg, rgba(219, 234, 254, 0.9), rgba(239, 246, 255, 0.96));
+      color: #1e40af;
+      font-weight: 800;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
+      min-height: 44px;
+      position: relative;
     }
 
-    .directory-session-chip i {
-      font-size: 0.92rem;
+    .directory-user-toggle i {
+      font-size: 0.95rem;
+    }
+
+    .directory-user-toggle .badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      min-width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.66rem;
+      border: 2px solid #ffffff;
+      border-radius: 999px;
+      padding: 0 0.32rem;
+      line-height: 1;
+    }
+
+    .landing-header.is-authenticated .directory-navbar-actions {
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 16px;
+      padding: 0.28rem;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.07);
+    }
+
+    .landing-header.is-authenticated .directory-client-action-btn .badge {
+      top: -4px;
+      right: -4px;
+      border: 2px solid #ffffff;
+    }
+
+    .landing-header.is-authenticated #directory-client-logout-btn {
+      border-color: #fecaca;
+      color: #b91c1c;
+      background: #fff5f5;
+    }
+
+    .landing-header.is-authenticated #directory-client-logout-btn:hover {
+      border-color: #fca5a5;
+      color: #991b1b;
+      background: #ffe4e6;
     }
 
     .directory-auth-modal .modal-content {
@@ -636,6 +764,26 @@
       .landing-nav-link {
         width: 100%;
       }
+
+      .directory-navbar-actions {
+        align-items: stretch;
+        gap: 0.5rem;
+      }
+
+      .landing-header.is-authenticated .directory-navbar-actions {
+        border-radius: 14px;
+        padding: 0.45rem;
+      }
+
+      .directory-user-toggle {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .directory-user-menu {
+        width: 100%;
+        min-width: 0;
+      }
     }
 
     @media (max-width: 767.98px) {
@@ -804,45 +952,67 @@
         </button>
 
         <div class="collapse navbar-collapse" id="landingNavbar">
-          <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+          <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2 directory-navbar-actions">
             <li class="nav-item">
-              <a class="btn btn-light text-dark landing-nav-link" href="/">Inicio</a>
-            </li>
-            <li class="nav-item">
-              <a class="btn btn-light text-dark landing-nav-link" href="/landings">Por tienda / servicio</a>
+              <a class="btn btn-light text-dark landing-nav-link directory-icon-btn" href="/landings" title="Inicio: tiendas y servicios" aria-label="Inicio: tiendas y servicios">
+                <i class="bi bi-house"></i>
+              </a>
             </li>
             <li class="nav-item" id="directory-client-login-wrap">
-              <button type="button" class="btn btn-dark landing-nav-link" id="directory-client-login-btn">Entrar como cliente</button>
+              <button type="button" class="btn btn-dark landing-nav-link directory-icon-btn" id="directory-client-login-btn" title="Entrar como cliente" aria-label="Entrar como cliente">
+                <i class="bi bi-person"></i>
+              </button>
             </li>
-            <li class="nav-item d-none" id="directory-client-session-wrap">
-              <div class="directory-session-chip">
+            <li class="nav-item dropdown d-none" id="directory-client-session-wrap">
+              <button type="button"
+                      class="btn directory-user-toggle dropdown-toggle"
+                      id="directory-client-session-toggle"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
+                      aria-label="Menú de cliente"
+                      title="Menú de cliente">
                 <i class="bi bi-person-circle"></i>
-                <span id="directory-client-session-name">Cliente</span>
-              </div>
-            </li>
-            <li class="nav-item d-none" id="directory-client-notifications-wrap">
-              <button type="button" class="btn btn-light text-dark landing-nav-link directory-client-action-btn" id="directory-client-notifications-btn" data-bs-toggle="modal" data-bs-target="#directoryClientNotificationsModal">
-                <i class="bi bi-bell me-1"></i> Notificaciones
+                <span class="d-none d-md-inline" id="directory-client-session-name">Cliente</span>
                 <span class="badge rounded-pill bg-danger d-none" id="directory-client-notifications-count">0</span>
               </button>
-            </li>
-            <li class="nav-item d-none" id="directory-client-orders-wrap">
-              <button type="button" class="btn btn-light text-dark landing-nav-link" id="directory-client-orders-btn">
-                <i class="bi bi-bag-check me-1"></i> Mis compras
-              </button>
-            </li>
-            <li class="nav-item d-none" id="directory-client-account-wrap">
-              <button type="button" class="btn btn-light text-dark landing-nav-link" id="directory-client-account-btn">
-                <i class="bi bi-person-gear me-1"></i> Mi perfil
-              </button>
-            </li>
-            <li class="nav-item" id="directory-install-pwa-wrap">
-              <button type="button" class="btn btn-light text-dark landing-nav-link directory-pwa-install d-none" id="directory-install-pwa-btn">
-                Instalar app
-              </button>
-            </li>
-            <li class="nav-item d-none" id="directory-client-logout-wrap">
-              <button type="button" class="btn btn-light text-dark landing-nav-link" id="directory-client-logout-btn">Cerrar sesión</button>
+              <ul class="dropdown-menu dropdown-menu-end directory-user-menu">
+                <li>
+                  <div class="directory-user-menu-header">
+                    Hola, <span id="directory-client-menu-name">cliente</span>
+                  </div>
+                </li>
+                <li id="directory-client-notifications-wrap">
+                  <button type="button" class="dropdown-item directory-client-action-btn" id="directory-client-notifications-btn">
+                    <i class="bi bi-bell"></i>
+                    <span>Notificaciones</span>
+                  </button>
+                </li>
+                <li id="directory-client-orders-wrap">
+                  <a href="#" class="dropdown-item" id="directory-client-orders-btn">
+                    <i class="bi bi-bag-check"></i>
+                    <span>Mis compras</span>
+                  </a>
+                </li>
+                <li id="directory-client-account-wrap">
+                  <a href="#" class="dropdown-item" id="directory-client-account-btn">
+                    <i class="bi bi-person-gear"></i>
+                    <span>Mi perfil</span>
+                  </a>
+                </li>
+                <li id="directory-install-pwa-wrap">
+                  <button type="button" class="dropdown-item directory-pwa-install d-none" id="directory-install-pwa-btn">
+                    <i class="bi bi-download"></i>
+                    <span id="directory-install-pwa-label">Instalar app</span>
+                  </button>
+                </li>
+                <li><hr class="dropdown-divider my-1"></li>
+                <li id="directory-client-logout-wrap">
+                  <button type="button" class="dropdown-item text-danger" id="directory-client-logout-btn">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span>Cerrar sesión</span>
+                  </button>
+                </li>
+              </ul>
             </li>
           </ul>
 
@@ -919,7 +1089,7 @@
     </div>
   </header>
 
-  <section class="hero">
+  <section class="hero mt-4">
     <div class="mx-1">
       <span class="hero-eyebrow"><i class="bi bi-geo-alt"></i> Explorador inteligente</span>
       <div class="hero-search-shell">
@@ -1128,7 +1298,14 @@
               <div class="tab-pane fade show active" id="directory-auth-login-panel" role="tabpanel">
                 <form id="directory-client-login-form" class="row g-3">
                   <div class="col-12">
-                    <input type="email" class="form-control" id="directory-client-login-email" placeholder="Email" required>
+                    <select class="form-select" id="directory-client-login-type" required>
+                      <option value="name" selected>Ingresar por Nombre</option>
+                      <option value="email">Ingresar por Correo</option>
+                      <option value="dni">Ingresar por DNI</option>
+                    </select>
+                  </div>
+                  <div class="col-12">
+                    <input type="text" class="form-control" id="directory-client-login-identifier" placeholder="Nombre" required>
                   </div>
                   <div class="col-12">
                     <input type="password" class="form-control" id="directory-client-login-password" placeholder="Contraseña" required>
@@ -1301,6 +1478,7 @@
     const directoryAuthTokenKey = 'shopix_ecomm_token';
     const directoryAuthUserKey = 'shopix_ecomm_user';
     const directoryPendingUrlKey = 'shopix_directory_pending_url';
+    const directoryCustomerPortalBaseUrl = @json(route('customer.portal.general'));
     const landingFilterElements = Array.from(document.querySelectorAll('[data-landing-filter]'));
     const landingFilterGroups = landingFilterElements.reduce((groups, element) => {
       const key = element.dataset.landingFilter;
@@ -1313,11 +1491,11 @@
     const landingResultsCounters = document.querySelectorAll('[data-landing-results-count]');
     const landingDirectoryItems = Array.from(document.querySelectorAll('.landing-directory-item'));
     const landingDirectoryEmpty = document.getElementById('landingDirectoryEmpty');
-    const directoryTenantLinks = Array.from(document.querySelectorAll('[data-directory-tenant-link]'));
     const directoryClientLoginWrap = document.getElementById('directory-client-login-wrap');
     const directoryClientLoginBtn = document.getElementById('directory-client-login-btn');
     const directoryClientSessionWrap = document.getElementById('directory-client-session-wrap');
     const directoryClientSessionName = document.getElementById('directory-client-session-name');
+    const directoryClientMenuName = document.getElementById('directory-client-menu-name');
     const directoryClientNotificationsWrap = document.getElementById('directory-client-notifications-wrap');
     const directoryClientNotificationsBtn = document.getElementById('directory-client-notifications-btn');
     const directoryClientNotificationsCount = document.getElementById('directory-client-notifications-count');
@@ -1328,6 +1506,7 @@
     const directoryClientAccountWrap = document.getElementById('directory-client-account-wrap');
     const directoryClientAccountBtn = document.getElementById('directory-client-account-btn');
     const directoryInstallPwaBtn = document.getElementById('directory-install-pwa-btn');
+    const directoryInstallPwaLabel = document.getElementById('directory-install-pwa-label');
     const directoryClientLogoutWrap = document.getElementById('directory-client-logout-wrap');
     const directoryClientLogoutBtn = document.getElementById('directory-client-logout-btn');
     const directoryClientAuthModalElement = document.getElementById('directoryClientAuthModal');
@@ -1359,6 +1538,10 @@
     let directoryServiceWorkerRegistrationPromise = null;
     let directoryNotificationAutoPrompted = false;
     let directoryCountriesCache = null;
+
+    function buildDirectoryCustomerPortalUrl(hash = '') {
+      return `${directoryCustomerPortalBaseUrl}${hash}`;
+    }
 
     async function fetchDirectoryLocationJson(url) {
       const response = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -1722,10 +1905,19 @@
         return;
       }
 
+      const setInstallButtonLabel = (text) => {
+        if (directoryInstallPwaLabel) {
+          directoryInstallPwaLabel.textContent = text;
+          return;
+        }
+
+        directoryInstallPwaBtn.textContent = text;
+      };
+
       directoryInstallPwaBtn.classList.remove('d-none');
 
       if (isDirectoryStandaloneMode()) {
-        directoryInstallPwaBtn.textContent = 'App instalada';
+        setInstallButtonLabel('App instalada');
         directoryInstallPwaBtn.classList.add('is-ready');
         return;
       }
@@ -1733,11 +1925,11 @@
       directoryInstallPwaBtn.classList.remove('is-ready');
 
       if (isDirectoryIosDevice()) {
-        directoryInstallPwaBtn.textContent = 'Agregar a inicio';
+        setInstallButtonLabel('Agregar a inicio');
         return;
       }
 
-      directoryInstallPwaBtn.textContent = 'Instalar app';
+      setInstallButtonLabel('Instalar app');
     }
 
     async function installDirectoryPwa() {
@@ -1848,6 +2040,7 @@
       const token = getDirectoryAuthToken();
       const user = getDirectoryAuthUser();
       const hasSession = !!token && !!user?.id;
+      const landingHeader = document.querySelector('.landing-header');
 
       directoryClientLoginWrap?.classList.toggle('d-none', hasSession);
       directoryClientSessionWrap?.classList.toggle('d-none', !hasSession);
@@ -1855,9 +2048,14 @@
       directoryClientOrdersWrap?.classList.toggle('d-none', !hasSession);
       directoryClientAccountWrap?.classList.toggle('d-none', !hasSession);
       directoryClientLogoutWrap?.classList.toggle('d-none', !hasSession);
+      landingHeader?.classList.toggle('is-authenticated', hasSession);
 
       if (directoryClientSessionName) {
-        directoryClientSessionName.textContent = hasSession ? `Hola, ${user.name || 'cliente'}` : 'Cliente';
+        directoryClientSessionName.textContent = hasSession ? (user.name || 'cliente') : 'Cliente';
+      }
+
+      if (directoryClientMenuName) {
+        directoryClientMenuName.textContent = hasSession ? (user.name || 'cliente') : 'cliente';
       }
 
       if (!hasSession && directoryClientNotificationsCount) {
@@ -2056,7 +2254,7 @@
           <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
             <div>
               <div class="fw-semibold fs-6">Pedido #${row.id}</div>
-              <div class="directory-list-meta">${row.tenant_name || 'Tienda'} ${row.date ? `• ${row.date}` : ''}</div>
+              <div class="directory-list-meta"><strong>Tienda:</strong> ${row.tenant_name || 'No disponible'}${row.date ? ` • ${row.date}` : ''}</div>
             </div>
             <a href="${row.public_url}" class="btn btn-sm btn-outline-dark">Ver detalle</a>
           </div>
@@ -2185,6 +2383,9 @@
       event.preventDefault();
       clearDirectoryAuthError();
 
+      const loginType = document.getElementById('directory-client-login-type')?.value || 'name';
+      const login = document.getElementById('directory-client-login-identifier')?.value.trim() || '';
+
       const response = await fetch('/api/loginEcomm', {
         method: 'POST',
         headers: {
@@ -2193,7 +2394,8 @@
           'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
         },
         body: JSON.stringify({
-          email: document.getElementById('directory-client-login-email')?.value.trim() || '',
+          login,
+          login_type: loginType,
           password: document.getElementById('directory-client-login-password')?.value || '',
         })
       });
@@ -2217,6 +2419,24 @@
       if (pendingUrl) {
         window.location.href = pendingUrl;
       }
+    }
+
+    function syncDirectoryLoginPlaceholder() {
+      const loginTypeSelect = document.getElementById('directory-client-login-type');
+      const loginInput = document.getElementById('directory-client-login-identifier');
+
+      if (!loginTypeSelect || !loginInput) {
+        return;
+      }
+
+      const placeholderByType = {
+        name: 'Nombre',
+        email: 'Correo electrónico',
+        dni: 'DNI o cédula',
+      };
+
+      const selectedType = String(loginTypeSelect.value || 'name');
+      loginInput.placeholder = placeholderByType[selectedType] || 'Nombre';
     }
 
     async function submitDirectoryClientRegister(event) {
@@ -2403,6 +2623,10 @@
 
     navLinks.forEach(link => {
       link.addEventListener('click', () => {
+        if (link.getAttribute('data-bs-toggle') === 'dropdown') {
+          return;
+        }
+
         if (window.innerWidth < 992 && navbarCollapse?.classList.contains('show') && bsCollapse) {
           bsCollapse.hide();
         }
@@ -2432,7 +2656,8 @@
       }
     });
 
-    directoryClientOrdersBtn?.addEventListener('click', async () => {
+    directoryClientOrdersBtn?.addEventListener('click', async (event) => {
+      event.preventDefault();
       const token = getDirectoryAuthToken();
       const user = getDirectoryAuthUser();
       if (!token || !user?.id) {
@@ -2440,21 +2665,12 @@
         return;
       }
 
-      if (directoryClientOrdersList) {
-        directoryClientOrdersList.innerHTML = '<p class="text-muted mb-0">Cargando compras...</p>';
-      }
-      directoryClientOrdersModal?.show();
-      try {
-        const payload = await fetchDirectoryOrders(token);
-        renderDirectoryOrders(payload);
-      } catch (error) {
-        if (directoryClientOrdersList) {
-          directoryClientOrdersList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar las compras.</p>';
-        }
-      }
+      const customerPortalUrl = buildDirectoryCustomerPortalUrl('#compras');
+      window.location.href = customerPortalUrl;
     });
 
-    directoryClientAccountBtn?.addEventListener('click', () => {
+    directoryClientAccountBtn?.addEventListener('click', (event) => {
+      event.preventDefault();
       const token = getDirectoryAuthToken();
       const user = getDirectoryAuthUser();
       if (!token || !user?.id) {
@@ -2462,9 +2678,8 @@
         return;
       }
 
-      fillDirectoryAccount(user);
-      directoryClientPasswordForm?.reset();
-      directoryClientAccountModal?.show();
+      const customerPortalUrl = buildDirectoryCustomerPortalUrl('#perfil');
+      window.location.href = customerPortalUrl;
     });
 
     directoryClientLogoutBtn?.addEventListener('click', () => {
@@ -2473,6 +2688,7 @@
     });
 
     directoryClientLoginForm?.addEventListener('submit', submitDirectoryClientLogin);
+    document.getElementById('directory-client-login-type')?.addEventListener('change', syncDirectoryLoginPlaceholder);
     directoryClientRegisterForm?.addEventListener('submit', submitDirectoryClientRegister);
     bindDirectoryLocationSelectors();
     directoryClientUseCurrentLocationBtn?.addEventListener('click', requestDirectoryCurrentLocation);
@@ -2502,6 +2718,8 @@
       applyDirectoryAuthState();
       fillDirectoryAccount(getDirectoryAuthUser());
     });
+
+    syncDirectoryLoginPlaceholder();
 
     updateLandingCityOptions(getLandingFilterValue('state'));
     initializeDirectoryAuthState().catch(() => {

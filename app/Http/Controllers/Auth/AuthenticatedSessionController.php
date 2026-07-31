@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
  
 class AuthenticatedSessionController extends Controller
 {
@@ -51,14 +52,18 @@ class AuthenticatedSessionController extends Controller
     {
         $login = trim((string) ($request->input('login') ?? $request->input('email') ?? ''));
         $password = (string) $request->input('password', '');
+        $loginType = $this->normalizeLoginType((string) $request->input('login_type', ''));
 
-        if (!$this->attemptLoginByIdentifier($login, $password)) {
+        $attempt = $this->attemptLoginByIdentifier($login, $password, $loginType);
+
+        if (!($attempt['ok'] ?? false)) {
             AuditLogger::logEvent('auth', 'CUSTOMER_LOGIN_FAILED', 'Intento fallido de inicio de sesión cliente.', null, [
                 'login' => $login,
+                'login_type' => $loginType,
             ]);
 
             return response()->json([
-                'message' => 'Credenciales incorrectas.',
+                'message' => (string) ($attempt['message'] ?? 'Credenciales incorrectas.'),
             ], 422);
         }
 
@@ -133,6 +138,7 @@ class AuthenticatedSessionController extends Controller
         if ($provider === 'google') {
             $state = Str::random(40);
             $request->session()->put('customer_social_google_state', $state);
+            $this->rememberSocialState($request, 'google', $state);
 
             $googleClient = $this->makeGoogleClient();
             $googleClient->setState($state);
@@ -209,19 +215,24 @@ class AuthenticatedSessionController extends Controller
         $credentials = $request->validate([
             'login' => ['required_without:email', 'string', 'max:255'],
             'email' => ['nullable', 'string', 'max:255'],
+            'login_type' => ['nullable', 'in:name,email,dni'],
             'password' => ['required'],
         ]);
 
         $login = trim((string) ($credentials['login'] ?? $credentials['email'] ?? ''));
         $password = (string) ($credentials['password'] ?? '');
+        $loginType = $this->normalizeLoginType((string) ($credentials['login_type'] ?? ''));
+
+        $attempt = $this->attemptLoginByIdentifier($login, $password, $loginType);
  
-        if (!$this->attemptLoginByIdentifier($login, $password)) {
+        if (!($attempt['ok'] ?? false)) {
             AuditLogger::logEvent('auth', 'ADMIN_LOGIN_FAILED', 'Intento fallido de login admin.', null, [
                 'login' => $login,
+                'login_type' => $loginType,
             ]);
 
             return response()->json([
-                'message' => 'Credenciales incorrectas.',
+                'message' => (string) ($attempt['message'] ?? 'Credenciales incorrectas.'),
             ], 422);
         }
 
@@ -430,6 +441,9 @@ class AuthenticatedSessionController extends Controller
         }
 
         $validated = $request->validate([
+            'name' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore((int) $user->id)],
+            'dni' => ['nullable', 'string', 'max:100', Rule::unique('users', 'dni')->ignore((int) $user->id)],
             'phone_code' => ['nullable', 'string', 'max:10', 'regex:/^\+?[0-9]{1,4}$/'],
             'phone_number' => ['nullable', 'string', 'max:50'],
             'country_id' => ['nullable', 'integer', 'exists:countries,id'],
@@ -439,6 +453,22 @@ class AuthenticatedSessionController extends Controller
             'latitude' => ['nullable', 'numeric'],
             'longitude' => ['nullable', 'numeric'],
         ]);
+
+        if (array_key_exists('name', $validated)) {
+            $user->name = trim((string) ($validated['name'] ?? '')) !== ''
+                ? trim((string) $validated['name'])
+                : $user->name;
+        }
+
+        if (array_key_exists('email', $validated)) {
+            $normalizedEmail = trim(Str::lower((string) ($validated['email'] ?? '')));
+            $user->email = $normalizedEmail !== '' ? $normalizedEmail : null;
+        }
+
+        if (array_key_exists('dni', $validated)) {
+            $normalizedDni = trim((string) ($validated['dni'] ?? ''));
+            $user->dni = $normalizedDni !== '' ? $normalizedDni : null;
+        }
 
         $user->phone_number = $this->normalizeCustomerPhone(
             (string) ($validated['phone_number'] ?? ''),
@@ -500,34 +530,80 @@ class AuthenticatedSessionController extends Controller
         return (int) Role::query()->firstOrCreate(['name' => 'user'])->id;
     }
 
-    private function attemptLoginByIdentifier(string $identifier, string $password): bool
+    private function attemptLoginByIdentifier(string $identifier, string $password, ?string $loginType = null): array
     {
         if ($identifier === '' || $password === '') {
-            return false;
+            return [
+                'ok' => false,
+                'message' => 'Debes indicar usuario y contraseña.',
+            ];
         }
 
-        foreach ($this->resolveLoginColumns($identifier) as $column) {
-            if (Auth::attempt([$column => $identifier, 'password' => $password])) {
-                return true;
+        $column = $this->resolveLoginColumn($identifier, $loginType);
+        if ($column === null) {
+            return [
+                'ok' => false,
+                'message' => 'Selecciona un tipo de acceso válido: Nombre, Correo o DNI.',
+            ];
+        }
+
+        if ($column === 'name') {
+            $nameMatches = User::query()
+                ->whereRaw('LOWER(name) = ?', [Str::lower($identifier)])
+                ->count();
+
+            if ($nameMatches > 1) {
+                return [
+                    'ok' => false,
+                    'message' => 'Hay otros usuarios con ese mismo nombre, por favor inicie sesion por DNI (cedula) o por correo.',
+                ];
             }
         }
 
-        return false;
+        if (Auth::attempt([$column => $identifier, 'password' => $password])) {
+            return ['ok' => true];
+        }
+
+        return [
+            'ok' => false,
+            'message' => 'Credenciales incorrectas.',
+        ];
     }
 
-    private function resolveLoginColumns(string $identifier): array
+    private function resolveLoginColumn(string $identifier, ?string $loginType = null): ?string
     {
-        $columns = ['email', 'phone_number', 'name', 'dni'];
+        $normalizedType = $this->normalizeLoginType((string) ($loginType ?? ''));
+
+        if ($normalizedType !== null) {
+            return match ($normalizedType) {
+                'email' => 'email',
+                'dni' => 'dni',
+                'name' => 'name',
+                default => null,
+            };
+        }
 
         if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
-            return ['email', 'phone_number', 'name', 'dni'];
+            return 'email';
         }
 
-        if (preg_match('/^[\+\d\s\-\(\)]+$/', $identifier)) {
-            return ['phone_number', 'email', 'name', 'dni'];
+        if (preg_match('/^[A-Za-z]{0,2}[\-\s]?[0-9][0-9\.\-\s]{4,}$/', $identifier)) {
+            return 'dni';
         }
 
-        return $columns;
+        return 'name';
+    }
+
+    private function normalizeLoginType(string $loginType): ?string
+    {
+        $normalizedType = strtolower(trim($loginType));
+        if ($normalizedType === '') {
+            return null;
+        }
+
+        return in_array($normalizedType, ['name', 'email', 'dni'], true)
+            ? $normalizedType
+            : null;
     }
 
     private function socialProviderMeta(): array
@@ -611,10 +687,9 @@ class AuthenticatedSessionController extends Controller
 
     private function resolveGoogleCustomerProfile(Request $request): array
     {
-        $expectedState = (string) $request->session()->pull('customer_social_google_state', '');
         $receivedState = trim((string) $request->query('state', ''));
 
-        if ($expectedState === '' || ! hash_equals($expectedState, $receivedState)) {
+        if (! $this->validateAndConsumeSocialState($request, 'google', $receivedState)) {
             throw new \RuntimeException('La respuesta de Google no pasó la validación de seguridad.');
         }
 
@@ -854,7 +929,7 @@ class AuthenticatedSessionController extends Controller
             'email' => $email,
             'password' => Hash::make(Str::random(40)),
             'role_id' => $this->resolveCustomerRoleId(),
-            'dni' => 'SOC-' . strtoupper($provider) . '-' . Str::upper(Str::random(8)),
+            'dni' => null,
             'email_verified_at' => now(),
             $providerColumn => $providerId,
             'avatar' => $avatar,
@@ -889,6 +964,44 @@ class AuthenticatedSessionController extends Controller
             'apple' => 'apple_id',
             default => throw new \RuntimeException('Proveedor social no soportado.'),
         };
+    }
+
+    private function rememberSocialState(Request $request, string $provider, string $state): void
+    {
+        $sessionKey = 'customer_social_' . $provider . '_states';
+        $states = (array) $request->session()->get($sessionKey, []);
+
+        if (!in_array($state, $states, true)) {
+            $states[] = $state;
+        }
+
+        // Keep a short rolling window of valid states for concurrent/retry flows.
+        $request->session()->put($sessionKey, array_slice($states, -5));
+    }
+
+    private function validateAndConsumeSocialState(Request $request, string $provider, string $receivedState): bool
+    {
+        if ($receivedState === '') {
+            return false;
+        }
+
+        $singleStateKey = 'customer_social_' . $provider . '_state';
+        $singleExpectedState = (string) $request->session()->pull($singleStateKey, '');
+        if ($singleExpectedState !== '' && hash_equals($singleExpectedState, $receivedState)) {
+            return true;
+        }
+
+        $sessionKey = 'customer_social_' . $provider . '_states';
+        $states = (array) $request->session()->get($sessionKey, []);
+        foreach ($states as $index => $state) {
+            if (is_string($state) && hash_equals($state, $receivedState)) {
+                unset($states[$index]);
+                $request->session()->put($sessionKey, array_values($states));
+                return true;
+            }
+        }
+
+        return false;
     }
 
 }

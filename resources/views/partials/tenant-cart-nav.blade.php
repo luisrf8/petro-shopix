@@ -27,6 +27,7 @@
   [$tenantSecondaryR, $tenantSecondaryG, $tenantSecondaryB] = $toRgb($tenantColorSecondary);
   [$tenantAccentR, $tenantAccentG, $tenantAccentB] = $toRgb($tenantColorAccent);
   $tenantAuthRedirect = request()->getRequestUri() ?: '/';
+  $tenantCustomerPortalUrl = route('customer.portal.general');
   $tenantSocialProviders = [
     [
       'key' => 'google',
@@ -628,22 +629,22 @@
   </button>
   <ul class="dropdown-menu dropdown-menu-end tenant-user-menu">
     <li id="tenant-orders-wrap">
-      <button type="button" id="tenant-orders-btn" class="dropdown-item d-inline-flex align-items-center gap-2">
+      <a href="{{ $tenantCustomerPortalUrl }}#compras" id="tenant-orders-btn" class="dropdown-item d-inline-flex align-items-center gap-2">
         <i class="bi bi-bag-check"></i>
         <span>Listado de compras</span>
-      </button>
+      </a>
     </li>
     <li id="tenant-appointments-wrap">
-      <button type="button" id="tenant-appointments-btn" class="dropdown-item d-inline-flex align-items-center gap-2">
+      <a href="{{ $tenantCustomerPortalUrl }}#citas" id="tenant-appointments-btn" class="dropdown-item d-inline-flex align-items-center gap-2">
         <i class="bi bi-calendar-check"></i>
         <span>Mis citas</span>
-      </button>
+      </a>
     </li>
     <li id="tenant-account-wrap">
-      <button type="button" id="tenant-account-btn" class="dropdown-item d-inline-flex align-items-center gap-2">
+      <a href="{{ $tenantCustomerPortalUrl }}#perfil" id="tenant-account-btn" class="dropdown-item d-inline-flex align-items-center gap-2">
         <i class="bi bi-person-gear"></i>
         <span>Mi perfil</span>
-      </button>
+      </a>
     </li>
     <li><hr class="dropdown-divider my-1"></li>
     <li id="tenant-session-logout-wrap">
@@ -656,30 +657,30 @@
 </li>
 
 <li class="nav-item d-none d-lg-none" id="tenant-orders-mobile-wrap">
-  <button type="button"
+  <a href="{{ $tenantCustomerPortalUrl }}#compras"
           id="tenant-orders-mobile-btn"
           class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-bag-check"></i>
     <span>Listado de compras</span>
-  </button>
+  </a>
 </li>
 
 <li class="nav-item d-none d-lg-none" id="tenant-appointments-mobile-wrap">
-  <button type="button"
+  <a href="{{ $tenantCustomerPortalUrl }}#citas"
           id="tenant-appointments-mobile-btn"
           class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-calendar-check"></i>
     <span>Mis citas</span>
-  </button>
+  </a>
 </li>
 
 <li class="nav-item d-none d-lg-none" id="tenant-account-mobile-wrap">
-  <button type="button"
+  <a href="{{ $tenantCustomerPortalUrl }}#perfil"
           id="tenant-account-mobile-btn"
           class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center gap-2">
     <i class="bi bi-person-gear"></i>
     <span>Mi perfil</span>
-  </button>
+  </a>
 </li>
 
 <li class="nav-item d-none d-lg-none" id="tenant-session-logout-mobile-wrap">
@@ -892,7 +893,7 @@
           @endforeach
         </div>
 
-        <div class="tenant-auth-divider">o con correo</div>
+        <div class="tenant-auth-divider">o con credenciales</div>
 
         <ul class="nav nav-tabs" id="tenantPublicAuthTabs" role="tablist">
           <li class="nav-item" role="presentation">
@@ -906,7 +907,14 @@
           <div class="tab-pane fade show active" id="tenant-public-login-panel" role="tabpanel">
             <form id="tenant-public-login-form" class="row g-2">
               <div class="col-12">
-                <input type="text" class="form-control" id="tenant-public-login-email" placeholder="Correo, teléfono o usuario" required>
+                <select class="form-select" id="tenant-public-login-type" required>
+                  <option value="name" selected>Ingresar por Nombre</option>
+                  <option value="email">Ingresar por Correo</option>
+                  <option value="dni">Ingresar por DNI</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <input type="text" class="form-control" id="tenant-public-login-identifier" placeholder="Nombre" required>
               </div>
               <div class="col-12">
                 <div class="input-group">
@@ -1109,6 +1117,7 @@
     const notificationPermissionCopy = document.getElementById('tenant-notification-permission-copy');
     const enableBrowserNotificationsBtn = document.getElementById('tenant-enable-browser-notifications');
     const authTriggers = Array.from(document.querySelectorAll('[data-shopix-open-auth]'));
+    const tenantCustomerPortalUrl = @json($tenantCustomerPortalUrl);
     let tenantToastContainer = document.getElementById('tenant-toast-container');
     let serviceWorkerRegistrationPromise = null;
     let tenantAppointmentsById = new Map();
@@ -1763,7 +1772,8 @@
     async function submitTenantPublicLogin(event) {
       event.preventDefault();
 
-      const login = document.getElementById('tenant-public-login-email')?.value.trim() || '';
+      const loginType = document.getElementById('tenant-public-login-type')?.value || 'name';
+      const login = document.getElementById('tenant-public-login-identifier')?.value.trim() || '';
       const password = document.getElementById('tenant-public-login-password')?.value || '';
 
       const response = await fetch('/api/loginEcomm', {
@@ -1773,7 +1783,7 @@
           'Accept': 'application/json',
           'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
         },
-        body: JSON.stringify({ login, password })
+        body: JSON.stringify({ login, login_type: loginType, password })
       });
 
       const data = await response.json().catch(() => ({}));
@@ -1793,6 +1803,24 @@
       setTimeout(() => {
         maybeAutoRequestBrowserNotificationPermission();
       }, 120);
+    }
+
+    function syncTenantPublicLoginPlaceholder() {
+      const loginTypeSelect = document.getElementById('tenant-public-login-type');
+      const loginInput = document.getElementById('tenant-public-login-identifier');
+
+      if (!loginTypeSelect || !loginInput) {
+        return;
+      }
+
+      const placeholderByType = {
+        name: 'Nombre',
+        email: 'Correo electrónico',
+        dni: 'DNI o cédula',
+      };
+
+      const selectedType = String(loginTypeSelect.value || 'name');
+      loginInput.placeholder = placeholderByType[selectedType] || 'Nombre';
     }
 
     async function submitTenantPublicRegister(event) {
@@ -2448,13 +2476,15 @@
           <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
             <div>
               <div class="fw-semibold fs-6">Pedido #${row.id}</div>
-              <div class="tenant-order-meta">${row.tenant_name || 'Tienda'} ${row.date ? `• ${row.date}` : ''}</div>
+              <div class="tenant-order-meta"><strong>Tienda:</strong> ${row.tenant_name || 'No disponible'}${row.date ? ` • ${row.date}` : ''}</div>
             </div>
             <a href="${row.public_url}" class="btn btn-sm btn-outline-dark">Ver detalle</a>
           </div>
 
           <div class="tenant-order-meta mb-1"><strong>${row.items_count || 0}</strong> item(s) • <strong>${Number(row.total || 0).toFixed(2)} $</strong></div>
-          <div class="tenant-order-meta mb-2">${row.preference || 'No definida'}${row.address ? ` • ${row.address}` : ''}</div>
+          <div class="tenant-order-meta mb-2">${String(row.preference || '').trim() && String(row.address || '').trim() && String(row.preference).trim().toLowerCase() === String(row.address).trim().toLowerCase()
+            ? `${row.preference}`
+            : `${row.preference || 'No definida'}${row.address ? ` • ${row.address}` : ''}`}</div>
 
           <div class="tenant-order-status-group">
             <span class="badge tenant-order-badge ${orderStatusClass(row.status)}">Pedido: ${orderStatusLabel(row.status)}</span>
@@ -2957,6 +2987,7 @@
     });
 
     document.getElementById('tenant-public-login-form')?.addEventListener('submit', submitTenantPublicLogin);
+    document.getElementById('tenant-public-login-type')?.addEventListener('change', syncTenantPublicLoginPlaceholder);
     document.getElementById('tenant-public-register-form')?.addEventListener('submit', submitTenantPublicRegister);
     document.querySelectorAll('[data-password-toggle]').forEach((button) => {
       if (button.dataset.shopixPasswordToggleBound === '1') {
@@ -2977,69 +3008,55 @@
       });
     });
 
-    ordersButton?.addEventListener('click', async () => {
-      const hasSession = !!currentToken && !!currentUser?.id;
-      if (!hasSession) {
-        if (openTenantAuthModal()) {
-          return;
-        }
+    syncTenantPublicLoginPlaceholder();
 
-        alert('No se pudo abrir el inicio de sesión en este momento.');
+    const goToCustomerPortal = (hash = '') => {
+      const destination = `${tenantCustomerPortalUrl}${hash}`;
+      window.location.assign(destination);
+    };
+
+    ordersButton?.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (currentToken && currentUser?.id) {
+        goToCustomerPortal('#compras');
         return;
       }
 
-      ordersList.innerHTML = '<p class="text-muted mb-0">Cargando compras...</p>';
-      const ordersModalInstance = bootstrap.Modal.getOrCreateInstance(document.getElementById('tenantOrdersModal'));
-      ordersModalInstance.show();
-
-      try {
-        const payload = await fetchOrders(currentToken);
-        renderOrders(payload);
-      } catch (error) {
-        ordersList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar las compras.</p>';
-      }
+      openTenantAuthModal();
     });
 
-    ordersMobileButton?.addEventListener('click', () => {
+    ordersMobileButton?.addEventListener('click', (event) => {
+      event.preventDefault();
       ordersButton?.click();
     });
 
-    appointmentsButton?.addEventListener('click', async () => {
-      const hasSession = !!currentToken && !!currentUser?.id;
-      if (!hasSession) {
-        if (openTenantAuthModal()) {
-          return;
-        }
-
-        alert('No se pudo abrir el inicio de sesión en este momento.');
+    appointmentsButton?.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (currentToken && currentUser?.id) {
+        goToCustomerPortal('#citas');
         return;
       }
 
-      appointmentsList.innerHTML = '<p class="text-muted mb-0">Cargando citas...</p>';
-      const appointmentsModalInstance = bootstrap.Modal.getOrCreateInstance(document.getElementById('tenantAppointmentsModal'));
-      appointmentsModalInstance.show();
-
-      try {
-        const payload = await fetchAppointments(currentToken);
-        renderAppointments(payload);
-      } catch (error) {
-        appointmentsList.innerHTML = '<p class="text-danger mb-0">No se pudieron cargar las citas.</p>';
-      }
+      openTenantAuthModal();
     });
 
-    appointmentsMobileButton?.addEventListener('click', () => {
+    appointmentsMobileButton?.addEventListener('click', (event) => {
+      event.preventDefault();
       appointmentsButton?.click();
     });
 
-    accountButton?.addEventListener('click', () => {
-      if (openTenantCustomerModal()) {
+    accountButton?.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (currentToken && currentUser?.id) {
+        goToCustomerPortal('#perfil');
         return;
       }
 
-      alert('No se pudo abrir tu perfil en este momento.');
+      openTenantAuthModal();
     });
 
-    accountMobileButton?.addEventListener('click', () => {
+    accountMobileButton?.addEventListener('click', (event) => {
+      event.preventDefault();
       accountButton?.click();
     });
 
@@ -3048,7 +3065,7 @@
         event.preventDefault();
 
         if (currentToken && currentUser?.id) {
-          openTenantCustomerModal();
+          goToCustomerPortal('#perfil');
           return;
         }
 
@@ -3062,7 +3079,7 @@
 
     window.addEventListener('shopix-open-auth-requested', () => {
       if (currentToken && currentUser?.id) {
-        openTenantCustomerModal();
+        goToCustomerPortal('#perfil');
         return;
       }
 

@@ -58,6 +58,7 @@ Route::middleware('guest')->group(function () {
 // PÁGINAS PÚBLICAS
 Route::get('/', [IndexController::class, 'landing'])->name('landing');
 Route::get('/landings', [IndexController::class, 'landingDirectory'])->name('landing.directory');
+Route::get('/mi-cuenta', [TenantController::class, 'publicCustomerPortalGeneral'])->name('customer.portal.general');
 Route::get('/legal/terms-and-conditions.pdf', [TenantController::class, 'termsAndConditionsPdf'])->name('legal.terms.pdf');
 Route::get('/index', fn() => view('index'));
 Route::get('/manifest.webmanifest', function (\Illuminate\Http\Request $request) {
@@ -422,6 +423,9 @@ Route::get('/{tenant:slug}/categorias', [TenantController::class, 'publicTenantC
 Route::get('/{tenant:slug}/payment-methods', [TenantController::class, 'publicTenantPaymentMethods'])->name('tenant.public.paymentMethods');
 Route::get('/{tenant:slug}/appointments/public-availability', [TenantController::class, 'publicTenantAppointmentAvailability'])->name('tenant.public.appointments.availability');
 Route::get('/{tenant:slug}/products/quick-options', [TenantController::class, 'publicTenantProductQuickOptions'])->name('tenant.public.productQuickOptions');
+Route::get('/{tenant:slug}/mi-cuenta', function () {
+    return redirect()->route('customer.portal.general');
+})->name('tenant.public.customer.portal');
 Route::post('/{tenant:slug}/checkout/pro', [TenantController::class, 'publicTenantProCheckout'])->name('tenant.public.proCheckout');
 Route::post('/{tenant:slug}/scan-code', [TenantController::class, 'publicTenantResolveScanCode'])->name('tenant.public.scanCode');
 Route::get('/{tenant:slug}/{product}', [TenantController::class, 'publicTenantProduct'])->name('tenant.public.product');

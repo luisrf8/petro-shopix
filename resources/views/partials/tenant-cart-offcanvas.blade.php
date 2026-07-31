@@ -913,7 +913,7 @@
                 @endforeach
               </div>
 
-              <div class="tenant-auth-divider">o con correo</div>
+              <div class="tenant-auth-divider">o con credenciales</div>
 
               <ul class="nav nav-tabs" id="tenantAuthTabs" role="tablist">
                 <li class="nav-item" role="presentation">
@@ -927,9 +927,16 @@
                 <div class="tab-pane fade show active" id="tenant-login-panel" role="tabpanel">
                   <form id="tenant-pro-login-form" class="row g-2">
                     <div class="col-12 col-md-6">
-                      <input type="text" class="form-control" id="tenant-pro-login-email" placeholder="Correo, teléfono o usuario" required>
+                      <select class="form-select" id="tenant-pro-login-type" required>
+                        <option value="name" selected>Ingresar por Nombre</option>
+                        <option value="email">Ingresar por Correo</option>
+                        <option value="dni">Ingresar por DNI</option>
+                      </select>
                     </div>
                     <div class="col-12 col-md-6">
+                      <input type="text" class="form-control" id="tenant-pro-login-identifier" placeholder="Nombre" required>
+                    </div>
+                    <div class="col-12">
                       <div class="input-group">
                         <input type="password" class="form-control" id="tenant-pro-login-password" placeholder="Contraseña" required>
                         <button type="button" class="btn btn-outline-secondary" data-password-toggle="tenant-pro-login-password" aria-label="Mostrar u ocultar contraseña"><i class="bi bi-eye"></i></button>
@@ -6232,7 +6239,8 @@
     async function loginProCustomer(event) {
       event.preventDefault();
       clearTenantAuthAlert();
-      const login = document.getElementById('tenant-pro-login-email').value.trim();
+      const loginType = document.getElementById('tenant-pro-login-type')?.value || 'name';
+      const login = document.getElementById('tenant-pro-login-identifier').value.trim();
       const password = document.getElementById('tenant-pro-login-password').value;
       setTenantAuthFormLoading('tenant-pro-login-form', true, 'Entrando...');
 
@@ -6246,7 +6254,7 @@
             'X-Requested-With': 'XMLHttpRequest',
             'X-CSRF-TOKEN': getCsrfToken(),
           },
-          body: JSON.stringify({ login, password })
+          body: JSON.stringify({ login, login_type: loginType, password })
         });
 
         const data = await response.json().catch(() => ({}));
@@ -6268,6 +6276,24 @@
       } finally {
         setTenantAuthFormLoading('tenant-pro-login-form', false);
       }
+    }
+
+    function syncProLoginPlaceholder() {
+      const loginTypeSelect = document.getElementById('tenant-pro-login-type');
+      const loginInput = document.getElementById('tenant-pro-login-identifier');
+
+      if (!loginTypeSelect || !loginInput) {
+        return;
+      }
+
+      const placeholderByType = {
+        name: 'Nombre',
+        email: 'Correo electrónico',
+        dni: 'DNI o cédula',
+      };
+
+      const selectedType = String(loginTypeSelect.value || 'name');
+      loginInput.placeholder = placeholderByType[selectedType] || 'Nombre';
     }
 
     async function registerProCustomer(event) {
@@ -6720,6 +6746,7 @@
     });
 
     document.getElementById('tenant-pro-login-form')?.addEventListener('submit', loginProCustomer);
+    document.getElementById('tenant-pro-login-type')?.addEventListener('change', syncProLoginPlaceholder);
     document.getElementById('tenant-pro-register-form')?.addEventListener('submit', registerProCustomer);
     document.querySelectorAll('[data-password-toggle]').forEach((button) => {
       if (button.dataset.shopixPasswordToggleBound === '1') {
@@ -6739,6 +6766,8 @@
         icon?.classList.toggle('bi-eye-slash', isHidden);
       });
     });
+
+    syncProLoginPlaceholder();
 
     const resumedCheckoutState = consumeCheckoutResumeState();
     const socialAuthNotice = consumeSocialAuthNotice();
