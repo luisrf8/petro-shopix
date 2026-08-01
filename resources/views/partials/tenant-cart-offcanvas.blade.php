@@ -2870,6 +2870,8 @@
     let appointmentExtraProducts = [];
     let appointmentExtraSearchTimer = null;
     let appointmentModalSearchTimer = null;
+    let proCheckoutSubmitInProgress = false;
+    let activeProCheckoutRequestUid = null;
 
     function clearAppointmentStatusPolling() {
       if (appointmentStatusPollingInterval) {
@@ -6347,6 +6349,10 @@
     }
 
     async function submitProOrder() {
+      if (proCheckoutSubmitInProgress) {
+        return;
+      }
+
       const token = getAuthToken();
       const user = getAuthUser();
       if (!token || !user?.id) {
@@ -6536,8 +6542,11 @@
       }
 
       const items = checkoutItems;
+      const requestUid = activeProCheckoutRequestUid || `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      activeProCheckoutRequestUid = requestUid;
 
       let response;
+      proCheckoutSubmitInProgress = true;
       setProSubmitLoading(true);
       try {
         response = await fetch(`/${tenantSlug}/checkout/pro`, {
@@ -6551,6 +6560,7 @@
             'X-CSRF-TOKEN': getCsrfToken(),
           },
           body: JSON.stringify({
+            request_uid: requestUid,
             customer_id: Number(user.id),
             delivery_type: deliveryType,
             delivery_address: ['delivery', 'shipping'].includes(deliveryType) ? deliveryAddressResult.address : 'Tienda',
@@ -6574,6 +6584,7 @@
       } catch (error) {
         alert('No se pudo conectar con la tienda para registrar el pedido.');
         setProSubmitLoading(false);
+        proCheckoutSubmitInProgress = false;
         return;
       }
 
@@ -6587,15 +6598,31 @@
         if (response.status === 413) {
           alert('La solicitud es demasiado grande (413). Reduce el peso total de los comprobantes e intenta de nuevo.');
           setProSubmitLoading(false);
+          proCheckoutSubmitInProgress = false;
+          activeProCheckoutRequestUid = null;
+          return;
+        }
+
+        if (response.status === 429) {
+          alert(data.message || data.error || 'Estás enviando solicitudes demasiado rápido. Espera unos segundos.');
+          setProSubmitLoading(false);
+          proCheckoutSubmitInProgress = false;
+          activeProCheckoutRequestUid = null;
           return;
         }
 
         alert(data.message || data.error || 'No se pudo completar el pedido.');
         setProSubmitLoading(false);
+        proCheckoutSubmitInProgress = false;
+        if (response.status !== 409) {
+          activeProCheckoutRequestUid = null;
+        }
         return;
       }
 
       setProSubmitLoading(false);
+      proCheckoutSubmitInProgress = false;
+      activeProCheckoutRequestUid = null;
       const successMessage = appointmentModeActive
         ? `Tu cita fue apartada correctamente para ${formatAppointmentSelectedDateLabel(selectedAppointmentDate)} a las ${selectedAppointmentStartTime}. Te notificaremos cuando el equipo confirme.`
         : 'Tu compra fue enviada correctamente. Te llegará una notificación con el seguimiento.';
@@ -7028,6 +7055,8 @@
     tenantProCheckoutModalElement?.addEventListener('hidden.bs.modal', () => {
       clearAppointmentStatusPolling();
       trackedAppointmentId = 0;
+      proCheckoutSubmitInProgress = false;
+      activeProCheckoutRequestUid = null;
       if (proAppointmentStatusWrap) {
         proAppointmentStatusWrap.classList.add('d-none');
       }

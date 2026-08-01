@@ -208,10 +208,18 @@ class SaleController extends Controller
         $customerId = null;
         $createdCustomerTemporaryPassword = null;
         $requestUid = trim((string) ($validated['request_uid'] ?? ''));
+        $requestFingerprint = $this->buildAdminSaleRequestFingerprint($request, $tenantId);
         $saleRequestLockKey = null;
         $saleRequestCompletedKey = null;
+        $saleFingerprintLockKey = null;
+        $saleFingerprintCompletedKey = null;
+        $saleUserConcurrencyLockKey = null;
+        $saleUserLastRequestKey = null;
         $saleRequestLockAcquired = false;
+        $saleFingerprintLockAcquired = false;
+        $saleUserConcurrencyLockAcquired = false;
         $saleRequestCompleted = false;
+        $authUserId = (int) (auth()->id() ?? 0);
 
         if ($tenantId <= 0) {
             return response()->json(['error' => 'No se pudo determinar la tienda para registrar la venta.'], 422);
@@ -231,16 +239,62 @@ class SaleController extends Controller
                 $cachedCompletedPayload['idempotent_replay'] = true;
                 return response()->json($cachedCompletedPayload, 200);
             }
-
-            if (!Cache::add($saleRequestLockKey, 'processing', 120)) {
-                return response()->json([
-                    'error' => 'Esta venta ya se está procesando. Espera unos segundos antes de reintentar.',
-                    'code' => 'sale_request_in_progress',
-                ], 409);
-            }
-
-            $saleRequestLockAcquired = true;
         }
+
+        if ($requestUid === '') {
+            $requestUid = 'sale-' . substr($requestFingerprint, 0, 24);
+            $saleRequestLockKey = 'sales:admin:request:lock:' . $tenantId . ':' . $requestUid;
+            $saleRequestCompletedKey = 'sales:admin:request:done:' . $tenantId . ':' . $requestUid;
+
+            $cachedCompletedPayload = Cache::get($saleRequestCompletedKey);
+            if (is_array($cachedCompletedPayload)) {
+                $cachedCompletedPayload['idempotent_replay'] = true;
+                return response()->json($cachedCompletedPayload, 200);
+            }
+        }
+
+        $saleFingerprintLockKey = 'sales:admin:fingerprint:lock:' . $tenantId . ':' . $requestFingerprint;
+        $saleFingerprintCompletedKey = 'sales:admin:fingerprint:done:' . $tenantId . ':' . $requestFingerprint;
+        $saleUserConcurrencyLockKey = 'sales:admin:user:lock:' . $tenantId . ':' . max(0, $authUserId);
+        $saleUserLastRequestKey = 'sales:admin:user:last:' . $tenantId . ':' . max(0, $authUserId);
+
+        $cachedFingerprintPayload = Cache::get($saleFingerprintCompletedKey);
+        if (is_array($cachedFingerprintPayload)) {
+            $cachedFingerprintPayload['idempotent_replay'] = true;
+            return response()->json($cachedFingerprintPayload, 200);
+        }
+
+        $lastRequestAt = (int) (Cache::get($saleUserLastRequestKey) ?? 0);
+        if ($authUserId > 0 && $lastRequestAt > 0 && (time() - $lastRequestAt) < 2) {
+            return response()->json([
+                'error' => 'Estás enviando solicitudes demasiado rápido. Espera 2 segundos e intenta de nuevo.',
+                'code' => 'sale_request_too_fast',
+            ], 429);
+        }
+
+        if (!Cache::add($saleUserConcurrencyLockKey, 'processing', 180)) {
+            return response()->json([
+                'error' => 'Ya tienes otra venta en procesamiento. Espera unos segundos.',
+                'code' => 'sale_user_request_in_progress',
+            ], 409);
+        }
+        $saleUserConcurrencyLockAcquired = true;
+
+        if (!Cache::add($saleRequestLockKey, 'processing', 180)) {
+            return response()->json([
+                'error' => 'Esta venta ya se está procesando. Espera unos segundos antes de reintentar.',
+                'code' => 'sale_request_in_progress',
+            ], 409);
+        }
+        $saleRequestLockAcquired = true;
+
+        if (!Cache::add($saleFingerprintLockKey, 'processing', 180)) {
+            return response()->json([
+                'error' => 'Ya existe una solicitud idéntica en proceso. Espera unos segundos.',
+                'code' => 'sale_duplicate_payload_in_progress',
+            ], 409);
+        }
+        $saleFingerprintLockAcquired = true;
 
         try {
 
@@ -920,8 +974,22 @@ class SaleController extends Controller
             Cache::put($saleRequestCompletedKey, $responsePayload, now()->addMinutes(10));
         }
 
+        if ($saleFingerprintCompletedKey) {
+            Cache::put($saleFingerprintCompletedKey, $responsePayload, now()->addMinutes(10));
+        }
+
+        if ($saleUserLastRequestKey) {
+            Cache::put($saleUserLastRequestKey, time(), now()->addMinutes(5));
+        }
+
         if ($saleRequestLockKey) {
             Cache::forget($saleRequestLockKey);
+        }
+        if ($saleFingerprintLockKey) {
+            Cache::forget($saleFingerprintLockKey);
+        }
+        if ($saleUserConcurrencyLockKey) {
+            Cache::forget($saleUserConcurrencyLockKey);
         }
         $saleRequestCompleted = true;
 
@@ -948,7 +1016,51 @@ class SaleController extends Controller
             if ($saleRequestLockAcquired && !$saleRequestCompleted && $saleRequestLockKey) {
                 Cache::forget($saleRequestLockKey);
             }
+
+            if ($saleFingerprintLockAcquired && !$saleRequestCompleted && $saleFingerprintLockKey) {
+                Cache::forget($saleFingerprintLockKey);
+            }
+
+            if ($saleUserConcurrencyLockAcquired && $saleUserConcurrencyLockKey) {
+                Cache::forget($saleUserConcurrencyLockKey);
+            }
         }
+    }
+
+    private function buildAdminSaleRequestFingerprint(Request $request, int $tenantId): string
+    {
+        $payload = $request->except(['request_uid', '_token']);
+        $normalizedPayload = $this->normalizeIdempotencyPayload($payload);
+
+        return hash('sha256', json_encode([
+            'tenant_id' => $tenantId,
+            'payload' => $normalizedPayload,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function normalizeIdempotencyPayload(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            if (array_is_list($value)) {
+                return array_map(fn ($item) => $this->normalizeIdempotencyPayload($item), $value);
+            }
+
+            $normalized = [];
+            $keys = array_keys($value);
+            sort($keys, SORT_STRING);
+
+            foreach ($keys as $key) {
+                $normalized[(string) $key] = $this->normalizeIdempotencyPayload($value[$key]);
+            }
+
+            return $normalized;
+        }
+
+        if (is_bool($value) || is_null($value) || is_int($value) || is_float($value)) {
+            return $value;
+        }
+
+        return trim((string) $value);
     }
 
     private function resolveIgtfRate(): float

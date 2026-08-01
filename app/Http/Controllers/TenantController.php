@@ -44,6 +44,7 @@ use Dompdf\Options;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -2861,9 +2862,21 @@ class TenantController extends Controller
             ], 403);
         }
 
+        $checkoutRequestLockKey = null;
+        $checkoutRequestDoneKey = null;
+        $checkoutFingerprintLockKey = null;
+        $checkoutFingerprintDoneKey = null;
+        $checkoutUserLockKey = null;
+        $checkoutUserLastRequestKey = null;
+        $checkoutRequestLockAcquired = false;
+        $checkoutFingerprintLockAcquired = false;
+        $checkoutUserLockAcquired = false;
+        $checkoutCompleted = false;
+
         try {
             $validated = $request->validate([
                 'customer_id' => 'required|exists:users,id',
+            'request_uid' => 'nullable|string|max:120',
                 'delivery_type' => 'nullable|in:pickup,delivery,shipping',
                 'delivery_address' => 'nullable|string|max:500',
                 'delivery_city_id' => 'nullable|integer|exists:cities,id',
@@ -2890,6 +2903,67 @@ class TenantController extends Controller
                 'payments.*.reference_image_data' => 'nullable|string',
                 'payments.*.reference_image_mime' => 'nullable|string|max:100',
             ]);
+
+            $requestUid = trim((string) ($validated['request_uid'] ?? ''));
+            $requestFingerprint = $this->buildPublicCheckoutRequestFingerprint($validated, (int) $tenant->id);
+            if ($requestUid === '') {
+                $requestUid = 'checkout-' . substr($requestFingerprint, 0, 24);
+            }
+
+            $checkoutRequestLockKey = 'checkout:pro:request:lock:' . (int) $tenant->id . ':' . $requestUid;
+            $checkoutRequestDoneKey = 'checkout:pro:request:done:' . (int) $tenant->id . ':' . $requestUid;
+            $checkoutFingerprintLockKey = 'checkout:pro:fingerprint:lock:' . (int) $tenant->id . ':' . $requestFingerprint;
+            $checkoutFingerprintDoneKey = 'checkout:pro:fingerprint:done:' . (int) $tenant->id . ':' . $requestFingerprint;
+            $checkoutUserLockKey = 'checkout:pro:user:lock:' . (int) $tenant->id . ':' . (int) ($validated['customer_id'] ?? 0);
+            $checkoutUserLastRequestKey = 'checkout:pro:user:last:' . (int) $tenant->id . ':' . (int) ($validated['customer_id'] ?? 0);
+
+            $cachedByRequestUid = Cache::get($checkoutRequestDoneKey);
+            if (is_array($cachedByRequestUid)) {
+                $cachedByRequestUid['idempotent_replay'] = true;
+                return response()->json($cachedByRequestUid, 200);
+            }
+
+            $cachedByFingerprint = Cache::get($checkoutFingerprintDoneKey);
+            if (is_array($cachedByFingerprint)) {
+                $cachedByFingerprint['idempotent_replay'] = true;
+                return response()->json($cachedByFingerprint, 200);
+            }
+
+            $lastRequestAt = (int) (Cache::get($checkoutUserLastRequestKey) ?? 0);
+            if ($lastRequestAt > 0 && (time() - $lastRequestAt) < 2) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Estás enviando solicitudes demasiado rápido. Espera 2 segundos e intenta de nuevo.',
+                    'code' => 'checkout_request_too_fast',
+                ], 429);
+            }
+
+            if (!Cache::add($checkoutUserLockKey, 'processing', 180)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ya tienes un pedido en procesamiento. Espera unos segundos.',
+                    'code' => 'checkout_user_request_in_progress',
+                ], 409);
+            }
+            $checkoutUserLockAcquired = true;
+
+            if (!Cache::add($checkoutRequestLockKey, 'processing', 180)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Este pedido ya se está procesando. Espera unos segundos.',
+                    'code' => 'checkout_request_in_progress',
+                ], 409);
+            }
+            $checkoutRequestLockAcquired = true;
+
+            if (!Cache::add($checkoutFingerprintLockKey, 'processing', 180)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ya existe una solicitud idéntica en proceso. Espera unos segundos.',
+                    'code' => 'checkout_duplicate_payload_in_progress',
+                ], 409);
+            }
+            $checkoutFingerprintLockAcquired = true;
 
             $customerExists = User::query()
                 ->whereKey((int) $validated['customer_id'])
@@ -3329,7 +3403,7 @@ class TenantController extends Controller
                 ]);
             }
 
-            return response()->json([
+            $responsePayload = [
                 'success' => true,
                 'message' => $createdAppointment
                     ? 'Cita registrada correctamente. Te notificaremos al confirmar la agenda.'
@@ -3341,7 +3415,32 @@ class TenantController extends Controller
                     'starts_at' => optional($createdAppointment->starts_at)?->toDateTimeString(),
                     'payment_mode' => $appointmentPaymentMode,
                 ] : null,
-            ], 201);
+            ];
+
+            if ($checkoutRequestDoneKey) {
+                Cache::put($checkoutRequestDoneKey, $responsePayload, now()->addMinutes(10));
+            }
+
+            if ($checkoutFingerprintDoneKey) {
+                Cache::put($checkoutFingerprintDoneKey, $responsePayload, now()->addMinutes(10));
+            }
+
+            if ($checkoutUserLastRequestKey) {
+                Cache::put($checkoutUserLastRequestKey, time(), now()->addMinutes(5));
+            }
+
+            if ($checkoutRequestLockKey) {
+                Cache::forget($checkoutRequestLockKey);
+            }
+            if ($checkoutFingerprintLockKey) {
+                Cache::forget($checkoutFingerprintLockKey);
+            }
+            if ($checkoutUserLockKey) {
+                Cache::forget($checkoutUserLockKey);
+            }
+            $checkoutCompleted = true;
+
+            return response()->json($responsePayload, 201);
         } catch (ValidationException $exception) {
             return response()->json([
                 'success' => false,
@@ -3360,7 +3459,80 @@ class TenantController extends Controller
                 'success' => false,
                 'message' => 'No se pudo completar el pedido en este momento.',
             ], 500);
+        } finally {
+            if ($checkoutRequestLockAcquired && !$checkoutCompleted && $checkoutRequestLockKey) {
+                Cache::forget($checkoutRequestLockKey);
+            }
+
+            if ($checkoutFingerprintLockAcquired && !$checkoutCompleted && $checkoutFingerprintLockKey) {
+                Cache::forget($checkoutFingerprintLockKey);
+            }
+
+            if ($checkoutUserLockAcquired && $checkoutUserLockKey) {
+                Cache::forget($checkoutUserLockKey);
+            }
         }
+    }
+
+    private function buildPublicCheckoutRequestFingerprint(array $validated, int $tenantId): string
+    {
+        $fingerprintPayload = [
+            'tenant_id' => $tenantId,
+            'customer_id' => (int) ($validated['customer_id'] ?? 0),
+            'delivery_type' => (string) ($validated['delivery_type'] ?? 'pickup'),
+            'delivery_address' => trim((string) ($validated['delivery_address'] ?? '')),
+            'delivery_city_id' => (int) ($validated['delivery_city_id'] ?? 0),
+            'delivery_distance_km' => isset($validated['delivery_distance_km']) ? (float) $validated['delivery_distance_km'] : null,
+            'appointment_mode' => (bool) ($validated['appointment_mode'] ?? false),
+            'appointment_service_id' => (int) ($validated['appointment_service_id'] ?? 0),
+            'appointment_user_id' => (int) ($validated['appointment_user_id'] ?? 0),
+            'appointment_date' => trim((string) ($validated['appointment_date'] ?? '')),
+            'appointment_start_time' => trim((string) ($validated['appointment_start_time'] ?? '')),
+            'appointment_payment_mode' => trim((string) ($validated['appointment_payment_mode'] ?? 'online')),
+            'items' => collect((array) ($validated['items'] ?? []))
+                ->map(fn ($item) => [
+                    'variant_id' => (int) ($item['variant_id'] ?? 0),
+                    'quantity' => (int) ($item['quantity'] ?? 0),
+                    'unit_price' => isset($item['unit_price']) ? (float) $item['unit_price'] : null,
+                ])
+                ->values()
+                ->all(),
+            'payments' => collect((array) ($validated['payments'] ?? []))
+                ->map(fn ($payment) => [
+                    'method_id' => (int) ($payment['method_id'] ?? 0),
+                    'amount' => (float) ($payment['amount'] ?? 0),
+                    'reference' => trim((string) ($payment['reference'] ?? '')),
+                ])
+                ->values()
+                ->all(),
+        ];
+
+        return hash('sha256', json_encode($this->normalizePublicCheckoutFingerprintValue($fingerprintPayload), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function normalizePublicCheckoutFingerprintValue(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            if (array_is_list($value)) {
+                return array_map(fn ($item) => $this->normalizePublicCheckoutFingerprintValue($item), $value);
+            }
+
+            $normalized = [];
+            $keys = array_keys($value);
+            sort($keys, SORT_STRING);
+
+            foreach ($keys as $key) {
+                $normalized[(string) $key] = $this->normalizePublicCheckoutFingerprintValue($value[$key]);
+            }
+
+            return $normalized;
+        }
+
+        if (is_bool($value) || is_null($value) || is_int($value) || is_float($value)) {
+            return $value;
+        }
+
+        return trim((string) $value);
     }
 
     public function publicTenantAppointmentAvailability(Request $request, Tenant $tenant)
