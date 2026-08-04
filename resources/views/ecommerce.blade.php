@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Shopix - Gestión de Tiendas Virtuales</title>
+  <title>Shopix - Gestión de sedes Virtuales</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
@@ -556,7 +556,7 @@
               <a class="btn btn-light text-dark landing-nav-link" href="#contacto">Contacto</a>
             </li>
             <li class="nav-item">
-              <a class="btn btn-light text-dark landing-nav-link" href="/landings">Por tienda / servicio</a>
+              <a class="btn btn-light text-dark landing-nav-link" href="/">Por sede / servicio</a>
             </li>
             <li class="nav-item">
               <a class="btn btn-light text-dark landing-nav-link" href="/login">Acceso admin</a>
@@ -575,15 +575,15 @@
     <div class="hero-overlay"></div> 
     <div class="container text-center">
       <h1 class="hero-title">SHOPIX</h1>
-      <h2 class="hero-slogan">GESTIONA TU TIENDA O SERVICIO VIRTUAL FÁCILMENTE</h2>
+      <h2 class="hero-slogan">GESTIONA TU sede O SERVICIO VIRTUAL FÁCILMENTE</h2>
       <div class="hero-cta-row">
-        <a href="/landings" class="hero-cta-pill hero-cta-primary">
+        <a href="/" class="hero-cta-pill hero-cta-primary">
           <i class="bi bi-grid-1x2-fill"></i>
-          Explorar tiendas / servicios
+          Explorar sedes / servicios
         </a>
-        <a href="#planes" class="hero-cta-pill hero-cta-secondary">
+        <a href="#sedes" class="hero-cta-pill hero-cta-secondary">
           <i class="bi bi-stars"></i>
-          Ver planes
+          Ver sedes
         </a>
       </div>
 
@@ -599,7 +599,7 @@
         <div class="col-12 col-sm-6 col-lg-3 icon-box mb-4 mb-lg-0">
           <div class="feature-card">
             <i class="bi bi-shop"></i>
-            <h5>Gestión de Tienda</h5>
+            <h5>Gestión de sede</h5>
             <p>Organiza todos tus productos y categorías fácilmente.</p>
           </div>
         </div>
@@ -628,50 +628,20 @@
     </div>
   </section>
 
-<section id="planes" class="p-5">
+<section id="sedes" class="p-5">
     <div class="text-center">
-      <h2 class="section-title mb-5">Planes Disponibles</h2>
-      <div class="plans-grid">
-        @foreach($plans as $plan)
-        @php
-          $isPopularPlan = str_contains(strtolower((string) $plan->name), 'pro');
-        @endphp
-        <div class="mb-2 d-flex justify-content-center">
-          <div class="card p-4 card-product plan-card {{ $isPopularPlan ? 'is-popular' : '' }} h-100 d-flex flex-column justify-content-between w-100">
-            @if($isPopularPlan)
-              <span class="plan-popular-badge">Más popular</span>
-            @endif
-            <div class="card-body d-flex flex-column align-items-center">
-              <h6 class="text-uppercase fw-semibold mb-3 plan-title">{{ $plan->name }}</h6>
-                <img src="{{ $plan->image }}" 
-                    alt="{{ $plan->name }}" 
-                    class="img-fluid mb-3 rounded shadow-soft" 
-                    style="max-width: 220px;">
-
-              
-              <p class="fw-semibold mb-1 plan-label">Monto a pagar</p>
-              <h4 class="plan-price">${{ number_format($plan->price, 2) }} <small>/ Mes</small></h4>
-
-              <h6 class="fw-bold mb-2 plan-label">Beneficios</h6>
-              <ul class="list-unstyled text-start w-100">
-                @foreach($plan->features as $feature)
-                <li class="mb-1 d-flex align-items-center gap-2 plan-feature-item">
-                  <i class="bi bi-check2 me-1" style="color: #0d6efd; font-size: 1.5rem; font-weight: 800"></i>{{ $feature }}
-                </li>
-                @endforeach
-              </ul>
-            </div>
-            
-            <div class="card-footer bg-transparent border-0 text-center pt-3">
-              <a href="/create-tenant-user"
-                target="_blank"
-                class="btn btn-primary w-75 plan-btn-available">
-                Suscribirse
-              </a>
-            </div>
-            </div>
+      <h2 class="section-title mb-4">Gestiona Tus Sedes</h2>
+      <p class="text-muted mb-4">Shopix ahora trabaja con sedes, sin planes ni pagos de suscripcion por tenant.</p>
+      <div class="d-flex justify-content-center">
+        <div class="card p-4 card-product plan-card h-100 w-100" style="max-width: 520px;">
+          <div class="card-body d-flex flex-column align-items-center text-center">
+            <h6 class="text-uppercase fw-semibold mb-3 plan-title">Crea tu sede principal</h6>
+            <p class="mb-3">Configura sucursales, usuarios y catalogo desde un flujo unificado.</p>
+            <a href="/admin/login" class="btn btn-primary w-75 plan-btn-available">
+              Acceso SuperUser
+            </a>
+          </div>
         </div>
-        @endforeach
       </div>
 
     </div>
@@ -687,7 +657,7 @@
           <div class="benefit-card">
             <i class="bi bi-speedometer"></i>
             <h5>Rápido y Eficiente</h5>
-            <p>Todo lo que necesitas para tu tienda en un solo panel.</p>
+            <p>Todo lo que necesitas para tu sede en un solo panel.</p>
           </div>
         </div>
         <div class="col-12 col-md-4 icon-box mb-4 mb-md-0">
@@ -708,29 +678,29 @@
     </div>
   </section>
 
-<!-- Tiendas -->
+<!-- sedes -->
 <section id="aliados" class="py-5 section-soft">
   <div class="container text-center">
     <h2 class="section-title mb-5 fw-bold">Aliados Comerciales</h2>
 
     <div class="allies-shell">
-    <div id="carouselTiendas" class="carousel slide" data-bs-ride="carousel" data-bs-interval="2000">
+    <div id="carouselsedes" class="carousel slide" data-bs-ride="carousel" data-bs-interval="2000">
       <div class="carousel-inner">
 
         @foreach($tenants->chunk(4) as $index => $grupo)
         <div class="carousel-item @if($index === 0) active @endif">
           <div class="row justify-content-center">
-            @foreach($grupo as $tienda)
+            @foreach($grupo as $sede)
               <div class="col-6 col-md-3 mb-4 d-flex justify-content-center align-items-center">
-                <a href="{{ route('tenant.public', $tienda->slug) }}" class="allies-link" aria-label="Explorar {{ $tienda->name }}">
-                  @if($tienda->logo)
-                    <img src="{{ \App\Support\ImageStorage::url($tienda->logo) ?? asset('assets/img/shopix5.png') }}" 
-                         alt="{{ $tienda->name }}" 
+                <a href="{{ route('tenant.public', $sede->slug) }}" class="allies-link" aria-label="Explorar {{ $sede->name }}">
+                  @if($sede->logo)
+                    <img src="{{ \App\Support\ImageStorage::url($sede->logo) ?? asset('assets/img/shopix5.png') }}" 
+                         alt="{{ $sede->name }}" 
                          class="img-fluid allies-logo" 
                          style="max-height: 100px;">
                   @else
                     <img src="{{ asset('assets/img/shopix5.png') }}" 
-                         alt="{{ $tienda->name }}" 
+                         alt="{{ $sede->name }}" 
                          class="img-fluid allies-logo" 
                          style="max-height: 100px;">
                   @endif
@@ -744,10 +714,10 @@
       </div>
 
       <!-- Controles (opcionales) -->
-      <button class="carousel-control-prev" type="button" data-bs-target="#carouselTiendas" data-bs-slide="prev">
+      <button class="carousel-control-prev" type="button" data-bs-target="#carouselsedes" data-bs-slide="prev">
         <span class="carousel-control-prev-icon"></span>
       </button>
-      <button class="carousel-control-next" type="button" data-bs-target="#carouselTiendas" data-bs-slide="next">
+      <button class="carousel-control-next" type="button" data-bs-target="#carouselsedes" data-bs-slide="next">
         <span class="carousel-control-next-icon"></span>
       </button>
     </div>
@@ -793,7 +763,7 @@
   <!-- FOOTER -->
   <footer>
     <div class="container">
-      <p>© 2025 Shopix. Sistema de Gestión de Tiendas Virtuales.</p>
+      <p>© 2025 Shopix. Sistema de Gestión de sedes Virtuales.</p>
       <a href="/login" class="btn btn-light text-dark fw-bold px-4 py-2 w-50">Soy Admin</a>
     </div>
   </footer>

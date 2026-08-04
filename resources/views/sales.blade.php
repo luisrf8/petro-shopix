@@ -1280,11 +1280,11 @@
                             </strong>
                         @elseif($igtfTax && !(bool) ($tenant->electronic_invoicing_enabled ?? false))
                             <strong>
-                                La facturación digital está desactivada en la tienda, por lo tanto no se aplica IGTF.
+                                La facturación digital está desactivada en la sede, por lo tanto no se aplica IGTF.
                             </strong>
                         @elseif($igtfTax)
                             <strong>
-                                La tienda no está marcada como contribuyente especial, por lo tanto no se aplica IGTF.
+                                La sede no está marcada como contribuyente especial, por lo tanto no se aplica IGTF.
                             </strong>
                         @endif
                     </div>
@@ -1457,7 +1457,7 @@
                         <div class="d-flex gap-4 flex-wrap">
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="delivery_type" id="delivery_pickup" value="pickup" checked>
-                                <label class="form-check-label" for="delivery_pickup">Retiro en tienda</label>
+                                <label class="form-check-label" for="delivery_pickup">Retiro en sede</label>
                             </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="delivery_type" id="delivery_shipping" value="shipping">
@@ -1524,7 +1524,7 @@
                             </div>
                         </div>
                         @if(!(bool) ($tenant->electronic_invoicing_enabled ?? false))
-                            <small class="text-muted d-block mt-2">La facturación digital está desactivada para esta tienda. Solo se permite orden de entrega.</small>
+                            <small class="text-muted d-block mt-2">La facturación digital está desactivada para esta sede. Solo se permite orden de entrega.</small>
                         @endif
                     </div>
 
@@ -1578,7 +1578,7 @@
                     </div>
                     <div class="mt-3">
                         <strong>Delivery:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="cartDeliveryFee">0.00</span>
-                        <small class="text-muted d-block" id="cartDeliveryMode">Retiro en tienda</small>
+                        <small class="text-muted d-block" id="cartDeliveryMode">Retiro en sede</small>
                     </div>
                     <div class="mt-3 igtf-class" style="display: none;">
                         <strong>Total sin IGTF:</strong> {{ $baseCurrencySymbol ?? '$' }}<span id="cartTotalIGTF">0.00</span>
@@ -2840,7 +2840,7 @@
                 return 'Delivery gratis';
             }
 
-            return 'Retiro en tienda';
+            return 'Retiro en sede';
         }
 
         function getAdminDeliveryChargeContext(strict = false) {
@@ -2854,7 +2854,7 @@
                     fee: 0,
                     mode: 'pickup',
                     distanceKm: null,
-                    label: 'Retiro en tienda',
+                    label: 'Retiro en sede',
                 };
             }
 
@@ -3121,7 +3121,7 @@ function updateQuantity(id, newQty) {
                 cartDeliveryFee.textContent = currentDeliveryFee.toFixed(2);
             }
             if (cartDeliveryMode) {
-                cartDeliveryMode.textContent = deliveryContext.label || 'Retiro en tienda';
+                cartDeliveryMode.textContent = deliveryContext.label || 'Retiro en sede';
             }
             totalAmountValue.textContent = totalAmount.toFixed(2); // Asegúrate de mostrar un número válido
             totalAmountBsValue.textContent = (totalAmount * baseRateToBs ).toFixed(2); // Asegúrate de mostrar un número válido
@@ -4301,7 +4301,7 @@ function updateQuantity(id, newQty) {
             const deliveryType = document.querySelector('input[name="delivery_type"]:checked')?.value || 'pickup';
             const deliveryAddressData = buildDeliveryAddress();
             const deliveryContext = getAdminDeliveryChargeContext(false);
-            const deliveryPreferenceLabel = deliveryType === 'shipping' ? 'Envío' : 'Retiro en tienda';
+            const deliveryPreferenceLabel = deliveryType === 'shipping' ? 'Envío' : 'Retiro en sede';
             const saleDocumentMode = document.querySelector('input[name="sale_document_mode"]:checked')?.value || 'delivery_note';
             const saleDocumentModeLabel = saleDocumentMode === 'electronic_invoice' ? 'Facturación digital' : 'Orden de entrega';
             const shouldCreateNewCustomer = document.querySelector('input[name="create_new_customer"]:checked')?.value === 'yes';
@@ -4342,7 +4342,7 @@ function updateQuantity(id, newQty) {
             container.appendChild(totalDivBs);
 
             const deliveryFeeDiv = document.createElement('p');
-            deliveryFeeDiv.innerHTML = `<strong>Costo delivery:</strong> ${baseCurrencySymbol}${Number(deliveryContext.fee || 0).toFixed(2)} <span class="text-muted">(${deliveryContext.label || 'Retiro en tienda'})</span>`;
+            deliveryFeeDiv.innerHTML = `<strong>Costo delivery:</strong> ${baseCurrencySymbol}${Number(deliveryContext.fee || 0).toFixed(2)} <span class="text-muted">(${deliveryContext.label || 'Retiro en sede'})</span>`;
             container.appendChild(deliveryFeeDiv);
 
             const deliveryDiv = document.createElement('p');
@@ -4350,7 +4350,7 @@ function updateQuantity(id, newQty) {
             container.appendChild(deliveryDiv);
 
             const addressDiv = document.createElement('p');
-            addressDiv.innerHTML = `<strong>Dirección:</strong> ${deliveryType === 'shipping' ? (deliveryAddressData.address || 'No indicada') : 'Tienda'}`;
+            addressDiv.innerHTML = `<strong>Dirección:</strong> ${deliveryType === 'shipping' ? (deliveryAddressData.address || 'No indicada') : 'sede'}`;
             container.appendChild(addressDiv);
 
             if (deliveryType !== 'pickup') {
@@ -4851,7 +4851,7 @@ function updateQuantity(id, newQty) {
     }
 
     if (saleDocumentMode === 'electronic_invoice' && !tenantElectronicInvoicingEnabled) {
-        alert('La facturación digital está desactivada para esta tienda.');
+        alert('La facturación digital está desactivada para esta sede.');
         button.disabled = false;
         button.innerHTML = originalText;
             setSaleSubmitOverlayVisible(false);
@@ -4883,7 +4883,7 @@ function updateQuantity(id, newQty) {
         tenant_id: tenantId,
         dollarRate: baseRateToBs,
         delivery_type: deliveryType,
-        delivery_address: deliveryType === 'shipping' ? deliveryAddressData.address : 'Tienda',
+        delivery_address: deliveryType === 'shipping' ? deliveryAddressData.address : 'sede',
         delivery_receiver_name: deliveryType !== 'pickup' ? deliveryReceiverName : null,
         delivery_receiver_phone: deliveryType !== 'pickup' ? deliveryReceiverPhone : null,
         delivery_city_id: deliveryType === 'shipping' ? Number(deliveryAddressData.cityId || 0) : null,

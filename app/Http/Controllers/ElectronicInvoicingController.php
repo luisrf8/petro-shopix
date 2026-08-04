@@ -7,11 +7,11 @@ use App\Models\DollarRate;
 use App\Models\EuroRate;
 use App\Models\SalesAdjustmentNote;
 use App\Models\SalesOrder;
-use App\Models\Tenant;
 use App\Services\FiscalCorrelativeService;
 use App\Services\TheFactoryHkaService;
 use App\Support\ActionReason;
 use App\Support\PdfDownload;
+use App\Support\UserRedirector;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -47,10 +47,8 @@ class ElectronicInvoicingController extends Controller
         $authTenantId = (int) (auth()->user()->tenant_id ?? 0);
         $isSeller = (bool) ($authUser?->hasStoreRole('seller') ?? false);
 
-        $tenantId = (int) $request->query('tenant_id', 0);
-        if (!$isSuperAdmin) {
-            $tenantId = $authTenantId;
-        }
+        $scopeTenantId = $this->tenantScopeId();
+        $tenantId = $isSuperAdmin ? $scopeTenantId : $authTenantId;
 
         $status = trim((string) $request->query('status', 'all'));
         $serie = trim((string) $request->query('serie', ''));
@@ -119,13 +117,9 @@ class ElectronicInvoicingController extends Controller
             ->get()
             ->map(fn (SalesAdjustmentNote $note) => $this->decorateAdjustmentNoteRow($note));
 
-        $tenants = $isSuperAdmin
-            ? Tenant::query()->orderBy('name')->get(['id', 'name'])
-            : Tenant::query()->where('id', $authTenantId)->orderBy('name')->get(['id', 'name']);
-
         $canRetry = $isSuperAdmin;
 
-        return view('electronicDocuments.index', compact('rows', 'adjustmentRows', 'tenants', 'tenantId', 'status', 'serie', 'code', 'errorOnly', 'fromDate', 'toDate', 'isSuperAdmin', 'canRetry'));
+        return view('electronicDocuments.index', compact('rows', 'adjustmentRows', 'tenantId', 'status', 'serie', 'code', 'errorOnly', 'fromDate', 'toDate', 'isSuperAdmin', 'canRetry'));
     }
 
     public function retry(ElectronicDocument $electronicDocument): RedirectResponse
@@ -138,7 +132,7 @@ class ElectronicInvoicingController extends Controller
         }
 
         if (!(bool) ($order->tenant?->electronic_invoicing_enabled ?? false)) {
-            return back()->with('error', 'La tienda asociada tiene desactivada la facturación digital.');
+            return back()->with('error', 'La sede asociada tiene desactivada la facturación digital.');
         }
 
         if (!$this->service->isConfigured()) {
@@ -458,8 +452,17 @@ class ElectronicInvoicingController extends Controller
     private function authorizeOrderAccess(SalesOrder $order): void
     {
         $authUser = auth()->user();
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $order->tenant_id !== $tenantId, 404);
+        $isSuperAdmin = $this->isSuperAdmin();
+        $scopeTenantId = $this->tenantScopeId();
+
+        if ($isSuperAdmin) {
+            if ($scopeTenantId > 0) {
+                abort_if((int) $order->tenant_id !== $scopeTenantId, 404);
+            }
+        } else {
+            $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+            abort_if((int) $order->tenant_id !== $tenantId, 404);
+        }
 
         $isSeller = (bool) ($authUser?->hasStoreRole('seller') ?? false);
         if ($isSeller && (int) ($order->sales_rep_user_id ?? 0) !== (int) ($authUser->id ?? 0)) {
@@ -471,7 +474,7 @@ class ElectronicInvoicingController extends Controller
         }
 
         if (!(bool) ($order->tenant?->electronic_invoicing_enabled ?? false)) {
-            abort(403, 'La facturación digital está desactivada para esta tienda.');
+            abort(403, 'La facturación digital está desactivada para esta sede.');
         }
 
         if (!$this->service->isConfigured()) {
@@ -488,7 +491,7 @@ class ElectronicInvoicingController extends Controller
             $output = fopen('php://output', 'w');
             fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
             fputcsv($output, [
-                'Fecha', 'Hora', 'Tipo de Doc', 'Serie', 'Nro. Documento', 'Control', 'Doc. Afectado', 'Tasa', 'Usuario', 'Total', 'Estado', 'Anulado', 'Orden', 'Tienda'
+                'Fecha', 'Hora', 'Tipo de Doc', 'Serie', 'Nro. Documento', 'Control', 'Doc. Afectado', 'Tasa', 'Usuario', 'Total', 'Estado', 'Anulado', 'Orden', 'sede'
             ]);
 
             foreach ($rows as $row) {
@@ -518,10 +521,7 @@ class ElectronicInvoicingController extends Controller
 
     private function isSuperAdmin(): bool
     {
-        $user = auth()->user();
-        $roleName = strtolower((string) optional($user->role)->name);
-
-        return (int) ($user->role_id ?? 0) === 4 || $roleName === 'super_user';
+        return UserRedirector::isSuperAdmin(auth()->user());
     }
 
     private function isStoreRoleAllowed(): bool

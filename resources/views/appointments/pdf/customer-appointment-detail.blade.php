@@ -16,7 +16,7 @@
 </head>
 <body>
     <h2>Control de cita #{{ (int) $appointment->id }}</h2>
-    <div class="muted row">Tienda: {{ $tenant->name ?? 'Shopix' }}</div>
+    <div class="muted row">sede: {{ $tenant->name ?? 'Shopix' }}</div>
 
     <div class="box">
         <div><strong>Cliente:</strong> {{ $appointment->customer->name ?? $appointment->contact_name ?? 'Cliente' }}</div>

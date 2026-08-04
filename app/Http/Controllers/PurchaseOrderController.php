@@ -261,7 +261,7 @@ class PurchaseOrderController extends Controller
                 $productVariant = ProductVariant::with('product')->find($detail['product_variant_id']);
 
                 if (!$productVariant || !$productVariant->product || (int) $productVariant->product->tenant_id !== (int) $user->tenant_id) {
-                    throw new \RuntimeException('Se intentó registrar una variante inválida para esta tienda.');
+                    throw new \RuntimeException('Se intentó registrar una variante inválida para esta sede.');
                 }
 
                 $detailPayload = [
@@ -525,7 +525,7 @@ class PurchaseOrderController extends Controller
 
             $outputVariant = ProductVariant::with('product')->find($outputVariantId);
             if (!$outputVariant || !$outputVariant->product || (int) $outputVariant->product->tenant_id !== (int) $user->tenant_id) {
-                return response()->json(['error' => 'Hay variantes de producto terminado no válidas para esta tienda.'], 422);
+                return response()->json(['error' => 'Hay variantes de producto terminado no válidas para esta sede.'], 422);
             }
 
             $lineConsumptions = [];
@@ -546,7 +546,7 @@ class PurchaseOrderController extends Controller
 
                 $consumedVariant = ProductVariant::with('product')->find($consumedVariantId);
                 if (!$consumedVariant || !$consumedVariant->product || (int) $consumedVariant->product->tenant_id !== (int) $user->tenant_id) {
-                    return response()->json(['error' => 'Hay consumibles no válidos para esta tienda.'], 422);
+                    return response()->json(['error' => 'Hay consumibles no válidos para esta sede.'], 422);
                 }
 
                 $consumedAmount = round($consumedQty * $unitCost, 4);

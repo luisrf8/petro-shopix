@@ -260,7 +260,7 @@
             return implode(' | ', $parts);
         };
         $storeWhatsappUrl = $storePhone !== ''
-            ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'tienda') . ', sobre la orden #' . $order->id . '.')
+            ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'sede') . ', sobre la orden #' . $order->id . '.')
             : null;
         $customerWhatsappUrl = $customerPhone !== ''
             ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', sobre la orden #' . $order->id . '.')
@@ -374,11 +374,11 @@
                         @if((bool) ($order->tenant->electronic_invoicing_enabled ?? false))
                             <a id="publicDownloadInvoiceBtn" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'invoice']) }}" class="btn btn-dark mb-0" target="_blank" rel="noopener">Factura PDF</a>
                         @else
-                            <button type="button" class="btn btn-dark mb-0" disabled title="La facturación digital no está activa en esta tienda">Factura PDF</button>
+                            <button type="button" class="btn btn-dark mb-0" disabled title="La facturación digital no está activa en esta sede">Factura PDF</button>
                         @endif
                         <a id="publicDownloadDeliveryBtn" href="{{ route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']) }}" class="btn btn-outline-dark mb-0" target="_blank" rel="noopener">Orden de entrega</a>
                         @if($storeWhatsappUrl)
-                            <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp tienda</a>
+                            <a href="{{ $storeWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-0">WhatsApp sede</a>
                         @endif
                         @if($customerWhatsappUrl)
                             <a id="public-order-customer-whatsapp" href="{{ $customerWhatsappUrl }}" target="_blank" rel="noopener" class="btn btn-success mb-0" data-order-user-id="{{ $order->user->id }}">WhatsApp cliente</a>

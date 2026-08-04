@@ -12,16 +12,15 @@ class ProviderController extends Controller
 {
     public function index(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0, 403);
-        $tenant = Tenant::query()->find($tenantId);
+        $tenantId = $this->tenantScopeId($request);
+        $tenant = $tenantId > 0 ? Tenant::query()->find($tenantId) : null;
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
 
         $search = trim((string) $request->query('search', ''));
         $status = trim((string) $request->query('status', 'active'));
 
         $providers = Provider::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($innerQuery) use ($search) {
                     $innerQuery
@@ -43,8 +42,7 @@ class ProviderController extends Controller
 
     public function store(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0, 403);
+        $tenantId = $this->tenantWriteId($request);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -84,7 +82,7 @@ class ProviderController extends Controller
 
     public function update(Request $request, Provider $provider)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $tenantId = $this->tenantWriteId($request);
         abort_if((int) $provider->tenant_id !== $tenantId, 404);
 
         $validated = $request->validate([
@@ -120,7 +118,7 @@ class ProviderController extends Controller
 
     public function toggleStatus(Request $request, Provider $provider)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $tenantId = $this->tenantWriteId($request);
         abort_if((int) $provider->tenant_id !== $tenantId, 404);
 
         $reason = null;

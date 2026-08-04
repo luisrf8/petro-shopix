@@ -10,9 +10,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Shopix">
   <meta name="theme-color" content="#2563eb">
-  <title>Shopix - Por tienda / servicio</title>
+  <title>Shopix - Por sede / servicio</title>
   <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192, 'variant' => 'client', 'v' => $ecommercePwaIconVersion]) }}">
-  <link rel="manifest" href="{{ route('tenant.pwa.manifest', ['start_url' => route('landing.directory'), 'name' => 'Shopix', 'theme' => '2563eb', 'icon_variant' => 'client']) }}">
+  <link rel="manifest" href="{{ route('tenant.pwa.manifest', ['start_url' => route('landing'), 'name' => 'Shopix', 'theme' => '2563eb', 'icon_variant' => 'client']) }}">
   <link rel="apple-touch-icon" sizes="180x180" href="{{ route('pwa.icon', ['size' => 180, 'variant' => 'client', 'v' => $ecommercePwaIconVersion]) }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -954,7 +954,7 @@
         <div class="collapse navbar-collapse" id="landingNavbar">
           <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2 directory-navbar-actions">
             <li class="nav-item">
-              <a class="btn btn-light text-dark landing-nav-link directory-icon-btn" href="/landings" title="Inicio: tiendas y servicios" aria-label="Inicio: tiendas y servicios">
+              <a class="btn btn-light text-dark landing-nav-link directory-icon-btn" href="/" title="Inicio: sedes y servicios" aria-label="Inicio: sedes y servicios">
                 <i class="bi bi-house"></i>
               </a>
             </li>
@@ -1061,7 +1061,7 @@
                     <div class="directory-filter-group-title"><i class="bi bi-sliders2-vertical me-1"></i> Especificaciones</div>
                     <div class="row g-2">
                       <div class="col-12">
-                        <label class="form-label" for="landingTypeFilterMobile">Tipo de tienda / servicio</label>
+                        <label class="form-label" for="landingTypeFilterMobile">Tipo de sede / servicio</label>
                         <select id="landingTypeFilterMobile" data-landing-filter="type" class="form-select">
                           <option value="">Todos</option>
                           @foreach(($tenantFilters['types'] ?? collect()) as $type)
@@ -1096,7 +1096,7 @@
         <label class="hero-search-card" for="landingHeroSearch">
           <span class="hero-search-icon"><i class="bi bi-search"></i></span>
           <span class="hero-search-copy">
-            <input id="landingHeroSearch" data-landing-filter="name" type="search" class="hero-search-input" placeholder="Buscar Tienda o Servicio...">
+            <input id="landingHeroSearch" data-landing-filter="name" type="search" class="hero-search-input" placeholder="Buscar sede o Servicio...">
           </span>
         </label>
       </div>
@@ -1139,7 +1139,7 @@
                   <div class="directory-filter-group-title"><i class="bi bi-sliders2-vertical me-1"></i> Especificaciones</div>
                   <div class="row g-2">
                     <div class="col-12">
-                      <label class="form-label" for="landingTypeFilterDesktop">Tipo de tienda / servicio</label>
+                      <label class="form-label" for="landingTypeFilterDesktop">Tipo de sede / servicio</label>
                       <select id="landingTypeFilterDesktop" data-landing-filter="type" class="form-select">
                         <option value="">Todos</option>
                         @foreach(($tenantFilters['types'] ?? collect()) as $type)
@@ -1202,7 +1202,7 @@
                 @else
                   <img src="{{ asset('assets/img/shopix5.png') }}" alt="Imagen principal de {{ $tenant->name }}">
                 @endif
-                <span class="directory-card-badge">{{ $tenant->directory_type ?? 'Tienda' }}</span>
+                <span class="directory-card-badge">{{ $tenant->directory_type ?? 'sede' }}</span>
               </div>
 
               <div class="p-3 d-flex flex-column flex-grow-1">
@@ -1226,16 +1226,16 @@
                 </p>
 
                 <p class="directory-slogan">
-                  {{ trim((string) ($tenant->slogan ?? '')) !== '' ? $tenant->slogan : 'Tu tienda de confianza' }}
+                  {{ trim((string) ($tenant->slogan ?? '')) !== '' ? $tenant->slogan : 'Tu sede de confianza' }}
                 </p>
 
                 <p class="directory-description">
-                  {{ trim((string) ($tenant->description ?? '')) !== '' ? $tenant->description : 'Explora productos y servicios disponibles en esta tienda.' }}
+                  {{ trim((string) ($tenant->description ?? '')) !== '' ? $tenant->description : 'Explora productos y servicios disponibles en esta sede.' }}
                 </p>
 
                 <div class="mt-auto">
-                  @php($directoryTypeLabel = mb_strtolower(trim((string) ($tenant->directory_type ?? 'tienda'))))
-                  @php($directoryActionLabel = str_contains($directoryTypeLabel, 'servicio') ? 'Ver servicio' : 'Ver tienda')
+                  @php($directoryTypeLabel = mb_strtolower(trim((string) ($tenant->directory_type ?? 'sede'))))
+                  @php($directoryActionLabel = str_contains($directoryTypeLabel, 'servicio') ? 'Ver servicio' : 'Ver sede')
                   @php($externalUrl = trim((string) ($tenant->external_url ?? '')))
                   @php($externalUrl = $externalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($externalUrl), ['http://', 'https://']) ? ('https://' . $externalUrl) : $externalUrl)
                   @php($shopixUrl = url('/' . $tenant->slug))
@@ -1268,7 +1268,7 @@
           </div>
 
           <div id="landingDirectoryEmpty" class="text-center text-muted mt-3 d-none">
-            No hay tiendas o servicios que coincidan con los filtros seleccionados.
+            No hay sedes o servicios que coincidan con los filtros seleccionados.
           </div>
         </div>
       </div>
@@ -1284,7 +1284,7 @@
         </div>
         <div class="modal-body">
           <div class="directory-auth-shell">
-            <p class="directory-auth-helper">Ingresa como cliente para entrar a las tiendas de Shopix. Si instalas la app desde aquí, el acceso directo abrirá este explorador.</p>
+            <p class="directory-auth-helper">Ingresa como cliente para entrar a las sedes de Shopix. Si instalas la app desde aquí, el acceso directo abrirá este explorador.</p>
             <div id="directory-auth-error" class="directory-auth-error d-none mb-3"></div>
             <ul class="nav nav-tabs mb-3" id="directoryAuthTabs" role="tablist">
               <li class="nav-item" role="presentation">
@@ -1938,7 +1938,7 @@
       }
 
       if (isDirectoryIosDevice()) {
-        alert('En iPhone o iPad, abre Shopix en Safari desde /landings, toca Compartir y luego selecciona "Agregar a pantalla de inicio". El acceso instalado abrirá el inicio del directorio de Shopix.');
+        alert('En iPhone o iPad, abre Shopix en Safari desde /, toca Compartir y luego selecciona "Agregar a pantalla de inicio". El acceso instalado abrirá el inicio del directorio de Shopix.');
         return;
       }
 
@@ -1953,7 +1953,7 @@
       updateDirectoryInstallPwaUi();
 
       if (choice?.outcome === 'accepted') {
-        alert('La instalación de Shopix se inició correctamente. La app abrirá desde /landings.');
+        alert('La instalación de Shopix se inició correctamente. La app abrirá desde /.');
       }
     }
 
@@ -2254,7 +2254,7 @@
           <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
             <div>
               <div class="fw-semibold fs-6">Pedido #${row.id}</div>
-              <div class="directory-list-meta"><strong>Tienda:</strong> ${row.tenant_name || 'No disponible'}${row.date ? ` • ${row.date}` : ''}</div>
+              <div class="directory-list-meta"><strong>sede:</strong> ${row.tenant_name || 'No disponible'}${row.date ? ` • ${row.date}` : ''}</div>
             </div>
             <a href="${row.public_url}" class="btn btn-sm btn-outline-dark">Ver detalle</a>
           </div>

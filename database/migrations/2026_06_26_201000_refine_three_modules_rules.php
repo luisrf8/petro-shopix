@@ -42,7 +42,7 @@ return new class extends Migration {
         if (Schema::hasTable('pm_team_members')) {
             Schema::table('pm_team_members', function (Blueprint $table) {
                 if (!Schema::hasColumn('pm_team_members', 'terminated_at')) {
-                    $table->dateTime('terminated_at')->nullable()->after('is_active');
+                    $table->dateTime('terminated_at')->nullable();
                 }
 
                 if (!Schema::hasColumn('pm_team_members', 'termination_reason')) {

@@ -163,7 +163,7 @@
                   </tr>
                 @empty
                   <tr>
-                    <td colspan="8" class="text-center text-muted py-4">No hay clientes registrados para esta tienda.</td>
+                    <td colspan="8" class="text-center text-muted py-4">No hay clientes registrados para esta sede.</td>
                   </tr>
                 @endforelse
               </tbody>

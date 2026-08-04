@@ -147,7 +147,7 @@
                 <div class="row g-0">
                     <div class="col-lg-5 login-aside">
                         <h2>Acceso administrativo Shopix</h2>
-                        <p>Este inicio de sesión es exclusivo para administración de tienda y panel superior.</p>
+                        <p>Este inicio de sesión es exclusivo para administración de sede y panel superior.</p>
                         <div class="mt-2 d-grid gap-2">
                             <div class="login-point"><i class="bi bi-shield-check"></i><span>Acceso seguro y protegido</span></div>
                             <div class="login-point"><i class="bi bi-bag-check"></i><span>Clientes ingresan solo desde las landings</span></div>

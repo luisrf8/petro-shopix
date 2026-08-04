@@ -37,12 +37,12 @@ class RestrictFreePlanAccess
         if ($request->expectsJson() || $request->wantsJson()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Tu plan Free solo permite Categorías, Productos y Gestión de Tienda.',
+                'message' => 'Tu plan Free solo permite Categorías, Productos y Gestión de sede.',
             ], 403);
         }
 
         return redirect()->route('categories.index')
-            ->with('warning', 'Tu plan Free solo permite Categorías, Productos y Gestión de Tienda.');
+            ->with('warning', 'Tu plan Free solo permite Categorías, Productos y Gestión de sede.');
     }
 
     private function isFreePlanTenant(int $tenantId): bool

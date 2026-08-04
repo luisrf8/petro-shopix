@@ -59,7 +59,7 @@ class MaterialPackageController extends Controller
             ->all();
 
         if (count($validVariantIds) !== count($variantIds)) {
-            return back()->withErrors(['items' => 'Una o más variantes no pertenecen a esta tienda.'])->withInput();
+            return back()->withErrors(['items' => 'Una o más variantes no pertenecen a esta sede.'])->withInput();
         }
 
         DB::beginTransaction();
@@ -240,7 +240,7 @@ class MaterialPackageController extends Controller
 
                     if (!$validProductForTenant) {
                         throw ValidationException::withMessages([
-                            "items.$index.product_id" => 'El producto seleccionado no pertenece a esta tienda.',
+                            "items.$index.product_id" => 'El producto seleccionado no pertenece a esta sede.',
                         ]);
                     }
 
@@ -270,7 +270,7 @@ class MaterialPackageController extends Controller
 
                     if (!$validVariantForTenant) {
                         throw ValidationException::withMessages([
-                            "items.$index.variant_id" => 'La variante seleccionada no pertenece a esta tienda.',
+                            "items.$index.variant_id" => 'La variante seleccionada no pertenece a esta sede.',
                         ]);
                     }
                 }
@@ -284,7 +284,7 @@ class MaterialPackageController extends Controller
 
                 if (!$resolvedVariant) {
                     throw ValidationException::withMessages([
-                        "items.$index.variant_id" => 'La variante seleccionada no pertenece a esta tienda.',
+                        "items.$index.variant_id" => 'La variante seleccionada no pertenece a esta sede.',
                     ]);
                 }
 

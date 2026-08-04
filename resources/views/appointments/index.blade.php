@@ -524,7 +524,7 @@
     @endif
 
     @if(!$serviceBusinessType)
-        <div class="alert alert-warning text-dark border">La tienda no está marcada como tipo servicio. El módulo funciona, pero conviene configurar el negocio como servicio para mantener la segmentación correcta.</div>
+        <div class="alert alert-warning text-dark border">La sede no está marcada como tipo servicio. El módulo funciona, pero conviene configurar el negocio como servicio para mantener la segmentación correcta.</div>
     @endif
 
     <div class="row g-3 mb-4 appointments-top-cards-row d-none d-lg-flex">
@@ -1199,7 +1199,7 @@
             </div>
             <div class="modal-body">
                 <div class="d-flex justify-content-end mb-2">
-                    <a href="{{ route('tenant.store') }}" class="btn btn-outline-secondary btn-sm mb-0">Gestión de Tienda</a>
+                    <a href="{{ route('tenant.store') }}" class="btn btn-outline-secondary btn-sm mb-0">Gestión de sede</a>
                 </div>
                 <form method="POST" action="{{ route('appointments.schedules.store') }}" class="row g-2 mb-3">
                     @csrf

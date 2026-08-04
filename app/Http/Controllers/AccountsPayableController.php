@@ -18,11 +18,12 @@ class AccountsPayableController extends Controller
 {
     public function index(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0, 403);
+        $tenantId = $this->tenantScopeId($request);
 
-        $this->ensureDefaultIslrConcepts($tenantId);
-        $this->syncOverdueStatuses($tenantId);
+        if ($tenantId > 0) {
+            $this->ensureDefaultIslrConcepts($tenantId);
+            $this->syncOverdueStatuses($tenantId);
+        }
 
         $search = trim((string) $request->query('search', ''));
         $status = trim((string) $request->query('status', ''));
@@ -32,7 +33,7 @@ class AccountsPayableController extends Controller
 
         $baseQuery = AccountPayable::query()
             ->with(['provider', 'purchaseOrder', 'payments', 'purchaseVatRetentions', 'islrWithholdings'])
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($innerQuery) use ($search) {
                     $innerQuery
@@ -72,18 +73,18 @@ class AccountsPayableController extends Controller
             ->sum('amount_pending');
 
         $monthPaid = (float) AccountPayablePayment::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereBetween('paid_at', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
             ->sum('amount');
 
         $providers = Provider::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
 
         $purchaseOrders = PurchaseOrder::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('entry_mode', 'purchase')
             ->orderByDesc('date')
             ->orderByDesc('id')
@@ -91,8 +92,10 @@ class AccountsPayableController extends Controller
             ->get();
 
         $islrConcepts = IslrWithholdingConcept::query()
-            ->where(function ($query) use ($tenantId) {
-                $query->whereNull('tenant_id')->orWhere('tenant_id', $tenantId);
+            ->when($tenantId > 0, function ($query) use ($tenantId) {
+                $query->where(function ($innerQuery) use ($tenantId) {
+                    $innerQuery->whereNull('tenant_id')->orWhere('tenant_id', $tenantId);
+                });
             })
             ->where('is_active', true)
             ->orderBy('code')
@@ -116,8 +119,7 @@ class AccountsPayableController extends Controller
 
     public function store(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0, 403);
+        $tenantId = $this->tenantWriteId($request);
 
         $validated = $request->validate([
             'provider_id' => 'nullable|integer|exists:providers,id',
@@ -149,7 +151,7 @@ class AccountsPayableController extends Controller
                 ->first();
 
             if (!$provider) {
-                return back()->with('error', 'El proveedor no pertenece a tu tienda.');
+                return back()->with('error', 'El proveedor no pertenece a tu sede.');
             }
         }
 
@@ -160,7 +162,7 @@ class AccountsPayableController extends Controller
                 ->first();
 
             if (!$purchaseOrder) {
-                return back()->with('error', 'La orden de compra no pertenece a tu tienda.');
+                return back()->with('error', 'La orden de compra no pertenece a tu sede.');
             }
 
             $alreadyLinked = AccountPayable::query()

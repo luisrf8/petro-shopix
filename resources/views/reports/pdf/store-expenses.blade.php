@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Reporte de Gastos de Tienda</title>
+    <title>Reporte de Gastos de sede</title>
     <style>
         body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #111; }
         h2 { margin: 0 0 8px; }
@@ -14,7 +14,7 @@
     </style>
 </head>
 <body>
-    <h2>Reporte de Gastos de Tienda</h2>
+    <h2>Reporte de Gastos de sede</h2>
     <div class="meta">Rango: {{ $summary['start_date']->format('d/m/Y') }} al {{ $summary['end_date']->format('d/m/Y') }}</div>
     <div class="meta">Categoría: <strong>{{ $summary['expense_category'] !== '' ? $summary['expense_category'] : 'Todas' }}</strong></div>
     <div class="meta">

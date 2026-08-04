@@ -70,7 +70,7 @@
 
 
     <h2>Factura Nro {{ $order->id }}</h2>
-    <p><strong>Tienda:</strong> {{ $storeName }} | <strong>Email:</strong> {{ $storeEmail }}</p>
+    <p><strong>sede:</strong> {{ $storeName }} | <strong>Email:</strong> {{ $storeEmail }}</p>
     <p><strong>RIF:</strong> {{ $storeRif }}</p>
     <p><strong>Cliente:</strong> {{ $order->user->name }} | <strong>Teléfono:</strong> {{ $order->user->phone_number ?? 'No registrado' }}</p>
     <p><strong>Dirección:</strong> {{ $order->address }}</p>

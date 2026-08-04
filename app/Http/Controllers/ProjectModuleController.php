@@ -13,6 +13,7 @@ use App\Models\ProjectQuotation;
 use App\Models\ProjectQuotationItem;
 use App\Models\ProjectAsset;
 use App\Models\ProjectTask;
+use App\Models\ProjectTeamGroup;
 use App\Models\ProjectTeamMember;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderDetail;
@@ -26,6 +27,7 @@ use App\Models\Warehouse;
 use App\Models\ProductVariantWarehouseStock;
 use App\Support\ImageStorage;
 use App\Support\PdfDownload;
+use App\Support\UserRedirector;
 use App\Support\WorkflowNotifier;
 use App\Support\TenantCurrency;
 use Carbon\Carbon;
@@ -36,17 +38,58 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ProjectModuleController extends Controller
 {
+    private function usersSelectColumns(): array
+    {
+        $columns = ['id', 'name', 'email'];
+
+        if (Schema::hasColumn('users', 'phone_number')) {
+            $columns[] = 'phone_number';
+        }
+
+        return $columns;
+    }
+
+    private function applyActiveUsersFilter($query)
+    {
+        if (Schema::hasColumn('users', 'is_active')) {
+            $query->where('is_active', 1);
+        }
+
+        return $query;
+    }
+
+    private function abortIfOutsideSelectedTenantScope(int $resourceTenantId): void
+    {
+        $user = auth()->user();
+        if (!UserRedirector::isSuperAdmin($user)) {
+            abort_if($resourceTenantId !== (int) ($user->tenant_id ?? 0), 404);
+            return;
+        }
+
+        $scopeTenantId = $this->tenantScopeId();
+        if ($scopeTenantId > 0) {
+            abort_if($resourceTenantId !== $scopeTenantId, 404);
+        }
+    }
+
     public function __construct()
     {
         $this->middleware(function ($request, $next) {
-            $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+            $user = auth()->user();
+            $isSuperOwner = UserRedirector::isSuperAdmin($user);
+            $tenantId = $this->tenantScopeId();
             $tenant = $tenantId > 0 ? Tenant::query()->find($tenantId) : null;
+
+            if ($isSuperOwner && $tenantId <= 0) {
+                return $next($request);
+            }
 
             if (!$tenant) {
                 return redirect()->route('dashboard')->with('warning', 'Este tenant no tiene habilitado el modulo de proyectos.');
@@ -67,26 +110,36 @@ class ProjectModuleController extends Controller
 
     public function payrollIndex()
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0, 403);
+        $user = auth()->user();
+        $isSuperOwner = UserRedirector::isSuperAdmin($user);
+        $selectedTenantId = $this->tenantScopeId();
+        $tenantId = $selectedTenantId;
+        abort_if(!$isSuperOwner && $tenantId <= 0, 403);
 
         $period = (string) request()->query('period', 'all');
         $paymentTypeFilter = (string) request()->query('payment_type', 'all');
 
-        $tenant = Tenant::query()->find($tenantId);
+        $tenant = $tenantId > 0 ? Tenant::query()->find($tenantId) : null;
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
-        $dollarRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'USD');
-        $euroRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'EUR');
+        $dollarRateToBs = $tenantId > 0 ? TenantCurrency::resolveRateToBs($tenantId, 'USD') : 0;
+        $euroRateToBs = $tenantId > 0 ? TenantCurrency::resolveRateToBs($tenantId, 'EUR') : 0;
 
         $teamMembers = ProjectTeamMember::query()
-            ->where('tenant_id', $tenantId)
-            ->with('user')
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->with(['user', 'group'])
             ->latest('id')
             ->take(100)
             ->get();
 
+        $teamGroups = ProjectTeamGroup::query()
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->withCount('members')
+            ->orderByDesc('id')
+            ->take(50)
+            ->get();
+
         $payrollQuery = ProjectPayroll::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->with(['project', 'teamMember'])
             ->when($paymentTypeFilter !== 'all', function ($query) use ($paymentTypeFilter) {
                 $query->where('payment_type', $paymentTypeFilter);
@@ -111,7 +164,7 @@ class ProjectModuleController extends Controller
         });
 
         $latestTeamPayments = ProjectPayroll::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereNotNull('team_member_id')
             ->select('team_member_id', DB::raw('MAX(paid_at) as last_paid_at'))
             ->groupBy('team_member_id')
@@ -149,35 +202,95 @@ class ProjectModuleController extends Controller
             ->values();
 
         $projects = Project::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->latest('id')
             ->take(50)
             ->get(['id', 'name']);
 
         $users = User::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'phone_number']);
+            ->get($this->usersSelectColumns());
+
+        $tenantFilterOptions = $isSuperOwner
+            ? Tenant::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
 
         return view('payroll.index', compact(
             'teamMembers',
+            'teamGroups',
             'payrollEntries',
             'projects',
             'users',
             'baseCurrencyCode',
             'period',
             'paymentTypeFilter',
-            'upcomingPayments'
+            'upcomingPayments',
+            'isSuperOwner',
+            'tenantFilterOptions',
+            'selectedTenantId'
         ));
+    }
+
+    public function storeTeamGroup(Request $request)
+    {
+        $scopeTenantId = $this->tenantScopeId();
+        $tenantId = $scopeTenantId > 0
+            ? $scopeTenantId
+            : (int) ($request->input('tenant_id', 0) ?? 0);
+        abort_if($tenantId <= 0, 403);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:120',
+            'description' => 'nullable|string|max:255',
+            'payment_type' => 'required|in:fixed,variable,mixed',
+            'default_payment_frequency' => 'required|in:daily,weekly,fortnightly,monthly,package,contract',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'notes' => 'nullable|string|max:2000',
+        ]);
+
+        ProjectTeamGroup::query()->create([
+            'tenant_id' => $tenantId,
+            'name' => trim((string) $validated['name']),
+            'description' => $validated['description'] ?? null,
+            'payment_type' => $validated['payment_type'],
+            'default_payment_frequency' => $validated['default_payment_frequency'],
+            'start_date' => $validated['start_date'] ?? null,
+            'end_date' => $validated['end_date'] ?? null,
+            'is_active' => true,
+            'notes' => $validated['notes'] ?? null,
+            'created_by' => auth()->id(),
+        ]);
+
+        return back()->with('success', 'Grupo de trabajo creado correctamente.');
+    }
+
+    public function updateTeamGroupStatus(Request $request, ProjectTeamGroup $group)
+    {
+        $this->abortIfOutsideSelectedTenantScope((int) $group->tenant_id);
+
+        $validated = $request->validate([
+            'is_active' => 'required|boolean',
+        ]);
+
+        $group->update([
+            'is_active' => (bool) $validated['is_active'],
+        ]);
+
+        return back()->with('success', 'Estado del grupo actualizado correctamente.');
     }
 
     public function projectsIndex()
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0, 403);
+        $user = auth()->user();
+        $isSuperOwner = UserRedirector::isSuperAdmin($user);
+        $selectedTenantId = $this->tenantScopeId();
+        $tenantId = $selectedTenantId;
+        abort_if(!$isSuperOwner && $tenantId <= 0, 403);
 
         $projects = Project::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->with([
                 'quotation',
                 'tasks' => fn ($query) => $query->with('responsibleMember')->latest('id')->take(8),
@@ -192,28 +305,34 @@ class ProjectModuleController extends Controller
             ->get();
 
         $quotations = ProjectQuotation::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->latest('id')
             ->take(50)
             ->get(['id', 'title', 'total_amount', 'currency_code']);
 
         $teamMembers = ProjectTeamMember::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('is_active', true)
             ->orderBy('full_name')
             ->get(['id', 'full_name', 'role']);
 
+        $tenantFilterOptions = $isSuperOwner
+            ? Tenant::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
+
         return view('projects.index', compact(
             'projects',
             'quotations',
-            'teamMembers'
+            'teamMembers',
+            'isSuperOwner',
+            'tenantFilterOptions',
+            'selectedTenantId'
         ));
     }
 
     public function projectShow(Project $project)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $project->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $project->tenant_id);
 
         $project->load([
             'quotation',
@@ -224,7 +343,7 @@ class ProjectModuleController extends Controller
         ]);
 
         $teamMembers = ProjectTeamMember::query()
-            ->where('tenant_id', $tenantId)
+            ->where('tenant_id', (int) $project->tenant_id)
             ->orderBy('full_name')
             ->get(['id', 'full_name']);
 
@@ -285,8 +404,11 @@ class ProjectModuleController extends Controller
 
     public function storeProjectAsset(Request $request, Project $project)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $project->tenant_id !== $tenantId, 404);
+        $user = auth()->user();
+        $isSuperOwner = UserRedirector::isSuperAdmin($user);
+        $tenantId = (int) ($user->tenant_id ?? 0);
+        abort_if(!$isSuperOwner && (int) $project->tenant_id !== $tenantId, 404);
+        $tenantId = (int) $project->tenant_id;
 
         $validated = $request->validate([
             'asset_type' => 'required|in:reference_image,process_image,task_image,final_image,documentation,expense,payment',
@@ -330,8 +452,7 @@ class ProjectModuleController extends Controller
 
     public function projectAssetFile(ProjectAsset $asset)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $asset->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $asset->tenant_id);
 
         $path = (string) ($asset->file_path ?? '');
         abort_if($path === '' || !Storage::disk('public')->exists($path), 404);
@@ -341,19 +462,22 @@ class ProjectModuleController extends Controller
 
     public function quotationsIndex()
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0, 403);
+        $user = auth()->user();
+        $isSuperOwner = UserRedirector::isSuperAdmin($user);
+        $selectedTenantId = $this->tenantScopeId();
+        $tenantId = $selectedTenantId;
+        abort_if(!$isSuperOwner && $tenantId <= 0, 403);
         $editingQuotationId = (int) request()->query('edit', 0);
         $requestedTab = (string) request()->query('tab', '');
-        $activeQuotationTab = $requestedTab === 'history'
+        $activeQuotationTab = $requestedTab === 'history' || ($isSuperOwner && $tenantId <= 0)
             ? 'history'
             : ($editingQuotationId > 0 ? 'create' : 'create');
         $isSeller = (bool) (auth()->user()?->hasStoreRole('seller') ?? false);
 
-        $tenant = Tenant::query()->find($tenantId);
+        $tenant = $tenantId > 0 ? Tenant::query()->find($tenantId) : null;
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
-        $dollarRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'USD');
-        $euroRateToBs = TenantCurrency::resolveRateToBs($tenantId, 'EUR');
+        $dollarRateToBs = $tenantId > 0 ? TenantCurrency::resolveRateToBs($tenantId, 'USD') : 0;
+        $euroRateToBs = $tenantId > 0 ? TenantCurrency::resolveRateToBs($tenantId, 'EUR') : 0;
 
         $quotationFilters = [
             'q' => trim((string) request()->query('q', '')),
@@ -367,7 +491,7 @@ class ProjectModuleController extends Controller
         $allowedConversions = ['project', 'sale', 'inventory_entry', 'pending'];
 
         $quotationsQuery = ProjectQuotation::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->with(['items', 'provider', 'convertedProject', 'customer', 'convertedPurchaseOrder']);
 
         if ($quotationFilters['q'] !== '') {
@@ -408,29 +532,29 @@ class ProjectModuleController extends Controller
 
         $editingQuotation = $editingQuotationId > 0
             ? ProjectQuotation::query()
-                ->where('tenant_id', $tenantId)
+                ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->with('items')
                 ->find($editingQuotationId)
             : null;
 
         $providers = Provider::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name']);
 
         $customerRoleIds = $this->resolveCustomerRoleIds();
         $customers = User::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->when(!empty($customerRoleIds), function ($query) use ($customerRoleIds) {
                 $query->whereIn('role_id', $customerRoleIds);
             })
-            ->where('is_active', 1)
+            ->tap(fn ($query) => $this->applyActiveUsersFilter($query))
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'phone_number']);
+            ->get($this->usersSelectColumns());
 
         $warehouses = Warehouse::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('is_active', true)
             ->orderByDesc('is_default')
             ->orderBy('name')
@@ -439,24 +563,30 @@ class ProjectModuleController extends Controller
         $productVariants = ProductVariant::query()
             ->with('product:id,name,tenant_id,barcode,qr_code')
             ->whereHas('product', function ($query) use ($tenantId) {
-                $query->where('tenant_id', $tenantId);
+                if ($tenantId > 0) {
+                    $query->where('tenant_id', $tenantId);
+                }
             })
             ->orderBy('id', 'desc')
             ->take(500)
             ->get();
 
         $appointmentServices = AppointmentService::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('is_active', true)
             ->orderBy('name')
             ->take(200)
             ->get(['id', 'name', 'description', 'price']);
 
         $projects = Project::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->orderByDesc('id')
             ->take(100)
             ->get(['id', 'name', 'budget_amount']);
+
+        $tenantFilterOptions = $isSuperOwner
+            ? Tenant::query()->orderBy('name')->get(['id', 'name'])
+            : collect();
 
         return view('quotations.index', compact(
             'quotations',
@@ -472,13 +602,19 @@ class ProjectModuleController extends Controller
             'euroRateToBs',
             'activeQuotationTab',
             'isSeller',
-            'quotationFilters'
+            'quotationFilters',
+            'isSuperOwner',
+            'tenantFilterOptions',
+            'selectedTenantId'
         ));
     }
 
     public function storeProject(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $scopeTenantId = $this->tenantScopeId();
+        $tenantId = $scopeTenantId > 0
+            ? $scopeTenantId
+            : (int) ($request->input('tenant_id', 0) ?? 0);
         abort_if($tenantId <= 0, 403);
 
         $validated = $request->validate([
@@ -519,8 +655,8 @@ class ProjectModuleController extends Controller
 
     public function storeProjectTask(Request $request, Project $project)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $project->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $project->tenant_id);
+        $tenantId = (int) $project->tenant_id;
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -552,8 +688,7 @@ class ProjectModuleController extends Controller
 
     public function updateProjectTaskStatus(Request $request, ProjectTask $task)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $task->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $task->tenant_id);
 
         $validated = $request->validate([
             'status' => 'required|in:todo,in_progress,done',
@@ -569,8 +704,8 @@ class ProjectModuleController extends Controller
 
     public function storeProjectAssignment(Request $request, Project $project)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $project->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $project->tenant_id);
+        $tenantId = (int) $project->tenant_id;
 
         $validated = $request->validate([
             'team_member_id' => 'required|exists:pm_team_members,id',
@@ -619,8 +754,7 @@ class ProjectModuleController extends Controller
 
     public function updateProjectPhase(Request $request, Project $project)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $project->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $project->tenant_id);
 
         $validated = $request->validate([
             'phase' => 'required|in:inicio,desarrollo,fin',
@@ -645,8 +779,7 @@ class ProjectModuleController extends Controller
 
     public function completeProject(Project $project)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $project->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $project->tenant_id);
 
         $project->update([
             'phase' => 'fin',
@@ -658,8 +791,7 @@ class ProjectModuleController extends Controller
 
     public function updateProjectVisibility(Request $request, Project $project)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $project->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $project->tenant_id);
 
         $validated = $request->validate([
             'is_public_landing' => 'nullable|boolean',
@@ -700,7 +832,10 @@ class ProjectModuleController extends Controller
 
     public function storeQuotation(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $scopeTenantId = $this->tenantScopeId();
+        $tenantId = $scopeTenantId > 0
+            ? $scopeTenantId
+            : (int) ($request->input('tenant_id', 0) ?? 0);
         abort_if($tenantId <= 0, 403);
 
         $this->persistQuotation($request, $tenantId);
@@ -710,8 +845,8 @@ class ProjectModuleController extends Controller
 
     public function updateQuotation(Request $request, ProjectQuotation $quotation)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $quotation->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $quotation->tenant_id);
+        $tenantId = (int) $quotation->tenant_id;
 
         $this->persistQuotation($request, $tenantId, $quotation);
 
@@ -720,8 +855,7 @@ class ProjectModuleController extends Controller
 
     public function invalidateQuotation(Request $request, ProjectQuotation $quotation)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $quotation->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $quotation->tenant_id);
 
         if ($this->isQuotationLockedStatus((string) $quotation->status)) {
             return back()->with('warning', 'La cotización ya fue cerrada y no se puede invalidar nuevamente.');
@@ -741,8 +875,7 @@ class ProjectModuleController extends Controller
 
     public function annulQuotation(Request $request, ProjectQuotation $quotation)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $quotation->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $quotation->tenant_id);
 
         if ($this->isQuotationLockedStatus((string) $quotation->status)) {
             return back()->with('warning', 'La cotización ya fue cerrada y no se puede anular nuevamente.');
@@ -762,8 +895,7 @@ class ProjectModuleController extends Controller
 
     public function replaceQuotation(Request $request, ProjectQuotation $quotation)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $quotation->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $quotation->tenant_id);
 
         if ($this->isQuotationLockedStatus((string) $quotation->status)) {
             return back()->with('warning', 'La cotización ya fue cerrada y no se puede reemplazar nuevamente.');
@@ -1209,7 +1341,7 @@ class ProjectModuleController extends Controller
                 'date' => now()->toDateString(),
                 'address' => 'Venta generada desde cotización #' . (int) $quotation->id,
                 'status' => 0,
-                'preference' => 'Retiro en tienda',
+                'preference' => 'Retiro en sede',
                 'deliver_status' => 0,
                 'tenant_id' => $tenantId,
                 'document_issue_mode' => 'delivery_note',
@@ -1719,19 +1851,29 @@ class ProjectModuleController extends Controller
 
     public function storeTeamMember(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $scopeTenantId = $this->tenantScopeId();
+        $tenantId = $scopeTenantId > 0
+            ? $scopeTenantId
+            : (int) ($request->input('tenant_id', 0) ?? 0);
         abort_if($tenantId <= 0, 403);
 
         $validated = $request->validate([
             'user_id' => 'nullable|exists:users,id',
+            'team_group_id' => 'nullable|exists:pm_team_groups,id',
             'full_name' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone' => ['nullable', 'string', 'max:60', 'regex:/^\+[1-9]\d{6,14}$/'],
             'role' => 'nullable|string|max:120',
-            'payment_frequency' => 'required|in:daily,weekly,fortnightly,package,monthly',
+            'payment_frequency' => 'required|in:daily,weekly,fortnightly,package,monthly,contract',
             'is_active' => 'nullable|boolean',
             'notes' => 'nullable|string|max:2000',
         ]);
+
+        $selectedGroup = null;
+        if (!empty($validated['team_group_id'])) {
+            $selectedGroup = ProjectTeamGroup::query()->findOrFail((int) $validated['team_group_id']);
+            abort_if((int) $selectedGroup->tenant_id !== $tenantId, 404);
+        }
 
         $selectedUser = null;
         if (!empty($validated['user_id'])) {
@@ -1748,6 +1890,7 @@ class ProjectModuleController extends Controller
 
         ProjectTeamMember::query()->create([
             'tenant_id' => $tenantId,
+            'team_group_id' => $selectedGroup?->id,
             'user_id' => $selectedUser?->id,
             'full_name' => $fullName,
             'email' => $validated['email'] ?? $selectedUser?->email,
@@ -1765,8 +1908,7 @@ class ProjectModuleController extends Controller
 
     public function updateTeamMemberStatus(Request $request, ProjectTeamMember $teamMember)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if((int) $teamMember->tenant_id !== $tenantId, 404);
+        $this->abortIfOutsideSelectedTenantScope((int) $teamMember->tenant_id);
 
         $validated = $request->validate([
             'action' => 'required|in:inactive,terminate,reactivate',
@@ -1817,7 +1959,11 @@ class ProjectModuleController extends Controller
 
     public function storePayroll(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $user = auth()->user();
+        $isSuperOwner = UserRedirector::isSuperAdmin($user);
+        $tenantId = $isSuperOwner
+            ? (int) ($request->input('tenant_id', session('superowner_tenant_scope_id', 0)) ?? 0)
+            : (int) ($user->tenant_id ?? 0);
         abort_if($tenantId <= 0, 403);
 
         $validated = $request->validate([
@@ -2025,8 +2171,10 @@ class ProjectModuleController extends Controller
         @set_time_limit(180);
         @ini_set('memory_limit', '512M');
 
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0 || (int) $payroll->tenant_id !== $tenantId, 404);
+        $user = auth()->user();
+        $isSuperOwner = UserRedirector::isSuperAdmin($user);
+        $tenantId = (int) ($user->tenant_id ?? 0);
+        abort_if(!$isSuperOwner && ($tenantId <= 0 || (int) $payroll->tenant_id !== $tenantId), 404);
 
         $payroll->loadMissing(['teamMember', 'project', 'items']);
 

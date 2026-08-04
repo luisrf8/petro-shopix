@@ -1136,7 +1136,7 @@
               </li>
             @endif
             <li class="nav-item">
-              <a class="btn landing-nav-link tenant-main-nav-btn" href="https://shopixve.com/landings"><i class="bi bi-shop-window"></i> Shopix</a>
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="https://shopixve.com/"><i class="bi bi-shop-window"></i> Shopix</a>
             </li>
             @if($cartEnabledForStorefront)
               @include('partials.tenant-cart-nav')
@@ -1765,13 +1765,13 @@
 
             const fullPhoneNumber = String(tenantPhoneCode).replace(/\D/g, '') + String(tenantPhoneNumber).replace(/\D/g, '');
             if (!fullPhoneNumber) {
-              alert('La tienda no tiene un número de WhatsApp configurado.');
+              alert('La sede no tiene un número de WhatsApp configurado.');
               return;
             }
 
             const message = projectQuoteOnlyMode
               ? `Hola, vengo de tu landing de Shopix y quiero cotizar un proyecto relacionado con el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio referencial de *${selectedVariant.price} ${baseCurrencySymbol}*. ¿Podemos iniciar el presupuesto?`
-              : `Hola, vengo de tu tienda virtual de Shopix y estoy interesado en el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio de *${selectedVariant.price} ${baseCurrencySymbol}*. ¿Podrían darme más información?`;
+              : `Hola, vengo de tu sede virtual de Shopix y estoy interesado en el producto *${selectedVariant.productName}* en la variante *${selectedVariant.size}* con precio de *${selectedVariant.price} ${baseCurrencySymbol}*. ¿Podrían darme más información?`;
             const whatsappLink = `https://wa.me/${fullPhoneNumber}?text=${encodeURIComponent(message)}`;
             window.open(whatsappLink, '_blank');
           });

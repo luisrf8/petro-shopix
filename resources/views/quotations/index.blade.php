@@ -329,6 +329,7 @@
 
 @section('content')
 <div class="container-fluid py-2 quotation-page-shell">
+  @php $selectedTenantId = (int) ($selectedTenantId ?? 0); @endphp
   @if(session('success'))
     <div class="alert alert-success text-white bg-gradient-success" role="alert">{{ session('success') }}</div>
   @endif
@@ -484,6 +485,20 @@
             @endif
 
             <input type="hidden" name="tab" value="create">
+            @if(($isSuperOwner ?? false) && $selectedTenantId > 0)
+              <input type="hidden" name="tenant_id" value="{{ $selectedTenantId }}">
+            @endif
+            @if(($isSuperOwner ?? false) && $selectedTenantId === 0)
+              <div class="col-md-4">
+                <label class="form-label">Tenant destino</label>
+                <select name="tenant_id" class="form-control border border-1 p-2" required>
+                  <option value="" selected disabled>Selecciona tenant</option>
+                  @foreach(($tenantFilterOptions ?? collect()) as $tenantOption)
+                    <option value="{{ $tenantOption->id }}">{{ $tenantOption->name }}</option>
+                  @endforeach
+                </select>
+              </div>
+            @endif
 
             <div class="col-md-3">
               <label class="form-label">Tipo cliente/proveedor</label>

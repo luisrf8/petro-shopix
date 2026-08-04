@@ -78,17 +78,6 @@
     </div>
     <div class="card-body">
       <form method="GET" class="electronic-documents-toolbar align-items-end">
-        @if($isSuperAdmin)
-          <div>
-            <label class="form-label">Tienda</label>
-            <select name="tenant_id" class="form-control border border-1 p-2">
-              <option value="0">Todas</option>
-              @foreach($tenants as $tenant)
-                <option value="{{ $tenant->id }}" {{ (int) $tenantId === (int) $tenant->id ? 'selected' : '' }}>{{ $tenant->name }}</option>
-              @endforeach
-            </select>
-          </div>
-        @endif
         <div>
           <label class="form-label">Estado</label>
           <select name="status" class="form-control border border-1 p-2">
@@ -134,7 +123,7 @@
             <tr>
               <th>Fecha</th>
               <th>Hora</th>
-              <th>Tienda</th>
+              <th>sede</th>
               <th>Tipo de Doc</th>
               <th>Serie</th>
               <th>Nro. Documento</th>
@@ -224,7 +213,7 @@
               <tr>
                 <th>Fecha</th>
                 <th>Hora</th>
-                <th>Tienda</th>
+                <th>sede</th>
                 <th>Tipo de Doc</th>
                 <th>Serie</th>
                 <th>Nro. Documento</th>
@@ -351,7 +340,7 @@
 </script>
               <th>Fecha</th>
               <th>Hora</th>
-              <th>Tienda</th>
+              <th>sede</th>
               <th>Tipo de Doc</th>
               <th>Serie</th>
               <th>Nro. Documento</th>

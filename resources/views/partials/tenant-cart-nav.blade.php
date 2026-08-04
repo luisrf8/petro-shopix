@@ -1401,7 +1401,7 @@
       if (!supportsBrowserNotifications()) {
         notificationPermissionPanel.classList.remove('d-none', 'is-ready');
         notificationPermissionTitle.textContent = 'Este navegador aún no admite alertas web aquí';
-        notificationPermissionCopy.textContent = 'Necesitas HTTPS y un navegador compatible. En iPhone, las alertas web funcionan mejor al instalar la tienda en pantalla de inicio.';
+        notificationPermissionCopy.textContent = 'Necesitas HTTPS y un navegador compatible. En iPhone, las alertas web funcionan mejor al instalar la sede en pantalla de inicio.';
         if (enableBrowserNotificationsBtn) {
           enableBrowserNotificationsBtn.textContent = 'Entendido';
         }
@@ -1414,7 +1414,7 @@
       if (permission === 'granted') {
         notificationPermissionPanel.classList.add('is-ready');
         notificationPermissionTitle.textContent = 'Alertas del navegador activas';
-        notificationPermissionCopy.textContent = 'Este dispositivo ya puede recibir notificaciones web de la tienda.';
+        notificationPermissionCopy.textContent = 'Este dispositivo ya puede recibir notificaciones web de la sede.';
         if (enableBrowserNotificationsBtn) {
           enableBrowserNotificationsBtn.textContent = 'Revisar';
         }
@@ -1433,7 +1433,7 @@
       }
 
       notificationPermissionTitle.textContent = 'Activa alertas del navegador';
-      notificationPermissionCopy.textContent = 'Permite notificaciones para recibir avisos nativos en este dispositivo. En iPhone, instala la tienda en pantalla de inicio para mejor compatibilidad.';
+      notificationPermissionCopy.textContent = 'Permite notificaciones para recibir avisos nativos en este dispositivo. En iPhone, instala la sede en pantalla de inicio para mejor compatibilidad.';
       if (enableBrowserNotificationsBtn) {
         enableBrowserNotificationsBtn.textContent = 'Activar alertas';
       }
@@ -1446,7 +1446,7 @@
       }
 
       if (!supportsBrowserNotifications()) {
-        alert('Este navegador necesita HTTPS, Service Worker y soporte Push API para activar alertas web. En iPhone, instala la tienda en pantalla de inicio.');
+        alert('Este navegador necesita HTTPS, Service Worker y soporte Push API para activar alertas web. En iPhone, instala la sede en pantalla de inicio.');
         return;
       }
 
@@ -1470,7 +1470,7 @@
       await syncBrowserPushSubscription(currentToken);
       await showBrowserNotification({
         title: 'Alertas activadas',
-        message: 'Desde ahora recibirás notificaciones nativas de esta tienda en este dispositivo.',
+        message: 'Desde ahora recibirás notificaciones nativas de esta sede en este dispositivo.',
         target_url: window.location.href,
       }, { force: true });
       showTenantToast('Alertas activadas', 'Este dispositivo ya puede recibir notificaciones del navegador.');
@@ -2476,7 +2476,7 @@
           <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
             <div>
               <div class="fw-semibold fs-6">Pedido #${row.id}</div>
-              <div class="tenant-order-meta"><strong>Tienda:</strong> ${row.tenant_name || 'No disponible'}${row.date ? ` • ${row.date}` : ''}</div>
+              <div class="tenant-order-meta"><strong>sede:</strong> ${row.tenant_name || 'No disponible'}${row.date ? ` • ${row.date}` : ''}</div>
             </div>
             <a href="${row.public_url}" class="btn btn-sm btn-outline-dark">Ver detalle</a>
           </div>

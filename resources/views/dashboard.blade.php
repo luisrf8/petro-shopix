@@ -169,7 +169,7 @@
                 <div class="col-md-6 col-xl-3 mb-4">
                     <div class="card">
                         <div class="card-body p-3">
-                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Delivery tienda pendientes</p>
+                            <p class="text-sm mb-1 text-uppercase font-weight-bold">Delivery sede pendientes</p>
                             <h4 class="mb-0">{{ number_format($deliveryDashboardOrders->count()) }}</h4>
                         </div>
                     </div>
@@ -187,7 +187,7 @@
             <div class="card my-4">
                 <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
                     <div class="bg-gradient-dark shadow-dark border-radius-lg pt-3 pb-3 d-flex justify-content-between align-items-center">
-                        <h6 class="text-white text-capitalize ps-3 mb-0">Órdenes Delivery tienda por entregar</h6>
+                        <h6 class="text-white text-capitalize ps-3 mb-0">Órdenes Delivery sede por entregar</h6>
                         <a href="{{ url('/paid-pending-deliveries') }}" class="btn btn-sm btn-light mb-0 me-3">Ver todas</a>
                     </div>
                 </div>
@@ -227,7 +227,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8" class="text-center text-muted py-4">No hay órdenes de Delivery tienda pendientes por entregar.</td>
+                                        <td colspan="8" class="text-center text-muted py-4">No hay órdenes de Delivery sede pendientes por entregar.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -252,7 +252,7 @@
                 <div class="dashboard-store-url-inline" id="tour-dashboard-store-url">
                     <div class="dashboard-url-shell">
                         <input type="text" class="form-control dashboard-url-input" id="dashboardStoreUrlInput" value="{{ $tenantPublicUrl }}" readonly>
-                        <a href="{{ $tenantPublicUrl }}" target="_blank" rel="noopener" class="btn dashboard-url-icon-btn" aria-label="Abrir tienda" title="Abrir tienda">
+                        <a href="{{ $tenantPublicUrl }}" target="_blank" rel="noopener" class="btn dashboard-url-icon-btn" aria-label="Abrir sede" title="Abrir sede">
                             <i class="material-symbols-rounded">open_in_new</i>
                         </a>
                         <button type="button" class="btn dashboard-url-icon-btn" id="dashboardCopyStoreUrlBtn" aria-label="Copiar enlace" title="Copiar enlace" data-icon-default="content_copy">
@@ -269,12 +269,12 @@
                                         @if(!is_null($currentPlanDaysRemaining) && $currentPlanDaysRemaining < 0)
                                                 <div class="alert alert-danger border mb-0" role="alert">
                                                         Tu plan <strong>{{ $currentPlanPayment->plan->name ?? 'actual' }}</strong> está vencido hace {{ abs((int) $currentPlanDaysRemaining) }} días.
-                                                        Registra tu pago desde <a href="{{ route('tenant.store') }}" class="alert-link">Gestión de Tienda</a>.
+                                                        Registra tu pago desde <a href="{{ route('tenant.store') }}" class="alert-link">Gestión de sede</a>.
                                                 </div>
                                         @elseif(!is_null($currentPlanDaysRemaining) && $currentPlanDaysRemaining <= 7)
                                                 <div class="alert alert-warning border mb-0" role="alert">
                                                         Tu plan <strong>{{ $currentPlanPayment->plan->name ?? 'actual' }}</strong> vence en {{ (int) $currentPlanDaysRemaining }} días.
-                                                        Puedes anticipar el pago desde <a href="{{ route('tenant.store') }}" class="alert-link">Gestión de Tienda</a>.
+                                                        Puedes anticipar el pago desde <a href="{{ route('tenant.store') }}" class="alert-link">Gestión de sede</a>.
                                                 </div>
                                         @endif
                                 </div>
@@ -663,12 +663,12 @@
         if (dashboardPlanDaysRemaining !== null) {
             setTimeout(() => {
                 if (dashboardPlanDaysRemaining < 0) {
-                    showDashboardToast(`Tu plan está vencido hace ${Math.abs(dashboardPlanDaysRemaining)} días. Registra el pago en Gestión de Tienda.`, 'error');
+                    showDashboardToast(`Tu plan está vencido hace ${Math.abs(dashboardPlanDaysRemaining)} días. Registra el pago en Gestión de sede.`, 'error');
                     return;
                 }
 
                 if (dashboardPlanDaysRemaining <= 7) {
-                    showDashboardToast(`Tu plan vence en ${dashboardPlanDaysRemaining} días. Registra tu pago con anticipación en Gestión de Tienda.`, 'warning');
+                    showDashboardToast(`Tu plan vence en ${dashboardPlanDaysRemaining} días. Registra tu pago con anticipación en Gestión de sede.`, 'warning');
                 }
             }, 250);
         }
@@ -685,7 +685,7 @@
                     element: '#tour-dashboard-headline',
                     popover: {
                         title: 'Bienvenido a tu Dashboard',
-                        description: 'Aqui ves un resumen rapido del estado de tu tienda y accesos clave.',
+                        description: 'Aqui ves un resumen rapido del estado de tu sede y accesos clave.',
                         side: 'bottom',
                         align: 'start'
                     }
@@ -693,8 +693,8 @@
                 {
                     element: '#tour-dashboard-store-url',
                     popover: {
-                        title: 'Enlace publico de tu tienda',
-                        description: 'Desde aqui puedes abrir tu tienda online o copiar su URL para compartirla.',
+                        title: 'Enlace publico de tu sede',
+                        description: 'Desde aqui puedes abrir tu sede online o copiar su URL para compartirla.',
                         side: 'bottom',
                         align: 'start'
                     }

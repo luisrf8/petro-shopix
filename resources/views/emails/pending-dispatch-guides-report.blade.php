@@ -7,7 +7,7 @@
 <body>
     <h2>Reporte {{ ucfirst((string) ($report['label'] ?? '')) }} de guías de despacho pendientes por facturar</h2>
 
-    <p><strong>Tienda:</strong> {{ $tenant->name ?? 'N/A' }}</p>
+    <p><strong>sede:</strong> {{ $tenant->name ?? 'N/A' }}</p>
     <p><strong>Periodo:</strong> {{ $report['start_date'] ?? 'N/A' }} al {{ $report['end_date'] ?? 'N/A' }}</p>
     <p><strong>Total pendiente:</strong> {{ $report['count'] ?? 0 }}</p>
 

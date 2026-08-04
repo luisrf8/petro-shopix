@@ -34,7 +34,7 @@
     [$tenantPrimaryR, $tenantPrimaryG, $tenantPrimaryB] = $toRgb($tenantColorPrimary);
 
     $tenantLandingUrl = route('tenant.public', ['tenant' => $tenant->slug]);
-    $shopixLandingsUrl = 'https://shopixve.com/landings';
+    $shopixLandingsUrl = 'https://shopixve.com/';
   @endphp
 
   <style>
@@ -133,7 +133,7 @@
         </div>
         <div class="d-flex flex-wrap gap-2">
           <a href="{{ $shopixLandingsUrl }}" class="btn portal-pill btn-sm">Shopix</a>
-          <a href="{{ $tenantLandingUrl }}" class="btn portal-pill btn-sm"><i class="bi bi-shop me-1"></i>Volver a la tienda</a>
+          <a href="{{ $tenantLandingUrl }}" class="btn portal-pill btn-sm"><i class="bi bi-shop me-1"></i>Volver a la sede</a>
           <button type="button" class="btn portal-pill btn-sm" id="logout-btn"><i class="bi bi-box-arrow-right me-1"></i>Cerrar sesión</button>
         </div>
       </div>
@@ -146,8 +146,8 @@
     <div id="guest-panel" class="card portal-card d-none">
       <div class="card-body p-4 text-center">
         <h2 class="h5 mb-2">Necesitas iniciar sesión</h2>
-        <p class="text-muted mb-3">Para ver tu cuenta, tus compras y tus citas debes iniciar sesión desde la landing de la tienda.</p>
-        <a href="{{ $tenantLandingUrl }}" class="btn btn-dark">Ir a la tienda</a>
+        <p class="text-muted mb-3">Para ver tu cuenta, tus compras y tus citas debes iniciar sesión desde la landing de la sede.</p>
+        <a href="{{ $tenantLandingUrl }}" class="btn btn-dark">Ir a la sede</a>
       </div>
     </div>
 
@@ -511,14 +511,14 @@
 
         ordersList.className = 'd-grid gap-2';
         ordersList.innerHTML = list.map(order => {
-          const storeName = order?.tenant?.name || 'Tienda no disponible';
+          const storeName = order?.tenant?.name || 'sede no disponible';
           return `
             <div class="border rounded-3 p-3">
               <div class="d-flex justify-content-between flex-wrap gap-2">
                 <strong>Pedido #${order.order_number ?? order.id}</strong>
                 <span class="badge text-bg-light">${order.status || 'Pendiente'}</span>
               </div>
-              <p class="mb-1 mt-2"><strong>Tienda:</strong> ${storeName}</p>
+              <p class="mb-1 mt-2"><strong>sede:</strong> ${storeName}</p>
               <p class="mb-0 text-muted">Fecha: ${order.created_at || 'N/A'}</p>
             </div>
           `;

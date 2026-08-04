@@ -576,7 +576,7 @@
             },
             'store-expenses.index': {
               tour: [
-                { title: 'Registro de egresos', description: 'Documenta gastos operativos de tienda.', selector: 'form' },
+                { title: 'Registro de egresos', description: 'Documenta gastos operativos de sede.', selector: 'form' },
                 { title: 'Historial de gastos', description: 'Revisa y ajusta gastos registrados.', selector: 'table.table' }
               ]
             },

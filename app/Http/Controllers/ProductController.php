@@ -36,22 +36,22 @@ class ProductController extends Controller
     // }
     public function index()
     {
-        $user = auth()->user();
-        $tenant = Tenant::find($user->tenant_id);
+        $tenantId = $this->tenantScopeId(request());
+        $tenant = $tenantId > 0 ? Tenant::find($tenantId) : null;
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
-        $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
+        $baseRateToBs = $tenantId > 0 ? TenantCurrency::resolveRateToBs($tenantId, $baseCurrencyCode) : 0.0;
         $search = trim((string) request()->input('q', ''));
         $searchNormalized = mb_strtolower($search);
 
         $categories = Category::query()
             ->where('is_active', true)
-            ->where('tenant_id', $user->tenant_id)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->get();
         $taxes = $this->allowedProductTaxes();
 
         $productItemsQuery = Product::with(['category', 'images', 'variants.images'])
-            ->where('tenant_id', $user->tenant_id);
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId));
 
         if ($search !== '') {
             $productItemsQuery->where(function ($query) use ($searchNormalized) {
@@ -77,9 +77,9 @@ class ProductController extends Controller
 
     public function indexCreateProduct()
     {
-        $user = auth()->user();
+        $tenantId = $this->tenantWriteId(request());
 
-        $categories = Category::where('tenant_id', $user->tenant_id)->get();
+        $categories = Category::where('tenant_id', $tenantId)->get();
         if ($categories->isEmpty()) {
             return redirect()->route('categories.index')
                 ->with('warning', 'Primero debes crear al menos una categoría para registrar productos.');
@@ -91,7 +91,7 @@ class ProductController extends Controller
 
     public function getProducts()
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $tenantId = $this->tenantScopeId(request());
         $productItems = Product::with(['category', 'images', 'variants.images'])
             ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->orderBy('created_at', 'desc')
@@ -100,12 +100,13 @@ class ProductController extends Controller
     }
     public function categoriesIndex()
     {
-        $user = auth()->user();
+        $tenantId = $this->tenantScopeId(request());
 
-        $categories = Category::where('tenant_id', $user->tenant_id)
-            ->with(['products' => function ($query) use ($user) {
+        $categories = Category::query()
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->with(['products' => function ($query) use ($tenantId) {
                 $query->where('is_active', true)
-                    ->where('tenant_id', $user->tenant_id)
+                    ->when($tenantId > 0, fn ($innerQuery) => $innerQuery->where('tenant_id', $tenantId))
                     ->with('variants');
             }])
             ->get();
@@ -129,20 +130,23 @@ class ProductController extends Controller
 
     public function showByCategory($categoryId)
     {
-        $user = auth()->user();
-        $tenant = Tenant::find($user->tenant_id);
+        $tenantId = $this->tenantScopeId(request());
+        $tenant = $tenantId > 0 ? Tenant::find($tenantId) : null;
         $baseCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tenant);
         $baseCurrencySymbol = TenantCurrency::resolveCurrencySymbol($baseCurrencyCode);
-        $baseRateToBs = TenantCurrency::resolveRateToBs((int) $user->tenant_id, $baseCurrencyCode);
+        $baseRateToBs = $tenantId > 0 ? TenantCurrency::resolveRateToBs($tenantId, $baseCurrencyCode) : 0.0;
         $search = trim((string) request()->input('q', ''));
         $searchNormalized = mb_strtolower($search);
 
-        $category = Category::where('tenant_id', $user->tenant_id)->findOrFail($categoryId);
-        $categories = Category::where('tenant_id', $user->tenant_id)
-        ->where('is_active', true)
-        ->get();
+        $category = Category::query()
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->findOrFail($categoryId);
+        $categories = Category::query()
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->where('is_active', true)
+            ->get();
         $productItemsQuery = Product::with(['category', 'images', 'variants.images'])
-            ->where('tenant_id', $user->tenant_id)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('category_id', $category->id);
 
         if ($search !== '') {
@@ -197,25 +201,26 @@ class ProductController extends Controller
     
     public function showByProduct($id)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
         $product = Product::with(['variants.images', 'images', 'category', 'taxes'])->findOrFail($id);
-        $tenant = Tenant::find($tenantId);
+        $tenantId = $this->tenantScopeId(request());
+        $tenantContextId = $tenantId > 0 ? $tenantId : (int) ($product->tenant_id ?? 0);
+        $tenant = Tenant::find($tenantContextId);
 
         if ($tenantId > 0 && (int) $product->tenant_id !== $tenantId) {
             abort(404);
         }
 
         $categories = Category::query()
-            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->when($tenantContextId > 0, fn ($query) => $query->where('tenant_id', $tenantContextId))
             ->get();
         $warehouses = Warehouse::query()
-            ->where('tenant_id', $tenantId)
+            ->where('tenant_id', $tenantContextId)
             ->where('is_active', true)
             ->orderByDesc('is_default')
             ->orderBy('name')
             ->get();
         $warehouseStocks = ProductVariantWarehouseStock::query()
-            ->where('tenant_id', $tenantId)
+            ->where('tenant_id', $tenantContextId)
             ->whereIn('product_variant_id', $product->variants->pluck('id'))
             ->get()
             ->keyBy(function ($item) {
@@ -223,7 +228,7 @@ class ProductController extends Controller
             });
         $reassignableProducts = Product::query()
             ->with('category:id,name')
-            ->where('tenant_id', $tenantId)
+            ->where('tenant_id', $tenantContextId)
             ->where('id', '!=', (int) $product->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -239,7 +244,7 @@ class ProductController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
-        $tenantId = (int) (auth()->user()->tenant_id ?? $request->tenant_id ?? 0);
+        $tenantId = $this->tenantWriteId($request);
 
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',

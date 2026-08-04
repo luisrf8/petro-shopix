@@ -752,7 +752,7 @@
   <div class="offcanvas-body d-flex flex-column tenant-cart-body">
     @if(!$cartEnabled)
       <div id="tenant-cart-disabled-alert" class="alert alert-warning tenant-cart-plan-alert" role="alert">
-        Tu tienda está en plan básico. Puedes enviar tu pedido por WhatsApp.
+        Tu sede está en plan básico. Puedes enviar tu pedido por WhatsApp.
       </div>
     @else
       <div id="tenant-cart-disabled-alert" class="alert alert-info tenant-cart-plan-alert" role="alert">
@@ -777,7 +777,7 @@
           <label class="form-label d-block">Tipo de entrega</label>
           <div class="form-check form-check-inline">
             <input class="form-check-input" type="radio" name="tenant-delivery-type" id="delivery-pickup" value="pickup" checked>
-            <label class="form-check-label" for="delivery-pickup">Retiro en tienda</label>
+            <label class="form-check-label" for="delivery-pickup">Retiro en sede</label>
           </div>
           <div class="form-check form-check-inline">
             <input class="form-check-input" type="radio" name="tenant-delivery-type" id="delivery-store" value="delivery" {{ (bool) ($tenant->delivery_enabled ?? false) ? '' : 'disabled' }}>
@@ -1054,7 +1054,7 @@
               <div id="tenant-pro-delivery-type-wrap">
                 <div class="form-check form-check-inline">
                   <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-pickup" value="pickup" checked>
-                  <label class="form-check-label" for="tenant-pro-delivery-pickup">Retiro en tienda</label>
+                  <label class="form-check-label" for="tenant-pro-delivery-pickup">Retiro en sede</label>
                 </div>
                 <div class="form-check form-check-inline">
                   <input class="form-check-input" type="radio" name="tenant-pro-delivery-type" id="tenant-pro-delivery-store" value="delivery" {{ (bool) ($tenant->delivery_enabled ?? false) ? '' : 'disabled' }}>
@@ -1803,7 +1803,7 @@
       return {
         valid: true,
         cityId: null,
-        address: 'Tienda',
+        address: 'sede',
         latitude: null,
         longitude: null,
       };
@@ -1846,7 +1846,7 @@
       }
 
       if (!tenantDeliveryConfig?.enabled) {
-        return 'Precio delivery: delivery de tienda no disponible.';
+        return 'Precio delivery: delivery de sede no disponible.';
       }
 
       if (!deliveryContext.valid && deliveryContext.message) {
@@ -1889,7 +1889,7 @@
       if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
         const estimatedDistanceKm = estimateDistanceFromCoordinates(latitudeInput, longitudeInput, distanceInput);
         statusElement.textContent = estimatedDistanceKm
-          ? `Ubicación de referencia registrada. Distancia estimada tienda-cliente: ${estimatedDistanceKm.toFixed(2)} km`
+          ? `Ubicación de referencia registrada. Distancia estimada sede-cliente: ${estimatedDistanceKm.toFixed(2)} km`
           : 'Ubicación de referencia registrada.';
         refreshDeliveryUiInfo();
         return;
@@ -2138,7 +2138,7 @@
 
     function getTenantDeliveryModeLabel(mode, distanceKm = null) {
       if (!tenantDeliveryConfig?.enabled) {
-        return 'Retiro en tienda';
+        return 'Retiro en sede';
       }
 
       if (mode === 'distance') {
@@ -2155,7 +2155,7 @@
         return 'Delivery gratis';
       }
 
-      return 'Retiro en tienda';
+      return 'Retiro en sede';
     }
 
     function getTenantDeliveryContext(deliveryType, distanceInput, strict = false) {
@@ -2168,7 +2168,7 @@
           fee: 0,
           mode: 'pickup',
           distanceKm: null,
-          label: 'Retiro en tienda',
+          label: 'Retiro en sede',
         };
       }
 
@@ -2188,8 +2188,8 @@
           fee: 0,
           mode: 'pickup',
           distanceKm: null,
-          label: 'Retiro en tienda',
-          message: 'La tienda no tiene delivery activo.',
+          label: 'Retiro en sede',
+          message: 'La sede no tiene delivery activo.',
         };
       }
 
@@ -2781,7 +2781,7 @@
 
       const phone = `${String(tenantPhoneCode).replace(/\D/g, '')}${String(tenantPhoneNumber).replace(/\D/g, '')}`;
       if (!phone) {
-        alert('La tienda no tiene un número de WhatsApp configurado.');
+        alert('La sede no tiene un número de WhatsApp configurado.');
         return;
       }
 
@@ -2806,9 +2806,9 @@
       if (consultOnly) {
         lines.push('Solicitud: Consulta de existencia/disponibilidad antes de confirmar pedido.');
       } else {
-        lines.push(`Entrega: ${isStoreDelivery ? 'Delivery tienda' : (isThirdPartyShipping ? 'Envío por tercero' : 'Retiro en tienda')}`);
+        lines.push(`Entrega: ${isStoreDelivery ? 'Delivery sede' : (isThirdPartyShipping ? 'Envío por tercero' : 'Retiro en sede')}`);
         if (isStoreDelivery) {
-          lines.push(`Costo delivery: ${Number(deliveryContext.fee || 0).toFixed(2)} ${getBaseCurrencySymbol()} (${deliveryContext.label || 'Retiro en tienda'})`);
+          lines.push(`Costo delivery: ${Number(deliveryContext.fee || 0).toFixed(2)} ${getBaseCurrencySymbol()} (${deliveryContext.label || 'Retiro en sede'})`);
         }
         if (requiresAddress) {
           if (isStoreDelivery) {
@@ -4100,7 +4100,7 @@
           note.textContent = state === 'available'
             ? `Día disponible (${slots.length} horario(s)).`
             : (state === 'closed'
-              ? 'No laboran este día en la tienda.'
+              ? 'No laboran este día en la sede.'
               : (state === 'past' ? 'Este día ya pasó.' : 'Día ocupado o sin horarios disponibles.'));
           return;
         }
@@ -6072,12 +6072,12 @@
       }
 
       if (methods.length === 0 && !isAppointmentCheckoutActive()) {
-        alert('Esta tienda no tiene métodos de pago activos para checkout.');
+        alert('Esta sede no tiene métodos de pago activos para checkout.');
         return;
       }
 
       if ((!proBaseRate || proBaseRate <= 0) && !isAppointmentCheckoutActive()) {
-        alert(`La tienda no tiene tasa configurada para ${proBaseCurrency}. Contacta al comercio.`);
+        alert(`La sede no tiene tasa configurada para ${proBaseCurrency}. Contacta al comercio.`);
         return;
       }
 
@@ -6090,7 +6090,7 @@
       }
 
       if (isAppointmentCheckoutActive() && methods.length === 0 && !appointmentAllowUnpaidReservation) {
-        alert('Esta tienda exige pago en línea para reservar citas y no tiene métodos de pago activos.');
+        alert('Esta sede exige pago en línea para reservar citas y no tiene métodos de pago activos.');
         return;
       }
 
@@ -6442,7 +6442,7 @@
         : normalizeDeliveryTypeSelection(document.querySelector('input[name="tenant-pro-delivery-type"]:checked')?.value || 'pickup');
 
       const deliveryAddressResult = appointmentModeActive
-        ? { valid: true, cityId: null, address: 'Tienda', latitude: null, longitude: null }
+        ? { valid: true, cityId: null, address: 'sede', latitude: null, longitude: null }
         : buildAddressForDeliveryType(deliveryType, {
         countrySelect: proShippingCountrySelect,
         stateSelect: proShippingStateSelect,
@@ -6563,7 +6563,7 @@
             request_uid: requestUid,
             customer_id: Number(user.id),
             delivery_type: deliveryType,
-            delivery_address: ['delivery', 'shipping'].includes(deliveryType) ? deliveryAddressResult.address : 'Tienda',
+            delivery_address: ['delivery', 'shipping'].includes(deliveryType) ? deliveryAddressResult.address : 'sede',
             delivery_city_id: ['delivery', 'shipping'].includes(deliveryType) ? Number(deliveryAddressResult.cityId || 0) : null,
             delivery_distance_km: deliveryType === 'delivery' ? proDeliveryContext.distanceKm : null,
             delivery_latitude: ['delivery', 'shipping'].includes(deliveryType) ? deliveryAddressResult.latitude : null,
@@ -6582,7 +6582,7 @@
           })
         });
       } catch (error) {
-        alert('No se pudo conectar con la tienda para registrar el pedido.');
+        alert('No se pudo conectar con la sede para registrar el pedido.');
         setProSubmitLoading(false);
         proCheckoutSubmitInProgress = false;
         return;

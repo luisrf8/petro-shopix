@@ -9,7 +9,7 @@ return new class extends Migration {
     {
         if (Schema::hasTable('users') && !Schema::hasColumn('users', 'commission_percentage')) {
             Schema::table('users', function (Blueprint $table) {
-                $table->decimal('commission_percentage', 5, 2)->default(0)->after('is_active');
+                $table->decimal('commission_percentage', 5, 2)->default(0);
             });
         }
 

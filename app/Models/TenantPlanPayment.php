@@ -35,11 +35,6 @@ class TenantPlanPayment extends Model
         return $this->belongsTo(Tenant::class);
     }
 
-    public function plan()
-    {
-        return $this->belongsTo(Plan::class);
-    }
-
     public function reviewer()
     {
         return $this->belongsTo(User::class, 'reviewed_by');

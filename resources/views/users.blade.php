@@ -35,14 +35,15 @@
         <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
           <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
             <h6 class="text-white text-capitalize ps-3">USUARIOS</h6>
-            <div class="py-1 px-3 text-end" data-bs-toggle="modal" data-bs-target="#createUserModal">
-              <label class="text-white admin-mobile-action-trigger">+ Crear Usuario</label>
+            <div class="py-1 px-3 text-end d-flex align-items-center gap-2">
+              <a href="{{ route('users.employmentProfiles.index') }}" class="btn btn-outline-light btn-sm mb-0">Ficha laboral</a>
+              <label class="text-white admin-mobile-action-trigger" data-bs-toggle="modal" data-bs-target="#createUserModal">+ Crear Usuario</label>
             </div>
           </div>
         </div>
         <div class="card-body px-0 pb-2">
           <div class="mx-3 mb-3">
-            <input type="text" id="searchUser" class="form-control border border-1 p-2" placeholder="Buscar usuario, correo o tienda...">
+            <input type="text" id="searchUser" class="form-control border border-1 p-2" placeholder="Buscar usuario, correo o sede...">
           </div>
           <div class="users-table-wrap m-3 mt-0">
             <table class="table table-striped text-center users-table mb-0">
@@ -50,7 +51,7 @@
                 <tr>
                   <th>Nombre</th>
                   <th>Correo Electrónico</th>
-                  <th>Tienda</th>
+                  <th>sede</th>
                   <th>Rol</th>
                   <th>Estado</th>
                   <th>Editar</th>
@@ -63,7 +64,7 @@
                     <td>{{ $user->name }}</td>
                     <td>{{ $user->email }}</td>
                     <td>
-                      <span class="tenant-chip">{{ $user->tenant->name ?? 'Sin tienda' }}</span>
+                      <span class="tenant-chip">{{ $user->tenant->name ?? 'Sin sede' }}</span>
                     </td>
                     <td>{{ $user->role->name }}</td>
                     <td>
@@ -121,9 +122,9 @@
               <input type="email" class="form-control border border-1 p-2" id="userEmail" name="email" placeholder="Ingrese el correo electrónico" required>
             </div>
             <div class="mb-3">
-              <label for="userTenantSelector" class="form-label">Tienda asignada</label>
+              <label for="userTenantSelector" class="form-label">sede asignada</label>
               <select id="userTenantSelector" name="tenant_id" class="form-control border border-1 p-2">
-                <option value="">Sin tienda</option>
+                <option value="">Sin sede</option>
                 @foreach($tenants as $tenant)
                   <option value="{{ $tenant->id }}">{{ $tenant->name }}</option>
                 @endforeach
@@ -179,9 +180,9 @@
               <input type="email" class="form-control border border-1 p-2" id="editUserEmail" name="email" placeholder="Ingrese el correo electrónico" required>
             </div>
             <div class="mb-3">
-              <label for="editUserTenantSelector" class="form-label">Tienda asignada</label>
+              <label for="editUserTenantSelector" class="form-label">sede asignada</label>
               <select id="editUserTenantSelector" name="tenant_id" class="form-control border border-1 p-2">
-                <option value="">Sin tienda</option>
+                <option value="">Sin sede</option>
                 @foreach($tenants as $tenant)
                   <option value="{{ $tenant->id }}">{{ $tenant->name }}</option>
                 @endforeach

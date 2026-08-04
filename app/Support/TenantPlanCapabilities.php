@@ -4,7 +4,6 @@ namespace App\Support;
 
 use App\Models\Tenant;
 use App\Models\TenantPlanPayment;
-use Illuminate\Support\Str;
 
 class TenantPlanCapabilities
 {
@@ -19,20 +18,13 @@ class TenantPlanCapabilities
         $this->tenant = $tenant;
         $this->isSuperAdmin = $isSuperAdmin;
         $this->latestPaidPlan = $latestPaidPlan;
-
-        $this->isFree = !$isSuperAdmin && (float) ($latestPaidPlan?->plan?->price ?? -1) <= 0;
-
-        $planName = Str::lower(Str::ascii((string) ($latestPaidPlan?->plan?->name ?? '')));
-        $this->isBasic = !$isSuperAdmin && !$this->isFree && Str::contains($planName, ['basico', 'basic']);
+        $this->isFree = false;
+        $this->isBasic = false;
     }
 
     public static function forTenant(?Tenant $tenant, bool $isSuperAdmin = false): self
     {
         $latestPaidPlan = null;
-
-        if (!$isSuperAdmin && $tenant?->id) {
-            $latestPaidPlan = TenantPlanResolver::latestPaidForTenant((int) $tenant->id);
-        }
 
         return new self($tenant, $isSuperAdmin, $latestPaidPlan);
     }
@@ -59,22 +51,22 @@ class TenantPlanCapabilities
 
     public function hasFreeRestriction(): bool
     {
-        return !$this->isSuperAdmin && $this->isFree;
+        return false;
     }
 
     public function hasBasicRestriction(): bool
     {
-        return !$this->isSuperAdmin && $this->isBasic;
+        return false;
     }
 
     public function canDashboard(): bool
     {
-        return $this->isSuperAdmin || $this->isPro();
+        return true;
     }
 
     public function canCategories(): bool
     {
-        return $this->isSuperAdmin || $this->isFree || $this->isBasic || $this->isPro();
+        return true;
     }
 
     public function canProducts(): bool
@@ -84,107 +76,107 @@ class TenantPlanCapabilities
 
     public function canStoreManagement(): bool
     {
-        return $this->isSuperAdmin || $this->isFree || $this->isBasic || $this->isPro();
+        return true;
     }
 
     public function canPaymentMethods(): bool
     {
-        return $this->isSuperAdmin || $this->isPro();
+        return true;
     }
 
     public function canSales(): bool
     {
-        return $this->isSuperAdmin || $this->isBasic || $this->isPro();
+        return true;
     }
 
     public function canCustomers(): bool
     {
-        return $this->isSuperAdmin || $this->isPro();
+        return true;
     }
 
     public function canAccountsReceivable(): bool
     {
-        return $this->isSuperAdmin || $this->isPro();
+        return true;
     }
 
     public function canPaidPendingDeliveries(): bool
     {
-        return $this->isSuperAdmin || $this->isPro();
+        return true;
     }
 
     public function canInventoryEntries(): bool
     {
-        return $this->isSuperAdmin || $this->isBasic || $this->isPro();
+        return true;
     }
 
     public function canProviders(): bool
     {
-        return $this->isSuperAdmin || $this->isBasic || $this->isPro();
+        return true;
     }
 
     public function canWarehouses(): bool
     {
-        return $this->isSuperAdmin || $this->isBasic || $this->isPro();
+        return true;
     }
 
     public function canMaterials(): bool
     {
-        return $this->isSuperAdmin || $this->isBasic || $this->isPro();
+        return true;
     }
 
     public function canPurchaseHistory(): bool
     {
-        return $this->isSuperAdmin || $this->isBasic || $this->isPro();
+        return true;
     }
 
     public function canPendingOrders(): bool
     {
-        return $this->isSuperAdmin || $this->isPro();
+        return true;
     }
 
     public function canSalesOrders(): bool
     {
-        return $this->isSuperAdmin || $this->isBasic || $this->isPro();
+        return true;
     }
 
     public function canElectronicDocuments(): bool
     {
-        return $this->isSuperAdmin || $this->isPro();
+        return true;
     }
 
     public function canReports(): bool
     {
-        return $this->isSuperAdmin || $this->isPro();
+        return true;
     }
 
     public function canStoreExpenses(): bool
     {
-        return $this->isSuperAdmin || $this->isPro();
+        return true;
     }
 
     public function canAppointments(): bool
     {
-        return $this->isSuperAdmin || $this->isPro();
+        return true;
     }
 
     public function canGeneratePurchase(): bool
     {
-        return !$this->isFree();
+        return true;
     }
 
     public function canGenerateSalesReport(): bool
     {
-        return !$this->isFree();
+        return true;
     }
 
     public function allowsOperationalDeliverySettings(): bool
     {
-        return !$this->isFree();
+        return true;
     }
 
     public function allowsDeliveryOperations(): bool
     {
-        return !$this->isFree();
+        return true;
     }
 
     public function effectiveDeliveryEnabled(?Tenant $tenant = null): bool
@@ -212,8 +204,6 @@ class TenantPlanCapabilities
     {
         $targetTenant = $tenant ?? $this->tenant;
 
-        return $this->isFree()
-            ? true
-            : (bool) ($targetTenant?->restrict_delivery_city_to_tenant ?? true);
+        return (bool) ($targetTenant?->restrict_delivery_city_to_tenant ?? true);
     }
 }

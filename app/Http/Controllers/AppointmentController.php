@@ -390,7 +390,7 @@ class AppointmentController extends Controller
             ->first();
 
         if (!$customer) {
-            return redirect()->route('appointments.customerControl.index')->with('warning', 'El cliente seleccionado no pertenece a esta tienda.');
+            return redirect()->route('appointments.customerControl.index')->with('warning', 'El cliente seleccionado no pertenece a esta sede.');
         }
 
         $appointments = Appointment::query()
@@ -916,7 +916,7 @@ class AppointmentController extends Controller
             if ($customerEmail !== '') {
                 $existingByEmail = User::query()->whereRaw('LOWER(email) = ?', [Str::lower($customerEmail)])->first();
                 if ($existingByEmail && (int) ($existingByEmail->tenant_id ?? 0) !== $tenantId) {
-                    return back()->withErrors(['customer_email' => 'El correo ya está registrado en otra tienda.'])->withInput();
+                    return back()->withErrors(['customer_email' => 'El correo ya está registrado en otra sede.'])->withInput();
                 }
 
                 if ($existingByEmail && (int) ($existingByEmail->tenant_id ?? 0) === $tenantId) {
@@ -1260,7 +1260,7 @@ class AppointmentController extends Controller
         if ((int) $appointment->tenant_id !== $tenantId) {
             return response()->json([
                 'success' => false,
-                'message' => 'La cita no pertenece a esta tienda.',
+                'message' => 'La cita no pertenece a esta sede.',
             ], 403);
         }
 

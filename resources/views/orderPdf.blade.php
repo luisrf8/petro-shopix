@@ -193,7 +193,7 @@
 </head>
 <body>
 @php
-    $storeData = $tienda ?? $order->tenant;
+    $storeData = $sede ?? $order->tenant;
     $storeName = optional($storeData)->name ?? '-';
     $storeRif = optional($storeData)->rif ?: '-';
     $storePhone = optional($storeData)->phone_number ?? 'No registrado';

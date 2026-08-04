@@ -209,11 +209,11 @@
                         <div class="col-md-6 col-xl-4">
                             <div class="card h-100 border">
                                 <div class="card-body">
-                                    <h6 class="mb-2">Gastos de tienda</h6>
+                                    <h6 class="mb-2">Gastos de sede</h6>
                                     <p class="text-sm text-muted mb-3">Egresos por categoria, proveedor y metodo de pago.</p>
                                     <div class="d-flex gap-2 flex-wrap">
                                         <a class="btn btn-dark btn-sm mb-0" href="{{ route('reports.storeExpenses.pdf') }}">PDF</a>
-                                        <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Gastos de tienda" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.storeExpenses.excel') }}" data-filters="date,currency,expense_category">CSV</a>
+                                        <a class="btn btn-outline-success btn-sm mb-0 js-report-launch" href="{{ route('reports.csv.viewer') }}" data-report-name="Gastos de sede" data-format="CSV" data-endpoint="{{ route('reports.csv.viewer') }}" data-csv-endpoint="{{ route('reports.storeExpenses.excel') }}" data-filters="date,currency,expense_category">CSV</a>
                                     </div>
                                 </div>
                             </div>

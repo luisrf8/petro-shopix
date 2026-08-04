@@ -4,6 +4,7 @@
 
 @section('content')
 <div class="container-fluid py-2">
+  @php $selectedTenantId = (int) ($selectedTenantId ?? 0); @endphp
   @if(session('success'))
     <div class="alert alert-success text-white bg-gradient-success" role="alert">{{ session('success') }}</div>
   @endif
@@ -40,17 +41,50 @@
             </div>
             <div id="payroll-team-content">
             <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0">Grupos de trabajo</h6>
+                <button type="button" class="btn btn-outline-dark mb-0" data-bs-toggle="modal" data-bs-target="#teamGroupModal">Crear grupo</button>
+              </div>
+
+              <div class="table-responsive mb-4">
+                <table class="table table-sm align-items-center mb-0">
+                  <thead><tr><th>Grupo</th><th>Tipo pago</th><th>Frecuencia</th><th>Vigencia</th><th>Integrantes</th><th>Estado</th><th>Acciones</th></tr></thead>
+                  <tbody>
+                    @forelse(($teamGroups ?? collect()) as $group)
+                      <tr>
+                        <td>{{ $group->name }}<br><small class="text-muted">{{ $group->description ?: '-' }}</small></td>
+                        <td>{{ strtoupper((string) $group->payment_type) }}</td>
+                        <td>{{ ['daily' => 'Diario', 'weekly' => 'Semanal', 'fortnightly' => 'Quincenal', 'monthly' => 'Mensual', 'package' => 'Paquete', 'contract' => 'Contrato'][$group->default_payment_frequency] ?? strtoupper((string) $group->default_payment_frequency) }}</td>
+                        <td>{{ $group->start_date ? $group->start_date->format('d/m/Y') : '-' }} - {{ $group->end_date ? $group->end_date->format('d/m/Y') : 'Abierto' }}</td>
+                        <td>{{ (int) ($group->members_count ?? 0) }}</td>
+                        <td><span class="badge {{ $group->is_active ? 'bg-success' : 'bg-secondary' }}">{{ $group->is_active ? 'Activo' : 'Inactivo' }}</span></td>
+                        <td>
+                          <form method="POST" action="{{ route('projects.module.team.groups.status', $group) }}">
+                            @csrf
+                            <input type="hidden" name="is_active" value="{{ $group->is_active ? 0 : 1 }}">
+                            <button class="btn btn-outline-secondary btn-sm mb-0" type="submit">{{ $group->is_active ? 'Inactivar' : 'Activar' }}</button>
+                          </form>
+                        </td>
+                      </tr>
+                    @empty
+                      <tr><td colspan="7" class="text-center text-muted">Sin grupos registrados.</td></tr>
+                    @endforelse
+                  </tbody>
+                </table>
+              </div>
+
               <div class="d-flex justify-content-end mb-3">
                 <button type="button" class="btn btn-dark mb-0" data-bs-toggle="modal" data-bs-target="#teamMemberModal">Agregar integrante</button>
               </div>
 
               <div class="table-responsive">
                 <table class="table table-sm align-items-center mb-0" id="payrollTeamTable">
-                  <thead><tr><th>Nombre</th><th>Rol</th><th>Contacto</th><th>Estado</th><th>Acciones</th></tr></thead>
+                  <thead><tr><th>Nombre</th><th>Grupo</th><th>Rol</th><th>Contacto</th><th>Estado</th><th>Acciones</th></tr></thead>
                   <tbody>
                     @forelse($teamMembers as $member)
                       <tr>
                         <td>{{ $member->full_name }}</td>
+                        <td>{{ $member->group->name ?? '-' }}</td>
                         <td>{{ $member->role ?: '-' }}</td>
                         <td>{{ $member->email ?: '-' }} {{ $member->phone ? '| ' . $member->phone : '' }}</td>
                         <td>
@@ -109,7 +143,7 @@
                         </td>
                       </tr>
                     @empty
-                      <tr><td colspan="5" class="text-center text-muted">Sin integrantes.</td></tr>
+                      <tr><td colspan="6" class="text-center text-muted">Sin integrantes.</td></tr>
                     @endforelse
                   </tbody>
                 </table>
@@ -145,8 +179,8 @@
               @endif
 
               <form method="GET" action="{{ route('projects.module.payroll.index') }}" class="row g-2 mb-3">
-                <div class="col-md-6"><label class="form-label">Filtrar período</label><select name="period" class="form-control border border-1 p-2"><option value="all" {{ ($period ?? 'all') === 'all' ? 'selected' : '' }}>Todos</option><option value="week" {{ ($period ?? 'all') === 'week' ? 'selected' : '' }}>Semana actual</option><option value="month" {{ ($period ?? 'all') === 'month' ? 'selected' : '' }}>Mes actual</option><option value="package" {{ ($period ?? 'all') === 'package' ? 'selected' : '' }}>Paquete</option></select></div>
-                <div class="col-md-4"><label class="form-label">Tipo pago</label><select name="payment_type" class="form-control border border-1 p-2"><option value="all" {{ ($paymentTypeFilter ?? 'all') === 'all' ? 'selected' : '' }}>Todos</option><option value="daily" {{ ($paymentTypeFilter ?? 'all') === 'daily' ? 'selected' : '' }}>Diario</option><option value="weekly" {{ ($paymentTypeFilter ?? 'all') === 'weekly' ? 'selected' : '' }}>Semanal</option><option value="fortnightly" {{ ($paymentTypeFilter ?? 'all') === 'fortnightly' ? 'selected' : '' }}>Quincenal</option><option value="monthly" {{ ($paymentTypeFilter ?? 'all') === 'monthly' ? 'selected' : '' }}>Mensual</option><option value="package" {{ ($paymentTypeFilter ?? 'all') === 'package' ? 'selected' : '' }}>Paquete</option><option value="contract" {{ ($paymentTypeFilter ?? 'all') === 'contract' ? 'selected' : '' }}>Contrato</option></select></div>
+                <div class="col-md-5"><label class="form-label">Filtrar período</label><select name="period" class="form-control border border-1 p-2"><option value="all" {{ ($period ?? 'all') === 'all' ? 'selected' : '' }}>Todos</option><option value="week" {{ ($period ?? 'all') === 'week' ? 'selected' : '' }}>Semana actual</option><option value="month" {{ ($period ?? 'all') === 'month' ? 'selected' : '' }}>Mes actual</option><option value="package" {{ ($period ?? 'all') === 'package' ? 'selected' : '' }}>Paquete</option></select></div>
+                <div class="col-md-5"><label class="form-label">Tipo pago</label><select name="payment_type" class="form-control border border-1 p-2"><option value="all" {{ ($paymentTypeFilter ?? 'all') === 'all' ? 'selected' : '' }}>Todos</option><option value="daily" {{ ($paymentTypeFilter ?? 'all') === 'daily' ? 'selected' : '' }}>Diario</option><option value="weekly" {{ ($paymentTypeFilter ?? 'all') === 'weekly' ? 'selected' : '' }}>Semanal</option><option value="fortnightly" {{ ($paymentTypeFilter ?? 'all') === 'fortnightly' ? 'selected' : '' }}>Quincenal</option><option value="monthly" {{ ($paymentTypeFilter ?? 'all') === 'monthly' ? 'selected' : '' }}>Mensual</option><option value="package" {{ ($paymentTypeFilter ?? 'all') === 'package' ? 'selected' : '' }}>Paquete</option><option value="contract" {{ ($paymentTypeFilter ?? 'all') === 'contract' ? 'selected' : '' }}>Contrato</option></select></div>
                 <div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-dark w-100 mb-0" type="submit">Filtrar</button></div>
               </form>
               <div class="d-flex justify-content-end mb-3">
@@ -234,6 +268,19 @@
       <div class="modal-body">
         <form method="POST" action="{{ route('projects.module.team.store') }}" class="row g-3" id="team-member-form">
           @csrf
+          @if(($isSuperOwner ?? false) && $selectedTenantId === 0)
+            <div class="col-md-12">
+              <label class="form-label">Tenant destino</label>
+              <select name="tenant_id" class="form-control border border-1 p-2" required>
+                <option value="" selected disabled>Selecciona tenant</option>
+                @foreach(($tenantFilterOptions ?? collect()) as $tenantOption)
+                  <option value="{{ $tenantOption->id }}">{{ $tenantOption->name }}</option>
+                @endforeach
+              </select>
+            </div>
+          @elseif(($isSuperOwner ?? false) && $selectedTenantId > 0)
+            <input type="hidden" name="tenant_id" value="{{ $selectedTenantId }}">
+          @endif
           <div class="col-md-6">
             <label class="form-label">Usuario existente (opcional)</label>
             <select name="user_id" class="form-control border border-1 p-2">
@@ -244,15 +291,96 @@
             </select>
           </div>
           <div class="col-md-6">
+            <label class="form-label">Grupo de trabajo</label>
+            <select name="team_group_id" class="form-control border border-1 p-2">
+              <option value="">Sin grupo</option>
+              @foreach(($teamGroups ?? collect()) as $group)
+                @if($group->is_active)
+                  <option value="{{ $group->id }}">{{ $group->name }}</option>
+                @endif
+              @endforeach
+            </select>
+          </div>
+          <div class="col-md-6">
             <label class="form-label">Nombre si es externo</label>
             <input type="text" name="full_name" class="form-control border border-1 p-2">
           </div>
           <div class="col-md-4"><label class="form-label">Rol</label><input type="text" name="role" class="form-control border border-1 p-2"></div>
-          <div class="col-md-4"><label class="form-label">Frecuencia de pago</label><select name="payment_frequency" class="form-control border border-1 p-2" required><option value="daily">Diario</option><option value="weekly">Semanal</option><option value="fortnightly">Quincenal</option><option value="package">Paquete</option><option value="monthly">Mensual</option></select></div>
+          <div class="col-md-4"><label class="form-label">Frecuencia de pago</label><select name="payment_frequency" class="form-control border border-1 p-2" required><option value="daily">Diario</option><option value="weekly">Semanal</option><option value="fortnightly">Quincenal</option><option value="package">Paquete</option><option value="monthly">Mensual</option><option value="contract">Contrato</option></select></div>
           <div class="col-md-4"><label class="form-label">Correo</label><input type="email" name="email" class="form-control border border-1 p-2"></div>
           <div class="col-md-4"><label class="form-label">Teléfono (+código país)</label><input type="text" name="phone" class="form-control border border-1 p-2" placeholder="+584141234567" pattern="^\+[1-9]\d{6,14}$"></div>
           <div class="col-12"><label class="form-label">Notas</label><textarea name="notes" rows="2" class="form-control border border-1 p-2"></textarea></div>
           <div class="col-12 text-end"><button class="btn btn-dark mb-0" type="submit">Guardar integrante</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="teamGroupModal" tabindex="-1" aria-labelledby="teamGroupModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="teamGroupModalLabel">Crear grupo de trabajo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <form method="POST" action="{{ route('projects.module.team.groups.store') }}" class="row g-3" id="team-group-form">
+          @csrf
+          @if(($isSuperOwner ?? false) && $selectedTenantId === 0)
+            <div class="col-md-12">
+              <label class="form-label">Tenant destino</label>
+              <select name="tenant_id" class="form-control border border-1 p-2" required>
+                <option value="" selected disabled>Selecciona tenant</option>
+                @foreach(($tenantFilterOptions ?? collect()) as $tenantOption)
+                  <option value="{{ $tenantOption->id }}">{{ $tenantOption->name }}</option>
+                @endforeach
+              </select>
+            </div>
+          @elseif(($isSuperOwner ?? false) && $selectedTenantId > 0)
+            <input type="hidden" name="tenant_id" value="{{ $selectedTenantId }}">
+          @endif
+
+          <div class="col-md-6">
+            <label class="form-label">Nombre del grupo</label>
+            <input type="text" name="name" class="form-control border border-1 p-2" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Tipo de pago</label>
+            <select name="payment_type" class="form-control border border-1 p-2" required>
+              <option value="fixed">Fijo</option>
+              <option value="variable">Variable</option>
+              <option value="mixed">Mixto</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Frecuencia por defecto</label>
+            <select name="default_payment_frequency" class="form-control border border-1 p-2" required>
+              <option value="daily">Diario</option>
+              <option value="weekly">Semanal</option>
+              <option value="fortnightly">Quincenal</option>
+              <option value="monthly">Mensual</option>
+              <option value="package">Paquete</option>
+              <option value="contract">Contrato</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Fecha inicio</label>
+            <input type="date" name="start_date" class="form-control border border-1 p-2">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Fecha fin</label>
+            <input type="date" name="end_date" class="form-control border border-1 p-2">
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">Descripción</label>
+            <input type="text" name="description" class="form-control border border-1 p-2" maxlength="255">
+          </div>
+          <div class="col-md-12">
+            <label class="form-label">Notas</label>
+            <textarea name="notes" rows="2" class="form-control border border-1 p-2"></textarea>
+          </div>
+          <div class="col-12 text-end"><button class="btn btn-dark mb-0" type="submit">Guardar grupo</button></div>
         </form>
       </div>
     </div>
@@ -269,6 +397,19 @@
       <div class="modal-body">
         <form method="POST" action="{{ route('projects.module.payrolls.store') }}" class="row g-3" id="payroll-flow-form">
           @csrf
+          @if(($isSuperOwner ?? false) && $selectedTenantId === 0)
+            <div class="col-12">
+              <label class="form-label">Tenant destino</label>
+              <select name="tenant_id" class="form-control border border-1 p-2" required>
+                <option value="" selected disabled>Selecciona tenant</option>
+                @foreach(($tenantFilterOptions ?? collect()) as $tenantOption)
+                  <option value="{{ $tenantOption->id }}">{{ $tenantOption->name }}</option>
+                @endforeach
+              </select>
+            </div>
+          @elseif(($isSuperOwner ?? false) && $selectedTenantId > 0)
+            <input type="hidden" name="tenant_id" value="{{ $selectedTenantId }}">
+          @endif
           <div class="col-12">
             <label class="form-label">Selecciona integrante</label>
             <select name="team_member_id" class="form-control border border-1 p-2" required>

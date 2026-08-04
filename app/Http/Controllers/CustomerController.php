@@ -14,10 +14,7 @@ class CustomerController extends Controller
 {
     public function index(Request $request)
     {
-        $authUser = auth()->user();
-        $tenantId = (int) ($authUser->tenant_id ?? 0);
-
-        abort_if($tenantId <= 0, 403);
+        $tenantId = $this->tenantScopeId($request);
 
         $search = trim((string) $request->query('search', ''));
         $status = trim((string) $request->query('status', 'all'));
@@ -34,7 +31,7 @@ class CustomerController extends Controller
         $activeCustomers = (clone $summaryQuery)->where('is_active', 1)->count();
         $customersWithPurchases = (clone $summaryQuery)
             ->whereHas('salesOrders', function ($salesOrdersQuery) use ($tenantId) {
-                $salesOrdersQuery->where('tenant_id', $tenantId);
+                $salesOrdersQuery->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId));
             })
             ->count();
         $totalApprovedRevenue = (float) ((clone $summaryQuery)
@@ -43,7 +40,7 @@ class CustomerController extends Controller
                     $paymentsQuery
                         ->whereRaw('payments.status = ?', [1])
                         ->whereHas('salesOrder', function ($salesOrderQuery) use ($tenantId) {
-                            $salesOrderQuery->where('tenant_id', $tenantId);
+                            $salesOrderQuery->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId));
                         });
                 },
             ], 'amount')
@@ -53,12 +50,12 @@ class CustomerController extends Controller
         $customers = (clone $baseQuery)
             ->withCount([
                 'salesOrders as orders_count' => function ($salesOrdersQuery) use ($tenantId) {
-                    $salesOrdersQuery->where('tenant_id', $tenantId);
+                    $salesOrdersQuery->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId));
                 },
             ])
             ->withMax([
                 'salesOrders as last_purchase_at' => function ($salesOrdersQuery) use ($tenantId) {
-                    $salesOrdersQuery->where('tenant_id', $tenantId);
+                    $salesOrdersQuery->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId));
                 },
             ], 'date')
             ->withSum([
@@ -66,7 +63,7 @@ class CustomerController extends Controller
                     $paymentsQuery
                         ->whereRaw('payments.status = ?', [1])
                         ->whereHas('salesOrder', function ($salesOrderQuery) use ($tenantId) {
-                            $salesOrderQuery->where('tenant_id', $tenantId);
+                            $salesOrderQuery->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId));
                         });
                 },
             ], 'amount')
@@ -95,10 +92,7 @@ class CustomerController extends Controller
 
     public function store(Request $request)
     {
-        $authUser = auth()->user();
-        $tenantId = (int) ($authUser->tenant_id ?? 0);
-
-        abort_if($tenantId <= 0, 403);
+        $tenantId = $this->tenantWriteId($request);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -129,8 +123,7 @@ class CustomerController extends Controller
 
     public function update(Request $request, User $customer)
     {
-        $authUser = auth()->user();
-        $tenantId = (int) ($authUser->tenant_id ?? 0);
+        $tenantId = $this->tenantWriteId($request);
 
         abort_if((int) $customer->tenant_id !== $tenantId, 404);
 
@@ -159,7 +152,7 @@ class CustomerController extends Controller
 
     public function toggleStatus(Request $request, User $customer)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $tenantId = $this->tenantWriteId($request);
 
         abort_if((int) $customer->tenant_id !== $tenantId, 404);
 
@@ -209,7 +202,7 @@ class CustomerController extends Controller
 
         return User::query()
             ->with('role')
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->when($excludedRoleIds->isNotEmpty(), function ($query) use ($excludedRoleIds) {
                 $query->whereNotIn('role_id', $excludedRoleIds->all());
             })
@@ -219,7 +212,7 @@ class CustomerController extends Controller
                 }
 
                 $query->orWhereHas('salesOrders', function ($salesOrdersQuery) use ($tenantId) {
-                    $salesOrdersQuery->where('tenant_id', $tenantId);
+                    $salesOrdersQuery->when($tenantId > 0, fn ($innerQuery) => $innerQuery->where('tenant_id', $tenantId));
                 });
             })
             ->when($search !== '', function ($query) use ($search) {
@@ -236,7 +229,7 @@ class CustomerController extends Controller
             })
             ->when($lastPurchaseFrom !== '' || $lastPurchaseTo !== '', function ($query) use ($tenantId, $lastPurchaseFrom, $lastPurchaseTo) {
                 $query->whereHas('salesOrders', function ($salesOrdersQuery) use ($tenantId, $lastPurchaseFrom, $lastPurchaseTo) {
-                    $salesOrdersQuery->where('tenant_id', $tenantId);
+                    $salesOrdersQuery->when($tenantId > 0, fn ($innerQuery) => $innerQuery->where('tenant_id', $tenantId));
 
                     if ($lastPurchaseFrom !== '') {
                         $salesOrdersQuery->whereDate('date', '>=', Carbon::parse($lastPurchaseFrom)->toDateString());

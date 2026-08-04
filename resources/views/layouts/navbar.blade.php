@@ -121,12 +121,13 @@
       use App\Models\User as UserModel;
       use App\Support\ImageStorage;
       use App\Support\TenantPlanCapabilities;
+      use App\Support\UserRedirector;
 
       $user = auth()->user();
       $roleName = strtolower((string) optional($user?->role)->name);
       $canonicalRole = UserModel::canonicalRoleName(optional($user?->role)->name);
 
-      $isSuperAdmin = ((int) ($user->role_id ?? 0) === 4) || $canonicalRole === 'super_user';
+      $isSuperAdmin = UserRedirector::isSuperAdmin($user);
       $isOwner = (bool) ($user?->isOwner() ?? false);
       $isAdmin = (bool) ($user?->isAdmin() ?? false);
       $isSeller = (bool) ($user?->hasStoreRole('seller') ?? false);
@@ -193,6 +194,11 @@
         $isServiceStore = in_array($tenantBusinessType, ['servicio', 'service', 'services'], true);
         $tenantOffersProjects = (bool) ($tenant->offers_projects ?? true);
         $canSeeAppointments = $isOwner || $isAdmin || $isSeller;
+        $activeScopeId = $isSuperAdmin
+          ? (int) ($superOwnerTenantScopeId ?? session('superowner_tenant_scope_id', 0))
+          : (int) ($user->tenant_id ?? 0);
+        $isSuperOwnerGeneralScope = $isSuperAdmin && $activeScopeId === 0;
+        $canAccessSingleTenantModules = !$isSuperOwnerGeneralScope;
 
         $showCatalogSection = ($planCanDashboard)
           || ($canSeeCategories && $planCanCategories)
@@ -256,7 +262,7 @@
       <ul class="navbar-nav">
       @if($showCatalogSection)
         <li class="nav-item px-3 mt-1 mb-1">
-          <span class="sidebar-section-title">Catálogo y Tienda</span>
+          <span class="sidebar-section-title">Catálogo y sede</span>
         </li>
       @endif
       @if($canSeeCategories || $canSeeProducts || $canManageStore)
@@ -284,7 +290,7 @@
             </a>
           </li>
         @endif
-        @if(($isOwner || $isAdmin) && $planCanPaymentMethods)
+        @if(($isOwner || $isAdmin) && $planCanPaymentMethods && $canAccessSingleTenantModules)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/paymentMethods">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
@@ -292,11 +298,11 @@
             </a>
           </li>
         @endif
-        @if($canManageStore && $planCanStoreManagement)
+        @if($canManageStore && $planCanStoreManagement && $canAccessSingleTenantModules)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/tenant-store">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
-              <span class="nav-link-text ms-1">Gestión de Tienda</span>
+              <span class="nav-link-text ms-1">Gestión de sede</span>
             </a>
           </li>
         @endif
@@ -308,7 +314,7 @@
         </li>
       @endif
 
-        @if($canSell && $planCanSales)
+        @if($canSell && $planCanSales && $canAccessSingleTenantModules)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/sales">
               <i class="material-symbols-rounded opacity-5">receipt_long</i>
@@ -317,7 +323,7 @@
           </li>
         @endif
 
-        @if($canSeeAppointments && $planCanAppointments && $isServiceStore)
+        @if($canSeeAppointments && $planCanAppointments && $isServiceStore && $canAccessSingleTenantModules)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/appointments">
               <i class="material-symbols-rounded opacity-5">calendar_month</i>
@@ -404,7 +410,7 @@
         </li>
       @endif
 
-        @if($canInventoryEntries && $planCanInventoryEntries)
+        @if($canInventoryEntries && $planCanInventoryEntries && $canAccessSingleTenantModules)
           <li class="nav-item">
             <a class="nav-link text-dark" href="/purchase">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
@@ -502,30 +508,12 @@
           <li class="nav-item">
             <a class="nav-link text-dark" href="/store-expenses">
               <i class="material-symbols-rounded opacity-5">account_balance_wallet</i>
-              <span class="nav-link-text ms-1">Gastos de Tienda</span>
+              <span class="nav-link-text ms-1">Gastos de sede</span>
             </a>
           </li>
         @endif
 
         @if($isSuperAdmin)
-          <li class="nav-item">
-            <a class="nav-link text-dark" href="/plans">
-              <i class="material-symbols-rounded opacity-5">sell</i>
-              <span class="nav-link-text ms-1">Planes</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link text-dark" href="/tenant-payments#billing-overview-section">
-              <i class="material-symbols-rounded opacity-5">event_upcoming</i>
-              <span class="nav-link-text ms-1">Próximas de Pago</span>
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link text-dark" href="/tenant-payments#pending-payments-section">
-              <i class="material-symbols-rounded opacity-5">request_quote</i>
-              <span class="nav-link-text ms-1">Pagos de Tiendas</span>
-            </a>
-          </li>
           <li class="nav-item">
             <a class="nav-link text-dark" href="/taxes">
               <i class="material-symbols-rounded opacity-5">view_in_ar</i>
@@ -536,7 +524,7 @@
           <li class="nav-item">
             <a class="nav-link text-dark" href="/tenants">
               <i class="material-symbols-rounded opacity-5">format_textdirection_r_to_l</i>
-              <span class="nav-link-text ms-1">Tiendas</span>
+              <span class="nav-link-text ms-1">sedes</span>
             </a>
           </li>
           <li class="nav-item">

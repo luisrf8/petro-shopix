@@ -13,8 +13,7 @@ class StoreExpenseController extends Controller
 {
     public function index(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0, 403);
+        $tenantId = $this->tenantScopeId($request);
 
         $search = trim((string) $request->query('search', ''));
         $category = trim((string) $request->query('category', ''));
@@ -23,7 +22,7 @@ class StoreExpenseController extends Controller
 
         $baseQuery = StoreExpense::query()
             ->with('creator')
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($innerQuery) use ($search) {
                     $innerQuery
@@ -51,32 +50,31 @@ class StoreExpenseController extends Controller
 
         $totalExpenses = (float) (clone $baseQuery)->sum('amount_bs');
         $monthExpenses = (float) StoreExpense::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereBetween('spent_at', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
             ->sum('amount_bs');
         $categories = StoreExpense::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereNotNull('category')
             ->where('category', '!=', '')
             ->distinct()
             ->orderBy('category')
             ->pluck('category');
         $providers = Provider::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
 
-        $usdRateToBs = (float) (DollarRate::query()->where('tenant_id', $tenantId)->latest('created_at')->value('rate') ?: 0);
-        $euroRateToBs = (float) (EuroRate::query()->where('tenant_id', $tenantId)->latest('created_at')->value('rate') ?: 0);
+        $usdRateToBs = (float) (DollarRate::query()->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))->latest('created_at')->value('rate') ?: 0);
+        $euroRateToBs = (float) (EuroRate::query()->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))->latest('created_at')->value('rate') ?: 0);
 
         return view('storeExpenses.index', compact('expenses', 'search', 'category', 'dateFrom', 'dateTo', 'totalExpenses', 'monthExpenses', 'categories', 'providers', 'usdRateToBs', 'euroRateToBs'));
     }
 
     public function store(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0, 403);
+        $tenantId = $this->tenantWriteId($request);
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -131,7 +129,7 @@ class StoreExpenseController extends Controller
 
     public function update(Request $request, StoreExpense $expense)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $tenantId = $this->tenantWriteId($request);
         abort_if((int) $expense->tenant_id !== $tenantId, 404);
 
         $validated = $request->validate([

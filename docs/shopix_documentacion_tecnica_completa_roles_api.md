@@ -93,7 +93,7 @@ Para operacion diaria, el sistema usa grupos equivalentes:
 1. Comercial: vendor, vendedor, seller.
 2. Almacen: almacen, almacenista, warehouse.
 3. Delivery: delivery, repartidor.
-4. Administracion de tienda: owner, admin, administrador.
+4. Administracion de sede: owner, admin, administrador.
 5. Plataforma: role.name:4.
 
 ## 6. Matriz completa de funciones por rol
@@ -109,13 +109,7 @@ Funciones:
   - GET /create-tenant
   - Route::resource('tenants') -> index, create, store, show, edit, update, destroy.
 - Importacion DOCX de setup tenant: POST /tenant-import-setup-docx.
-- Aprobacion/rechazo/corte de pagos de plan:
-  - POST /tenants/{tenant}/plan-payments/{payment}/approve
-  - POST /tenants/{tenant}/plan-payments/{payment}/cutoff
-  - POST /tenants/{tenant}/plan-payments/{payment}/reject
-- Planes globales:
-  - GET /plans
-  - API: POST /api/plans, POST /api/plans/{id}, DELETE /api/plans/{id}
+- No existen flujos de planes ni pagos de planes para tenants/sedes.
 - Impuestos globales:
   - GET /taxes
   - POST /taxes/create
@@ -133,7 +127,7 @@ Funciones:
 
 Funciones:
 
-- Acceso a configuracion de tienda:
+- Acceso a configuracion de sede:
   - GET /tenant-store
   - POST /tenant-update
   - POST /tenant-store/users/{id}/update
@@ -348,11 +342,8 @@ Compras:
 - POST /api/create-order
 - POST /api/get-variants
 
-Planes y tenants (API):
+Tenants (API):
 
-- POST /api/plans
-- POST /api/plans/{id}
-- DELETE /api/plans/{id}
 - POST /api/tenants
 - POST /api/tenants/{tenant}
 - DELETE /api/tenants/{tenant}
@@ -389,7 +380,7 @@ Planes y tenants (API):
 ## 8.2 Publico general
 
 - GET /
-- GET /landings
+- GET /
 - GET /legal/terms-and-conditions.pdf
 - GET /index
 - GET /manifest.webmanifest
@@ -397,7 +388,7 @@ Planes y tenants (API):
 - GET /storage/gdrive/{fileId}
 - GET /publicOrder/{id}
 - GET /publicOrder/{id}/pdfs/{type}
-- GET /create-tenant-user
+- GET /create-tenant-user (solo SuperUser autenticado)
 - GET /get-countries
 - GET /get-states/{country}
 - GET /get-cities/{state}
@@ -608,12 +599,7 @@ Plataforma:
 - POST /tenant-store/users/{id}/update
 - POST /tenant-store/users/{id}/toggle-status
 - POST /tenant-import-setup-docx
-- POST /tenant-store/plan-payment-request
-- POST /tenants/{tenant}/plan-payments/{payment}/approve
-- POST /tenants/{tenant}/plan-payments/{payment}/cutoff
-- POST /tenants/{tenant}/plan-payments/{payment}/reject
 - Resource /tenants (index/create/store/show/edit/update/destroy)
-- GET /plans
 - GET /taxes
 - POST /taxes/create
 - POST /taxes/update/{tax}

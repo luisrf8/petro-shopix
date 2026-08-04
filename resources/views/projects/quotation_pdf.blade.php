@@ -298,7 +298,7 @@
       </tr>
       <tr class="header-title-row">
         <td class="store-title-cell">
-          <p class="company-name">{{ strtoupper((string) ($tenant->name ?? 'TIENDA')) }}</p>
+          <p class="company-name">{{ strtoupper((string) ($tenant->name ?? 'sede')) }}</p>
         </td>
         <td class="quote-title-cell">
           <p class="doc-title">COTIZACIÓN #{{ $quotation->id }}</p>

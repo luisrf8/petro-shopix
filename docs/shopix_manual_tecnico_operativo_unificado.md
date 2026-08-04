@@ -17,7 +17,7 @@ Este documento describe lo que el sistema hace hoy, con base en rutas y controla
 
 ## 2. Resumen ejecutivo (comercial + funcional)
 
-Shopix es una plataforma para operar negocios tipo tienda, servicio o mixto desde un mismo entorno:
+Shopix es una plataforma para operar negocios tipo sede, servicio o mixto desde un mismo entorno:
 
 - Venta de productos (catalogo, variantes, stock, pedidos, pagos).
 - Agenda y servicios (profesionales, disponibilidad, workflow de citas).
@@ -40,7 +40,7 @@ Resultado esperado para cliente final:
 
 ### 3.2 Modulos operativos activos
 
-- Tenant y configuracion de tienda.
+- Tenant y configuracion de sede.
 - Productos, categorias y variantes.
 - Metodos de pago y monedas.
 - Ventas, ordenes y despacho.
@@ -75,7 +75,7 @@ Resultado esperado para cliente final:
   - Input requerido: `setup_docx` (archivo `.docx`, max 5 MB)
   - Salida: `payload` estructurado + `summary` de filas parseadas.
 
-### Actualizacion de tienda con payload importado
+### Actualizacion de sede con payload importado
 
 - `POST /tenant-update`
   - Controlador: `TenantController@updateTenant`
@@ -90,11 +90,9 @@ Resultado esperado para cliente final:
 ### Plan payments
 
 - `POST /tenant-store/plan-payment-request`
-- `POST /tenants/{tenant}/plan-payments/{payment}/approve`
-- `POST /tenants/{tenant}/plan-payments/{payment}/cutoff`
-- `POST /tenants/{tenant}/plan-payments/{payment}/reject`
+- No existen endpoints de aprobacion/corte/rechazo de pagos de planes para tenants.
 
-## 5.2 Catalogo tienda
+## 5.2 Catalogo sede
 
 ### Lectura
 
@@ -271,20 +269,20 @@ Resultado esperado para cliente final:
    - `POST /tenant-import-setup-docx` con `setup_docx`.
 3. Revisar `payload` y `summary` devueltos.
 4. Persistir configuracion en tenant:
-   - `POST /tenant-update` con datos de tienda + `import_payload`.
+   - `POST /tenant-update` con datos de sede + `import_payload`.
 5. Validar modulos cargados:
    - usuarios,
    - metodos de pago,
-   - catalogo tienda,
+   - catalogo sede,
    - catalogo servicio,
    - horarios por profesional.
-6. Activar salida operativa por tipo de negocio (tienda/servicio/mixto).
+6. Activar salida operativa por tipo de negocio (sede/servicio/mixto).
 
 Vinculo tecnico: `ShopixSetupDocumentService` parsea tablas DOCX y `ShopixSetupImportService` aplica sincronizacion por modulo.
 
 ## 7.2 Flujo real: venta ecommerce y checkout pro publico
 
-1. Cliente consulta tienda publica por slug.
+1. Cliente consulta sede publica por slug.
 2. Consulta catalogo y metodos de pago.
 3. Ejecuta checkout:
    - estandar ecomm: `POST /api/create-sale/ecomm`
@@ -341,7 +339,7 @@ El levantamiento operativo se ejecuta en paralelo al manual tecnico usando el mi
 - Datos generales tenant.
 - Usuarios iniciales.
 - Metodos de pago.
-- Catalogo tienda.
+- Catalogo sede.
 - Catalogo de servicios.
 - Reglas de horario por profesional.
 

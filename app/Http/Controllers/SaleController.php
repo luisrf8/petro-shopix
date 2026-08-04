@@ -58,6 +58,7 @@ use App\Support\ActionReason;
 use App\Support\DeliveryManager;
 use App\Support\PdfDownload;
 use App\Support\TenantPlanCapabilities;
+use App\Support\UserRedirector;
 use App\Services\FiscalCorrelativeService;
 use App\Services\TheFactoryHkaService;
 use Tymon\JWTAuth\Facades\JWTAuth;
@@ -66,6 +67,7 @@ class SaleController extends Controller
 {
     public function index()
     {
+        $tenantId = $this->tenantWriteId(request());
         $user = auth()->user();
         $customerId = $user;
         $search = trim((string) request()->input('q', ''));
@@ -73,7 +75,7 @@ class SaleController extends Controller
 
         $productItemsQuery = Product::query()
             ->with(['category', 'images', 'variants', 'taxes'])
-            ->where('tenant_id', $user->tenant_id)
+            ->where('tenant_id', $tenantId)
             ->where('is_consumable', false)
             ->where('is_active', true);
 
@@ -99,7 +101,7 @@ class SaleController extends Controller
 
         $materialPackagesQuery = MaterialPackage::query()
             ->with(['items', 'items.variant', 'items.variant.product', 'items.variant.product.images', 'items.variant.product.taxes', 'items.variant.product.variants'])
-            ->where('tenant_id', $user->tenant_id)
+            ->where('tenant_id', $tenantId)
             ->where('is_active', true);
 
         if ($search !== '') {
@@ -123,11 +125,11 @@ class SaleController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
         $paymentMethods = PaymentMethod::with('currency')
-            ->where('tenant_id', $user->tenant_id)
+            ->where('tenant_id', $tenantId)
             ->active()
             ->get();
-        $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
-        $euroRate = EuroRate::latest('created_at')->where('tenant_id', $user->tenant_id)->first();
+        $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $tenantId)->first();
+        $euroRate = EuroRate::latest('created_at')->where('tenant_id', $tenantId)->first();
         $taxes = Tax::all();
         $tenant = Tenant::find($user->tenant_id);
         $tenantPlanCapabilities = TenantPlanCapabilities::forTenant($tenant);
@@ -222,7 +224,7 @@ class SaleController extends Controller
         $authUserId = (int) (auth()->id() ?? 0);
 
         if ($tenantId <= 0) {
-            return response()->json(['error' => 'No se pudo determinar la tienda para registrar la venta.'], 422);
+            return response()->json(['error' => 'No se pudo determinar la sede para registrar la venta.'], 422);
         }
 
         if ($requestUid !== '') {
@@ -357,30 +359,30 @@ class SaleController extends Controller
             return response()->json(['error' => 'Debes indicar nombre y teléfono de la persona que recibe para delivery o envío.'], 422);
         }
 
-        $tienda = Tenant::find($tenantId);
-        if (!$tienda) {
-            return response()->json(['error' => 'No se encontró la tienda asociada a la venta.'], 422);
+        $sede = Tenant::find($tenantId);
+        if (!$sede) {
+            return response()->json(['error' => 'No se encontró la sede asociada a la venta.'], 422);
         }
 
-        if (!TenantPlanCapabilities::forTenant($tienda)->allowsDeliveryOperations() && in_array($deliveryType, ['delivery', 'shipping'], true)) {
+        if (!TenantPlanCapabilities::forTenant($sede)->allowsDeliveryOperations() && in_array($deliveryType, ['delivery', 'shipping'], true)) {
             return response()->json(['error' => 'El plan Free no permite usar delivery o envíos en ventas administrativas.'], 403);
         }
 
-        if ($deliveryType === 'delivery' && (bool) ($tienda->restrict_delivery_city_to_tenant ?? true)) {
+        if ($deliveryType === 'delivery' && (bool) ($sede->restrict_delivery_city_to_tenant ?? true)) {
             $deliveryCityId = (int) ($validated['delivery_city_id'] ?? 0);
-            $shippingCityValidation = $this->validateShippingCityAgainstTenant($tienda, $deliveryCityId);
+            $shippingCityValidation = $this->validateShippingCityAgainstTenant($sede, $deliveryCityId);
 
             if (!($shippingCityValidation['ok'] ?? false)) {
-                return response()->json(['error' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la tienda.')], 422);
+                return response()->json(['error' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la sede.')], 422);
             }
         }
 
         $preference = match ($deliveryType) {
-            'delivery' => 'Delivery tienda',
+            'delivery' => 'Delivery sede',
             'shipping' => 'Envío externo',
-            default => 'Retiro en tienda',
+            default => 'Retiro en sede
         };
-        $address = $deliveryType !== 'pickup' ? $deliveryAddress : 'Tienda';
+        $address = $deliveryType !== 'pickup' ? $deliveryAddress : 'sede
         if ($deliveryType !== 'pickup') {
             $address .= "\nRecibe: {$deliveryReceiverName}\nTeléfono receptor: {$deliveryReceiverPhone}";
         }
@@ -392,14 +394,14 @@ class SaleController extends Controller
         if (empty($itemsSelected) || !is_array($itemsSelected)) {
             return response()->json(['error' => 'No se enviaron productos válidos.'], 400);
         }
-        $saleCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($tienda);
+        $saleCurrencyCode = TenantCurrency::resolveBaseCurrencyCode($sede
         $saleRateToBs = max(0, (float) ($validated['dollarRate'] ?? 0));
         if ($saleRateToBs <= 0) {
             $saleRateToBs = (float) TenantCurrency::resolveRateToBs($tenantId, $saleCurrencyCode);
         }
 
-        if ($requestedDocumentMode === 'electronic_invoice' && !(bool) ($tienda?->electronic_invoicing_enabled ?? false)) {
-            return response()->json(['error' => 'La facturacion digital esta desactivada para esta tienda.'], 422);
+        if ($requestedDocumentMode === 'electronic_invoice' && !(bool) ($sedeing_enabled ?? false)) {
+            return response()->json(['error' => 'La facturacion digital esta desactivada para esta sede
         }
 
         $documentIssueMode = $requestedDocumentMode === 'electronic_invoice' ? 'electronic_invoice' : 'delivery_note';
@@ -745,7 +747,7 @@ class SaleController extends Controller
             }
         }
 
-        $deliveryPricing = DeliveryManager::calculate($tienda, $deliveryType, $itemsSubtotal, $deliveryDistanceKm);
+        $deliveryPricing = DeliveryManager::calculate($sedetal, $deliveryDistanceKm);
         $salesOrder->delivery_fee = $deliveryPricing['fee'];
         $salesOrder->delivery_fee_mode = $deliveryPricing['mode'];
         $salesOrder->delivery_distance_km = $deliveryPricing['distance_km'];
@@ -754,8 +756,8 @@ class SaleController extends Controller
         $totalTaxes = (float) $salesOrder->details()->with('taxes')->get()->flatMap->taxes->sum('tax_amount');
         $totalWithoutIgtf = round((float) $salesOrder->gross_total + $totalTaxes, 2);
         $igtfRate = $this->resolveIgtfRate();
-        $tenantEligibleForIgtf = (bool) ($tienda->electronic_invoicing_enabled ?? false)
-            && (bool) ($tienda->special_taxpayer ?? false)
+        $tenantEligibleForIgtf = (bool) ($sede ?? false)
+            && (bool) ($sede? false)
             && $igtfRate > 0;
 
         // Crear pagos
@@ -770,7 +772,7 @@ class SaleController extends Controller
                     ->find($paymentDetail['methodId']);
 
                 if (!$paymentMethod) {
-                    throw new \RuntimeException('Uno de los métodos de pago seleccionados está inactivo o no pertenece a esta tienda.');
+                    throw new \RuntimeException('Uno de los métodos de pago seleccionados está inactivo o no pertenece a esta sede
                 }
 
                 $requiresReference = $paymentMethod->usesReference();
@@ -922,7 +924,7 @@ class SaleController extends Controller
 
         if ($deliveryType === 'delivery' && $markSaleCompleted) {
             try {
-                $this->notifyDeliveryTeamIfEnabled($tienda, $salesOrder, 'Pedido listo para despacho desde venta interna.');
+                $this->notifyDeliveryTeamIfEnabled($sededer, 'Pedido listo para despacho desde venta interna.');
             } catch (\Throwable $exception) {
                 Log::warning('No se pudo notificar al equipo de delivery para la venta.', [
                     'order_id' => (int) $salesOrder->id,
@@ -1192,6 +1194,32 @@ class SaleController extends Controller
         return (int) Role::query()->firstOrCreate(['name' => 'user'])->id;
     }
 
+    private function canAccessOrderByScope(SalesOrder $order, ?User $user = null): bool
+    {
+        $user = $user ?? auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        if (!UserRedirector::isSuperAdmin($user)) {
+            return (int) ($order->tenant_id ?? 0) === (int) ($user->tenant_id ?? 0);
+        }
+
+        $scopeTenantId = $this->tenantScopeId();
+        if ($scopeTenantId <= 0) {
+            return true;
+        }
+
+        return (int) ($order->tenant_id ?? 0) === $scopeTenantId;
+    }
+
+    private function abortIfOrderOutsideScope(SalesOrder $order, ?User $user = null): void
+    {
+        if (!$this->canAccessOrderByScope($order, $user)) {
+            abort(404);
+        }
+    }
+
     public function downloadPdf(Request $request, $id)
     {
         $order = SalesOrder::with([
@@ -1269,14 +1297,14 @@ class SaleController extends Controller
         $customer = User::find($customerId);
         $tenantForSale = Tenant::find(optional($customer)->tenant_id);
         if (!$tenantForSale) {
-            return response()->json(['error' => 'No se encontró la tienda asociada al cliente.'], 422);
+            return response()->json(['error' => 'No se encontró la sedeal cliente.'], 422);
         }
 
         $deliveryType = strtolower(trim((string) $request->input('delivery_type', '')));
         if (!in_array($deliveryType, ['pickup', 'delivery', 'shipping'], true)) {
             $normalizedPreference = strtolower(trim((string) $preference));
             $deliveryType = match ($normalizedPreference) {
-                'delivery', 'delivery tienda', 'envío', 'envio' => 'delivery',
+                'delivery', 'delivery sede'envio' => 'delivery',
                 'envío externo', 'envio externo', 'shipping' => 'shipping',
                 default => 'pickup',
             };
@@ -1299,7 +1327,7 @@ class SaleController extends Controller
             $shippingCityValidation = $this->validateShippingCityAgainstTenant($tenantForSale, $deliveryCityId);
 
             if (!($shippingCityValidation['ok'] ?? false)) {
-                return response()->json(['error' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la tienda.')], 422);
+                return response()->json(['error' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la sede
             }
         }
 
@@ -1313,7 +1341,7 @@ class SaleController extends Controller
         // Crear orden de venta con status en 0 (pendiente)
         $formattedAddress = in_array($deliveryType, ['delivery', 'shipping'], true)
             ? trim((string) $address) . "\nRecibe: {$deliveryReceiverName}\nTeléfono receptor: {$deliveryReceiverPhone}"
-            : ($address ?? 'Tienda');
+            : ($address ?? 'sede
 
         $salesOrder = SalesOrder::create([
             'user_id' => $customerId,
@@ -1415,7 +1443,8 @@ class SaleController extends Controller
     public function viewOrders()
     {
         $user = auth()->user();
-        $tenant = Tenant::find($user->tenant_id);
+        $tenantId = $this->tenantScopeId();
+        $tenant = $tenantId > 0 ? Tenant::find($tenantId) : null;
         $isSeller = (bool) ($user?->hasStoreRole('seller') ?? false);
         $ordersSearch = trim((string) request()->input('q', ''));
         $ordersSearchNormalized = mb_strtolower($ordersSearch);
@@ -1431,7 +1460,7 @@ class SaleController extends Controller
             'payments',
             'electronicDocuments',
             'returns.items',
-        ])->where('tenant_id', $user->tenant_id);
+        ])->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId));
 
         if ($isSeller) {
             $salesOrdersQuery->where('sales_rep_user_id', (int) $user->id);
@@ -1478,8 +1507,8 @@ class SaleController extends Controller
 
         if ($deliveryFilter !== '') {
             $deliveryFilterNormalized = mb_strtolower($deliveryFilter);
-            if ($deliveryFilterNormalized === 'tienda') {
-                $salesOrdersQuery->whereRaw('LOWER(preference) LIKE ?', ['%tienda%']);
+            if ($deliveryFilterNormalized === 'sede {
+                $salesOrdersQuery->whereRaw('LOWER(preference) LIKE ?', ['%sede]);
             } elseif ($deliveryFilterNormalized === 'delivery') {
                 $salesOrdersQuery->where(function ($query) {
                     $query->whereRaw('LOWER(preference) LIKE ?', ['%delivery%'])
@@ -1523,7 +1552,7 @@ class SaleController extends Controller
             ? $this->buildPendingDispatchGuideAlertData($salesOrders->getCollection(), $tenant)
             : null;
     
-        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView', 'pendingDispatchGuideAlert', 'ordersSearch', 'statusFilter', 'deliveryFilter', 'documentFilter'));
+        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView', 'pendingDispatchGuideAlert', 'ordersSearch', 'statusFilter', 'deliveryFilter', 'documentFilter', 'tenant'));
     }
 
     public function sendPendingDispatchGuidesReport(Request $request)
@@ -1567,21 +1596,22 @@ class SaleController extends Controller
     public function viewPendingDeliveryOrders()
     {
         $user = auth()->user();
-        $tenant = Tenant::find($user->tenant_id);
-        $planCapabilities = TenantPlanCapabilities::forTenant($tenant);
+        $tenantId = $this->tenantScopeId();
+        $tenant = $tenantId > 0 ? Tenant::find($tenantId) : null;
+        $planCapabilities = $tenant ? TenantPlanCapabilities::forTenant($tenant) : null;
         $ordersSearch = trim((string) request()->input('q', ''));
         $ordersSearchNormalized = mb_strtolower($ordersSearch);
         $statusFilter = trim((string) request()->input('status', ''));
         $deliveryFilter = trim((string) request()->input('delivery', ''));
         $documentFilter = trim((string) request()->input('document', ''));
 
-        if (!$planCapabilities->canPendingOrders() || !$planCapabilities->allowsDeliveryOperations()) {
+        if ($planCapabilities && (!$planCapabilities->canPendingOrders() || !$planCapabilities->allowsDeliveryOperations())) {
             return redirect()->route('sales.orders')
                 ->with('warning', 'El plan actual no permite gestionar pedidos pendientes de delivery.');
         }
 
         $salesOrdersQuery = SalesOrder::with(['user', 'salesRepresentative', 'details', 'details.variant', 'payments', 'electronicDocuments', 'returns.items'])
-            ->where('tenant_id', $user->tenant_id)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereIn('deliver_status', [0, 3])
             ->where(function ($query) {
                 $query->where('status', 1)
@@ -1631,8 +1661,8 @@ class SaleController extends Controller
 
         if ($deliveryFilter !== '') {
             $deliveryFilterNormalized = mb_strtolower($deliveryFilter);
-            if ($deliveryFilterNormalized === 'tienda') {
-                $salesOrdersQuery->whereRaw('LOWER(preference) LIKE ?', ['%tienda%']);
+            if ($deliveryFilterNormalized === 'sede
+                $salesOrdersQuery->whereRaw('LOWER(preference) LIKE ?', ['%sede
             } elseif ($deliveryFilterNormalized === 'delivery') {
                 $salesOrdersQuery->where(function ($query) {
                     $query->whereRaw('LOWER(preference) LIKE ?', ['%delivery%'])
@@ -1674,15 +1704,15 @@ class SaleController extends Controller
         $pageTitle = 'PEDIDOS PENDIENTES DE ENTREGA';
         $isPendingDeliveryView = true;
 
-        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView', 'ordersSearch', 'statusFilter', 'deliveryFilter', 'documentFilter'));
+        return view('salesOrders', compact('salesOrders', 'canApprovePayments', 'canDeliverOrders', 'pageTitle', 'isPendingDeliveryView', 'ordersSearch', 'statusFilter', 'deliveryFilter', 'documentFilter', 'tenant'));
     }
 
     public function viewReceivables()
     {
-        $user = auth()->user();
+        $tenantId = $this->tenantScopeId();
 
         $salesOrders = SalesOrder::with(['user', 'details', 'payments', 'retentions'])
-            ->where('tenant_id', $user->tenant_id)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('status', '!=', 2)
             ->orderByDesc('id')
             ->get()
@@ -1707,10 +1737,11 @@ class SaleController extends Controller
     public function viewPaidPendingDelivery()
     {
         $user = auth()->user();
-        $tenant = Tenant::find($user->tenant_id);
-        $planCapabilities = TenantPlanCapabilities::forTenant($tenant);
+        $tenantId = $this->tenantScopeId();
+        $tenant = $tenantId > 0 ? Tenant::find($tenantId) : null;
+        $planCapabilities = $tenant ? TenantPlanCapabilities::forTenant($tenant) : null;
 
-        if (!$planCapabilities->canPaidPendingDeliveries() || !$planCapabilities->allowsDeliveryOperations()) {
+        if ($planCapabilities && (!$planCapabilities->canPaidPendingDeliveries() || !$planCapabilities->allowsDeliveryOperations())) {
             return redirect()->route('sales.orders')
                 ->with('warning', 'El plan actual no permite usar la bandeja de entregas pendientes.');
         }
@@ -1722,7 +1753,7 @@ class SaleController extends Controller
                 'assignedDeliveryUser:id,name',
                 'retentions:id,sales_order_id,retained_amount',
             ])
-            ->where('tenant_id', $user->tenant_id)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereIn('deliver_status', [0, 3])
             ->where('status', '!=', 2)
             ->orderByDesc('id')
@@ -1805,7 +1836,7 @@ class SaleController extends Controller
         $visibleTabs = collect([
             [
                 'key' => 'pickup',
-                'label' => 'Retiro en tienda',
+                'label' => 'Retiro en sede',
                 'orders' => $pickupOrders,
                 'canManage' => $canManagePickupOrders,
             ],
@@ -1953,7 +1984,7 @@ class SaleController extends Controller
                     'document_issue_mode' => (string) ($order->document_issue_mode ?? 'delivery_note'),
                     'preference' => $order->preference,
                     'address' => $order->address,
-                    'tenant_name' => $order->tenant->name ?? 'Tienda',
+                    'tenant_name' => $order->tenant->name ?? 'sede',
                     'items_count' => (int) $order->details->sum('quantity'),
                     'total' => round($total, 2),
                     'public_url' => url('/publicOrder/' . $order->id),
@@ -1993,7 +2024,7 @@ class SaleController extends Controller
             abort(404);
         }
 
-        abort_if((int) ($order->tenant_id ?? 0) !== (int) ($authUser->tenant_id ?? 0), 404);
+        $this->abortIfOrderOutsideScope($order, $authUser);
 
         $isSeller = (bool) ($authUser?->hasStoreRole('seller') ?? false);
         if ($isSeller && (int) ($order->sales_rep_user_id ?? 0) !== (int) ($authUser->id ?? 0)) {
@@ -2077,7 +2108,7 @@ class SaleController extends Controller
         }
 
         $order = SalesOrder::query()->with(['tenant'])->findOrFail($orderId);
-        if ((int) ($order->tenant_id ?? 0) !== (int) ($user->tenant_id ?? 0)) {
+        if (!$this->canAccessOrderByScope($order, $user)) {
             return response()->json(['success' => false, 'message' => 'No autorizado para esta orden.'], 403);
         }
 
@@ -2103,7 +2134,7 @@ class SaleController extends Controller
         if (!$paymentMethod) {
             return response()->json([
                 'success' => false,
-                'message' => 'El método de pago seleccionado está inactivo o no pertenece a esta tienda.',
+                'message' => 'El método de pago seleccionado está inactivo o no pertenece a esta sede.',
             ], 422);
         }
 
@@ -2231,9 +2262,7 @@ class SaleController extends Controller
             return back()->with('error', 'No autorizado para asignar repartidores.');
         }
 
-        if ((int) $order->tenant_id !== (int) ($user->tenant_id ?? 0)) {
-            abort(404);
-        }
+        $this->abortIfOrderOutsideScope($order, $user);
 
         if ($canSelfAssignDelivery && !$canManageAnyDeliveryAssignment) {
             $assignedUserId = (int) ($request->input('delivery_assigned_user_id') ?: ($user->id ?? 0));
@@ -2275,7 +2304,7 @@ class SaleController extends Controller
                 if ((int) $deliveryUser->tenant_id !== (int) $lockedOrder->tenant_id || !$deliveryUser->hasStoreRole('delivery')) {
                     return [
                         'ok' => false,
-                        'message' => 'Debes seleccionar un usuario con rol delivery de esta tienda.',
+                        'message' => 'Debes seleccionar un usuario con rol delivery de esta sede.',
                         'status' => 422,
                     ];
                 }
@@ -2565,7 +2594,7 @@ class SaleController extends Controller
         $totalPagado = (float) $order->payments->sum('amount');
         $totalGeneral = $totalOrden + $totalTaxes;
         $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $order->tenant_id)->first();
-        $tienda = $order->tenant;
+        $sede = $order->tenant;
 
         $qrUrl = url('/publicOrder/' . $order->id);
         $qrCode = QrCode::create($qrUrl)
@@ -2588,7 +2617,7 @@ class SaleController extends Controller
             'imageBase64',
             'qrCodeBase64',
             'dollarRate',
-            'tienda'
+            'sede'
         ))->with($pdfCurrencyContext)->render();
 
         $deliveryOutput = $this->renderPdfOutput($deliveryHtml);
@@ -2678,7 +2707,7 @@ class SaleController extends Controller
         $totalPagado = (float) $order->payments->sum('amount');
         $totalGeneral = $totalOrden + $totalTaxes;
         $dollarRate = DollarRate::latest('created_at')->where('tenant_id', $order->tenant_id)->first();
-        $tienda = $order->tenant;
+        $sede = $order->tenant;
         $pdfCurrencyContext = $this->buildPdfCurrencyContext($order, $emissionCurrencyCode);
 
         $qrUrl = url('/publicOrder/' . $order->id);
@@ -2702,7 +2731,7 @@ class SaleController extends Controller
             'imageBase64',
             'qrCodeBase64',
             'dollarRate',
-            'tienda'
+            'sede'
         ))->with($pdfCurrencyContext)->render();
 
         $output = $this->renderPdfOutput($html);
@@ -3125,9 +3154,7 @@ class SaleController extends Controller
     public function updateDocumentMode(SalesOrder $order, Request $request)
     {
         $user = auth()->user();
-        if ((int) ($order->tenant_id ?? 0) !== (int) ($user->tenant_id ?? 0)) {
-            abort(404);
-        }
+        $this->abortIfOrderOutsideScope($order, $user);
 
         $validated = $request->validate([
             'document_issue_mode' => 'required|in:delivery_note,electronic_invoice',
@@ -3135,7 +3162,7 @@ class SaleController extends Controller
 
         $tenantElectronicEnabled = (bool) ($order->tenant?->electronic_invoicing_enabled ?? false);
         if ($validated['document_issue_mode'] === 'electronic_invoice' && !$tenantElectronicEnabled) {
-            return back()->with('error', 'La facturación digital está desactivada para esta tienda.');
+            return back()->with('error', 'La facturación digital está desactivada para esta sede.');
         }
 
         $order->document_issue_mode = $validated['document_issue_mode'];
@@ -3151,9 +3178,7 @@ class SaleController extends Controller
     public function downloadHkaDispatchGuide(Request $request, SalesOrder $order)
     {
         $authUser = auth()->user();
-        if ((int) ($order->tenant_id ?? 0) !== (int) ($authUser->tenant_id ?? 0)) {
-            abort(404);
-        }
+        $this->abortIfOrderOutsideScope($order, $authUser);
 
         if (!$authUser?->hasStoreRole('owner', 'admin', 'seller', 'warehouse')) {
             abort(403, 'No autorizado para descargar la guía de despacho fiscal.');
@@ -3216,9 +3241,7 @@ class SaleController extends Controller
     public function emitHkaDispatchGuide(SalesOrder $order)
     {
         $authUser = auth()->user();
-        if ((int) ($order->tenant_id ?? 0) !== (int) ($authUser->tenant_id ?? 0)) {
-            abort(404);
-        }
+        $this->abortIfOrderOutsideScope($order, $authUser);
 
         if (!$authUser?->hasStoreRole('owner', 'admin', 'seller')) {
             abort(403, 'No autorizado para emitir la guía de despacho fiscal.');
@@ -3227,7 +3250,7 @@ class SaleController extends Controller
         $order->loadMissing(['tenant', 'user', 'details.variant.product', 'details.taxes', 'payments.payment']);
 
         if (!(bool) ($order->tenant?->electronic_invoicing_enabled ?? false)) {
-            return back()->with('error', 'La facturación digital está desactivada para esta tienda.');
+            return back()->with('error', 'La facturación digital está desactivada para esta sede.');
         }
 
         $service = app(TheFactoryHkaService::class);
@@ -3282,9 +3305,7 @@ class SaleController extends Controller
             'payments.payment'
         ])->findOrFail($id);
 
-        if ((int) ($order->tenant_id ?? 0) !== (int) ($user->tenant_id ?? 0)) {
-            abort(404);
-        }
+        $this->abortIfOrderOutsideScope($order, $user);
 
         $tenantPlanCapabilities = TenantPlanCapabilities::forTenant($order->tenant);
         if (!$tenantPlanCapabilities->allowsDeliveryOperations() && $this->orderUsesDeliveryOperations($order)) {
@@ -4133,7 +4154,7 @@ class SaleController extends Controller
         if ($tenantCityId <= 0) {
             return [
                 'ok' => false,
-                'message' => 'La tienda no tiene una ciudad configurada para envíos.',
+                'message' => 'La sede no tiene una ciudad configurada para envíos.',
             ];
         }
 
@@ -4142,7 +4163,7 @@ class SaleController extends Controller
 
             return [
                 'ok' => false,
-                'message' => 'Solo se permiten envíos para la ciudad de la tienda' . (!empty($tenantCityName) ? ': ' . $tenantCityName : '.') ,
+                'message' => 'Solo se permiten envíos para la ciudad de la sede' . (!empty($tenantCityName) ? ': ' . $tenantCityName : '.') ,
             ];
         }
 

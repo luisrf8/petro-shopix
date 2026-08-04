@@ -102,7 +102,7 @@
           <h1 class="h3 mb-0">Mi cuenta Shopix</h1>
         </div>
         <div class="d-flex flex-wrap gap-2">
-          <a href="{{ url('/landings') }}" class="btn portal-pill btn-sm">Inicio tiendas / servicios</a>
+          <a href="{{ url('/') }}" class="btn portal-pill btn-sm">Inicio sedes / servicios</a>
           <button type="button" class="btn portal-pill btn-sm" id="logout-btn"><i class="bi bi-box-arrow-right me-1"></i>Cerrar sesión</button>
         </div>
       </div>
@@ -116,7 +116,7 @@
       <div class="card-body p-4 text-center">
         <h2 class="h5 mb-2">Necesitas iniciar sesión</h2>
         <p class="text-muted mb-3">Para ver tu cuenta, compras y citas debes iniciar sesión como cliente.</p>
-        <a href="{{ url('/landings') }}" class="btn btn-dark">Ir al directorio</a>
+        <a href="{{ url('/') }}" class="btn btn-dark">Ir al directorio</a>
       </div>
     </div>
 
@@ -480,14 +480,14 @@
 
         ordersList.className = 'd-grid gap-2';
         ordersList.innerHTML = list.map(order => {
-          const storeName = order?.tenant_name || order?.tenant?.name || 'Tienda no disponible';
+          const storeName = order?.tenant_name || order?.tenant?.name || 'sede no disponible';
           return `
             <div class="border rounded-3 p-3">
               <div class="d-flex justify-content-between flex-wrap gap-2">
                 <strong>Pedido #${order.order_number ?? order.id}</strong>
                 <span class="badge text-bg-light">${order.status || 'Pendiente'}</span>
               </div>
-              <p class="mb-1 mt-2"><strong>Tienda:</strong> ${storeName}</p>
+              <p class="mb-1 mt-2"><strong>sede:</strong> ${storeName}</p>
               <p class="mb-0 text-muted">Fecha: ${order.created_at || order.date || 'N/A'}</p>
             </div>
           `;
@@ -637,7 +637,7 @@
 
       logoutBtn.addEventListener('click', () => {
         clearSession();
-        window.location.href = '{{ url('/landings') }}';
+        window.location.href = '{{ url('/') }}';
       });
 
       document.querySelectorAll('.portal-anchor-btn').forEach(btn => {

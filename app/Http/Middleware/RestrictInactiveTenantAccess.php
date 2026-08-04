@@ -42,13 +42,13 @@ class RestrictInactiveTenantAccess
 
         if ($request->expectsJson()) {
             return response()->json([
-                'message' => 'La tienda está inactiva. Solo puedes acceder a Gestión de tienda y pagos.',
+                'message' => 'La sede está inactiva. Solo puedes acceder a Gestión de sede y pagos.',
                 'redirect_to' => route('tenant.store'),
             ], 403);
         }
 
         return redirect()
             ->route('tenant.store')
-            ->with('warning', 'La tienda está inactiva. Solo puedes acceder a Gestión de tienda y pagos.');
+            ->with('warning', 'La sede está inactiva. Solo puedes acceder a Gestión de sede y pagos.');
     }
 }

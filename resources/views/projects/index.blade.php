@@ -294,6 +294,7 @@
 
   @php
     $activeProjects = $projects->where('phase', '!=', 'fin')->count();
+    $selectedTenantId = (int) ($selectedTenantId ?? 0);
     $phaseLabels = [
       'inicio' => 'Inicio',
       'desarrollo' => 'Desarrollo',
@@ -319,6 +320,20 @@
             <div class="card-body">
               <form method="POST" action="{{ route('projects.module.projects.store') }}" class="row g-3">
                 @csrf
+                @if(($isSuperOwner ?? false) && $selectedTenantId > 0)
+                  <input type="hidden" name="tenant_id" value="{{ $selectedTenantId }}">
+                @endif
+                @if(($isSuperOwner ?? false) && $selectedTenantId === 0)
+                  <div class="col-md-4">
+                    <label class="form-label">Tenant destino</label>
+                    <select name="tenant_id" class="form-control border border-1 p-2" required>
+                      <option value="" selected disabled>Selecciona tenant</option>
+                      @foreach(($tenantFilterOptions ?? collect()) as $tenantOption)
+                        <option value="{{ $tenantOption->id }}">{{ $tenantOption->name }}</option>
+                      @endforeach
+                    </select>
+                  </div>
+                @endif
                 <div class="col-md-4"><label class="form-label">Nombre</label><input type="text" name="name" class="form-control border border-1 p-2" required></div>
                 <div class="col-md-2"><label class="form-label">Fase</label><select name="phase" class="form-control border border-1 p-2" required><option value="inicio">Inicio</option><option value="desarrollo">Desarrollo</option><option value="fin">Fin</option></select></div>
                 <div class="col-md-3"><label class="form-label">Inicio</label><input type="date" name="starts_at" class="form-control border border-1 p-2"></div>
@@ -377,6 +392,9 @@
                   <a href="{{ route('projects.module.projects.show', $project) }}" class="btn btn-primary btn-sm mb-0 project-actions-view" data-project-open-link>Ver Proyecto</a>
                   <form method="POST" action="{{ route('projects.module.projects.phase', $project) }}" class="project-phase-form" data-project-phase-form>
                     @csrf
+                    @if(($isSuperOwner ?? false) && $selectedTenantId > 0)
+                      <input type="hidden" name="tenant_id" value="{{ $selectedTenantId }}">
+                    @endif
                     <select name="phase" class="form-control border border-1 p-2 form-control-sm" aria-label="Seleccionar fase del proyecto {{ $project->name }}">
                       <option value="inicio" {{ $project->phase === 'inicio' ? 'selected' : '' }}>Inicio</option>
                       <option value="desarrollo" {{ $project->phase === 'desarrollo' ? 'selected' : '' }}>Desarrollo</option>

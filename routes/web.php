@@ -18,7 +18,6 @@ use App\Http\Controllers\{
     StoreExpenseController,
     AccountsPayableController,
     TenantController,
-    PlanController,
     TaxController,
     LocationController,
     MaterialPackageController,
@@ -32,7 +31,8 @@ use App\Http\Controllers\{
     SalesFiscalController,
     SellerCommissionController,
     WithholdingController,
-    ProjectModuleController
+    ProjectModuleController,
+    UserEmploymentProfileController
 };
 
 // RUTAS DE INVITADOS
@@ -57,7 +57,6 @@ Route::middleware('guest')->group(function () {
 
 // PÁGINAS PÚBLICAS
 Route::get('/', [IndexController::class, 'landing'])->name('landing');
-Route::get('/landings', [IndexController::class, 'landingDirectory'])->name('landing.directory');
 Route::get('/mi-cuenta', [TenantController::class, 'publicCustomerPortalGeneral'])->name('customer.portal.general');
 Route::get('/legal/terms-and-conditions.pdf', [TenantController::class, 'termsAndConditionsPdf'])->name('legal.terms.pdf');
 Route::get('/index', fn() => view('index'));
@@ -173,7 +172,9 @@ Route::get('/pwa-icon/{size}.png', function (int $size) {
 Route::get('/storage/gdrive/{fileId}', [GoogleDriveController::class, 'streamImage'])->where('fileId', '.*')->name('storage.gdrive.proxy');
 Route::get('/publicOrder/{id}', [SaleController::class, 'showPublicOrder']);
 Route::get('/publicOrder/{id}/pdfs/{type}', [SaleController::class, 'downloadStoredPdf'])->whereIn('type', ['invoice', 'delivery'])->name('public.order.pdf');
-Route::get('/create-tenant-user', [TenantController::class, 'createIndexUser'])->name('createTenantUser');
+Route::get('/create-tenant-user', [TenantController::class, 'createIndexUser'])
+    ->middleware(['auth', 'role.name:super_user,superowner,4'])
+    ->name('createTenantUser');
 Route::get('/get-countries', [LocationController::class, 'getCountries']);
 Route::get('/get-states/{country}', [LocationController::class, 'getStates']);
 Route::get('/get-cities/{state}', [LocationController::class, 'getCities']);
@@ -182,13 +183,16 @@ Route::post('/tenant-ai-copy', [TenantController::class, 'generateTenantCopy'])-
 Route::post('/tenant-ai-setup', [TenantController::class, 'generateTenantSetup'])->name('tenant.ai-setup');
 
 // RUTAS CON AUTENTICACIÓN
-Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.access', 'inactive.tenant.restrict'])->group(function () {
+Route::middleware(['auth', 'backoffice.access', 'superowner.tenant.scope'])->group(function () {
     Route::get('/settings/google-drive/oauth', [GoogleDriveController::class, 'oauthStatus'])->name('google-drive.oauth.status');
     Route::get('/settings/google-drive/connect', [GoogleDriveController::class, 'redirectToGoogle'])->name('google-drive.connect');
     Route::get('/settings/google-drive/callback', [GoogleDriveController::class, 'handleGoogleCallback'])->name('google-drive.callback');
 
     Route::get('/dashboard', [IndexController::class, 'index'])->name('dashboard');
     Route::post('/logout', [AuthenticatedSessionController::class, 'logout'])->name('logout');
+    Route::post('/superowner/tenant-scope', [IndexController::class, 'updateSuperOwnerTenantScope'])
+        ->middleware('role.name:super_user,superowner,4')
+        ->name('superowner.tenant.scope.update');
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/notifications/feed', [NotificationController::class, 'webFeed'])->name('notifications.feed');
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
@@ -213,6 +217,8 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/variants/{productVariant}/qr-image', [ProductVariantController::class, 'qrImage'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('variants.qrImage');
 
     Route::get('/users', [UserController::class, 'index'])->middleware('role.name:4')->name('users');
+    Route::get('/users/employment-profiles', [UserEmploymentProfileController::class, 'index'])->middleware('role.name:4')->name('users.employmentProfiles.index');
+    Route::post('/users/{user}/employment-profile', [UserEmploymentProfileController::class, 'update'])->middleware('role.name:4')->name('users.employmentProfiles.update');
     Route::get('/paymentMethods', [PaymentMethodController::class, 'index'])->middleware('role.name:owner,admin,administrador')->name('paymentMethods.index');
     Route::get('/paymentMethods/rates/export/{format}', [PaymentMethodController::class, 'exportRateHistory'])->where('format', 'csv|excel|pdf')->middleware('role.name:owner,admin,administrador')->name('paymentMethods.rates.export');
     Route::get('/profile', fn() => view('profile'))->name('profile');
@@ -276,36 +282,38 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     Route::get('/appointments/available-slots', [AppointmentController::class, 'availableSlots'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller')->name('appointments.availableSlots');
 
     // Módulos separados: nómina, proyectos y cotizaciones
-    Route::get('/projects-module', [ProjectModuleController::class, 'index'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.index');
+    Route::get('/projects-module', [ProjectModuleController::class, 'index'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.index');
 
-    Route::get('/nomina', [ProjectModuleController::class, 'payrollIndex'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.payroll.index');
-    Route::post('/nomina/team-members', [ProjectModuleController::class, 'storeTeamMember'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.team.store');
-    Route::post('/nomina/team-members/{teamMember}/status', [ProjectModuleController::class, 'updateTeamMemberStatus'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.team.status');
-    Route::post('/nomina/payrolls', [ProjectModuleController::class, 'storePayroll'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.payrolls.store');
-    Route::get('/nomina/payrolls/{payroll}/comprobante', [ProjectModuleController::class, 'payrollReceipt'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.payrolls.receipt');
+    Route::get('/nomina', [ProjectModuleController::class, 'payrollIndex'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.payroll.index');
+    Route::post('/nomina/team-groups', [ProjectModuleController::class, 'storeTeamGroup'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.team.groups.store');
+    Route::post('/nomina/team-groups/{group}/status', [ProjectModuleController::class, 'updateTeamGroupStatus'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.team.groups.status');
+    Route::post('/nomina/team-members', [ProjectModuleController::class, 'storeTeamMember'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.team.store');
+    Route::post('/nomina/team-members/{teamMember}/status', [ProjectModuleController::class, 'updateTeamMemberStatus'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.team.status');
+    Route::post('/nomina/payrolls', [ProjectModuleController::class, 'storePayroll'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.payrolls.store');
+    Route::get('/nomina/payrolls/{payroll}/comprobante', [ProjectModuleController::class, 'payrollReceipt'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.payrolls.receipt');
 
-    Route::get('/proyectos', [ProjectModuleController::class, 'projectsIndex'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.index');
-    Route::post('/proyectos', [ProjectModuleController::class, 'storeProject'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.store');
-    Route::get('/proyectos/{project}', [ProjectModuleController::class, 'projectShow'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.show');
-    Route::post('/proyectos/{project}/assets', [ProjectModuleController::class, 'storeProjectAsset'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.assets.store');
-    Route::get('/proyectos/assets/{asset}/file', [ProjectModuleController::class, 'projectAssetFile'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.assets.file');
-    Route::post('/proyectos/{project}/phase', [ProjectModuleController::class, 'updateProjectPhase'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.phase');
-    Route::post('/proyectos/{project}/complete', [ProjectModuleController::class, 'completeProject'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.complete');
-    Route::post('/proyectos/{project}/visibility', [ProjectModuleController::class, 'updateProjectVisibility'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.visibility');
-    Route::post('/proyectos/{project}/tasks', [ProjectModuleController::class, 'storeProjectTask'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.tasks.store');
-    Route::post('/proyectos/tasks/{task}/status', [ProjectModuleController::class, 'updateProjectTaskStatus'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.tasks.status');
-    Route::post('/proyectos/{project}/assignments', [ProjectModuleController::class, 'storeProjectAssignment'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse')->name('projects.module.projects.assignments.store');
+    Route::get('/proyectos', [ProjectModuleController::class, 'projectsIndex'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.index');
+    Route::post('/proyectos', [ProjectModuleController::class, 'storeProject'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.store');
+    Route::get('/proyectos/{project}', [ProjectModuleController::class, 'projectShow'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.show');
+    Route::post('/proyectos/{project}/assets', [ProjectModuleController::class, 'storeProjectAsset'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.assets.store');
+    Route::get('/proyectos/assets/{asset}/file', [ProjectModuleController::class, 'projectAssetFile'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.assets.file');
+    Route::post('/proyectos/{project}/phase', [ProjectModuleController::class, 'updateProjectPhase'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.phase');
+    Route::post('/proyectos/{project}/complete', [ProjectModuleController::class, 'completeProject'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.complete');
+    Route::post('/proyectos/{project}/visibility', [ProjectModuleController::class, 'updateProjectVisibility'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.visibility');
+    Route::post('/proyectos/{project}/tasks', [ProjectModuleController::class, 'storeProjectTask'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.tasks.store');
+    Route::post('/proyectos/tasks/{task}/status', [ProjectModuleController::class, 'updateProjectTaskStatus'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.tasks.status');
+    Route::post('/proyectos/{project}/assignments', [ProjectModuleController::class, 'storeProjectAssignment'])->middleware('role.name:owner,admin,administrador,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.projects.assignments.store');
 
-    Route::get('/cotizaciones', [ProjectModuleController::class, 'quotationsIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.index');
-    Route::post('/cotizaciones', [ProjectModuleController::class, 'storeQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.store');
-    Route::put('/cotizaciones/{quotation}', [ProjectModuleController::class, 'updateQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.update');
-    Route::get('/cotizaciones/{quotation}/pdf', [ProjectModuleController::class, 'quotationPdf'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.pdf');
-    Route::post('/cotizaciones/{quotation}/invalidate', [ProjectModuleController::class, 'invalidateQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.invalidate');
-    Route::post('/cotizaciones/{quotation}/annul', [ProjectModuleController::class, 'annulQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.annul');
-    Route::post('/cotizaciones/{quotation}/replace', [ProjectModuleController::class, 'replaceQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.replace');
-    Route::post('/cotizaciones/{quotation}/to-project', [ProjectModuleController::class, 'convertQuotationToProject'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.toProject');
-    Route::post('/cotizaciones/{quotation}/to-sale', [ProjectModuleController::class, 'convertQuotationToSale'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.toSale');
-    Route::post('/cotizaciones/{quotation}/to-inventory-entry', [ProjectModuleController::class, 'convertQuotationToInventoryEntry'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse')->name('projects.module.quotations.toInventory');
+    Route::get('/cotizaciones', [ProjectModuleController::class, 'quotationsIndex'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.quotations.index');
+    Route::post('/cotizaciones', [ProjectModuleController::class, 'storeQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.quotations.store');
+    Route::put('/cotizaciones/{quotation}', [ProjectModuleController::class, 'updateQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.quotations.update');
+    Route::get('/cotizaciones/{quotation}/pdf', [ProjectModuleController::class, 'quotationPdf'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.quotations.pdf');
+    Route::post('/cotizaciones/{quotation}/invalidate', [ProjectModuleController::class, 'invalidateQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.quotations.invalidate');
+    Route::post('/cotizaciones/{quotation}/annul', [ProjectModuleController::class, 'annulQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.quotations.annul');
+    Route::post('/cotizaciones/{quotation}/replace', [ProjectModuleController::class, 'replaceQuotation'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.quotations.replace');
+    Route::post('/cotizaciones/{quotation}/to-project', [ProjectModuleController::class, 'convertQuotationToProject'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.quotations.toProject');
+    Route::post('/cotizaciones/{quotation}/to-sale', [ProjectModuleController::class, 'convertQuotationToSale'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.quotations.toSale');
+    Route::post('/cotizaciones/{quotation}/to-inventory-entry', [ProjectModuleController::class, 'convertQuotationToInventoryEntry'])->middleware('role.name:owner,admin,administrador,vendor,vendedor,seller,almacen,almacenista,warehouse,super_user,superowner,4')->name('projects.module.quotations.toInventory');
 
     // Reportes PDF
     Route::get('/reports', [ReportController::class, 'index'])->middleware('role.name:owner,admin,administrador')->name('reports.index');
@@ -380,20 +388,15 @@ Route::middleware(['auth', 'backoffice.access', 'free.plan.access', 'basic.plan.
     // Tenants
     Route::get('/tenants', [TenantController::class, 'index'])->middleware('role.name:4')->name('tenant.index');
     Route::get('/tenant-payments', [TenantController::class, 'paymentsIndex'])->middleware('role.name:4')->name('tenant.payments.index');
-    Route::get('/create-tenant', [TenantController::class, 'createIndex'])->middleware('role.name:4')->name('createTenant');
+    Route::get('/create-tenant', [TenantController::class, 'createIndex'])->middleware('role.name:super_user,superowner,4')->name('createTenant');
     Route::get('/tenant-store', [TenantController::class, 'getTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.store');
     Route::post('/tenant-update', [TenantController::class, 'updateTenant'])->middleware('role.name:owner,admin,administrador')->name('tenant.update');
     Route::post('/tenant-store/users/{id}/update', [UserController::class, 'update'])->middleware('role.name:owner,admin,administrador')->name('tenant.users.update');
     Route::post('/tenant-store/users/{id}/toggle-status', [UserController::class, 'toggleStatus'])->middleware('role.name:owner,admin,administrador')->name('tenant.users.toggleStatus');
     Route::post('/tenant-import-setup-docx', [TenantController::class, 'importSetupDocument'])->middleware('role.name:4')->name('tenant.importSetupDocx');
-    Route::post('/tenant-store/plan-payment-request', [TenantController::class, 'submitPlanPaymentRequest'])->middleware('role.name:owner')->name('tenant.planPayment.request');
-    Route::post('/tenants/{tenant}/plan-payments/{payment}/approve', [TenantController::class, 'approvePlanPayment'])->middleware('role.name:4')->name('tenant.planPayment.approve');
-    Route::post('/tenants/{tenant}/plan-payments/{payment}/cutoff', [TenantController::class, 'updatePlanPaymentCutoffDate'])->middleware('role.name:4')->name('tenant.planPayment.cutoff.update');
-    Route::post('/tenants/{tenant}/plan-payments/{payment}/reject', [TenantController::class, 'rejectPlanPayment'])->middleware('role.name:4')->name('tenant.planPayment.reject');
-    Route::resource('tenants', TenantController::class)->middleware('role.name:4');
+    Route::resource('tenants', TenantController::class)->middleware('role.name:super_user,superowner,4');
 
     // Planes
-    Route::get('/plans', [PlanController::class, 'index'])->middleware('role.name:4')->name('plans.index');
 
     // Impuestos
     Route::get('taxes', [TaxController::class, 'index'])->middleware('role.name:4')->name('taxes');
@@ -429,4 +432,6 @@ Route::get('/{tenant:slug}/mi-cuenta', function () {
 Route::post('/{tenant:slug}/checkout/pro', [TenantController::class, 'publicTenantProCheckout'])->name('tenant.public.proCheckout');
 Route::post('/{tenant:slug}/scan-code', [TenantController::class, 'publicTenantResolveScanCode'])->name('tenant.public.scanCode');
 Route::get('/{tenant:slug}/{product}', [TenantController::class, 'publicTenantProduct'])->name('tenant.public.product');
-Route::post('/tenants-public', [TenantController::class, 'storePublic'])->name('tenants.storePublic'); // ← fuera del grupo auth
+Route::post('/tenants-public', [TenantController::class, 'storePublic'])
+    ->middleware(['auth', 'role.name:super_user,superowner,4'])
+    ->name('tenants.storePublic');

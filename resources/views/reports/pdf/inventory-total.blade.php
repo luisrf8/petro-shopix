@@ -48,7 +48,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6">No hay variantes registradas para esta tienda.</td>
+                    <td colspan="6">No hay variantes registradas para esta sede.</td>
                 </tr>
             @endforelse
         </tbody>

@@ -19,7 +19,7 @@
 </head>
 <body>
     <h2>Control de clientes / citas</h2>
-    <div class="mb-8 muted">Tienda: {{ $tenant->name ?? 'Shopix' }}</div>
+    <div class="mb-8 muted">sede: {{ $tenant->name ?? 'Shopix' }}</div>
     <div class="mb-12"><strong>Cliente:</strong> {{ $customer->name ?? 'Cliente' }}{{ !empty($customer->phone_number) ? ' · ' . $customer->phone_number : '' }}</div>
 
     <div class="summary-box mb-16">

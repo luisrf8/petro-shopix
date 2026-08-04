@@ -15,12 +15,14 @@ class CategoryController extends Controller
 {
     public function index()
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $tenantId = $this->tenantScopeId(request());
 
         $categories = Category::with(['products' => function ($query) use ($tenantId) {
-            $query->where('is_active', true)->where('tenant_id', $tenantId)->with(['variants']);
+            $query->where('is_active', true)
+                ->when($tenantId > 0, fn ($innerQuery) => $innerQuery->where('tenant_id', $tenantId))
+                ->with(['variants']);
         }])
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->get();
     
         // Calcular total de stock por categoría
@@ -59,7 +61,7 @@ class CategoryController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
-        $tenantId = $this->resolveTenantId($request);
+        $tenantId = $this->tenantWriteId($request);
         if ($tenantId <= 0) {
             return response()->json([
                 'success' => false,
@@ -133,7 +135,7 @@ class CategoryController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
-        $tenantId = $this->resolveTenantId($request);
+        $tenantId = $this->tenantWriteId($request);
         if ($tenantId <= 0 || (int) $category->tenant_id !== $tenantId) {
             return response()->json([
                 'success' => false,
@@ -187,7 +189,7 @@ class CategoryController extends Controller
     {
         DB::raw("SET @user_id = " . auth()->id());
 
-        $tenantId = $this->resolveTenantId($request);
+        $tenantId = $this->tenantWriteId($request);
         if ($tenantId <= 0) {
             return response()->json([
                 'status' => 'error',
@@ -244,17 +246,12 @@ class CategoryController extends Controller
 
     private function resolveTenantId(Request $request): int
     {
-        $authTenantId = (int) (auth()->user()->tenant_id ?? 0);
-        if ($authTenantId > 0) {
-            return $authTenantId;
-        }
-
-        return (int) $request->input('tenant_id', 0);
+        return $this->tenantScopeId($request);
     }
 
     private function abortIfCategoryOutOfTenant(Category $category): void
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $tenantId = $this->tenantWriteId(request());
         if ($tenantId <= 0 || (int) $category->tenant_id !== $tenantId) {
             abort(403, 'No autorizado para operar esta categoría.');
         }

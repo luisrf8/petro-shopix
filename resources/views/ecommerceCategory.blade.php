@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192, 'variant' => 'client']) }}" />
-  <title>{{ $tenant->name }} - Tienda Virtual</title>
+  <title>{{ $tenant->name }} - sede Virtual</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 
@@ -1227,7 +1227,7 @@
               </li>
             @endif
             <li class="nav-item">
-              <a class="btn landing-nav-link tenant-main-nav-btn" href="https://shopixve.com/landings"><i class="bi bi-shop-window"></i> Shopix</a>
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="https://shopixve.com/"><i class="bi bi-shop-window"></i> Shopix</a>
             </li>
             @include('partials.tenant-cart-nav')
             <li class="nav-item">
@@ -1366,7 +1366,7 @@
                     <div class="card-body product-card-body text-start">
                       <div class="product-card-copy">
                         <h5 class="product-card-title fw-bold">{{ $product->display_name }}</h5>
-                        <p class="product-card-description">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta tienda.', 84) }}</p>
+                        <p class="product-card-description">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta sede.', 84) }}</p>
                       </div>
                       <div class="product-variant-strip" aria-label="Variantes disponibles de {{ $product->display_name }}">
                         @foreach ($product->variants->take(2) as $variant)

@@ -13,7 +13,11 @@ class UserRedirector
             return false;
         }
 
-        return (int) ($user->role_id ?? 0) === 4 || Str::lower((string) optional($user->role)->name) === 'super_user';
+        $roleName = Str::lower(Str::ascii(trim((string) optional($user->role)->name)));
+        $roleName = str_replace([' ', '-'], '_', $roleName);
+
+        return (int) ($user->role_id ?? 0) === 4
+            || in_array($roleName, ['super_user', 'superuser', 'superowner', 'super-owner'], true);
     }
 
     public static function isCustomer(?User $user): bool
@@ -22,7 +26,7 @@ class UserRedirector
             return false;
         }
 
-        $roleName = Str::lower(Str::ascii((string) optional($user->role)->name));
+        $roleName = Str::lower(Str::ascii(trim((string) optional($user->role)->name)));
 
         return in_array($roleName, ['user', 'cliente', 'customer'], true);
     }
@@ -58,35 +62,23 @@ class UserRedirector
             return '/';
         }
 
-        [$isFreePlan, $isBasicPlan] = self::resolvePlanFlags($user);
-
         if ($user->hasStoreRole('warehouse', 'delivery')) {
             return '/sales-orders/pending-delivery';
         }
 
         if ($user->hasStoreRole('seller')) {
-            return ($isFreePlan || $isBasicPlan) ? '/products' : '/sales';
+            return '/sales';
         }
 
         if ($user->isOwner() || $user->isAdmin()) {
-            return ($isFreePlan || $isBasicPlan) ? '/products' : '/dashboard';
+            return '/dashboard';
         }
 
-        return ($isFreePlan || $isBasicPlan) ? '/products' : '/dashboard';
+        return '/dashboard';
     }
 
     public static function resolvePlanFlags(?User $user): array
     {
-        if (!$user || !(int) ($user->tenant_id ?? 0)) {
-            return [false, false];
-        }
-
-        $latestPaid = TenantPlanResolver::latestPaidForTenant((int) $user->tenant_id);
-
-        $planName = Str::lower(Str::ascii((string) ($latestPaid?->plan?->name ?? '')));
-        $isFreePlan = (float) ($latestPaid?->plan?->price ?? -1) <= 0;
-        $isBasicPlan = Str::contains($planName, ['basico', 'basic']);
-
-        return [$isFreePlan, $isBasicPlan];
+        return [false, false];
     }
 }

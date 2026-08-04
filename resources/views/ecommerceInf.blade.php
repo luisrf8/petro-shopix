@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <link rel="icon" type="image/png" href="{{ route('pwa.icon', ['size' => 192, 'variant' => 'client']) }}" />
-  <title>{{ $tenant->name }} - Tienda Virtual</title>
+  <title>{{ $tenant->name }} - sede Virtual</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 
@@ -74,7 +74,7 @@
     $projectWhatsappBaseUrl = !empty($whatsapp) ? 'https://api.whatsapp.com/send?phone=' . $whatsapp : null;
     $serviceLabel = !empty($tenant->business_type) && \Illuminate\Support\Str::lower((string) $tenant->business_type) === 'servicio'
       ? 'Servicio'
-      : 'Tienda';
+      : 'sede';
     $tenantOffersProjects = (bool) ($tenant->offers_projects ?? true);
     $heroSummary = !empty($tenant->description)
       ? \Illuminate\Support\Str::limit((string) $tenant->description, 96)
@@ -83,7 +83,7 @@
       ? \Illuminate\Support\Str::limit($workingDaysText, 36)
       : ($serviceLabel === 'Servicio' ? 'Atención por agenda' : 'Horario no publicado');
     $mapsUrl = null;
-    $defaultWhatsappMessage = 'Hola, vengo de tu tienda virtual de Shopix';
+    $defaultWhatsappMessage = 'Hola, vengo de tu sede virtual de Shopix';
     $projectWhatsappMessage = 'Hola, vi la landing de proyectos en Shopix y quiero solicitar una cotización personalizada.';
     $tenantExternalUrl = trim((string) ($tenant->external_url ?? ''));
     if ($tenantExternalUrl !== '' && !\Illuminate\Support\Str::startsWith(\Illuminate\Support\Str::lower($tenantExternalUrl), ['http://', 'https://'])) {
@@ -1411,17 +1411,6 @@
           @endif
         </a>
 
-        <button type="button"
-                class="btn tenant-nav-action-btn landing-nav-link d-inline-flex align-items-center tenant-icon-btn d-lg-none ms-auto me-2"
-                aria-label="Carrito"
-                title="Carrito"
-                data-bs-toggle="offcanvas"
-                data-bs-target="#tenantCartOffcanvas"
-                aria-controls="tenantCartOffcanvas">
-          <i class="bi bi-cart3"></i>
-          <span class="badge rounded-pill bg-dark tenant-cart-count">0</span>
-        </button>
-
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#landingNavbar" aria-controls="landingNavbar" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
@@ -1438,9 +1427,8 @@
               <a class="btn landing-nav-link tenant-main-nav-btn" href="#" data-shopix-open-auth><i class="bi bi-person-circle"></i> Entrar</a>
             </li>
             <li class="nav-item">
-              <a class="btn landing-nav-link tenant-main-nav-btn" href="https://shopixve.com/landings"><i class="bi bi-shop-window"></i> Shopix</a>
+              <a class="btn landing-nav-link tenant-main-nav-btn" href="https://shopixve.com/"><i class="bi bi-shop-window"></i> Shopix</a>
             </li>
-            @include('partials.tenant-cart-nav')
           </ul>
         </div>
       </nav>
@@ -1522,7 +1510,7 @@
         <div>
           <div class="project-section-kicker">Soluciones a medida</div>
           <h2 class="section-title text-start mb-2">Categorías y especialidades que ofrece {{ $tenant->name }}</h2>
-          <p class="text-muted mb-0">Explora el tipo de solución que maneja la tienda y luego solicita tu cotización por WhatsApp.</p>
+          <p class="text-muted mb-0">Explora el tipo de solución que maneja la sede y luego solicita tu cotización por WhatsApp.</p>
         </div>
         <div class="project-pill-tabs">
           <button type="button" class="project-pill-tab is-active" data-project-category="all">Todos</button>
@@ -1551,7 +1539,7 @@
               @endif
               <div class="project-card-body">
                 <h3 class="project-card-title">{{ $category->name }}</h3>
-                <p class="project-card-text">{{ \Illuminate\Support\Str::limit($category->description ?: 'Especialidad disponible dentro de la oferta comercial de esta tienda.', 120) }}</p>
+                <p class="project-card-text">{{ \Illuminate\Support\Str::limit($category->description ?: 'Especialidad disponible dentro de la oferta comercial de esta sede.', 120) }}</p>
                 <button type="button" class="project-card-link project-category-trigger" data-project-category-trigger="{{ $category->id }}">Filtrar en catalogo <i class="bi bi-arrow-right"></i></button>
               </div>
             </article>
@@ -1645,7 +1633,7 @@
                     @endif
                     <div class="card-body text-start">
                       <h5 class="fw-bold text-dark mb-1">{{ $product->display_name }}</h5>
-                      <p class="text-muted small mb-0">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta tienda.', 72) }}</p>
+                      <p class="text-muted small mb-0">{{ \Illuminate\Support\Str::limit($product->description ?? 'Producto destacado en esta sede.', 72) }}</p>
                       @if(!is_null($displayPrice))
                         <p class="mb-0 mt-2">
                           <span class="price-neo-chip">
@@ -1792,11 +1780,7 @@
                       @endif
                       <div class="d-flex gap-2 align-items-center">
                         <input type="number" min="1" value="1" class="form-control form-control-sm" id="tenant-pack-qty-{{ $package->id }}" style="max-width: 90px;">
-                        @if($tenantOffersProjects && !empty($projectWhatsappBaseUrl))
-                          <a href="{{ $projectWhatsappBaseUrl . '&text=' . urlencode('Hola, quiero cotizar el paquete ' . $package->name . ' que vi en la landing de Shopix.') }}" target="_blank" rel="noopener noreferrer" class="btn btn-dark btn-sm">Cotizar paquete</a>
-                        @else
-                          <button type="button" class="btn btn-dark btn-sm js-add-tenant-package" data-package-id="{{ $package->id }}">Agregar paquete</button>
-                        @endif
+                        <a href="{{ !empty($projectWhatsappBaseUrl) ? $projectWhatsappBaseUrl . '&text=' . urlencode('Hola, quiero cotizar el paquete ' . $package->name . ' que vi en la landing de Shopix.') : ($whatsappUrl ?? '#') }}" target="_blank" rel="noopener noreferrer" class="btn btn-dark btn-sm">Consultar paquete</a>
                       </div>
                     </div>
                   </div>
@@ -1867,7 +1851,7 @@
         <div>
           <div class="project-section-kicker">Proyectos en curso</div>
           <h2 class="section-title text-start mb-2">Proyectos que se están realizando</h2>
-          <p class="text-muted mb-0">Visibilidad del avance por fases para que los clientes entiendan cómo se ejecuta cada solución.</p>
+          <p class="text-muted mb-0">Visibilidad del avance por fases para que los clientes enseden cómo se ejecuta cada solución.</p>
         </div>
       </div>
 
@@ -1898,7 +1882,7 @@
               @endif
               <div class="project-card-body">
                 <h3 class="project-card-title">{{ $project->name }}</h3>
-                <p class="project-card-text">{{ \Illuminate\Support\Str::limit($project->description ?: 'Proyecto activo en ejecución dentro del portafolio de la tienda.', 120) }}</p>
+                <p class="project-card-text">{{ \Illuminate\Support\Str::limit($project->description ?: 'Proyecto activo en ejecución dentro del portafolio de la sede.', 120) }}</p>
 
                 <div class="project-progress-shell">
                   <div class="project-progress-meta">
@@ -2039,8 +2023,6 @@
     <p>© 2025 {{ $tenant->name }} - SHOPIX. Todos los derechos reservados.</p>
   </footer>
 
-  @include('partials.tenant-cart-offcanvas')
-
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
   <script>
@@ -2093,64 +2075,20 @@
     const packagesEmpty = document.getElementById('packages-empty');
     let activeCategory = 'all';
 
-    function sendCartCommand(type, detail = {}) {
-      document.dispatchEvent(new CustomEvent('shopix-cart-command', {
-        detail: { type, ...detail }
-      }));
-    }
-
     function openServiceFlow(button) {
       if (!button) {
         return;
       }
 
-      const isFreePlan = String(button.dataset.serviceFreePlan || '0') === '1';
-      const appointmentsEnabled = String(button.dataset.serviceAppointmentsEnabled || '0') === '1';
       const whatsappUrl = String(button.dataset.serviceWhatsappUrl || '').trim();
-      const serviceId = Number(button.dataset.serviceId || 0);
-      const serviceName = String(button.dataset.serviceName || 'Servicio').trim();
 
-      if (isFreePlan) {
-        if (!whatsappUrl) {
-          alert('Esta tienda no tiene WhatsApp configurado para consultas de servicios.');
-          return;
-        }
-
-        window.open(whatsappUrl, '_blank', 'noopener');
+      if (!whatsappUrl) {
+        alert('Esta sede no tiene WhatsApp configurado para consultas de servicios.');
         return;
       }
 
-      if (!appointmentsEnabled) {
-        alert('La agenda de citas no está disponible en este momento para este servicio.');
-        return;
-      }
-
-      if (serviceId <= 0) {
-        alert('No se pudo abrir el flujo de cita para este servicio.');
-        return;
-      }
-
-      sendCartCommand('open-appointment-service', {
-        serviceId,
-        serviceName,
-      });
+      window.open(whatsappUrl, '_blank', 'noopener');
     }
-
-    function addTenantPackageToCart(packageId) {
-      const qtyInput = document.getElementById(`tenant-pack-qty-${packageId}`);
-      const packQty = Math.max(1, parseInt(qtyInput?.value || '1', 10));
-
-      sendCartCommand('add-package', {
-        packageId: Number(packageId),
-        packageQty: packQty,
-      });
-    }
-
-      document.querySelectorAll('.js-add-tenant-package').forEach(button => {
-        button.addEventListener('click', () => {
-          addTenantPackageToCart(button.dataset.packageId);
-        });
-      });
 
     function setActiveCategory(categoryId) {
       activeCategory = categoryId;

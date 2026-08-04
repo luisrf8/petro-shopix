@@ -20,49 +20,52 @@ class WarehouseController extends Controller
 {
     public function index()
     {
-        $user = auth()->user();
+        $tenantId = $this->tenantScopeId(request());
+        $writeTenantId = $tenantId > 0 ? $tenantId : 0;
 
-        $warehouses = Warehouse::where('tenant_id', $user->tenant_id)
+        $warehouses = Warehouse::query()
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->orderByDesc('is_default')
             ->orderBy('name')
             ->get();
 
         $products = Product::with(['variants'])
-            ->where('tenant_id', $user->tenant_id)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
 
-        $stocks = ProductVariantWarehouseStock::where('tenant_id', $user->tenant_id)
+        $stocks = ProductVariantWarehouseStock::query()
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->get()
             ->keyBy(function ($item) {
                 return $item->warehouse_id . '_' . $item->product_variant_id;
             });
 
         $warehouseStockDetails = ProductVariantWarehouseStock::with(['variant.product'])
-            ->where('tenant_id', $user->tenant_id)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('quantity', '>', 0)
             ->orderByDesc('quantity')
             ->get()
             ->groupBy('warehouse_id');
 
         $variants = ProductVariant::with('product')
-            ->whereHas('product', function ($query) use ($user) {
-                $query->where('tenant_id', $user->tenant_id)
+            ->whereHas('product', function ($query) use ($tenantId) {
+                $query->when($tenantId > 0, fn ($innerQuery) => $innerQuery->where('tenant_id', $tenantId))
                     ->where('is_active', true);
             })
             ->orderBy('size')
             ->get();
 
         $movements = WarehouseMovement::with(['variant.product', 'sourceWarehouse', 'destinationWarehouse', 'user'])
-            ->where('tenant_id', $user->tenant_id)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->orderByDesc('moved_at')
             ->orderByDesc('id')
             ->limit(50)
             ->get();
 
         $movementTypes = WarehouseMovement::typeOptions();
-        $isBasicPlanTenant = $this->tenantPlanCapabilities((int) $user->tenant_id)->isBasic();
+        $isBasicPlanTenant = $writeTenantId > 0 ? $this->tenantPlanCapabilities($writeTenantId)->isBasic() : false;
 
         return view('warehouses', compact('warehouses', 'products', 'stocks', 'warehouseStockDetails', 'variants', 'movements', 'movementTypes', 'isBasicPlanTenant'));
     }
@@ -233,7 +236,7 @@ class WarehouseController extends Controller
 
         if (!$variant) {
             throw ValidationException::withMessages([
-                'product_variant_id' => 'La variante seleccionada no pertenece a tu tienda.',
+                'product_variant_id' => 'La variante seleccionada no pertenece a tu sede.',
             ]);
         }
 

@@ -14,7 +14,6 @@ use App\Models\User;
 use App\Models\PurchaseOrder;
 use App\Models\DollarRate;
 use App\Models\Tenant;
-use App\Models\Plan;
 use App\Models\Country;
 use App\Models\State;
 use App\Models\City;
@@ -22,6 +21,7 @@ use Carbon\Carbon;
 use App\Models\Log;
 use App\Models\SalesOrderDetail;
 use App\Support\TenantPlanCapabilities;
+use App\Support\UserRedirector;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -41,7 +41,6 @@ class IndexController extends Controller
         }
 
         $tenants = $tenantsQuery->get();
-        $plans = Plan::all();
         
         // Asocia íconos por nombre o ID
         $icons = [
@@ -79,7 +78,7 @@ class IndexController extends Controller
             ->take(3)
             ->get();
     
-        return view('ecommerce', compact('categories', 'productItems', 'tenants', 'plans'));
+        return view('ecommerce', compact('categories', 'productItems', 'tenants'));
     }
 
     public function landingDirectory()
@@ -160,8 +159,8 @@ class IndexController extends Controller
             return 'Servicio';
         }
 
-        if (in_array($key, ['tienda', 'tiendas', 'store', 'stores', 'comercio', 'comercios'], true)) {
-            return 'Tienda';
+        if (in_array($key, ['sede', 'sedes', 'store', 'stores', 'comercio', 'comercios'], true)) {
+            return 'sede';
         }
 
         return '';
@@ -311,14 +310,14 @@ class IndexController extends Controller
         $haystack = trim($name . ' ' . $description . ' ' . $categoryNames);
 
         if ($haystack === '') {
-            return 'Tienda';
+            return 'sede';
         }
 
         if (preg_match('/servicio|consultor|agencia|taller|reparaci[oó]n|sal[oó]n|spa|barber|estudio/', $haystack) === 1) {
             return 'Servicio';
         }
 
-        return 'Tienda';
+        return 'sede';
     }
 
     private function inferTenantActivity(Tenant $tenant): string
@@ -534,6 +533,25 @@ class IndexController extends Controller
         return response()->download($path, basename($path));
     }
 
+    public function updateSuperOwnerTenantScope(Request $request)
+    {
+        $user = auth()->user();
+
+        abort_unless($user && UserRedirector::isSuperAdmin($user), 403);
+
+        $validated = $request->validate([
+            'tenant_scope_id' => 'required|integer|min:0',
+        ]);
+
+        $tenantScopeId = (int) $validated['tenant_scope_id'];
+
+        abort_if($tenantScopeId > 0 && !Tenant::query()->whereKey($tenantScopeId)->exists(), 422);
+
+        session(['superowner_tenant_scope_id' => $tenantScopeId]);
+
+        return back()->with('success', 'Filtro de tenant actualizado.');
+    }
+
     private function documentationCatalog(): array
     {
         return [
@@ -605,9 +623,11 @@ class IndexController extends Controller
         $startOfNineMonthsAgo = $now->copy()->subMonths(8)->startOfMonth(); // incluye mes actual
 
         $user = auth()->user();
-        $tenantId = $user->tenant_id;
+        $isSuperOwner = UserRedirector::isSuperAdmin($user);
+        $selectedTenantId = (int) request()->query('tenant_id', 0);
+        $tenantId = $isSuperOwner ? $selectedTenantId : (int) ($user->tenant_id ?? 0);
         $isDeliveryUser = (bool) ($user?->hasStoreRole('delivery') ?? false);
-        $tenant = Tenant::find($tenantId);
+        $tenant = $tenantId > 0 ? Tenant::find($tenantId) : null;
         $tenantPlanCapabilities = TenantPlanCapabilities::forTenant($tenant);
         $tenantPublicUrl = $tenant?->slug ? url('/').'/'.$tenant->slug : null;
         $currentPlanPayment = $tenantPlanCapabilities->latestPaidPlan();
@@ -621,22 +641,24 @@ class IndexController extends Controller
         }
 
         // Cargas (filtradas por tenant)
-        $users = User::with('role')->where('tenant_id', $tenantId)->get();
+        $users = User::with('role')
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->get();
         $productItems = Product::with(['category', 'images', 'variants'])
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->get();
 
         $salesOrders = SalesOrder::with(['user', 'details', 'details.variant'])
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->latest('date')->take(3)->get();
 
         $purchaseOrders = PurchaseOrder::with(['detalles'])
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->latest('date')->take(3)->get();
 
         // Cantidad de ventas en la última semana (filtrado)
         $weeklySalesCount = SalesOrder::where('date', '>=', $startOfWeek)
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->count();
 
         // Meses (últimos 9, incluyendo actual)
@@ -647,7 +669,7 @@ class IndexController extends Controller
         // Productos con bajo stock (menos de 10 unidades)
         $lowStockProducts = Product::select('products.id', 'products.name', DB::raw('SUM(product_variants.stock) as total_stock'))
             ->join('product_variants', 'products.id', '=', 'product_variants.product_id')
-            ->where('products.tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('products.tenant_id', $tenantId))
             ->groupBy('products.id', 'products.name')
             ->orderBy('total_stock', 'asc')
             ->limit(4)
@@ -656,7 +678,7 @@ class IndexController extends Controller
         // Ventas por mes (últimos 9 meses)
         $monthlySales = SalesOrder::selectRaw('DATE_FORMAT(date, "%b") as month, COUNT(*) as total')
             ->where('date', '>=', $startOfNineMonthsAgo)
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->groupBy(DB::raw('YEAR(date), MONTH(date), DATE_FORMAT(date, "%b")'))
             ->orderByRaw('YEAR(date), MONTH(date)')
             ->get()
@@ -669,7 +691,7 @@ class IndexController extends Controller
 
         $monthlyExpenseRows = Schema::hasTable('store_expenses')
             ? StoreExpense::selectRaw('DATE_FORMAT(spent_at, "%b") as month, SUM(COALESCE(amount_bs, amount)) as total')
-                ->where('tenant_id', $tenantId)
+                ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->where('spent_at', '>=', $startOfNineMonthsAgo)
                 ->groupBy(DB::raw('YEAR(spent_at), MONTH(spent_at), DATE_FORMAT(spent_at, "%b")'))
                 ->orderByRaw('YEAR(spent_at), MONTH(spent_at)')
@@ -681,7 +703,7 @@ class IndexController extends Controller
         $monthlySalesAmountRows = SalesOrderDetail::query()
             ->join('sales_orders', 'sales_orders.id', '=', 'sales_order_details.sales_order_id')
             ->selectRaw('DATE_FORMAT(sales_orders.date, "%b") as month, SUM(sales_order_details.amount) as total')
-            ->where('sales_orders.tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('sales_orders.tenant_id', $tenantId))
             ->where('sales_orders.date', '>=', $startOfNineMonthsAgo)
             ->groupBy(DB::raw('YEAR(sales_orders.date), MONTH(sales_orders.date), DATE_FORMAT(sales_orders.date, "%b")'))
             ->orderByRaw('YEAR(sales_orders.date), MONTH(sales_orders.date)')
@@ -689,12 +711,14 @@ class IndexController extends Controller
             ->pluck('total', 'month')
             ->toArray();
 
+        $paymentsHasStatusColumn = Schema::hasColumn('payments', 'status');
+        $salesOrdersHasStatusColumn = Schema::hasColumn('sales_orders', 'status');
         $monthlyCollectedRows = SalesOrder::query()
             ->join('payments', 'payments.sales_order_id', '=', 'sales_orders.id')
             ->selectRaw('DATE_FORMAT(sales_orders.date, "%b") as month, SUM(payments.amount) as total')
-            ->where('sales_orders.tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('sales_orders.tenant_id', $tenantId))
             ->where('sales_orders.date', '>=', $startOfNineMonthsAgo)
-            ->where('payments.status', 1)
+            ->when($paymentsHasStatusColumn, fn ($query) => $query->where('payments.status', 1))
             ->groupBy(DB::raw('YEAR(sales_orders.date), MONTH(sales_orders.date), DATE_FORMAT(sales_orders.date, "%b")'))
             ->orderByRaw('YEAR(sales_orders.date), MONTH(sales_orders.date)')
             ->get()
@@ -720,31 +744,40 @@ class IndexController extends Controller
             return round($collected - $expenses, 2);
         });
 
-        $salesAmountCurrentMonth = (float) SalesOrder::where('tenant_id', $tenantId)
+        $salesAmountCurrentMonth = (float) SalesOrder::query()
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
             ->with('details')
             ->get()
             ->sum(fn ($order) => (float) $order->details->sum('amount'));
 
-        $collectedAmountCurrentMonth = (float) SalesOrder::where('tenant_id', $tenantId)
+        $collectedAmountCurrentMonth = (float) SalesOrder::query()
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
             ->with('payments')
             ->get()
-            ->sum(fn ($order) => (float) $order->payments->where('status', 1)->sum('amount'));
+            ->sum(function ($order) use ($paymentsHasStatusColumn) {
+                return (float) ($paymentsHasStatusColumn
+                    ? $order->payments->where('status', 1)->sum('amount')
+                    : $order->payments->sum('amount'));
+            });
 
         $expensesAmountCurrentMonth = Schema::hasTable('store_expenses')
-            ? (float) StoreExpense::where('tenant_id', $tenantId)
+            ? (float) StoreExpense::query()
+                ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
                 ->whereBetween('spent_at', [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()])
                 ->sum(DB::raw('COALESCE(amount_bs, amount)'))
             : 0.0;
 
         $receivablesAmount = (float) SalesOrder::with(['details', 'payments'])
-            ->where('tenant_id', $tenantId)
-            ->where('status', '!=', 2)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
+            ->when($salesOrdersHasStatusColumn, fn ($query) => $query->where('status', '!=', 2))
             ->get()
-            ->sum(function ($order) {
+            ->sum(function ($order) use ($paymentsHasStatusColumn) {
                 $total = (float) $order->details->sum('amount');
-                $paid = (float) $order->payments->where('status', 1)->sum('amount');
+                $paid = (float) ($paymentsHasStatusColumn
+                    ? $order->payments->where('status', 1)->sum('amount')
+                    : $order->payments->sum('amount'));
 
                 return max(0, round($total - $paid, 2));
             });
@@ -814,7 +847,7 @@ class IndexController extends Controller
             $deliveryDashboardOrders = SalesOrder::with(['user', 'details', 'payments'])
                 ->where('tenant_id', $tenantId)
                 ->where('deliver_status', 0)
-                ->where('status', '!=', 2)
+                ->when($salesOrdersHasStatusColumn, fn ($query) => $query->where('status', '!=', 2))
                 ->whereRaw('LOWER(COALESCE(preference, "")) LIKE ?', ['%delivery%'])
                 ->orderByDesc('id')
                 ->get()

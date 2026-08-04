@@ -113,23 +113,48 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasMany(Appointment::class, 'customer_id');
     }
 
+    public function employmentProfile()
+    {
+        return $this->hasOne(UserEmploymentProfile::class);
+    }
+
     public static function storeRoleDefinitions(): array
     {
         return [
+            'superowner' => [
+                'name' => 'Superowner',
+                'aliases' => ['superowner', 'super_user', 'super user', 'super-admin'],
+                'description' => 'Gestiona todas las sedes corporativas y controla los procesos globales del negocio.',
+                'permissions' => [
+                    'Administrar todas las sedes del grupo corporativo.',
+                    'Asignar administradores de sede y definir permisos locales.',
+                    'Supervisar operaciones globales sin depender de una sede específica.',
+                ],
+            ],
             'owner' => [
                 'name' => 'Owner',
                 'aliases' => ['owner'],
-                'description' => 'Dirige la tienda y controla la configuracion general del negocio.',
+                'description' => 'Dirige la sede y controla la configuracion general del negocio.',
                 'permissions' => [
-                    'Configurar la tienda, marca, colores y datos generales.',
+                    'Configurar la sede, marca, colores y datos generales.',
                     'Crear usuarios y asignar roles de admin, vendedor y almacenista.',
                     'Supervisar ventas, inventario, almacenes, productos y metodos de pago.',
+                ],
+            ],
+            'sede_admin' => [
+                'name' => 'Admin de Sede',
+                'aliases' => ['sede_admin', 'admin de sede', 'sede-admin'],
+                'description' => 'Administra la operacion diaria de una sede específica.',
+                'permissions' => [
+                    'Gestionar catalogo, pagos, ventas e inventario en la sede asignada.',
+                    'Crear usuarios operativos con rol de vendedor y almacenista.',
+                    'No puede administrar las sedes de otros puntos de negocio.',
                 ],
             ],
             'admin' => [
                 'name' => 'Admin',
                 'aliases' => ['admin', 'administrador'],
-                'description' => 'Administra la operacion diaria de la tienda sin reemplazar al owner.',
+                'description' => 'Administra la operacion diaria de la sede sin reemplazar al owner.',
                 'permissions' => [
                     'Gestionar catalogo, pagos, ventas e inventario.',
                     'Crear usuarios operativos con rol de vendedor y almacenista.',
@@ -143,7 +168,7 @@ class User extends Authenticatable implements JWTSubject
                 'permissions' => [
                     'Registrar ventas y revisar pedidos generados.',
                     'Consultar informacion operativa necesaria para vender.',
-                    'No administra configuracion general de la tienda.',
+                    'No administra configuracion general de la sede.',
                 ],
             ],
             'warehouse' => [
@@ -153,7 +178,7 @@ class User extends Authenticatable implements JWTSubject
                 'permissions' => [
                     'Registrar entradas de inventario y consultar historiales.',
                     'Preparar y despachar pedidos asignados a almacen.',
-                    'No modifica configuracion comercial de la tienda.',
+                    'No modifica configuracion comercial de la sede.',
                 ],
             ],
             'delivery' => [
@@ -215,7 +240,21 @@ class User extends Authenticatable implements JWTSubject
 
     public function hasStoreRole(string ...$roleKeys): bool
     {
-        return in_array($this->canonicalRole(), $roleKeys, true);
+        $canonicalRole = $this->canonicalRole();
+        $normalizedKeys = array_values(array_unique(array_map(static fn ($value) => strtolower(trim((string) $value)), $roleKeys)));
+
+        if ($canonicalRole === 'superowner') {
+            return in_array('superowner', $normalizedKeys, true)
+                || in_array('owner', $normalizedKeys, true)
+                || in_array('admin', $normalizedKeys, true);
+        }
+
+        if ($canonicalRole === 'sede_admin') {
+            return in_array('sede_admin', $normalizedKeys, true)
+                || in_array('admin', $normalizedKeys, true);
+        }
+
+        return in_array($canonicalRole, $normalizedKeys, true);
     }
 
     public function isOwner(): bool
@@ -228,9 +267,19 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasStoreRole('admin');
     }
 
+    public function isSuperowner(): bool
+    {
+        return $this->hasStoreRole('superowner');
+    }
+
     public function canManageTenantStore(): bool
     {
         return $this->hasStoreRole('owner', 'admin');
+    }
+
+    public function canManageSedes(): bool
+    {
+        return $this->isSuperowner() || $this->canManageTenantStore();
     }
 
     public function canAssignStoreRoles(): bool
@@ -240,6 +289,10 @@ class User extends Authenticatable implements JWTSubject
 
     public function assignableStoreRoleKeys(): array
     {
+        if ($this->isSuperowner()) {
+            return ['sede_admin', 'admin', 'seller', 'warehouse', 'delivery'];
+        }
+
         if ($this->isOwner()) {
             return ['admin', 'seller', 'warehouse', 'delivery'];
         }

@@ -350,7 +350,7 @@ return [
                 [
                     'heading' => 'Uso',
                     'items' => [
-                        'Crea metodos de pago para caja y tienda publica.',
+                        'Crea metodos de pago para caja y sede publica.',
                         'Actualiza datos bancarios o desactiva metodos no vigentes.',
                     ],
                 ],
@@ -782,7 +782,7 @@ return [
         ],
         'createTenant' => [
             'title' => 'Ayuda: Crear tenant',
-            'intro' => 'Formulario para crear una nueva tienda con su configuracion inicial.',
+            'intro' => 'Formulario para crear una nueva sede con su configuracion inicial.',
             'wizard' => [
                 [
                     'title' => 'Paso 1: Datos base',
@@ -792,7 +792,7 @@ return [
                 ],
                 [
                     'title' => 'Paso 2: Branding',
-                    'description' => 'Configura logo y colores para personalizar la tienda.',
+                    'description' => 'Configura logo y colores para personalizar la sede.',
                     'selector' => '#logo',
                     'action' => 'Sube logo y ajusta color primario, secundario y acento.',
                 ],
@@ -818,7 +818,7 @@ return [
             'tour' => [
                 [
                     'title' => 'Nombre del tenant',
-                    'description' => 'Define el nombre visible de la nueva tienda.',
+                    'description' => 'Define el nombre visible de la nueva sede.',
                     'selector' => '#name',
                 ],
                 [
@@ -833,7 +833,7 @@ return [
                 ],
                 [
                     'title' => 'Logo y colores',
-                    'description' => 'Sube la imagen y define la paleta visual de la tienda.',
+                    'description' => 'Sube la imagen y define la paleta visual de la sede.',
                     'selector' => '#logo',
                 ],
                 [
@@ -857,7 +857,7 @@ return [
                     'heading' => 'Campos clave',
                     'items' => [
                         'Nombre, slug y correo definen la identidad base del tenant.',
-                        'Logo y colores personalizan la apariencia de la tienda.',
+                        'Logo y colores personalizan la apariencia de la sede.',
                     ],
                 ],
                 [
@@ -870,33 +870,20 @@ return [
                 [
                     'heading' => 'Accion final',
                     'items' => [
-                        'Crear Tenant: guarda la tienda y vincula usuarios de forma automatica.',
+                        'Crear Tenant: guarda la sede y vincula usuarios de forma automatica.',
                     ],
                 ],
             ],
         ],
         'tenant.store' => [
-            'title' => 'Ayuda: Configuracion de tienda',
-            'intro' => 'Aqui actualizas datos publicos y ajustes de la tienda tenant.',
+            'title' => 'Ayuda: Configuracion de sede',
+            'intro' => 'Aqui actualizas datos publicos y ajustes de la sede tenant.',
             'sections' => [
                 [
                     'heading' => 'Que puedes actualizar',
                     'items' => [
                         'Informacion de empresa, branding y datos de contacto.',
                         'Parametros comerciales que afectan la experiencia publica.',
-                    ],
-                ],
-            ],
-        ],
-        'plans.index' => [
-            'title' => 'Ayuda: Planes',
-            'intro' => 'Administra los planes comerciales disponibles para tenants.',
-            'sections' => [
-                [
-                    'heading' => 'Acciones',
-                    'items' => [
-                        'Crear o editar planes con precio y beneficios.',
-                        'Activar o ajustar condiciones segun estrategia comercial.',
                     ],
                 ],
             ],
@@ -934,7 +921,7 @@ return [
                 [
                     'heading' => 'Acciones',
                     'items' => [
-                        'Completa los datos basicos para crear tu tienda.',
+                        'Completa los datos basicos para crear tu sede.',
                         'Revisa la previsualizacion antes de enviar el registro.',
                     ],
                 ],
@@ -1089,7 +1076,7 @@ return [
             ],
         ],
         'store-expenses.index' => [
-            'title' => 'Ayuda: Gastos de tienda',
+            'title' => 'Ayuda: Gastos de sede',
             'intro' => 'Registra y controla egresos operativos para analisis financiero.',
             'tour' => [
                 [
@@ -1394,7 +1381,7 @@ return [
         ],
         'landing' => [
             'title' => 'Ayuda: Landing principal',
-            'intro' => 'Presentacion inicial de Shopix con acceso a registro y directorio de tiendas.',
+            'intro' => 'Presentacion inicial de Shopix con acceso a registro y directorio de sedes.',
             'tour' => [
                 [
                     'title' => 'Propuesta de valor',
@@ -1403,29 +1390,29 @@ return [
                 ],
                 [
                     'title' => 'Accion principal',
-                    'description' => 'Accede al flujo para crear tienda o explorar directorio.',
-                    'selector' => 'a[href*="create-tenant-user"], a[href*="/landings"], .btn',
+                    'description' => 'Accede al flujo para crear sede o explorar directorio.',
+                    'selector' => 'a[href*="admin/login"], a[href="/"], .btn',
                 ],
             ],
         ],
-        'landing.directory' => [
-            'title' => 'Ayuda: Directorio de tiendas',
-            'intro' => 'Explora tiendas y servicios publicados en Shopix desde una sola vista.',
+        'landing' => [
+            'title' => 'Ayuda: Directorio de sedes',
+            'intro' => 'Explora sedes y servicios publicados en Shopix desde una sola vista.',
             'tour' => [
                 [
                     'title' => 'Buscador global',
-                    'description' => 'Filtra tiendas por nombre, ciudad o actividad economica.',
+                    'description' => 'Filtra sedes por nombre, ciudad o actividad economica.',
                     'selector' => 'input[type="search"], #directorySearchInput, .hero-search-input',
                 ],
                 [
-                    'title' => 'Tarjetas de tiendas',
+                    'title' => 'Tarjetas de sedes',
                     'description' => 'Entra a cada landing para ver productos, servicios y contacto.',
                     'selector' => '.card, .tenant-card, a[href*="/"]',
                 ],
             ],
         ],
         'tenant.public' => [
-            'title' => 'Ayuda: Tienda publica',
+            'title' => 'Ayuda: sede publica',
             'intro' => 'Vista publica del tenant para explorar productos y comprar.',
             'tour' => [
                 [
@@ -1435,7 +1422,7 @@ return [
                 ],
                 [
                     'title' => 'Hero y accesos rapidos',
-                    'description' => 'Este bloque resume la tienda y te deja ir a catalogo, WhatsApp o ubicacion.',
+                    'description' => 'Este bloque resume la sede y te deja ir a catalogo, WhatsApp o ubicacion.',
                     'selector' => '.hero, .hero-copy-shell, .hero-actions, a[href*="/categorias"]',
                 ],
                 [

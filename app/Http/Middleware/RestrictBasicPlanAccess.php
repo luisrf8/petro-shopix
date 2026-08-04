@@ -28,7 +28,7 @@ class RestrictBasicPlanAccess
         }
 
         if ($this->isBlockedRouteForBasicPlan($request)) {
-            $message = 'El plan Básico solo permite: Categorías, Productos, Gestión de Tienda, Realizar Venta, Entrada de Inventario, Proveedores, Lista de Materiales, Ventas Realizadas e Historial de Entradas.';
+            $message = 'El plan Básico solo permite: Categorías, Productos, Gestión de sede, Realizar Venta, Entrada de Inventario, Proveedores, Lista de Materiales, Ventas Realizadas e Historial de Entradas.';
 
             if ($request->expectsJson() || $request->wantsJson()) {
                 return response()->json([

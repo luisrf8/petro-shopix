@@ -8,7 +8,6 @@ use Illuminate\Support\Str;
 use App\Support\WorkflowNotifier;
 use App\Support\DeliveryManager;
 use App\Models\User;
-use App\Models\Plan;
 use Illuminate\Support\Facades\Hash;
 use App\Models\TenantPlanPayment;
 use App\Models\Category;
@@ -55,6 +54,14 @@ use Carbon\Carbon;
 
 class TenantController extends Controller
 {
+    private function ensureSystemSuperUser(): void
+    {
+        $actor = auth()->user();
+        $isSuperUser = (int) ($actor->role_id ?? 0) === 4 || ($actor && $actor->isSuperowner());
+
+        abort_unless($isSuperUser, 403, 'Solo un SuperUser puede crear sedes.');
+    }
+
     public function importSetupDocument(Request $request, ShopixSetupDocumentService $documentService)
     {
         $request->validate([
@@ -75,7 +82,7 @@ class TenantController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'business_type' => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
+            'business_type' => ['required', 'string', Rule::in(['sede', 'servicio', 'sede', 'Servicio'])],
             'economic_activity' => 'nullable|string|max:150',
         ]);
 
@@ -94,7 +101,7 @@ class TenantController extends Controller
         }
 
         $storeName = trim((string) $validated['name']);
-        $businessType = $this->normalizeBusinessType($validated['business_type'] ?? 'tienda');
+        $businessType = $this->normalizeBusinessType($validated['business_type'] ?? 'sede');
         $economicActivity = $this->normalizeEconomicActivity($validated['economic_activity'] ?? '', $validated['business_type'] ?? null)
             ?? trim((string) $validated['economic_activity']);
 
@@ -199,7 +206,7 @@ class TenantController extends Controller
 
         $seed = [
             'name' => trim((string) data_get($validated, 'context.name', '')),
-            'business_type' => $this->normalizeBusinessType((string) data_get($validated, 'context.business_type', 'tienda')),
+            'business_type' => $this->normalizeBusinessType((string) data_get($validated, 'context.business_type', 'sede')),
             'economic_activity' => trim((string) data_get($validated, 'context.economic_activity', '')),
             'country_name' => trim((string) data_get($validated, 'context.country_name', '')),
             'state_name' => trim((string) data_get($validated, 'context.state_name', '')),
@@ -255,10 +262,10 @@ class TenantController extends Controller
             . "\"schedule_rules\":[...]"
             . "}. "
             . "Reglas: "
-            . "1) Si falta informacion, infiere valores realistas y consistentes para una tienda inicial. "
+            . "1) Si falta informacion, infiere valores realistas y consistentes para una sede inicial. "
             . "2) Usa maximo 12 items en store_catalog y maximo 8 items en service_catalog. "
             . "3) Usa montos numericos simples y horarios HH:MM. "
-            . "4) business_type solo puede ser tienda o servicio. "
+            . "4) business_type solo puede ser sede o servicio. "
             . "5) working_days debe ser array con monday..sunday en ingles. "
             . "6) Extrae un nombre comercial limpio para tenant.name. Nunca uses frases meta como 'mi empresa se llama', 'en instagram' o texto de la consulta literal. "
             . "7) tenant.economic_activity debe salir de la investigacion e inferencia del negocio, no de un valor generico por defecto salvo falta total de senales. "
@@ -357,7 +364,7 @@ class TenantController extends Controller
         $storeName = trim($name) !== '' ? trim($name) : 'Tu negocio';
         $normalizedType = Str::lower(trim($businessType));
         $activity = trim($economicActivity) !== '' ? trim($economicActivity) : 'servicios y productos';
-        $typeLabel = $normalizedType === 'servicio' ? 'servicio' : 'tienda';
+        $typeLabel = $normalizedType === 'servicio' ? 'servicio' : 'sede';
 
         return [
             'slogan' => Str::limit($storeName . ': calidad y confianza para tu dia a dia', 255, ''),
@@ -370,7 +377,7 @@ class TenantController extends Controller
         $seedName = trim((string) ($seed['name'] ?? ''));
         $name = $seedName;
 
-        $businessType = $this->normalizeBusinessType((string) ($seed['business_type'] ?? 'tienda'));
+        $businessType = $this->normalizeBusinessType((string) ($seed['business_type'] ?? 'sede'));
         $economicActivity = trim((string) ($seed['economic_activity'] ?? ''));
         if ($economicActivity === '') {
             $economicActivity = $businessType === 'servicio' ? 'Servicios profesionales' : 'Comercio general';
@@ -391,14 +398,14 @@ class TenantController extends Controller
                 'working_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'],
                 'opening_time' => '08:00',
                 'closing_time' => '18:00',
-                'delivery_enabled' => $businessType === 'tienda',
+                'delivery_enabled' => $businessType === 'sede',
                 'delivery_fee_mode' => 'fixed',
                 'delivery_fixed_fee' => 2.50,
             ],
             'users' => [
                 [
-                    'name' => $name !== '' ? 'Owner ' . $name : 'Owner Principal',
-                    'role' => 'owner',
+                    'name' => $name !== '' ? 'Superowner ' . $name : 'Superowner Corporativo',
+                    'role' => 'superowner',
                 ],
             ],
             'payment_methods' => [
@@ -411,7 +418,7 @@ class TenantController extends Controller
                     'has_reference' => true,
                 ],
             ],
-            'store_catalog' => $businessType === 'tienda'
+            'store_catalog' => $businessType === 'sede'
                 ? [
                     ['category' => 'General', 'product_name' => 'Producto base A', 'variant_name' => 'Unica', 'price' => 5.00, 'stock' => 20, 'is_active' => true],
                     ['category' => 'General', 'product_name' => 'Producto base B', 'variant_name' => 'Unica', 'price' => 7.50, 'stock' => 15, 'is_active' => true],
@@ -423,7 +430,7 @@ class TenantController extends Controller
                 ]
                 : [],
             'schedule_rules' => [
-                ['professional' => $name !== '' ? 'Owner ' . $name : 'Owner Principal', 'day' => 'monday', 'start_time' => '08:00', 'end_time' => '17:00', 'slot_interval_minutes' => 30, 'is_active' => true],
+                ['professional' => $name !== '' ? 'Superowner ' . $name : 'Superowner Corporativo', 'day' => 'monday', 'start_time' => '08:00', 'end_time' => '17:00', 'slot_interval_minutes' => 30, 'is_active' => true],
             ],
         ];
 
@@ -448,7 +455,7 @@ class TenantController extends Controller
         $seedName = trim((string) ($seed['name'] ?? ''));
         $tenantName = trim((string) ($tenantInput['name'] ?? $seedName));
 
-        $businessType = $this->normalizeBusinessType((string) ($tenantInput['business_type'] ?? ($seed['business_type'] ?? 'tienda')));
+        $businessType = $this->normalizeBusinessType((string) ($tenantInput['business_type'] ?? ($seed['business_type'] ?? 'sede')));
         $economicActivity = $this->normalizeEconomicActivity(
             (string) ($tenantInput['economic_activity'] ?? ($seed['economic_activity'] ?? '')),
             $businessType
@@ -514,7 +521,7 @@ class TenantController extends Controller
             ->filter(fn ($row) => is_array($row))
             ->map(function (array $row) {
                 $role = strtolower(trim((string) ($row['role'] ?? 'seller')));
-                if (!in_array($role, ['owner', 'admin', 'seller', 'vendedor', 'vendor'], true)) {
+                if (!in_array($role, ['owner', 'admin', 'seller', 'vendedor', 'vendor', 'superowner', 'sede_admin'], true)) {
                     $role = 'seller';
                 }
 
@@ -699,7 +706,7 @@ class TenantController extends Controller
             ]);
 
             if (!empty($parts)) {
-                $colorContext = "Usa esta paleta de colores de la tienda: " . implode(', ', $parts) . ".\n";
+                $colorContext = "Usa esta paleta de colores de la sede: " . implode(', ', $parts) . ".\n";
             }
         }
 
@@ -864,7 +871,7 @@ class TenantController extends Controller
         // O solo el plan activo de cada tenant
         // $tenants = Tenant::with(['activePlanPayment.plan'])->get();
 
-        $plans = Plan::all();
+        $plans = collect();
 
         $tenants = $tenantsWithDueData;
 
@@ -873,16 +880,16 @@ class TenantController extends Controller
 
     public function edit(Tenant $tenant)
     {
-        $tenant->load(['tenantPlanPayments.plan', 'users.role']);
+        $tenant->load(['users.role']);
 
-        $plans = Plan::query()->orderBy('price')->get();
+        $plans = collect();
         $countries = Country::query()->orderBy('name')->get(['id', 'name']);
         $states = State::query()->orderBy('name')->get(['id', 'name', 'country_id']);
         $cities = City::query()->orderBy('name')->get(['id', 'name', 'state_id']);
-        $latestPlanPayment = $this->getTenantLatestPaidPlanPayment($tenant);
-        $upgradePlans = $plans->values();
-        $planDaysRemaining = $this->calculatePlanDaysRemaining($latestPlanPayment);
-        $resolvedPlanCutoffDate = $this->resolvePaymentCutoffDate($latestPlanPayment);
+        $latestPlanPayment = null;
+        $upgradePlans = collect();
+        $planDaysRemaining = null;
+        $resolvedPlanCutoffDate = null;
         $ownerRoleIds = $this->resolveOwnerRoleIds();
         $owner = $tenant->users->first(function (User $user) use ($ownerRoleIds) {
             return in_array((int) $user->role_id, $ownerRoleIds, true);
@@ -904,32 +911,10 @@ class TenantController extends Controller
 
     public function paymentsIndex()
     {
-        $tenants = Tenant::with(['tenantPlanPayments.plan', 'tenantPlanPayments.reviewer', 'users.role'])->get();
-
-        $payments = TenantPlanPayment::with(['tenant', 'plan', 'reviewer'])
-            ->orderByDesc('created_at')
-            ->get();
-
-        $pendingPayments = $payments->where('status', 'pending')->values();
-
-        $tenantsWithDueData = $tenants->map(function (Tenant $tenant) {
-            $latestPaid = $this->getTenantLatestPaidPlanPayment($tenant);
-            $daysRemaining = $this->calculatePlanDaysRemaining($latestPaid);
-            $tenant->latest_paid_plan_payment = $latestPaid;
-            $tenant->plan_days_remaining = $daysRemaining;
-
-            return $tenant;
-        });
-
-        $nearDueTenants = $tenantsWithDueData
-            ->filter(fn (Tenant $tenant) => is_int($tenant->plan_days_remaining) && $tenant->plan_days_remaining >= 0 && $tenant->plan_days_remaining <= 7)
-            ->sortBy('plan_days_remaining')
-            ->values();
-
-        $overdueTenants = $tenantsWithDueData
-            ->filter(fn (Tenant $tenant) => is_int($tenant->plan_days_remaining) && $tenant->plan_days_remaining < 0)
-            ->sortBy('plan_days_remaining')
-            ->values();
+        $payments = collect();
+        $pendingPayments = collect();
+        $nearDueTenants = collect();
+        $overdueTenants = collect();
 
         return view('tenantPayments', compact('payments', 'pendingPayments', 'nearDueTenants', 'overdueTenants'));
     }
@@ -937,13 +922,13 @@ class TenantController extends Controller
     public function getTenant()
     {
         $user = auth()->user();
-        $tenant = Tenant::with(['users.role', 'tenantPlanPayments.plan'])
+        $tenant = Tenant::with(['users.role'])
             ->where('id', $user->tenant_id)
             ->first();
         $tenantPlanCapabilities = TenantPlanCapabilities::forTenant($tenant);
-        $currentPlanPayment = $this->getTenantLatestPaidPlanPayment($tenant);
-        $isBasicPlanTenant = $tenantPlanCapabilities->isBasic();
-        $isFreePlanTenant = $tenantPlanCapabilities->isFree();
+        $currentPlanPayment = null;
+        $isBasicPlanTenant = false;
+        $isFreePlanTenant = false;
         $assignableRoleKeys = $user?->assignableStoreRoleKeys() ?? [];
         $roles = Role::whereNotIn('name', ['owner', 'user', 'super_user'])
             ->get()
@@ -966,14 +951,10 @@ class TenantController extends Controller
                 return $adminCount < 1;
             })->values();
         }
-        $plans = Plan::query()->where('status', 1)->orderBy('price')->get();
-        $currentPlanCutoffDate = $this->resolvePaymentCutoffDate($currentPlanPayment);
-        $currentPlanDaysRemaining = $this->calculatePlanDaysRemaining($currentPlanPayment);
-        $pendingPlanPayment = $tenant->tenantPlanPayments()
-            ->with('plan')
-            ->where('status', 'pending')
-            ->latest('created_at')
-            ->first();
+        $plans = collect();
+        $currentPlanCutoffDate = null;
+        $currentPlanDaysRemaining = null;
+        $pendingPlanPayment = null;
         $roleDefinitions = User::storeRoleDefinitions();
         $countries = Country::all();
         $states = State::all();
@@ -1045,264 +1026,46 @@ class TenantController extends Controller
 
     public function submitPlanPaymentRequest(Request $request)
     {
-        $user = auth()->user();
-        $tenant = Tenant::query()->findOrFail($user->tenant_id);
-
-        $validated = $request->validate([
-            'plan_id' => 'required|exists:plans,id',
-            'payment_reference' => 'nullable|string|max:255',
-            'payment_proof' => 'nullable|image|mimes:png,jpg,jpeg,webp|max:4096',
-            'notes' => 'nullable|string|max:1000',
-        ]);
-
-        $plan = Plan::query()->findOrFail((int) $validated['plan_id']);
-        $hasPendingRequest = $tenant->tenantPlanPayments()->where('status', 'pending')->exists();
-
-        if ($hasPendingRequest) {
-            if ($request->expectsJson() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Ya tienes una solicitud de pago pendiente por revisar.',
-                ], 422);
-            }
-
-            return back()->with('warning', 'Ya tienes una solicitud de pago pendiente por revisar.');
-        }
-
-        $isFreePlan = $this->isFreePlan($plan);
-
-        if (!$isFreePlan && empty(trim((string) ($validated['payment_reference'] ?? '')))) {
-            if ($request->expectsJson() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'errors' => [
-                        'payment_reference' => ['Debes ingresar una referencia de pago para planes de pago.'],
-                    ],
-                ], 422);
-            }
-
-            return back()->withErrors([
-                'payment_reference' => 'Debes ingresar una referencia de pago para planes de pago.',
-            ])->withInput();
-        }
-
-        if (!$isFreePlan && !$request->hasFile('payment_proof')) {
-            if ($request->expectsJson() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'errors' => [
-                        'payment_proof' => ['Debes subir un comprobante de pago para planes de pago.'],
-                    ],
-                ], 422);
-            }
-
-            return back()->withErrors([
-                'payment_proof' => 'Debes subir un comprobante de pago para planes de pago.',
-            ])->withInput();
-        }
-
-        if (!$isFreePlan && !ImageStorage::usesGoogleDrive()) {
-            $message = 'No se pudo registrar el pago porque Google Drive no está configurado para comprobantes. Configura Drive e intenta nuevamente.';
-
-            if ($request->expectsJson() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $message,
-                ], 422);
-            }
-
-            return back()->withErrors([
-                'payment_proof' => $message,
-            ])->withInput();
-        }
-
-        $paymentProofPath = null;
-        if ($request->hasFile('payment_proof')) {
-            $paymentProofPath = ImageStorage::storeUploadedImageAsWebp($request->file('payment_proof'), 'tenant/plan-payments');
-
-            if (!ImageStorage::isGooglePath($paymentProofPath)) {
-                ImageStorage::delete($paymentProofPath);
-
-                $message = 'El comprobante no se subió correctamente a Google Drive. Intenta nuevamente.';
-
-                if ($request->expectsJson() || $request->wantsJson()) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => $message,
-                    ], 422);
-                }
-
-                return back()->withErrors([
-                    'payment_proof' => $message,
-                ])->withInput();
-            }
-        }
-
-        $status = $isFreePlan ? 'paid' : 'pending';
-        $paidAt = $isFreePlan ? now() : null;
-        $expiresAt = $isFreePlan ? $this->resolvePlanExpirationDate($tenant, $plan, now()) : null;
-
-        $paymentData = [
-            'tenant_id' => $tenant->id,
-            'plan_id' => $plan->id,
-            'amount' => (float) ($plan->price ?? 0),
-            'status' => $status,
-            'paid_at' => $paidAt,
-            'payment_reference' => $validated['payment_reference'] ?? null,
-            'payment_proof' => $paymentProofPath,
-            'review_notes' => $validated['notes'] ?? null,
-        ];
-
-        if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
-            $paymentData['expires_at'] = $expiresAt;
-        }
-
-        TenantPlanPayment::create($paymentData);
-
-        if ($isFreePlan) {
-            if ($request->expectsJson() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Plan gratuito activado correctamente.',
-                ]);
-            }
-
-            return back()->with('success', 'Plan gratuito activado correctamente.');
-        }
-
         if ($request->expectsJson() || $request->wantsJson()) {
             return response()->json([
-                'success' => true,
-                'message' => 'Solicitud de pago enviada correctamente. Queda pendiente de aprobación.',
-            ]);
+                'success' => false,
+                'message' => 'Los planes fueron deshabilitados. No hay pagos de planes para sedes.',
+            ], 410);
         }
 
-        return back()->with('success', 'Solicitud de pago enviada correctamente. Queda pendiente de aprobación.');
+        return back()->with('warning', 'Los planes fueron deshabilitados. No hay pagos de planes para sedes.');
     }
 
     public function approvePlanPayment(Request $request, Tenant $tenant, TenantPlanPayment $payment)
     {
-        if ((int) $payment->tenant_id !== (int) $tenant->id) {
-            abort(404);
-        }
-
-        if ($payment->status !== 'pending') {
-            return back()->with('warning', 'Solo se pueden aprobar pagos pendientes.');
-        }
-
-        $validated = $request->validate([
-            'review_notes' => 'nullable|string|max:1000',
-            'expires_at' => 'nullable|date',
-        ]);
-
-        $plan = Plan::query()->findOrFail((int) $payment->plan_id);
-        $approvedAt = now();
-        $expiresAt = !empty($validated['expires_at'])
-            ? Carbon::parse($validated['expires_at'])
-            : $this->resolvePlanExpirationDate($tenant, $plan, $approvedAt);
-
-        $payment->status = 'paid';
-        $payment->paid_at = $approvedAt;
-        $payment->review_notes = $validated['review_notes'] ?? $payment->review_notes;
-
-        if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
-            $payment->expires_at = $expiresAt;
-        }
-
-        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_at')) {
-            $payment->reviewed_at = now();
-        }
-
-        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_by')) {
-            $payment->reviewed_by = auth()->id();
-        }
-
-        $payment->save();
-
-        return back()->with('success', 'Pago de plan aprobado correctamente.');
+        return back()->with('warning', 'Los planes fueron deshabilitados. No hay aprobaciones de pagos de plan.');
     }
 
     public function updatePlanPaymentCutoffDate(Request $request, Tenant $tenant, TenantPlanPayment $payment)
     {
-        if ((int) $payment->tenant_id !== (int) $tenant->id) {
-            abort(404);
-        }
-
-        if (!Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
-            return back()->with('warning', 'No existe la columna de fecha de corte para este entorno.');
-        }
-
-        if ($payment->status !== 'paid') {
-            return back()->with('warning', 'Solo puedes editar la fecha de corte de pagos aprobados.');
-        }
-
-        $validated = $request->validate([
-            'expires_at' => 'required|date',
-        ]);
-
-        $payment->expires_at = Carbon::parse($validated['expires_at']);
-
-        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_at')) {
-            $payment->reviewed_at = now();
-        }
-
-        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_by')) {
-            $payment->reviewed_by = auth()->id();
-        }
-
-        $payment->save();
-
-        return back()->with('success', 'Fecha de corte actualizada correctamente.');
+        return back()->with('warning', 'Los planes fueron deshabilitados. No hay fechas de corte de planes.');
     }
 
     public function rejectPlanPayment(Request $request, Tenant $tenant, TenantPlanPayment $payment)
     {
-        if ((int) $payment->tenant_id !== (int) $tenant->id) {
-            abort(404);
-        }
-
-        if ($payment->status !== 'pending') {
-            return back()->with('warning', 'Solo se pueden rechazar pagos pendientes.');
-        }
-
-        $validated = $request->validate([
-            'review_notes' => 'required|string|max:1000',
-        ]);
-
-        $payment->status = 'failed';
-        $payment->review_notes = $validated['review_notes'];
-
-        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_at')) {
-            $payment->reviewed_at = now();
-        }
-
-        if (Schema::hasColumn('tenant_plan_payments', 'reviewed_by')) {
-            $payment->reviewed_by = auth()->id();
-        }
-
-        $payment->save();
-
-        ActionReason::log('tenant_plan_payments', 'PLAN_PAYMENT_REJECTED', $validated['review_notes'], [
-            'payment_id' => $payment->id,
-            'tenant_id' => $payment->tenant_id,
-        ]);
-
-        return back()->with('warning', 'Pago de plan rechazado correctamente.');
+        return back()->with('warning', 'Los planes fueron deshabilitados. No hay rechazos de pagos de plan.');
     }
 
     public function createIndex()
     {
         
         $tenants = Tenant::all();
-        $plans = Plan::query()->where('status', 1)->orderBy('price')->get();
+        $plans = collect();
         return view('createTenant', compact('tenants', 'plans'));
 
     }
 
     public function createIndexUser()
     {
+        $this->ensureSystemSuperUser();
+
         $tenants = Tenant::all();
-        $plans = Plan::query()->where('status', 1)->orderBy('price')->get();
+        $plans = collect();
         $countries = Country::all();
         $states = State::all();
         $cities = City::all();
@@ -1365,14 +1128,14 @@ class TenantController extends Controller
             ->limit(6)
             ->get();
 
-        $cartEnabled = $this->tenantHasProPlan($tenant);
-        $isFreePlanTenant = TenantPlanCapabilities::forTenant($tenant)->isFree();
-        $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+        $cartEnabled = false;
+        $isFreePlanTenant = true;
+        $cartPlanName = 'Informativo';
         $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
         $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
         $storefrontBsRate = $this->resolveStorefrontBsRate($tenant);
-        $appointmentsEnabledForStorefront = $this->tenantSupportsPublicAppointmentCheckout($tenant);
+        $appointmentsEnabledForStorefront = false;
         $appointmentCatalogServices = AppointmentService::query()
             ->with(['productVariant.product.images', 'assignedUsers:id,name', 'assignedUser:id,name'])
             ->where('tenant_id', (int) $tenant->id)
@@ -1406,184 +1169,68 @@ class TenantController extends Controller
         DB::raw("SET @user_id = " . auth()->id());
 
         $validated = $request->validate([
-            'name'            => 'required|string|max:255',
-            'slug'            => 'required|string|max:255',
-            'email'           => 'required|email|unique:tenants,email',
-            'rif'             => 'nullable|string|max:20',
-            'external_url'    => 'nullable|string|max:255',
-            'logo'            => 'nullable|image|mimes:png,svg,webp|max:2048',
-            'billing_logo'    => 'nullable|image|mimes:png,svg,webp|max:2048',
-            'color_primary'   => 'required|string|max:7',
-            'color_secondary' => 'required|string|max:7',
-            'color_accent'    => 'required|string|max:7',
-            'business_type'   => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
-            'economic_activity' => 'nullable|string|max:150|regex:/.*\S.*/',
-            'country'         => 'nullable|string|max:255',
-            'state'           => 'nullable|string|max:255',
-            'city'            => 'nullable|string|max:255',
-            'phone_code'      => 'nullable|string|max:5',
-            'phone_number'    => 'nullable|string|max:20',
-            'working_days'    => 'nullable|array',
-            'working_days.*'  => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
-            'opening_time'    => 'nullable|date_format:H:i',
-            'closing_time'    => 'nullable|date_format:H:i',
-            'users'           => 'nullable|array',
-            'users.*.name'    => 'nullable|string|max:255',
-            'users.*.email'   => 'nullable|email|unique:users,email',
-            'users.*.password'=> 'nullable|string|min:8',
-            'plan_id'         => 'required|exists:plans,id',
-            'import_payload'  => 'nullable|string',
+            'name'        => 'required|string|max:255',
+            'city'        => 'required|string|max:255',
+            'description' => 'required|string|max:2000',
         ]);
 
-        $this->assertEconomicActivityAllowed(
-            $validated['business_type'] ?? null,
-            $validated['economic_activity'] ?? null
-        );
+        $tenantName = trim((string) $validated['name']);
+        $locality = trim((string) $validated['city']);
+        $description = trim((string) $validated['description']);
 
-        $this->assertLocationHierarchy(
-            $validated['country'] ?? null,
-            $validated['state'] ?? null,
-            $validated['city'] ?? null
-        );
-
-        $normalizedSlug = Str::slug((string) $validated['slug']);
-
-        if ($normalizedSlug === '') {
-            return back()
-                ->withErrors(['slug' => 'El slug ingresado no es válido.'])
-                ->withInput();
+        $slugBase = Str::slug($tenantName);
+        if ($slugBase === '') {
+            $slugBase = 'sede';
         }
 
-        if (Tenant::where('slug', $normalizedSlug)->exists()) {
-            return back()
-                ->withErrors(['slug' => 'El slug ingresado ya está en uso.'])
-                ->withInput();
-        }
-
-        $normalizedExternalUrl = $this->normalizeExternalUrl($validated['external_url'] ?? null);
-        if (($validated['external_url'] ?? null) !== null && trim((string) $validated['external_url']) !== '' && !$normalizedExternalUrl) {
-            return back()
-                ->withErrors(['external_url' => 'La URL propia no es valida.'])
-                ->withInput();
+        $normalizedSlug = $slugBase;
+        $slugSuffix = 2;
+        while (Tenant::where('slug', $normalizedSlug)->exists()) {
+            $normalizedSlug = $slugBase . '-' . $slugSuffix;
+            $slugSuffix++;
         }
 
         DB::beginTransaction();
 
         try {
-            // 📂 Subir logo si existe
-            $logoPath = null;
-            if ($request->hasFile('logo')) {
-                $logoPath = ImageStorage::storeUploadedImageAsWebp($request->file('logo'), 'tenants/logos');
-            }
-
-            $billingLogoPath = null;
-            if ($request->hasFile('billing_logo')) {
-                $billingLogoPath = ImageStorage::storeUploadedImageAsWebp($request->file('billing_logo'), 'tenants/billing-logos');
-            }
-
             $tenantData = [
-                'name'            => $validated['name'],
+                'name'            => $tenantName,
                 'slug'            => $normalizedSlug,
-                'email'           => $validated['email'],
-                'rif'             => strtoupper(trim((string) ($validated['rif'] ?? ''))) ?: null,
-                'external_url'    => $normalizedExternalUrl,
-                'logo'            => $logoPath,
-                'billing_logo'    => $billingLogoPath,
-                'color_primary'   => $validated['color_primary'],
-                'color_secondary' => $validated['color_secondary'],
-                'color_accent'    => $validated['color_accent'],
-                'business_type'   => $this->normalizeBusinessType($validated['business_type']),
-                'economic_activity' => $this->normalizeEconomicActivity($validated['economic_activity'], $validated['business_type']),
-                'country'         => $validated['country'] ?? null,
-                'state'           => $validated['state'] ?? null,
-                'city'            => $validated['city'] ?? null,
-                'phone_code'      => $validated['phone_code'] ?? null,
-                'phone_number'    => $validated['phone_number'] ?? null,
-                'working_days'    => $this->normalizeWorkingDays($validated['working_days'] ?? null),
-                'opening_time'    => $validated['opening_time'] ?? null,
-                'closing_time'    => $validated['closing_time'] ?? null,
+                'email'           => null,
+                'city'            => $locality,
+                'description'     => $description,
+                'color_primary'   => '#000000',
+                'color_secondary' => '#FFFFFF',
+                'color_accent'    => '#CCCCCC',
+                'business_type'   => 'sede',
+                'economic_activity' => null,
             ];
 
             $tenant = Tenant::create($this->filterDataByExistingColumns('tenants', $tenantData));
-
-            // 💳 Crear relación TenantPayment
-            $plan = Plan::findOrFail($validated['plan_id']);
-
-            $tenantPlanPaymentData = [
-                'tenant_id' => $tenant->id,
-                'plan_id'   => $plan->id,
-                'amount'    => $plan->price,
-                'status'    => 'paid',
-                'paid_at'   => now(),
-            ];
-
-            if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
-                $tenantPlanPaymentData['expires_at'] = now()->addDays((int) ($plan->duration_days ?? 0));
-            }
-
-            TenantPlanPayment::create($tenantPlanPaymentData);
-
-            $roles = Role::whereIn('name', ['owner', 'admin', 'vendor'])
-                ->get()
-                ->keyBy(fn (Role $role) => Str::lower((string) $role->name));
-
-            // 👥 Crear usuarios enviados en el formulario
-            if (!empty($validated['users']) && is_array($validated['users'])) {
-                foreach ($validated['users'] as $roleName => $userData) {
-                    if (empty($userData['email'])) {
-                        continue;
-                    }
-
-                    $normalizedRoleName = Str::lower((string) $roleName);
-                    $role = $roles->get($normalizedRoleName);
-
-                    if (!$role && $normalizedRoleName === 'owner') {
-                        $role = $roles->get('admin');
-                    }
-
-                    $userRecord = [
-                        'name'      => $userData['name'] ?? ucfirst($normalizedRoleName),
-                        'email'     => $userData['email'],
-                        'password'  => Hash::make($userData['password'] ?? 'password123'),
-                        'tenant_id' => $tenant->id,
-                        'role_id'   => $role?->id,
-                        'is_active' => 1,
-                    ];
-
-                    $user = User::create($this->filterDataByExistingColumns('users', $userRecord));
-
-                    if ($normalizedRoleName === 'owner' && Schema::hasColumn('tenants', 'owner_id')) {
-                        $tenant->owner_id = $user->id;
-                    }
-                }
-            }
 
             if ($tenant->isDirty()) {
                 $tenant->save();
             }
 
-            $importSummary = $this->applyImportedSetupPayload($request->input('import_payload'), $tenant);
-
             DB::commit();
 
             if ($request->expectsJson() || $request->wantsJson()) {
                 return response()->json([
-                    'message' => $this->appendImportSummaryToMessage('Creado Exitosamente', $importSummary),
+                    'message' => 'Creado Exitosamente',
                     'tenant'  => $tenant,
-                    'import_summary' => $importSummary,
                 ]);
             }
 
             return redirect()
-                ->route('tenant.index')
-                ->with('status', $this->appendImportSummaryToMessage('Tienda creada correctamente.', $importSummary));
+                ->route('tenants.index')
+                ->with('status', 'Sede creada correctamente. Ahora puedes anexar usuarios y asignar sus roles.');
         } catch (QueryException $e) {
             DB::rollBack();
 
-            Log::error('Error SQL al crear tienda desde admin', [
-                'slug_input' => $validated['slug'] ?? null,
+            Log::error('Error SQL al crear sede desde admin', [
+                'slug_input' => $locality,
                 'slug_normalized' => $normalizedSlug,
-                'email' => $validated['email'] ?? null,
+                'email' => null,
                 'error' => $e->getMessage(),
             ]);
 
@@ -1597,22 +1244,24 @@ class TenantController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
 
-            Log::error('Error al crear tienda desde admin', [
-                'slug_input' => $validated['slug'] ?? null,
+            Log::error('Error al crear sede desde admin', [
+                'slug_input' => $locality,
                 'slug_normalized' => $normalizedSlug,
-                'email' => $validated['email'] ?? null,
+                'email' => null,
                 'error' => $e->getMessage(),
             ]);
 
             if ($request->expectsJson() || $request->wantsJson()) {
-                return response()->json(['message' => 'No se pudo crear la tienda. Intenta nuevamente.'], 500);
+                return response()->json(['message' => 'No se pudo crear la sede. Intenta nuevamente.'], 500);
             }
 
-            return back()->withErrors(['create_tenant' => 'No se pudo crear la tienda. Intenta nuevamente.'])->withInput();
+            return back()->withErrors(['create_tenant' => 'No se pudo crear la sede. Intenta nuevamente.'])->withInput();
         }
     }
     public function storePublic(Request $request)
     {
+        $this->ensureSystemSuperUser();
+
         $validated = $request->validate([
             'name'                  => 'required|string|max:255',
             'slug'                  => 'required|string|max:255',
@@ -1625,7 +1274,7 @@ class TenantController extends Controller
             'color_primary'         => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
             'color_secondary'       => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
             'color_accent'          => ['required', 'string', 'max:7', 'regex:/^#(?:[A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/'],
-            'business_type'         => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
+            'business_type'         => ['required', 'string', Rule::in(['sede', 'servicio', 'sede', 'Servicio'])],
             'economic_activity'     => 'nullable|string|max:150|regex:/.*\S.*/',
             'country'               => 'required|exists:countries,id',
             'state'                 => 'required|exists:states,id',
@@ -1636,7 +1285,6 @@ class TenantController extends Controller
             'working_days.*'        => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
             'opening_time'          => 'nullable|date_format:H:i',
             'closing_time'          => 'nullable|date_format:H:i',
-            'plan_id'               => 'required|exists:plans,id',
             'address'               => 'nullable|string|max:255',
             'latitude'              => 'nullable|numeric',
             'longitude'             => 'nullable|numeric',
@@ -1729,21 +1377,6 @@ class TenantController extends Controller
 
             $tenant = Tenant::create($this->filterDataByExistingColumns('tenants', $tenantData));
 
-            $plan = Plan::findOrFail($validated['plan_id']);
-            $tenantPlanPaymentData = [
-                'tenant_id' => $tenant->id,
-                'plan_id'   => $plan->id,
-                'amount'    => $plan->price,
-                'status'    => 'paid',
-                'paid_at'   => now(),
-            ];
-
-            if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
-                $tenantPlanPaymentData['expires_at'] = now()->addDays((int) ($plan->duration_days ?? 0));
-            }
-
-            TenantPlanPayment::create($tenantPlanPaymentData);
-
             $ownerRole = Role::where('name', 'owner')->first();
 
             $ownerData = [
@@ -1768,14 +1401,14 @@ class TenantController extends Controller
 
             return redirect()
                 ->route('login')
-                ->with('status', 'Tu tienda fue creada exitosamente. Ahora inicia sesión con tu cuenta.')
+                ->with('status', 'Tu sede fue creada exitosamente. Ahora inicia sesión con tu cuenta.')
                 ->withInput([
                     'email' => $validated['users']['owner']['email'],
                 ]);
         } catch (QueryException $e) {
             DB::rollBack();
 
-            Log::error('Error SQL al crear tienda pública', [
+            Log::error('Error SQL al crear sede pública', [
                 'slug_input' => $validated['slug'] ?? null,
                 'slug_normalized' => $normalizedSlug,
                 'email' => $validated['email'] ?? null,
@@ -1788,7 +1421,7 @@ class TenantController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
 
-            Log::error('Error al crear tienda pública', [
+            Log::error('Error al crear sede pública', [
                 'slug_input' => $validated['slug'] ?? null,
                 'slug_normalized' => $normalizedSlug,
                 'email' => $validated['email'] ?? null,
@@ -1796,7 +1429,7 @@ class TenantController extends Controller
             ]);
 
             return back()
-                ->withErrors(['create_tenant' => 'No se pudo crear la tienda. Intenta nuevamente.'])
+                ->withErrors(['create_tenant' => 'No se pudo crear la sede. Intenta nuevamente.'])
                 ->withInput();
         }
     }
@@ -1813,17 +1446,10 @@ class TenantController extends Controller
 
         $validated = $request->validate([
             'name'  => 'sometimes|string|max:255',
-            'slug'  => 'sometimes|string|max:255|unique:tenants,slug,' . $tenant->id,
             'email' => 'nullable|email|unique:tenants,email,' . $tenant->id,
             'rif' => 'nullable|string|max:20',
-            'external_url' => 'sometimes|nullable|string|max:255',
             'logo'  => 'nullable|string',
             'billing_logo'  => 'nullable|string',
-            'color_primary'   => 'nullable|string|max:7',
-            'color_secondary' => 'nullable|string|max:7',
-            'color_accent'    => 'nullable|string|max:7',
-            'business_type'   => ['sometimes', 'required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
-            'economic_activity' => 'nullable|string|max:150|regex:/.*\S.*/',
             'country'         => 'nullable|string|max:255',
             'state'           => 'nullable|string|max:255',
             'city'            => 'nullable|string|max:255',
@@ -1833,7 +1459,6 @@ class TenantController extends Controller
             'working_days.*'  => ['string', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])],
             'opening_time'    => 'nullable|date_format:H:i',
             'closing_time'    => 'nullable|date_format:H:i',
-            'slogan'          => 'nullable|string|max:255',
             'description'     => 'nullable|string',
             'address'         => 'nullable|string|max:255',
             'latitude'        => 'nullable|numeric',
@@ -1842,150 +1467,14 @@ class TenantController extends Controller
             'tiktok'          => 'nullable|string|max:255',
             'instagram'       => 'nullable|string|max:255',
             'facebook'        => 'nullable|string|max:255',
-            'owner_name'      => 'nullable|string|max:255',
-            'owner_email'     => 'nullable|email|max:255',
-            'owner_phone_number' => 'nullable|string|max:20',
-            'owner_dni'       => 'nullable|string|max:50',
-            'owner_password'  => 'nullable|string|min:8',
-            'plan_id' => 'nullable|exists:plans,id',
-            'is_active' => 'nullable|boolean',
-            'electronic_invoicing_enabled' => 'nullable|boolean',
-            'offers_projects' => 'nullable|boolean',
-            'special_taxpayer' => 'nullable|boolean',
-            'printer_tax_change_enabled' => 'nullable|boolean',
-            'printer_tax_change_reference' => 'nullable|string|max:255',
-            'restrict_delivery_city_to_tenant' => 'nullable|boolean',
-            'delivery_enabled' => 'nullable|boolean',
-            'delivery_fee_mode' => 'nullable|in:free,fixed,distance',
-            'delivery_fixed_fee' => 'nullable|numeric|min:0',
-            'delivery_fee_per_km' => 'nullable|numeric|min:0',
-            'delivery_notifications_enabled' => 'nullable|boolean',
-            'show_bs_prices_in_storefront' => 'nullable|boolean',
-            'show_product_category_suffix' => 'nullable|boolean',
         ]);
-
-        if (array_key_exists('economic_activity', $validated)) {
-            $this->assertEconomicActivityAllowed(
-                $validated['business_type'] ?? $tenant->business_type,
-                $validated['economic_activity'] ?? null
-            );
-        }
-
-        $normalizedExternalUrl = null;
-        if (array_key_exists('external_url', $validated)) {
-            $normalizedExternalUrl = $this->normalizeExternalUrl($validated['external_url']);
-            if (trim((string) $validated['external_url']) !== '' && !$normalizedExternalUrl) {
-                throw ValidationException::withMessages([
-                    'external_url' => 'La URL propia no es valida.',
-                ]);
-            }
-        }
-
-        $latestPaidPlanPayment = $tenant->tenantPlanPayments()
-            ->where('status', 'paid')
-            ->orderByDesc('paid_at')
-            ->orderByDesc('id')
-            ->first();
-
-        $currentPlanId = $latestPaidPlanPayment?->plan_id;
-        $incomingPlanId = isset($validated['plan_id']) ? (int) $validated['plan_id'] : null;
-        $incomingPlan = !is_null($incomingPlanId)
-            ? Plan::query()->findOrFail($incomingPlanId)
-            : null;
-        $planSelectionRequested = !is_null($incomingPlanId);
-        $planChanged = $planSelectionRequested && ((int) $currentPlanId !== $incomingPlanId);
-
-        $ownerRole = Role::where('name', 'owner')->first();
-        $owner = $tenant->users()
-            ->when($ownerRole, function ($query) use ($ownerRole) {
-                $query->where('role_id', $ownerRole->id);
-            })
-            ->first();
-
-        if (!$owner) {
-            $owner = $tenant->users()->orderBy('id')->first();
-        }
-
-        if (!empty($validated['owner_email'])) {
-            $existingUserWithEmail = User::where('email', $validated['owner_email'])->first();
-
-            if ($existingUserWithEmail) {
-                $sameOwner = $owner && ((int) $existingUserWithEmail->id === (int) $owner->id);
-                $belongsToSameTenant = (int) $existingUserWithEmail->tenant_id === (int) $tenant->id;
-
-                if (!$sameOwner && !$belongsToSameTenant) {
-                    throw ValidationException::withMessages([
-                        'owner_email' => 'El correo del dueño ya está en uso por otro usuario.',
-                    ]);
-                }
-
-                if (!$owner && $belongsToSameTenant) {
-                    $owner = $existingUserWithEmail;
-                }
-            }
-
-        }
-
-        $ownerDataProvided =
-            array_key_exists('owner_name', $validated) ||
-            array_key_exists('owner_email', $validated) ||
-            array_key_exists('owner_phone_number', $validated) ||
-            array_key_exists('owner_dni', $validated) ||
-            array_key_exists('owner_password', $validated);
-
-        $ownerHasChanges = false;
-
-        if ($ownerDataProvided) {
-            if (!$owner) {
-                $ownerHasChanges =
-                    !empty($validated['owner_name']) ||
-                    !empty($validated['owner_email']) ||
-                    !empty($validated['owner_phone_number']) ||
-                    !empty($validated['owner_dni']) ||
-                    !empty($validated['owner_password']);
-            } else {
-                if (array_key_exists('owner_name', $validated) && (string) ($validated['owner_name'] ?? '') !== (string) $owner->name) {
-                    $ownerHasChanges = true;
-                }
-
-                if (array_key_exists('owner_email', $validated) && (string) ($validated['owner_email'] ?? '') !== (string) $owner->email) {
-                    $ownerHasChanges = true;
-                }
-
-                if (array_key_exists('owner_phone_number', $validated) && (string) ($validated['owner_phone_number'] ?? '') !== (string) ($owner->phone_number ?? '')) {
-                    $ownerHasChanges = true;
-                }
-
-                if (array_key_exists('owner_dni', $validated) && (string) ($validated['owner_dni'] ?? '') !== (string) ($owner->dni ?? '')) {
-                    $ownerHasChanges = true;
-                }
-
-                if (!empty($validated['owner_password'])) {
-                    $ownerHasChanges = true;
-                }
-            }
-        }
 
         $tenantData = [
             'name' => $validated['name'] ?? $tenant->name,
-            'slug' => array_key_exists('slug', $validated) ? Str::slug((string) $validated['slug']) : $tenant->slug,
             'email' => $validated['email'] ?? $tenant->email,
             'rif' => array_key_exists('rif', $validated) ? (strtoupper(trim((string) $validated['rif'])) ?: null) : $tenant->rif,
-            'external_url' => array_key_exists('external_url', $validated) ? $normalizedExternalUrl : $tenant->external_url,
             'logo' => $validated['logo'] ?? $tenant->logo,
             'billing_logo' => $validated['billing_logo'] ?? $tenant->billing_logo,
-            'color_primary' => $validated['color_primary'] ?? $tenant->color_primary,
-            'color_secondary' => $validated['color_secondary'] ?? $tenant->color_secondary,
-            'color_accent' => $validated['color_accent'] ?? $tenant->color_accent,
-            'business_type' => array_key_exists('business_type', $validated)
-                ? $this->normalizeBusinessType($validated['business_type'])
-                : $tenant->business_type,
-            'economic_activity' => array_key_exists('economic_activity', $validated)
-                ? $this->normalizeEconomicActivity(
-                    $validated['economic_activity'],
-                    $validated['business_type'] ?? $tenant->business_type
-                )
-                : $tenant->economic_activity,
             'country' => $validated['country'] ?? $tenant->country,
             'state' => $validated['state'] ?? $tenant->state,
             'city' => $validated['city'] ?? $tenant->city,
@@ -1996,7 +1485,6 @@ class TenantController extends Controller
                 : $tenant->working_days,
             'opening_time' => $validated['opening_time'] ?? $tenant->opening_time,
             'closing_time' => $validated['closing_time'] ?? $tenant->closing_time,
-            'slogan' => $validated['slogan'] ?? $tenant->slogan,
             'description' => $validated['description'] ?? $tenant->description,
             'address' => $validated['address'] ?? $tenant->address,
             'latitude' => $validated['latitude'] ?? $tenant->latitude,
@@ -2005,27 +1493,13 @@ class TenantController extends Controller
             'tiktok' => $validated['tiktok'] ?? $tenant->tiktok,
             'instagram' => $validated['instagram'] ?? $tenant->instagram,
             'facebook' => $validated['facebook'] ?? $tenant->facebook,
-            'is_active' => $validated['is_active'] ?? $tenant->is_active,
-            'electronic_invoicing_enabled' => $validated['electronic_invoicing_enabled'] ?? $tenant->electronic_invoicing_enabled,
-            'offers_projects' => $validated['offers_projects'] ?? $tenant->offers_projects,
-            'special_taxpayer' => $validated['special_taxpayer'] ?? $tenant->special_taxpayer,
-            'printer_tax_change_enabled' => $validated['printer_tax_change_enabled'] ?? $tenant->printer_tax_change_enabled,
-            'printer_tax_change_reference' => $validated['printer_tax_change_reference'] ?? $tenant->printer_tax_change_reference,
-            'restrict_delivery_city_to_tenant' => $validated['restrict_delivery_city_to_tenant'] ?? $tenant->restrict_delivery_city_to_tenant,
-            'delivery_enabled' => $validated['delivery_enabled'] ?? $tenant->delivery_enabled,
-            'delivery_fee_mode' => $validated['delivery_fee_mode'] ?? $tenant->delivery_fee_mode,
-            'delivery_fixed_fee' => $validated['delivery_fixed_fee'] ?? $tenant->delivery_fixed_fee,
-            'delivery_fee_per_km' => $validated['delivery_fee_per_km'] ?? $tenant->delivery_fee_per_km,
-            'delivery_notifications_enabled' => $validated['delivery_notifications_enabled'] ?? $tenant->delivery_notifications_enabled,
-            'show_bs_prices_in_storefront' => $validated['show_bs_prices_in_storefront'] ?? $tenant->show_bs_prices_in_storefront,
-            'show_product_category_suffix' => $validated['show_product_category_suffix'] ?? $tenant->show_product_category_suffix,
         ];
 
         $tenantData = $this->filterTenantPayloadToExistingColumns($tenantData);
         $tenant->fill($tenantData);
         $tenantHasChanges = $tenant->isDirty();
 
-        if (!$tenantHasChanges && !$ownerHasChanges && !$planSelectionRequested) {
+        if (!$tenantHasChanges) {
             if ($expectsJson) {
                 return response()->json([
                     'message' => 'No se detectaron cambios para actualizar',
@@ -2038,73 +1512,27 @@ class TenantController extends Controller
                 ->with('warning', 'No se detectaron cambios para actualizar.');
         }
 
-        if ($ownerHasChanges) {
-            if (!$owner) {
-                $owner = new User();
-                $owner->tenant_id = $tenant->id;
-                if ($ownerRole) {
-                    $owner->role_id = $ownerRole->id;
-                }
-                $owner->is_active = 1;
-            }
-
-            $owner->name = $validated['owner_name'] ?? $owner->name ?? 'Owner';
-            $owner->email = $validated['owner_email'] ?? $owner->email;
-            $owner->phone_number = $validated['owner_phone_number'] ?? $owner->phone_number;
-            $owner->dni = $validated['owner_dni'] ?? $owner->dni;
-
-            if (!empty($validated['owner_password'])) {
-                $owner->password = Hash::make($validated['owner_password']);
-            } elseif (!$owner->exists) {
-                $owner->password = Hash::make('password123');
-            }
-
-            $owner->save();
-        }
-
         if ($tenantHasChanges) {
             $tenant->save();
         }
 
         // Si cambia o se renueva el plan
-        if ($planSelectionRequested) {
-            $plan = $incomingPlan;
-            $paidAt = Carbon::now();
-            $expiresAt = (clone $paidAt)->addDays((int) ($plan->duration_days ?? 0));
-
-            $tenantPlanPaymentData = [
-                'tenant_id' => $tenant->id,
-                'plan_id' => $plan->id,
-                'amount' => $plan->price,
-                'status' => 'paid',
-                'paid_at' => $paidAt,
-            ];
-
-            if (Schema::hasColumn('tenant_plan_payments', 'expires_at')) {
-                $tenantPlanPaymentData['expires_at'] = $expiresAt;
-            }
-
-            TenantPlanPayment::create($tenantPlanPaymentData);
-        }
-
         if ($expectsJson) {
             return response()->json([
                 'message' => 'Tenant actualizado correctamente',
-                'tenant'  => $tenant->load(['tenantPlanPayments.plan', 'users.role']),
+                'tenant'  => $tenant->load(['users.role']),
             ]);
         }
 
         return redirect()
             ->route('tenants.edit', $tenant)
-            ->with('success', 'Tienda actualizada correctamente.');
+            ->with('success', 'sede actualizada correctamente.');
     }
 
     public function updateTenant(Request $request)
     {
         $user = auth()->user();
         $tenant = Tenant::findOrFail($user->tenant_id);
-        $latestPaidPlan = $this->getTenantLatestPaidPlanPayment($tenant);
-        $isFreePlanTenant = (float) ($latestPaidPlan?->plan?->price ?? -1) <= 0;
         $expectsJson = $request->expectsJson() || $request->wantsJson();
 
         try {
@@ -2127,7 +1555,7 @@ class TenantController extends Controller
                 'external_url'    => 'nullable|string|max:255',
                 'slogan'          => 'nullable|string|max:255',
                 'description'     => 'nullable|string',
-                'business_type'   => ['required', 'string', Rule::in(['tienda', 'servicio', 'Tienda', 'Servicio'])],
+                'business_type'   => ['required', 'string', Rule::in(['sede', 'servicio', 'sede', 'Servicio'])],
                 'economic_activity' => 'nullable|string|max:150|regex:/.*\S.*/',
                 'logo'            => 'nullable|image|mimes:png,jpg,jpeg,svg,webp|max:2048',
                 'billing_logo'    => 'nullable|image|mimes:png,jpg,jpeg,svg,webp|max:2048',
@@ -2190,13 +1618,6 @@ class TenantController extends Controller
                 }
             }
 
-            if ($isFreePlanTenant) {
-                $validated['special_taxpayer'] = false;
-                $validated['restrict_delivery_city_to_tenant'] = $tenant->restrict_delivery_city_to_tenant ?? true;
-                $validated['delivery_enabled'] = false;
-                $validated['delivery_notifications_enabled'] = false;
-            }
-
             $appointmentsEnabled = $request->has('appointments_enabled')
                 ? $request->boolean('appointments_enabled')
                 : (bool) ($tenant->appointments_enabled ?? true);
@@ -2222,79 +1643,6 @@ class TenantController extends Controller
             }
 
             if ($shouldCreateNewUser) {
-                if ($isFreePlanTenant) {
-                    if ($expectsJson) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'El plan Free no permite crear usuarios adicionales.',
-                        ], 403);
-                    }
-
-                    return redirect()->route('tenant.store')->with('warning', 'El plan Free no permite crear usuarios adicionales.');
-                }
-
-                $newUserRoleId = (int) ($request->input('new_user.role_id') ?? 0);
-                if ($this->isBasicPlanTenant($tenant) && $newUserRoleId > 0) {
-                    $ownerRoleIds = $this->resolveOwnerRoleIds();
-                    $adminRoleIds = $this->resolveAdminRoleIds();
-                    $selectedRoleIsOwner = in_array($newUserRoleId, $ownerRoleIds, true);
-                    $selectedRoleIsAdmin = in_array($newUserRoleId, $adminRoleIds, true);
-
-                    if (!$selectedRoleIsAdmin) {
-                        if ($expectsJson) {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'En plan Básico solo se permite crear un usuario administrador.',
-                            ], 403);
-                        }
-
-                        return redirect()->route('tenant.store')->with('warning', 'En plan Básico solo se permite crear un usuario administrador.');
-                    }
-
-                    $currentOwnerCount = $tenant->users()
-                        ->whereIn('role_id', $ownerRoleIds)
-                        ->count();
-
-                    if ($currentOwnerCount > 1) {
-                        if ($expectsJson) {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'La tienda tiene más de un owner. Debes regularizarlo antes de crear usuarios.',
-                            ], 403);
-                        }
-
-                        return redirect()->route('tenant.store')->with('warning', 'La tienda tiene más de un owner. Debes regularizarlo antes de crear usuarios.');
-                    }
-
-                    if ($selectedRoleIsOwner) {
-                        if ($expectsJson) {
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'El plan Básico no permite crear más usuarios owner.',
-                            ], 403);
-                        }
-
-                        return redirect()->route('tenant.store')->with('warning', 'El plan Básico no permite crear más usuarios owner.');
-                    }
-
-                    if ($selectedRoleIsAdmin) {
-                        $currentAdminCount = $tenant->users()
-                            ->whereIn('role_id', $adminRoleIds)
-                            ->count();
-
-                        if ($currentAdminCount >= 1) {
-                            if ($expectsJson) {
-                                return response()->json([
-                                    'success' => false,
-                                    'message' => 'El plan Básico solo permite un usuario con rol administrador.',
-                                ], 403);
-                            }
-
-                            return redirect()->route('tenant.store')->with('warning', 'El plan Básico solo permite un usuario con rol administrador.');
-                        }
-                    }
-                }
-
                 if (!$user || !$user->canAssignStoreRoles() || empty($assignableRoleIds)) {
                     if ($expectsJson) {
                         return response()->json([
@@ -2507,13 +1855,13 @@ class TenantController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $cartEnabled = $this->tenantHasProPlan($tenant);
-        $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+        $cartEnabled = false;
+        $cartPlanName = 'Informativo';
         $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
         $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
         $storefrontBsRate = $this->resolveStorefrontBsRate($tenant);
-        $appointmentsEnabledForStorefront = $this->tenantSupportsPublicAppointmentCheckout($tenant);
+        $appointmentsEnabledForStorefront = false;
 
         return view('ecommerceCategory', compact(
             'tenant',
@@ -2582,9 +1930,9 @@ class TenantController extends Controller
             abort(404);
         }
 
-        $cartEnabled = $this->tenantHasProPlan($tenant);
+        $cartEnabled = false;
         $projectQuoteOnlyMode = (bool) ($tenant->offers_projects ?? true);
-        $cartPlanName = $this->getTenantCurrentPlanName($tenant);
+        $cartPlanName = 'Informativo';
         $baseCurrencyCode = $this->resolveTenantBaseCurrencyCode($tenant);
         $baseCurrencySymbol = $this->resolveCurrencySymbol($baseCurrencyCode);
         $showBsPrices = $this->shouldShowStorefrontBsPrices($tenant);
@@ -2608,6 +1956,11 @@ class TenantController extends Controller
     public function publicTenantPaymentMethods(Tenant $tenant)
     {
         $this->abortIfTenantInactiveForPublic($tenant);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'La landing del tenant está en modo informativo. No hay procesos de compra habilitados.',
+        ], 410);
 
         $paymentMethods = PaymentMethod::with('currency')
             ->where('tenant_id', $tenant->id)
@@ -2728,6 +2081,12 @@ class TenantController extends Controller
     public function publicTenantResolveScanCode(Request $request, Tenant $tenant)
     {
         $this->abortIfTenantInactiveForPublic($tenant);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'La landing del tenant está en modo informativo. No hay procesos de compra habilitados.',
+        ], 410);
+
         $appointmentOnlyVariantIds = $this->appointmentOnlyVariantIdsForTenant((int) $tenant->id);
 
         $request->validate([
@@ -2786,6 +2145,11 @@ class TenantController extends Controller
     public function publicTenantProductQuickOptions(Request $request, Tenant $tenant)
     {
         $this->abortIfTenantInactiveForPublic($tenant);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'La landing del tenant está en modo informativo. No hay procesos de compra habilitados.',
+        ], 410);
 
         $validated = $request->validate([
             'q' => 'nullable|string|max:100',
@@ -2854,6 +2218,11 @@ class TenantController extends Controller
     public function publicTenantProCheckout(Request $request, Tenant $tenant)
     {
         $this->abortIfTenantInactiveForPublic($tenant);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'La landing del tenant está en modo informativo. No hay procesos de compra habilitados.',
+        ], 410);
 
         if (!$this->tenantHasProPlan($tenant)) {
             return response()->json([
@@ -2996,7 +2365,7 @@ class TenantController extends Controller
                 }
 
                 if ($appointmentPaymentMode === 'on_site' && !$allowUnpaidReservation) {
-                    throw new \RuntimeException('Esta tienda requiere pago en línea para confirmar la reserva de citas.');
+                    throw new \RuntimeException('Esta sede requiere pago en línea para confirmar la reserva de citas.');
                 }
 
                 $appointmentService = AppointmentService::query()
@@ -3051,7 +2420,7 @@ class TenantController extends Controller
                 }
 
                 $validated['delivery_type'] = 'pickup';
-                $validated['delivery_address'] = 'Tienda';
+                $validated['delivery_address'] = 'sede';
                 $validated['delivery_city_id'] = null;
                 $validated['delivery_distance_km'] = null;
                 $validated['delivery_latitude'] = null;
@@ -3114,14 +2483,14 @@ class TenantController extends Controller
                 if ($validated['delivery_type'] === 'delivery' && (!$tenantAllowsDeliveryOperations || !$tenantDeliveryEnabled)) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'El delivery local está desactivado para esta tienda.',
+                        'message' => 'El delivery local está desactivado para esta sede.',
                     ], 422);
                 }
 
                 if ($validated['delivery_type'] === 'shipping' && (!$tenantAllowsDeliveryOperations || !$tenantShippingEnabled)) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'El envío nacional está desactivado para esta tienda.',
+                        'message' => 'El envío nacional está desactivado para esta sede.',
                     ], 422);
                 }
 
@@ -3139,7 +2508,7 @@ class TenantController extends Controller
                     if (!($shippingCityValidation['ok'] ?? false)) {
                         return response()->json([
                             'success' => false,
-                            'message' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la tienda.'),
+                            'message' => (string) ($shippingCityValidation['message'] ?? 'Solo se permite delivery en la ciudad de la sede.'),
                         ], 422);
                     }
                 }
@@ -3161,7 +2530,7 @@ class TenantController extends Controller
                     ->find($paymentData['method_id']);
 
                 if (!$method) {
-                    throw new \RuntimeException('Uno de los métodos de pago no pertenece a esta tienda.');
+                    throw new \RuntimeException('Uno de los métodos de pago no pertenece a esta sede.');
                 }
 
                 $requiresReference = $method->usesReference();
@@ -3190,7 +2559,7 @@ class TenantController extends Controller
 
             $address = $validated['delivery_type'] !== 'pickup'
                 ? trim((string) ($validated['delivery_address'] ?? ''))
-                : 'Tienda';
+                : 'sede';
 
             $markDelivered = (bool) ($validated['mark_delivered'] ?? false);
             $markPaymentsPaid = (bool) ($validated['mark_payments_paid'] ?? false);
@@ -3202,9 +2571,9 @@ class TenantController extends Controller
             $preference = $isAppointmentOrder
                 ? 'Cita programada'
                 : match ($validated['delivery_type']) {
-                    'delivery' => 'Delivery tienda',
+                    'delivery' => 'Delivery sede',
                     'shipping' => 'Envío externo',
-                    default => 'Retiro en tienda',
+                    default => 'Retiro en sede',
                 };
 
             $createdAppointment = null;
@@ -3233,7 +2602,7 @@ class TenantController extends Controller
                     $variant = ProductVariant::with('product')->findOrFail((int) $item['variant_id']);
 
                     if ((int) $variant->product->tenant_id !== (int) $tenant->id) {
-                        throw new \RuntimeException('Uno de los productos no pertenece a esta tienda.');
+                        throw new \RuntimeException('Uno de los productos no pertenece a esta sede.');
                     }
 
                     if ((int) $variant->stock < (int) $item['quantity']) {
@@ -3269,7 +2638,7 @@ class TenantController extends Controller
                         ->findOrFail((int) $paymentData['method_id']);
 
                     if ((int) $method->tenant_id !== (int) $tenant->id) {
-                        throw new \RuntimeException('Uno de los métodos de pago no pertenece a esta tienda.');
+                        throw new \RuntimeException('Uno de los métodos de pago no pertenece a esta sede.');
                     }
 
                     if (!$firstPaymentMethod) {
@@ -3543,7 +2912,7 @@ class TenantController extends Controller
             return response()->json([
                 'success' => false,
                 'enabled' => false,
-                'message' => 'La gestión de citas no está habilitada para esta tienda.',
+                'message' => 'La gestión de citas no está habilitada para esta sede.',
             ], 200);
         }
 
@@ -3762,7 +3131,7 @@ class TenantController extends Controller
         foreach ([
             'users_synced' => 'usuarios',
             'payment_methods_synced' => 'métodos de pago',
-            'store_items_synced' => 'items de tienda',
+            'store_items_synced' => 'items de sede',
             'service_items_synced' => 'servicios',
             'schedule_rules_synced' => 'horarios',
         ] as $key => $label) {
@@ -3883,7 +3252,9 @@ class TenantController extends Controller
         return Role::query()
             ->get()
             ->filter(function (Role $role) {
-                return User::canonicalRoleName((string) $role->name) === 'admin';
+                $canonicalRole = User::canonicalRoleName((string) $role->name);
+
+                return in_array($canonicalRole, ['admin', 'sede_admin'], true);
             })
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
@@ -3896,7 +3267,9 @@ class TenantController extends Controller
         return Role::query()
             ->get()
             ->filter(function (Role $role) {
-                return User::canonicalRoleName((string) $role->name) === 'owner';
+                $canonicalRole = User::canonicalRoleName((string) $role->name);
+
+                return in_array($canonicalRole, ['owner', 'superowner'], true);
             })
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
@@ -4197,7 +3570,7 @@ class TenantController extends Controller
             return null;
         }
 
-        return $normalized === 'servicio' ? 'Servicio' : 'Tienda';
+        return $normalized === 'servicio' ? 'Servicio' : 'sede';
     }
 
     private function normalizeSocialProfiles($value): array
@@ -4332,7 +3705,7 @@ class TenantController extends Controller
             }
         }
 
-        $businessTypeLabel = $businessTypeKey === 'servicio' ? 'Servicio' : 'Tienda';
+        $businessTypeLabel = $businessTypeKey === 'servicio' ? 'Servicio' : 'sede';
         throw ValidationException::withMessages([
             'economic_activity' => [
                 'El rubro economico no corresponde al tipo de negocio seleccionado (' . $businessTypeLabel . '). Opciones validas: ' . implode(', ', $options) . '.',
@@ -4343,7 +3716,7 @@ class TenantController extends Controller
     private function resolveLegacyEconomicActivityAlias(string $economicActivity, string $businessTypeKey): string
     {
         $legacyAliases = [
-            'tienda' => [
+            'sede' => [
                 'Alimentos y Bebidas' => 'Supermercado y Abastos',
                 'Moda y Accesorios' => 'Moda y Boutique',
                 'Hogar y Construccion' => 'Ferreteria y Construccion',
@@ -4410,8 +3783,8 @@ class TenantController extends Controller
             return null;
         }
 
-        if ($normalized === 'tienda') {
-            return 'tienda';
+        if ($normalized === 'sede') {
+            return 'sede';
         }
 
         if ($normalized === 'servicio') {
@@ -4434,7 +3807,7 @@ class TenantController extends Controller
         if ($tenantCityId <= 0) {
             return [
                 'ok' => false,
-                'message' => 'La tienda no tiene una ciudad configurada para envíos.',
+                'message' => 'La sede no tiene una ciudad configurada para envíos.',
             ];
         }
 
@@ -4443,7 +3816,7 @@ class TenantController extends Controller
 
             return [
                 'ok' => false,
-                'message' => 'Solo se permiten envíos para la ciudad de la tienda' . (!empty($tenantCityName) ? ': ' . $tenantCityName : '.'),
+                'message' => 'Solo se permiten envíos para la ciudad de la sede' . (!empty($tenantCityName) ? ': ' . $tenantCityName : '.'),
             ];
         }
 
@@ -4469,7 +3842,7 @@ class TenantController extends Controller
     private function getBusinessActivityCatalog(): array
     {
         return [
-            'tienda' => [
+            'sede' => [
                 'Supermercado y Abastos',
                 'Panaderia y Pasteleria',
                 'Moda y Boutique',
@@ -4479,7 +3852,7 @@ class TenantController extends Controller
                 'Tecnologia y Computacion',
                 'Telefonia y Accesorios',
                 'Farmacia y Bienestar',
-                'Mascotas y Agrotienda',
+                'Mascotas y Agrosede',
                 'Papeleria, Libros y Juguetes',
                 'Repuestos y Accesorios Automotrices',
             ],
@@ -4525,7 +3898,7 @@ class TenantController extends Controller
             return 'La plataforma requiere una actualización de base de datos. Contacta al administrador.';
         }
 
-        return 'No se pudo crear la tienda. Intenta nuevamente.';
+        return 'No se pudo crear la sede. Intenta nuevamente.';
     }
 
     public function destroy(Tenant $tenant)

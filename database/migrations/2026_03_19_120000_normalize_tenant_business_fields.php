@@ -16,7 +16,7 @@ return new class extends Migration {
         }
 
         $catalogByType = [
-            'Tienda' => [
+            'sede' => [
                 'Alimentos y Bebidas',
                 'Moda y Accesorios',
                 'Hogar y Construccion',
@@ -91,7 +91,7 @@ return new class extends Migration {
             $typeKey = $this->normalizeKey($currentTypeRaw);
             $normalizedType = match (true) {
                 in_array($typeKey, ['servicio', 'servicios', 'service', 'services'], true) => 'Servicio',
-                in_array($typeKey, ['tienda', 'tiendas', 'store', 'stores', 'comercio', 'comercios'], true) => 'Tienda',
+                in_array($typeKey, ['sede', 'sedes', 'store', 'stores', 'comercio', 'comercios'], true) => 'sede',
                 default => null,
             };
 
@@ -102,7 +102,7 @@ return new class extends Migration {
                 if ($normalizedActivity && in_array($normalizedActivity, $catalogByType['Servicio'], true)) {
                     $normalizedType = 'Servicio';
                 } else {
-                    $normalizedType = 'Tienda';
+                    $normalizedType = 'sede';
                 }
             }
 

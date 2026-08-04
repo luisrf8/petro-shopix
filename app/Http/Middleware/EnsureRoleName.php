@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\UserRedirector;
 use Closure;
 use Illuminate\Http\Request;
 
@@ -13,6 +14,11 @@ class EnsureRoleName
 
         if (!$user || !$user->role) {
             abort(403);
+        }
+
+        // SuperOwner bypasses role.name checks and can access all modules.
+        if (UserRedirector::isSuperAdmin($user)) {
+            return $next($request);
         }
 
         $roleName = strtolower((string) $user->role->name);

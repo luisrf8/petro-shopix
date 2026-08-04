@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Gastos de Tienda')
+@section('title', 'Gastos de sede')
 
 @section('content')
 <div class="container-fluid py-2">
@@ -15,7 +15,7 @@
   <div class="card my-4">
     <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
       <div class="bg-gradient-dark shadow-dark border-radius-lg pt-3 pb-3 d-flex justify-content-between align-items-center">
-        <h6 class="text-white text-capitalize ps-3 mb-0">Registro de gastos de la tienda</h6>
+        <h6 class="text-white text-capitalize ps-3 mb-0">Registro de gastos de la sede</h6>
         <button type="button" class="btn btn-sm btn-light mb-0 me-3" id="storeExpenseCreateTrigger" data-bs-toggle="modal" data-bs-target="#createExpenseModal">+ Registrar gasto</button>
       </div>
     </div>

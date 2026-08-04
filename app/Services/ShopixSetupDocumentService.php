@@ -29,7 +29,7 @@ class ShopixSetupDocumentService
         'nombre comercial' => 'name',
         'slug sugerido' => 'slug',
         'correo principal' => 'email',
-        'tipo de negocio tienda servicio' => 'business_type',
+        'tipo de negocio sede servicio' => 'business_type',
         'rubro economico' => 'economic_activity',
         'eslogan' => 'slogan',
         'descripcion comercial' => 'description',
@@ -48,7 +48,7 @@ class ShopixSetupDocumentService
         'modo tarifa delivery free fixed distance' => 'delivery_fee_mode',
         'tarifa fija delivery' => 'delivery_fixed_fee',
         'tarifa por km delivery' => 'delivery_fee_per_km',
-        'restringir delivery a ciudad de la tienda si no' => 'restrict_delivery_city_to_tenant',
+        'restringir delivery a ciudad de la sede si no' => 'restrict_delivery_city_to_tenant',
         'notificaciones de delivery si no' => 'delivery_notifications_enabled',
         'tiktok' => 'tiktok',
         'instagram' => 'instagram',
@@ -308,7 +308,7 @@ class ShopixSetupDocumentService
     {
         if (array_key_exists('business_type', $tenant)) {
             $value = Str::lower(trim((string) $tenant['business_type']));
-            $tenant['business_type'] = $value === 'servicio' ? 'servicio' : 'tienda';
+            $tenant['business_type'] = $value === 'servicio' ? 'servicio' : 'sede';
         }
 
         foreach (['appointments_first_come_enabled', 'special_taxpayer', 'delivery_enabled', 'restrict_delivery_city_to_tenant', 'delivery_notifications_enabled'] as $booleanField) {

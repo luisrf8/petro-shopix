@@ -13,8 +13,7 @@ class SellerCommissionController extends Controller
 {
     public function index(Request $request)
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        abort_if($tenantId <= 0, 403);
+        $tenantId = $this->tenantScopeId($request);
 
         $authUser = auth()->user();
         $isAdminView = (bool) ($authUser?->hasStoreRole('owner', 'admin') ?? false);
@@ -31,7 +30,7 @@ class SellerCommissionController extends Controller
 
         $sellers = User::query()
             ->with('role')
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->where('is_active', 1)
             ->orderBy('name')
             ->get()
@@ -40,7 +39,7 @@ class SellerCommissionController extends Controller
 
         $baseQuery = SellerCommission::query()
             ->with(['seller', 'order'])
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->when($sellerId > 0, function ($query) use ($sellerId) {
                 $query->where('seller_user_id', $sellerId);
             })
@@ -69,7 +68,7 @@ class SellerCommissionController extends Controller
             ->sum('commission_amount');
 
         $monthGenerated = (float) SellerCommission::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->when($sellerId > 0, function ($query) use ($sellerId) {
                 $query->where('seller_user_id', $sellerId);
             })

@@ -21,31 +21,31 @@ class PaymentMethodController extends Controller
 {
     public function index()
     {
-        $user = auth()->user();
+        $tenantId = $this->tenantScopeId(request());
 
         Currency::firstOrCreate(['code' => 'USD'], ['name' => 'Dólar', 'status' => true]);
         Currency::firstOrCreate(['code' => 'EUR'], ['name' => 'Euro', 'status' => true]);
 
         $currencies = Currency::orderBy('name')->get();
         $paymentMethods = PaymentMethod::with('currency')
-            ->where('tenant_id', $user->tenant_id)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->get();
 
         // Obtener el último valor de la tasa del dólar
-        $dollarRate = DollarRate::where('tenant_id', $user->tenant_id)->latest('created_at')->first();
-        $euroRate = EuroRate::where('tenant_id', $user->tenant_id)->latest('created_at')->first();
-        $dollarRateHistory = DollarRate::where('tenant_id', $user->tenant_id)
+        $dollarRate = DollarRate::query()->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))->latest('created_at')->first();
+        $euroRate = EuroRate::query()->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))->latest('created_at')->first();
+        $dollarRateHistory = DollarRate::query()->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->latest('date')
             ->latest('id')
             ->limit(50)
             ->get();
-        $euroRateHistory = EuroRate::where('tenant_id', $user->tenant_id)
+        $euroRateHistory = EuroRate::query()->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->latest('date')
             ->latest('id')
             ->limit(50)
             ->get();
-        $rateHistoryEntries = $this->buildRateHistoryEntries((int) $user->tenant_id, 120);
-        $baseCurrencyCode = strtoupper((string) optional(Tenant::find($user->tenant_id))->base_currency ?: 'USD');
+        $rateHistoryEntries = $this->buildRateHistoryEntries($tenantId, 120);
+        $baseCurrencyCode = strtoupper((string) optional($tenantId > 0 ? Tenant::find($tenantId) : null)->base_currency ?: 'USD');
 
         // Agrupar métodos de pago por moneda
         $groupedPaymentMethods = $paymentMethods->groupBy(function ($paymentMethod) {
@@ -296,8 +296,8 @@ class PaymentMethodController extends Controller
 
     public function getDollarRate()
     {
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
-        $dollarRate = DollarRate::where('tenant_id', $tenantId)->latest('created_at')->first();
+        $tenantId = $this->tenantScopeId(request());
+        $dollarRate = DollarRate::query()->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))->latest('created_at')->first();
         return response()->json(['message' => 'Tasa del dólar obtenida exitosamente', 'data' => $dollarRate], 201);
     }
 
@@ -349,7 +349,7 @@ class PaymentMethodController extends Controller
         $tenant->base_currency = strtoupper((string) $validated['base_currency']);
         $tenant->save();
 
-        AuditLogger::logEvent('paymentMethods', 'BASE_CURRENCY_UPDATED', 'Actualización de moneda madre de la tienda.', (int) (auth()->id() ?? 0), [
+        AuditLogger::logEvent('paymentMethods', 'BASE_CURRENCY_UPDATED', 'Actualización de moneda madre de la sede.', (int) (auth()->id() ?? 0), [
             'tenant_id' => (int) $tenant->id,
             'previous_base_currency' => $previousBaseCurrency,
             'new_base_currency' => (string) $tenant->base_currency,
@@ -397,7 +397,7 @@ class PaymentMethodController extends Controller
         @set_time_limit(180);
         @ini_set('memory_limit', '512M');
 
-        $tenantId = (int) (auth()->user()->tenant_id ?? 0);
+        $tenantId = $this->tenantScopeId(request());
         $entries = $this->buildRateHistoryEntries($tenantId);
 
         if ($format === 'csv') {
@@ -468,7 +468,7 @@ class PaymentMethodController extends Controller
     private function buildRateHistoryEntries(int $tenantId, ?int $limit = null)
     {
         $dollarEntries = DollarRate::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->latest('date')
             ->latest('id')
             ->get()
@@ -483,7 +483,7 @@ class PaymentMethodController extends Controller
             });
 
         $euroEntries = EuroRate::query()
-            ->where('tenant_id', $tenantId)
+            ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
             ->latest('date')
             ->latest('id')
             ->get()

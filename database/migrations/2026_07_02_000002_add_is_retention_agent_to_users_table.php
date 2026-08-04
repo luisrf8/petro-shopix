@@ -9,7 +9,7 @@ return new class extends Migration {
     {
         if (Schema::hasTable('users') && !Schema::hasColumn('users', 'is_retention_agent')) {
             Schema::table('users', function (Blueprint $table) {
-                $table->boolean('is_retention_agent')->default(false)->after('is_active');
+                $table->boolean('is_retention_agent')->default(false);
             });
         }
     }

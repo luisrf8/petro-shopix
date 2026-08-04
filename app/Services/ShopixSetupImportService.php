@@ -549,7 +549,7 @@ class ShopixSetupImportService
             return null;
         }
 
-        return $normalized === 'servicio' ? 'Servicio' : 'Tienda';
+        return $normalized === 'servicio' ? 'Servicio' : 'sede';
     }
 
     private function normalizeWorkingDays(mixed $value): ?array

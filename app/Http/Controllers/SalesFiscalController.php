@@ -13,6 +13,7 @@ use App\Services\FiscalCorrelativeService;
 use App\Services\TheFactoryHkaService;
 use App\Support\PdfDownload;
 use App\Support\TenantCurrency;
+use App\Support\UserRedirector;
 use Carbon\Carbon;
 use Dompdf\Dompdf;
 use Dompdf\Options;
@@ -466,8 +467,16 @@ class SalesFiscalController extends Controller
     private function authorizeOrderAccess(SalesOrder $order): void
     {
         $authUser = auth()->user();
+        $isSuperOwner = UserRedirector::isSuperAdmin($authUser);
 
-        abort_if((int) ($order->tenant_id ?? 0) !== (int) ($authUser->tenant_id ?? 0), 404);
+        if ($isSuperOwner) {
+            $scopeTenantId = $this->tenantScopeId();
+            if ($scopeTenantId > 0) {
+                abort_if((int) ($order->tenant_id ?? 0) !== $scopeTenantId, 404);
+            }
+        } else {
+            abort_if((int) ($order->tenant_id ?? 0) !== (int) ($authUser->tenant_id ?? 0), 404);
+        }
 
         $isSeller = (bool) ($authUser?->hasStoreRole('seller') ?? false);
         if ($isSeller && (int) ($order->sales_rep_user_id ?? 0) !== (int) ($authUser->id ?? 0)) {

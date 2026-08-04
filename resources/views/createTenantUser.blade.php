@@ -217,7 +217,7 @@
           <div class="card-body p-4">
             @if ($errors->any())
               <div class="alert alert-danger" role="alert">
-                <strong>No se pudo crear la tienda.</strong>
+                <strong>No se pudo crear la sede.</strong>
                 <ul class="mb-0 mt-2">
                   @foreach ($errors->all() as $error)
                     <li>{{ $error }}</li>
@@ -267,7 +267,7 @@
 
                 <div class="mb-3">
                   <label for="external_url" class="form-label fw-bold">URL propia (opcional)</label>
-                  <input type="text" name="external_url" id="external_url" class="form-control form-control-lg" placeholder="https://mitienda.com" value="{{ old('external_url') }}">
+                  <input type="text" name="external_url" id="external_url" class="form-control form-control-lg" placeholder="https://misede.com" value="{{ old('external_url') }}">
                   <small class="text-muted">Si la agregas, en el directorio de Shopix tu tarjeta abrira esa URL.</small>
                 </div>
 
@@ -282,7 +282,7 @@
                     <label for="business_type" class="form-label fw-bold">Tipo de negocio</label>
                     <select name="business_type" id="business_type" class="form-select form-select-lg" required>
                       <option value="">Selecciona una opción</option>
-                      <option value="tienda" {{ old('business_type') === 'tienda' ? 'selected' : '' }}>Tienda</option>
+                      <option value="sede" {{ old('business_type') === 'sede' ? 'selected' : '' }}>sede</option>
                       <option value="servicio" {{ old('business_type') === 'servicio' ? 'selected' : '' }}>Servicio</option>
                     </select>
                   </div>
@@ -328,7 +328,7 @@
 
               <!-- PASO 2 -->
               <div class="step" id="step2">
-                <h5 class="fw-bold mb-4 text-center">Detalles de tu tienda</h5>
+                <h5 class="fw-bold mb-4 text-center">Detalles de tu sede</h5>
 
                 <div class="assistant-copy-card mb-4">
                   <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
@@ -467,7 +467,7 @@
                     'sunday' => 'Domingo',
                   ];
                 @endphp
-                <div class="mb-4" id="createTenantUserScheduleFields" style="display: {{ strtolower((string) old('business_type', 'tienda')) === 'tienda' ? 'block' : 'none' }};">
+                <div class="mb-4" id="createTenantUserScheduleFields" style="display: {{ strtolower((string) old('business_type', 'sede')) === 'sede' ? 'block' : 'none' }};">
                   <label class="form-label fw-bold d-block">Días laborales y horario (opcional)</label>
                   <div class="row g-2 mb-3">
                     @foreach($weekDays as $dayKey => $dayLabel)
@@ -539,14 +539,14 @@
 
                 <div class="d-flex justify-content-between mt-3">
                   <button type="button" class="btn btn-secondary btn-lg" id="prevBtn">⬅ Volver</button>
-                  <button type="submit" class="btn btn-success btn-lg" id="createTenantBtn" disabled>🚀 Crear mi tienda</button>
+                  <button type="submit" class="btn btn-success btn-lg" id="createTenantBtn" disabled>🚀 Crear mi sede</button>
                 </div>
 
                 <div class="terms-consent-card mt-4">
                   <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                     <div>
                       <h6 class="fw-bold mb-1">Términos y condiciones del registro</h6>
-                      <p class="text-muted mb-0">Revisa el contrato y confirma la aceptación antes de crear tu tienda.</p>
+                      <p class="text-muted mb-0">Revisa el contrato y confirma la aceptación antes de crear tu sede.</p>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
                       <button type="button" class="btn btn-outline-secondary btn-sm" id="openTermsModalBtn">Leer contrato</button>
@@ -556,7 +556,7 @@
                   <ul class="terms-consent-list">
                     <li>Los datos registrados deben ser reales y corresponder a la empresa o servicio que se está creando.</li>
                     <li>El uso de SHOPIX queda sujeto a las capacidades, restricciones y límites operativos del plan seleccionado.</li>
-                    <li>La creación de la tienda implica aceptación del contrato, políticas de uso y tratamiento operativo de la información suministrada.</li>
+                    <li>La creación de la sede implica aceptación del contrato, políticas de uso y tratamiento operativo de la información suministrada.</li>
                   </ul>
                   <div class="form-check mt-3">
                     <input class="form-check-input" type="checkbox" value="1" id="accept_terms" name="accept_terms" {{ old('accept_terms') ? 'checked' : '' }} required>
@@ -564,7 +564,7 @@
                       He leído y acepto los términos y condiciones del servicio de SHOPIX.
                     </label>
                   </div>
-                  <small id="acceptTermsHint" class="text-muted d-block mt-2">Debes aceptar los términos para habilitar la creación de la tienda.</small>
+                  <small id="acceptTermsHint" class="text-muted d-block mt-2">Debes aceptar los términos para habilitar la creación de la sede.</small>
                 </div>
               </div>
             </form>
@@ -746,7 +746,7 @@
       }, 3600);
     }
 
-    function setTenantSubmitLoading(button, isLoading, loadingText = 'Creando tienda...') {
+    function setTenantSubmitLoading(button, isLoading, loadingText = 'Creando sede...') {
       if (!button) return;
 
       if (isLoading) {
@@ -1076,7 +1076,7 @@
 
       title.textContent = 'Generar logo con IA';
       question.textContent = 'Chatea con Gemini hasta que el logo quede como quieres.';
-      prompt.placeholder = 'Ej: logo minimalista para tienda deportiva en tonos azul y blanco, sin texto';
+      prompt.placeholder = 'Ej: logo minimalista para sede deportiva en tonos azul y blanco, sin texto';
 
       prompt.value = '';
       referenceInput.value = '';
@@ -1332,7 +1332,7 @@
       ];
 
       const businessCatalog = {
-        tienda: [
+        sede: [
           'Supermercado y Abastos',
           'Panaderia y Pasteleria',
           'Moda y Boutique',
@@ -1342,7 +1342,7 @@
           'Tecnologia y Computacion',
           'Telefonia y Accesorios',
           'Farmacia y Bienestar',
-          'Mascotas y Agrotienda',
+          'Mascotas y Agrosede',
           'Papeleria, Libros y Juguetes',
           'Repuestos y Accesorios Automotrices'
         ],
@@ -1370,7 +1370,7 @@
         'Tecnologia y Computacion': 'Computadoras, gaming, electronica, impresoras, consumibles.',
         'Telefonia y Accesorios': 'Celulares, tablets, fundas, cargadores, wearables.',
         'Farmacia y Bienestar': 'Farmacias, suplementos, cuidado personal, ortopedia ligera.',
-        'Mascotas y Agrotienda': 'Pet shop, alimento para mascotas, insumos veterinarios, agroinsumos.',
+        'Mascotas y Agrosede': 'Pet shop, alimento para mascotas, insumos veterinarios, agroinsumos.',
         'Papeleria, Libros y Juguetes': 'Papelerias, librerias, regalos educativos, jugueterias.',
         'Repuestos y Accesorios Automotrices': 'Lubricantes, baterias, repuestos, accesorios para vehiculos.',
         'Restaurante, Cafeteria y Delivery': 'Restaurantes, lunch, cafeterias, dark kitchen, delivery.',
@@ -1386,7 +1386,7 @@
       };
 
       const businessDescriptions = {
-        tienda: 'Selecciona el rubro comercial que mejor representa lo que vendes para personalizar mejor la identidad inicial de tu tienda.',
+        sede: 'Selecciona el rubro comercial que mejor representa lo que vendes para personalizar mejor la identidad inicial de tu sede.',
         servicio: 'Elige el sector del servicio para reflejar con más precisión tu propuesta profesional desde el registro.'
       };
 
@@ -1448,7 +1448,7 @@
         setValue('#color_accent', tenant.color_accent);
 
         if (tenant.business_type && businessTypeSelect) {
-          businessTypeSelect.value = String(tenant.business_type).toLowerCase() === 'servicio' ? 'servicio' : 'tienda';
+          businessTypeSelect.value = String(tenant.business_type).toLowerCase() === 'servicio' ? 'servicio' : 'sede';
           refreshEconomicActivities(tenant.economic_activity || '');
           businessTypeSelect.dispatchEvent(new Event('change'));
         }
@@ -1533,7 +1533,7 @@
         const socialProfiles = buildSocialProfilesPayload();
 
         return [
-          'Investiga la presencia digital y comercial de esta empresa usando solo estas redes sociales y devuelve un JSON estructurado para autocompletar la tienda, incluyendo tenant, usuarios, medios de pago, catalogo, servicios, horarios y social_profiles.',
+          'Investiga la presencia digital y comercial de esta empresa usando solo estas redes sociales y devuelve un JSON estructurado para autocompletar la sede, incluyendo tenant, usuarios, medios de pago, catalogo, servicios, horarios y social_profiles.',
           socialProfiles.length
             ? `Perfiles sociales: ${socialProfiles.map((profile) => `${profile.platform}: ${profile.handle || profile.url || ''}`.trim()).join(' | ')}.`
             : 'No se proporcionaron perfiles sociales y debes inferir la estructura base con las senales disponibles.',
@@ -1604,7 +1604,7 @@
           return;
         }
 
-        const businessType = String(businessTypeSelect.value || 'tienda').toLowerCase() === 'servicio' ? 'servicio' : 'tienda';
+        const businessType = String(businessTypeSelect.value || 'sede').toLowerCase() === 'servicio' ? 'servicio' : 'sede';
         const options = businessCatalog[businessType] || [];
         const help = document.getElementById('economic_activity_help');
         const examples = document.getElementById('economic_activity_examples');
@@ -1727,8 +1727,8 @@
 
         if (acceptTermsHint) {
           acceptTermsHint.textContent = accepted
-            ? 'Términos aceptados. Ya puedes crear tu tienda.'
-            : 'Debes aceptar los términos para habilitar la creación de la tienda.';
+            ? 'Términos aceptados. Ya puedes crear tu sede.'
+            : 'Debes aceptar los términos para habilitar la creación de la sede.';
           acceptTermsHint.className = accepted
             ? 'text-success d-block mt-2'
             : 'text-muted d-block mt-2';
@@ -1786,7 +1786,7 @@
           if (storeCopyAiStatus) {
             storeCopyAiStatus.textContent = 'Propuesta aplicada. Puedes editar el slogan o la descripción antes de continuar.';
           }
-          showTenantToast('Gemini generó una propuesta inicial para tu tienda.', 'success');
+          showTenantToast('Gemini generó una propuesta inicial para tu sede.', 'success');
         } catch (error) {
           if (storeCopyAiStatus) {
             storeCopyAiStatus.textContent = 'No se pudo generar la propuesta en este momento.';
@@ -2037,7 +2037,7 @@
             return;
           }
 
-          const isPhysicalStore = String(businessTypeSelect.value || '').toLowerCase() === 'tienda';
+          const isPhysicalStore = String(businessTypeSelect.value || '').toLowerCase() === 'sede';
           scheduleBlock.style.display = isPhysicalStore ? 'block' : 'none';
         };
 
@@ -2078,7 +2078,7 @@
 
         if (!termsCheckbox?.checked) {
           event.preventDefault();
-          showTenantToast('Debes aceptar los términos y condiciones para crear la tienda.', 'warning');
+          showTenantToast('Debes aceptar los términos y condiciones para crear la sede.', 'warning');
           termsCheckbox?.focus();
           return;
         }
@@ -2089,7 +2089,7 @@
           return;
         }
 
-        setTenantSubmitLoading(submitBtn, true, 'Creando tienda...');
+        setTenantSubmitLoading(submitBtn, true, 'Creando sede...');
       });
     });
   </script>

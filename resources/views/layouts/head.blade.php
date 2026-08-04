@@ -79,6 +79,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
+    overflow: visible;
   }
 
   .header-session-user .header-session-user-inner {
@@ -88,6 +90,15 @@
     overflow: hidden;
     justify-content: center;
     text-align: center;
+  }
+
+  .header-session-user.has-tenant-scope {
+    flex: 0 1 auto;
+    max-width: none;
+  }
+
+  .header-session-user.has-tenant-scope .header-session-user-inner {
+    overflow: visible;
   }
 
   .header-session-user .session-name {
@@ -119,8 +130,34 @@
     max-width: 170px;
   }
 
+  .superowner-tenant-scope-form {
+    min-width: 240px;
+    max-width: 360px;
+  }
+
+  .superowner-tenant-scope-form .form-select {
+    min-height: 34px;
+    font-size: 0.75rem;
+    border-radius: 0.5rem;
+    border-color: rgba(52, 71, 103, 0.25);
+  }
+
   .header-session-user .session-meta-role {
     max-width: 120px;
+  }
+
+  .header-session-user .session-tenant-scope-inline {
+    flex: 0 0 auto;
+    margin-right: 0.4rem;
+  }
+
+  .header-session-user .session-tenant-scope-inline .superowner-tenant-scope-form {
+    min-width: 220px;
+    max-width: 300px;
+  }
+
+  .header-session-user .session-tenant-scope-inline .superowner-tenant-scope-form .form-select {
+    width: 100%;
   }
 
   .header-session-user .session-sep {
@@ -128,6 +165,62 @@
     color: #9ca3af;
     font-size: 0.68rem;
     line-height: 1;
+  }
+
+  .header-user-badge-toggle {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    color: inherit;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .header-user-badge-toggle:focus-visible {
+    outline: 2px solid rgba(59, 130, 246, 0.65);
+    outline-offset: 2px;
+    border-radius: 999px;
+  }
+
+  .header-user-badge {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    right: 0;
+    min-width: 220px;
+    max-width: min(90vw, 320px);
+    background: #ffffff;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 0.6rem;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+    padding: 0.6rem 0.75rem;
+    display: none;
+    z-index: 1200;
+  }
+
+  .header-user-badge.is-open {
+    display: block;
+  }
+
+  .header-user-badge-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 0.35rem;
+  }
+
+  .header-user-badge-item {
+    font-size: 0.7rem;
+    color: #374151;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  .header-user-badge-item + .header-user-badge-item {
+    margin-top: 0.18rem;
   }
 
   .header-icon-item {
@@ -167,24 +260,77 @@
   @media (max-width: 576px) {
     #navbarBlur .container-fluid {
       align-items: flex-start;
+      flex-wrap: nowrap;
     }
 
     #navbarBlur .header-actions-wrap {
-      width: 100%;
+      width: auto;
       margin-left: 0;
+      margin-top: 0 !important;
+      min-width: 0;
     }
 
     #navbarBlur .header-actions-wrap .navbar-nav {
-      width: 100%;
+      width: auto;
       justify-content: flex-end;
       gap: 0.35rem;
+      flex-wrap: nowrap;
     }
 
     .header-session-user {
-      order: -1;
-      flex: 1 0 100%;
+      order: 0;
+      flex: 1 1 auto;
+      max-width: none;
+      margin-right: 0.15rem !important;
+      justify-content: flex-end;
+    }
+
+    .header-session-user.has-tenant-scope {
+      flex: 1 1 auto;
+      max-width: calc(100vw - 120px);
+    }
+
+    .header-session-user.has-tenant-scope .header-session-user-inner {
+      justify-content: flex-end;
+      width: auto;
       max-width: 100%;
-      margin-right: 0 !important;
+      text-align: right;
+      white-space: nowrap;
+      overflow: visible;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .header-session-user.has-tenant-scope .session-tenant-scope-inline {
+      flex: 1 1 auto;
+      min-width: 170px;
+      max-width: calc(100vw - 165px);
+      margin-right: 0.25rem;
+    }
+
+    .header-session-user.has-tenant-scope .session-tenant-scope-inline .superowner-tenant-scope-form {
+      min-width: 100%;
+      max-width: none;
+      width: 100%;
+    }
+
+    .header-session-user.has-tenant-scope .session-name,
+    .header-session-user.has-tenant-scope .session-meta,
+    .header-session-user.has-tenant-scope .session-sep {
+      display: none;
+    }
+
+    .header-session-user.has-tenant-scope .header-user-badge-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 0.05rem;
+      flex: 0 0 auto;
+    }
+
+    .header-session-user.has-tenant-scope .header-user-badge-toggle .material-symbols-rounded {
+      font-size: 1.25rem;
+      line-height: 1;
     }
 
     .header-session-user .session-name {
@@ -223,6 +369,26 @@
       justify-content: flex-end;
     }
 
+    .header-session-user.has-tenant-scope {
+      max-width: min(72vw, 560px);
+    }
+
+    .header-session-user.has-tenant-scope .header-session-user-inner {
+      overflow: visible;
+    }
+
+    .header-session-user.has-tenant-scope .session-tenant-scope-inline {
+      min-width: 240px;
+      max-width: min(58vw, 420px);
+      margin-right: 0.45rem;
+    }
+
+    .header-session-user.has-tenant-scope .session-tenant-scope-inline .superowner-tenant-scope-form {
+      min-width: 100%;
+      max-width: none;
+      width: 100%;
+    }
+
     .header-session-user .session-meta {
       display: none;
     }
@@ -248,6 +414,24 @@
     .header-session-user .session-meta-email,
     .header-session-user .session-sep-email {
       display: none;
+    }
+
+    .superowner-tenant-scope-form {
+      min-width: 190px;
+      max-width: 240px;
+    }
+  }
+
+  @media (max-width: 460px) {
+    .header-session-user.has-tenant-scope .session-tenant-scope-inline {
+      min-width: 150px;
+      max-width: calc(100vw - 160px);
+    }
+
+    .header-user-badge {
+      right: -18px;
+      min-width: 200px;
+      max-width: min(92vw, 300px);
     }
   }
 </style>
@@ -283,21 +467,58 @@
         </nav>
 
         <div class="navbar-collapse mt-sm-0 mt-2 me-md-0 me-sm-4 header-actions-wrap" id="navbar">
-          <!-- <div class="ms-md-auto pe-md-3 d-flex align-items-center">
-            <div class="input-group input-group-outline">
-              <label class="form-label">Type here...</label>
-              <input type="text" class="form-control">
-            </div>
-          </div> -->
           <ul class="navbar-nav ms-auto pe-md-3 d-flex align-items-center justify-content-end">
-            <li class="nav-item d-flex align-items-center me-3 header-session-user">
+            @php($headerAuthUser = auth()->user())
+            @php($headerIsSuperOwner = auth()->check() && \App\Support\UserRedirector::isSuperAdmin($headerAuthUser))
+            @php($headerTenantScopeOptions = collect($superOwnerTenantScopeOptions ?? []))
+            @if($headerIsSuperOwner && $headerTenantScopeOptions->isEmpty())
+              @php($headerTenantScopeOptions = \App\Models\Tenant::query()->orderBy('name')->get(['id', 'name']))
+            @endif
+            <li class="nav-item d-flex align-items-center me-3 header-session-user {{ $headerIsSuperOwner ? 'has-tenant-scope' : '' }}">
               <div class="d-flex text-end align-items-center gap-1 header-session-user-inner">
-                <i class="material-symbols-rounded flex-shrink-0">account_circle</i>
+                @if($headerIsSuperOwner)
+                  @php($headerActiveScopeId = (int) ($superOwnerTenantScopeId ?? session('superowner_tenant_scope_id', 0)))
+                  @php($headerActiveScopeOption = $headerTenantScopeOptions->firstWhere('id', $headerActiveScopeId))
+                  <div class="session-tenant-scope-inline">
+                    <form method="POST" action="{{ route('superowner.tenant.scope.update') }}" class="superowner-tenant-scope-form">
+                      @csrf
+                      <select
+                        name="tenant_scope_id"
+                        class="form-select form-select-sm"
+                        title="Tenant activa para módulos"
+                        onchange="this.form.submit()"
+                      >
+                        <option value="0" {{ $headerActiveScopeId === 0 ? 'selected' : '' }}>GENERAL (todas las sedes)</option>
+                        @foreach($headerTenantScopeOptions as $tenantOption)
+                          <option value="{{ $tenantOption->id }}" {{ $headerActiveScopeId === (int) $tenantOption->id ? 'selected' : '' }}>
+                            Tenant: {{ $tenantOption->name }}
+                          </option>
+                        @endforeach
+                      </select>
+                    </form>
+                  </div>
+                @endif
+                <button
+                  type="button"
+                  class="header-user-badge-toggle"
+                  id="headerUserBadgeToggle"
+                  aria-label="Ver datos del usuario"
+                  aria-expanded="false"
+                  aria-controls="headerUserBadge"
+                >
+                  <i class="material-symbols-rounded flex-shrink-0">account_circle</i>
+                </button>
                 <span class="session-name session-text">{{ $authUserName ?? (string) (auth()->user()->name ?? 'Usuario') }}</span>
                 <span class="session-sep session-sep-email">/</span>
                 <span class="session-meta session-text session-meta-email">{{ $authUserEmail ?? (string) (auth()->user()->email ?? 'Sin correo') }}</span>
                 <span class="session-sep session-sep-role">/</span>
                 <span class="session-meta session-text session-meta-role">Rol: {{ $authUserRole ?? (string) (optional(auth()->user()?->role)->name ?? 'Sin rol') }}</span>
+                <div class="header-user-badge" id="headerUserBadge" role="status" aria-live="polite">
+                  <div class="header-user-badge-title">Datos del usuario</div>
+                  <div class="header-user-badge-item"><strong>Nombre:</strong> {{ $authUserName ?? (string) (auth()->user()->name ?? 'Usuario') }}</div>
+                  <div class="header-user-badge-item"><strong>Correo:</strong> {{ $authUserEmail ?? (string) (auth()->user()->email ?? 'Sin correo') }}</div>
+                  <div class="header-user-badge-item"><strong>Rol:</strong> {{ $authUserRole ?? (string) (optional(auth()->user()?->role)->name ?? 'Sin rol') }}</div>
+                </div>
               </div>
             </li>
             <li class="nav-item d-flex align-items-center me-2 header-icon-item">
@@ -324,89 +545,6 @@
                 </button>
               </form>
             </li>
-            <!-- <li class="nav-item px-3 d-flex align-items-center">
-              <a href="javascript:;" class="nav-link text-body p-0">
-                <i class="material-symbols-rounded fixed-plugin-button-nav">settings</i>
-              </a>
-            </li> -->
-            <!-- <li class="nav-item dropdown pe-3 d-flex align-items-center">
-              <a href="javascript:;" class="nav-link text-body p-0" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="material-symbols-rounded">notifications</i>
-              </a>
-              <ul class="dropdown-menu  dropdown-menu-end  px-2 py-3 me-sm-n4" aria-labelledby="dropdownMenuButton">
-                <li class="mb-2">
-                  <a class="dropdown-item border-radius-md" href="javascript:;">
-                    <div class="d-flex py-1">
-                      <div class="my-auto">
-                        <img src="../assets/img/team-2.jpg" class="avatar avatar-sm  me-3 ">
-                      </div>
-                      <div class="d-flex flex-column justify-content-center">
-                        <h6 class="text-sm font-weight-normal mb-1">
-                          <span class="font-weight-bold">New message</span> from Laur
-                        </h6>
-                        <p class="text-xs text-secondary mb-0">
-                          <i class="fa fa-clock me-1"></i>
-                          13 minutes ago
-                        </p>
-                      </div>
-                    </div>
-                  </a>
-                </li>
-                <li class="mb-2">
-                  <a class="dropdown-item border-radius-md" href="javascript:;">
-                    <div class="d-flex py-1">
-                      <div class="my-auto">
-                        <img src="../assets/img/small-logos/logo-spotify.svg" class="avatar avatar-sm bg-gradient-dark  me-3 ">
-                      </div>
-                      <div class="d-flex flex-column justify-content-center">
-                        <h6 class="text-sm font-weight-normal mb-1">
-                          <span class="font-weight-bold">New album</span> by Travis Scott
-                        </h6>
-                        <p class="text-xs text-secondary mb-0">
-                          <i class="fa fa-clock me-1"></i>
-                          1 day
-                        </p>
-                      </div>
-                    </div>
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item border-radius-md" href="javascript:;">
-                    <div class="d-flex py-1">
-                      <div class="avatar avatar-sm bg-gradient-secondary  me-3  my-auto">
-                        <svg width="12px" height="12px" viewBox="0 0 43 36" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-                          <title>credit-card</title>
-                          <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-                            <g transform="translate(-2169.000000, -745.000000)" fill="#FFFFFF" fill-rule="nonzero">
-                              <g transform="translate(1716.000000, 291.000000)">
-                                <g transform="translate(453.000000, 454.000000)">
-                                  <path class="color-background" d="M43,10.7482083 L43,3.58333333 C43,1.60354167 41.3964583,0 39.4166667,0 L3.58333333,0 C1.60354167,0 0,1.60354167 0,3.58333333 L0,10.7482083 L43,10.7482083 Z" opacity="0.593633743"></path>
-                                  <path class="color-background" d="M0,16.125 L0,32.25 C0,34.2297917 1.60354167,35.8333333 3.58333333,35.8333333 L39.4166667,35.8333333 C41.3964583,35.8333333 43,34.2297917 43,32.25 L43,16.125 L0,16.125 Z M19.7083333,26.875 L7.16666667,26.875 L7.16666667,23.2916667 L19.7083333,23.2916667 L19.7083333,26.875 Z M35.8333333,26.875 L28.6666667,26.875 L28.6666667,23.2916667 L35.8333333,23.2916667 L35.8333333,26.875 Z"></path>
-                                </g>
-                              </g>
-                            </g>
-                          </g>
-                        </svg>
-                      </div>
-                      <div class="d-flex flex-column justify-content-center">
-                        <h6 class="text-sm font-weight-normal mb-1">
-                          Payment successfully completed
-                        </h6>
-                        <p class="text-xs text-secondary mb-0">
-                          <i class="fa fa-clock me-1"></i>
-                          2 days
-                        </p>
-                      </div>
-                    </div>
-                  </a>
-                </li>
-              </ul>
-            </li> -->
-            <!-- <li class="nav-item d-flex align-items-center">
-              <a href="../pages/sign-in.html" class="nav-link text-body font-weight-bold px-0">
-                <i class="material-symbols-rounded">account_circle</i>
-              </a>
-            </li> -->
           </ul>
         </div>
       </div>
@@ -423,6 +561,8 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const sidenav = document.getElementById('sidenav-main');
+  const userBadgeToggle = document.getElementById('headerUserBadgeToggle');
+  const userBadge = document.getElementById('headerUserBadge');
 
     // Botones
     const btnDesktop = document.getElementById('btnDesktopNav');
@@ -466,6 +606,29 @@ document.addEventListener("DOMContentLoaded", function () {
     // Al cargar y al redimensionar
     initMobileState();
     window.addEventListener('resize', initMobileState);
+
+    if (userBadgeToggle && userBadge) {
+      userBadgeToggle.addEventListener('click', function (event) {
+        event.stopPropagation();
+        const willOpen = !userBadge.classList.contains('is-open');
+        userBadge.classList.toggle('is-open', willOpen);
+        userBadgeToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      });
+
+      document.addEventListener('click', function (event) {
+        if (!userBadge.contains(event.target) && !userBadgeToggle.contains(event.target)) {
+          userBadge.classList.remove('is-open');
+          userBadgeToggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          userBadge.classList.remove('is-open');
+          userBadgeToggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
 });
 </script>
 

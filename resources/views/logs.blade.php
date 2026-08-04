@@ -13,7 +13,7 @@
           <input type="text" class="form-control border border-1 p-2" name="user_id" placeholder="Usuario ID" value="{{ $filters['user_id'] ?? '' }}">
         </div>
         <div class="col-12 col-md-2">
-          <input type="text" class="form-control border border-1 p-2" name="tenant_id" placeholder="Tienda ID" value="{{ $filters['tenant_id'] ?? '' }}">
+          <input type="text" class="form-control border border-1 p-2" name="tenant_id" placeholder="sede ID" value="{{ $filters['tenant_id'] ?? '' }}">
         </div>
         <div class="col-12 col-md-2">
           <select class="form-select border border-1 p-2" name="role">
@@ -81,7 +81,7 @@
               <th class="border border-1 p-2">Fecha</th>
               <th class="border border-1 p-2">Hora</th>
               <th class="border border-1 p-2">Usuario</th>
-              <th class="border border-1 p-2">Tienda</th>
+              <th class="border border-1 p-2">sede</th>
               <th class="border border-1 p-2">Rol</th>
               <th class="border border-1 p-2">Tipo</th>
               <th class="border border-1 p-2">Tabla</th>

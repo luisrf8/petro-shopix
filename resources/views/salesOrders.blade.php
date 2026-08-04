@@ -5,9 +5,9 @@
 @php
   $salesOrdersUserRole = \App\Models\User::canonicalRoleName(optional(auth()->user()->role)->name);
   $salesOrdersIsSellerRole = in_array($salesOrdersUserRole, ['vendor', 'vendedor', 'seller'], true);
-  $salesOrdersTenant = ($salesOrdersTenantId = (int) (auth()->user()->tenant_id ?? 0)) > 0
+  $salesOrdersTenant = $tenant ?? (($salesOrdersTenantId = (int) (auth()->user()->tenant_id ?? 0)) > 0
     ? \App\Models\Tenant::find($salesOrdersTenantId)
-    : null;
+    : null);
   $salesOrdersCapabilities = \App\Support\TenantPlanCapabilities::forTenant($salesOrdersTenant);
   $salesOrdersFreePlan = !$salesOrdersCapabilities->canGenerateSalesReport();
 @endphp
@@ -162,7 +162,7 @@
                     <div class="col-6 col-md-2">
                       <select id="salesOrdersDeliveryFilter" class="form-control border border-1 p-2">
                         <option value="">Entrega (todas)</option>
-                        <option value="Tienda" {{ ($deliveryFilter ?? '') === 'Tienda' ? 'selected' : '' }}>Tienda</option>
+                        <option value="sede" {{ ($deliveryFilter ?? '') === 'sede' ? 'selected' : '' }}>sede</option>
                         <option value="delivery" {{ ($deliveryFilter ?? '') === 'delivery' ? 'selected' : '' }}>delivery</option>
                       </select>
                     </div>
@@ -253,7 +253,7 @@
                           <td>{{ $order->user ? $order->user->name : 'Usuario no asignado' }}</td>
                           <td>{{ $salesRepLabel }}</td>
                           <td class="text-center">
-                            <span class="badge badge-sm  {{ $order->preference == 'Tienda' ? 'bg-gradient-secondary' : 'bg-gradient-info' }}">{{ $order->preference }}
+                            <span class="badge badge-sm  {{ $order->preference == 'sede' ? 'bg-gradient-secondary' : 'bg-gradient-info' }}">{{ $order->preference }}
                             </span>
                           </td>
                           <td>{{ $order->total_items }}</td>

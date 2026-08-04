@@ -29,7 +29,7 @@ class DeliveryManager
                 'fee' => 0.0,
                 'mode' => 'pickup',
                 'distance_km' => null,
-                'label' => 'Retiro en tienda',
+                'label' => 'Retiro en sede',
                 'notifications_enabled' => $settings['notifications_enabled'],
             ];
         }
@@ -46,7 +46,7 @@ class DeliveryManager
         }
 
         if (!$settings['enabled']) {
-            throw new RuntimeException('La tienda no tiene delivery activo.');
+            throw new RuntimeException('La sede no tiene delivery activo.');
         }
 
         $mode = $settings['mode'];

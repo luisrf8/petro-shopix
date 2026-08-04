@@ -13,6 +13,7 @@ class ProjectTeamMember extends Model
 
     protected $fillable = [
         'tenant_id',
+        'team_group_id',
         'user_id',
         'full_name',
         'email',
@@ -33,6 +34,11 @@ class ProjectTeamMember extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function group()
+    {
+        return $this->belongsTo(ProjectTeamGroup::class, 'team_group_id');
     }
 
     public function payrollEntries()

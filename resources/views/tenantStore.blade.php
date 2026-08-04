@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Tienda')
+@section('title', 'sede')
 
 @section('content')
 <style>
@@ -207,7 +207,7 @@
     $tenantShopixUrl = url('/').'/'.$tenant->slug;
     $tenantStoreUrl = $tenantExternalUrl !== '' ? $tenantExternalUrl : $tenantShopixUrl;
     $freePlanOperationalLock = !$tenantPlanCapabilities->allowsOperationalDeliverySettings();
-    $tenantBusinessType = \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'tienda'));
+    $tenantBusinessType = \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'sede'));
     $isServiceBusinessType = in_array($tenantBusinessType, ['servicio', 'service', 'services'], true);
     $currentPlanName = $currentPlanPayment?->plan?->name ?? 'Sin plan activo';
     $currentPlanAmount = $currentPlanPayment?->amount;
@@ -225,11 +225,11 @@
     <div id="shopixToastContainer" class="shopix-toast-stack"></div>
     <div class="tenant-store-header mb-3">
         <div>
-            <h1 class="mb-1">Gestión de Tienda</h1>
-            <p class="text-sm text-muted mb-0">Administra la configuración comercial, operativa y visual de tu tienda.</p>
+            <h1 class="mb-1">Gestión de sede</h1>
+            <p class="text-sm text-muted mb-0">Administra la configuración comercial, operativa y visual de tu sede.</p>
         </div>
         <div class="tenant-store-url-box">
-            <label class="form-label fw-bold mb-1">URLs de la Tienda</label>
+            <label class="form-label fw-bold mb-1">URLs de la sede</label>
             <div class="tenant-store-url-stack">
                 <div class="tenant-store-url-row">
                     <p class="tenant-store-url-label">Shopix</p>
@@ -370,7 +370,7 @@
                             </button>
                         </li>
 
-                        {{-- NUEVO: Usuarios de la tienda --}}
+                        {{-- NUEVO: Usuarios de la sede --}}
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">
                                 Usuarios
@@ -410,19 +410,19 @@
                             {{-- TAB 1 --}}
                             <div class="tab-pane fade show active" id="info" role="tabpanel">
                                 <div class="mb-3">
-                                    <label class="form-label">Nombre de la Tienda</label>
+                                    <label class="form-label">Nombre de la sede</label>
                                     <input type="text" class="form-control p-2 border border-radius-lg" name="name" value="{{ $tenant->name ?? '' }}">
                                 </div>
 
                                 <div class="row mb-3">
                                     @php
                                         $tenantBusinessTypeForActivity = in_array(
-                                            \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'tienda')),
+                                            \Illuminate\Support\Str::lower((string) ($tenant->business_type ?? 'sede')),
                                             ['servicio', 'service', 'services'],
                                             true
-                                        ) ? 'servicio' : 'tienda';
+                                        ) ? 'servicio' : 'sede';
                                         $tenantBusinessCatalog = [
-                                            'tienda' => [
+                                            'sede' => [
                                                 'Supermercado y Abastos',
                                                 'Panaderia y Pasteleria',
                                                 'Moda y Boutique',
@@ -432,7 +432,7 @@
                                                 'Tecnologia y Computacion',
                                                 'Telefonia y Accesorios',
                                                 'Farmacia y Bienestar',
-                                                'Mascotas y Agrotienda',
+                                                'Mascotas y Agrosede',
                                                 'Papeleria, Libros y Juguetes',
                                                 'Repuestos y Accesorios Automotrices',
                                             ],
@@ -463,7 +463,7 @@
                                         <label for="business_type" class="form-label fw-bold">Tipo de negocio</label>
                                         <select name="business_type" id="business_type" class="form-select form-select-lg" required>
                                             <option value="">Selecciona una opción</option>
-                                            <option value="tienda" {{ !$isServiceBusinessType ? 'selected' : '' }}>Tienda</option>
+                                            <option value="sede" {{ !$isServiceBusinessType ? 'selected' : '' }}>sede</option>
                                             <option value="servicio" {{ $isServiceBusinessType ? 'selected' : '' }}>Servicio</option>
                                         </select>
                                     </div>
@@ -503,14 +503,14 @@
                                 </div>
 
                                 <div class="mb-3">
-                                    <label for="email" class="form-label fw-bold">Correo de la tienda</label>
+                                    <label for="email" class="form-label fw-bold">Correo de la sede</label>
                                     <input
                                         type="email"
                                         name="email"
                                         id="email"
                                         class="form-control p-2 border border-radius-lg"
                                         value="{{ old('email', $tenant->email ?? '') }}"
-                                        placeholder="tienda@dominio.com">
+                                        placeholder="sede@dominio.com">
                                     <small class="text-muted d-block mt-1">Este correo se mostrará en ordenes de despacho, cotizaciones y facturas.</small>
                                 </div>
 
@@ -528,7 +528,7 @@
                                 @endphp
 
                                 <div class="mb-4" id="physicalStoreScheduleFields">
-                                    <label class="form-label fw-bold d-block">Horario general de la tienda (base operativa)</label>
+                                    <label class="form-label fw-bold d-block">Horario general de la sede (base operativa)</label>
                                     <div class="row g-2 mb-3">
                                         @foreach($weekDays as $dayKey => $dayLabel)
                                             <div class="col-6 col-md-3">
@@ -549,7 +549,7 @@
                                             <input type="time" class="form-control border border-1 p-2" id="closing_time" name="closing_time" value="{{ !empty($tenant->closing_time) ? \Illuminate\Support\Str::substr((string) $tenant->closing_time, 0, 5) : '' }}">
                                         </div>
                                     </div>
-                                    <small class="text-muted d-block mt-2">Este horario define cuándo opera la tienda. Los turnos de cada vendedor/profesional se aplican sobre esta base.</small>
+                                    <small class="text-muted d-block mt-2">Este horario define cuándo opera la sede. Los turnos de cada vendedor/profesional se aplican sobre esta base.</small>
                                 </div>
 
                                 <div class="mb-3">
@@ -570,12 +570,12 @@
                                         id="storeExternalUrlInput"
                                         name="external_url"
                                         value="{{ old('external_url', $tenant->external_url ?? '') }}"
-                                        placeholder="https://mitienda.com">
+                                        placeholder="https://misede.com">
                                     <small class="text-muted d-block mt-1">Si la completas, el directorio de Shopix redireccionara hacia esta URL.</small>
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label">RIF de la tienda (opcional)</label>
+                                    <label class="form-label">RIF de la sede (opcional)</label>
                                     <input
                                         type="text"
                                         class="form-control p-2 border border-radius-lg"
@@ -631,7 +631,7 @@
                                                 Activar servicio de citas
                                             </label>
                                         </div>
-                                        <small class="text-muted d-block mt-1">Si se desactiva, el calendario de citas no se mostrará en la tienda pública.</small>
+                                        <small class="text-muted d-block mt-1">Si se desactiva, el calendario de citas no se mostrará en la sede pública.</small>
                                         <input type="hidden" name="appointments_first_come_enabled" value="0">
                                         <div class="form-check form-switch">
                                             <input
@@ -681,7 +681,7 @@
                                                 Este tenant ofrece proyectos
                                             </label>
                                         </div>
-                                        <small class="text-muted d-block mt-1">Controla si la tienda puede ver el módulo de Proyectos.</small>
+                                        <small class="text-muted d-block mt-1">Controla si la sede puede ver el módulo de Proyectos.</small>
                                     </div>
 
                                     <div class="mb-3">
@@ -700,7 +700,7 @@
                                                 Mostrar "Producto - Categoría" en listados
                                             </label>
                                         </div>
-                                        <small class="text-muted d-block mt-1">Si está activo, se agrega " - categoría" al nombre visible de productos y servicios en toda la tienda de este tenant.</small>
+                                        <small class="text-muted d-block mt-1">Si está activo, se agrega " - categoría" al nombre visible de productos y servicios en toda la sede de este tenant.</small>
                                     </div>
 
                                     @unless($freePlanOperationalLock)
@@ -717,7 +717,7 @@
                                                 value="1"
                                                 {{ (bool) ($tenant->special_taxpayer ?? false) ? 'checked' : '' }}>
                                             <label class="form-check-label" for="special_taxpayer">
-                                                La tienda es contribuyente especial
+                                                La sede es contribuyente especial
                                             </label>
                                         </div>
                                         <small class="text-muted">Si está activo, el sistema podrá aplicar IGTF en cobros elegibles en divisas/moneda extranjera.</small>
@@ -757,14 +757,14 @@
                                                 value="1"
                                                 {{ (bool) ($tenant->restrict_delivery_city_to_tenant ?? true) ? 'checked' : '' }}>
                                             <label class="form-check-label" for="restrict_delivery_city_to_tenant">
-                                                Permitir envíos solo en la ciudad de la tienda
+                                                Permitir envíos solo en la ciudad de la sede
                                             </label>
                                         </div>
-                                        <small class="text-muted">Si se desactiva, la tienda puede registrar envíos a cualquier ciudad.</small>
+                                        <small class="text-muted">Si se desactiva, la sede puede registrar envíos a cualquier ciudad.</small>
                                     </div>
 
                                     <div class="mb-3">
-                                        <label class="form-label fw-bold d-block">Activar delivery de la tienda</label>
+                                        <label class="form-label fw-bold d-block">Activar delivery de la sede</label>
                                         <input type="hidden" name="delivery_enabled" value="0">
                                         <div class="form-check form-switch">
                                             <input
@@ -803,7 +803,7 @@
                                     @endunless
 
                                     <div class="mb-0">
-                                        <label class="form-label fw-bold d-block">Mostrar precios en Bs en la tienda</label>
+                                        <label class="form-label fw-bold d-block">Mostrar precios en Bs en la sede</label>
                                         <div class="form-check form-switch">
                                             <input
                                                 class="form-check-input"
@@ -814,7 +814,7 @@
                                                 value="1"
                                                 {{ (bool) ($tenant->show_bs_prices_in_storefront ?? false) ? 'checked' : '' }}>
                                             <label class="form-check-label" for="show_bs_prices_in_storefront">
-                                                Mostrar un precio pequeño en bolívares según la tasa BCV de esta tienda
+                                                Mostrar un precio pequeño en bolívares según la tasa BCV de esta sede
                                             </label>
                                         </div>
                                         <small class="text-muted">El precio base seguirá siendo la moneda madre; Bs se mostrará como referencia adicional.</small>
@@ -907,7 +907,7 @@
                                 <div class="mb-3">
                                     <label class="form-label">Logo de facturación / PDFs (PNG, JPG, JPEG o SVG)</label>
                                     <input type="file" name="billing_logo" id="billing_logo" class="form-control form-control-lg border border-radius-lg" accept=".png,.jpg,.jpeg,.webp,.svg">
-                                    <small class="text-muted">Este logo se usa en facturas, cotizaciones y documentos PDF. El logo principal de la tienda se mantiene aparte.</small>
+                                    <small class="text-muted">Este logo se usa en facturas, cotizaciones y documentos PDF. El logo principal de la sede se mantiene aparte.</small>
                                 </div>
                                 <div class="mb-4">
                                     @php
@@ -976,7 +976,7 @@
                                             <option value="secondary" {{ ($tenant->logo_chip_background ?? '') === 'secondary' ? 'selected' : '' }}>Color secundario</option>
                                             <option value="accent" {{ ($tenant->logo_chip_background ?? '') === 'accent' ? 'selected' : '' }}>Tercero (acento)</option>
                                         </select>
-                                        <small class="text-muted">Define el color del fondo del recuadro del logo en la tienda pública.</small>
+                                        <small class="text-muted">Define el color del fondo del recuadro del logo en la sede pública.</small>
                                     </div>
                                 </div>
                                 <div class="row mb-4">
@@ -1068,7 +1068,7 @@
                                     $tenantUsersActorRole = \App\Models\User::canonicalRoleName(optional($tenantUsersActor->role)->name);
                                     $canManageTenantUsers = in_array($tenantUsersActorRole, ['owner', 'admin'], true);
                                 @endphp
-                                <h5 class="mt-2">Usuarios de la tienda</h5>
+                                <h5 class="mt-2">Usuarios de la sede</h5>
                                 @if($isFreePlanTenant ?? false)
                                     <div class="alert alert-secondary border mb-4">
                                         En plan Free puedes visualizar los usuarios existentes, pero no crear usuarios adicionales desde esta pantalla.
@@ -1096,7 +1096,7 @@
                                     <div class="modal-dialog modal-lg modal-dialog-scrollable">
                                         <div class="modal-content">
                                             <div class="modal-header">
-                                                <h5 class="modal-title" id="tenantUsersModalLabel">Usuarios de la tienda</h5>
+                                                <h5 class="modal-title" id="tenantUsersModalLabel">Usuarios de la sede</h5>
                                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                             </div>
                                             <div class="modal-body">
@@ -1118,7 +1118,7 @@
                                                                 <strong>{{ $user->name }}</strong>
                                                                 <small class="d-block text-muted">{{ $user->email }}</small>
                                                                 <small class="d-block text-muted">Tel: {{ $user->phone_number ?: 'No registrado' }} | DNI: {{ $user->dni ?: 'No registrado' }}</small>
-                                                                <small class="d-block text-muted">{{ ($roleDefinitions[\App\Models\User::canonicalRoleName(optional($user->role)->name)]['description'] ?? 'Usuario operativo de la tienda.') }}</small>
+                                                                <small class="d-block text-muted">{{ ($roleDefinitions[\App\Models\User::canonicalRoleName(optional($user->role)->name)]['description'] ?? 'Usuario operativo de la sede.') }}</small>
                                                                 @if($canManageTenantUsers)
                                                                     <div class="d-flex flex-wrap gap-2 mt-2">
                                                                         <button
@@ -1479,7 +1479,7 @@
                 <div class="d-flex gap-3 align-items-center mb-2">
                     <div class="form-check m-0">
                         <input class="" type="checkbox" id="aiUseStoreColors" checked>
-                        <label class="form-check-label" for="aiUseStoreColors">Usar colores de la tienda</label>
+                        <label class="form-check-label" for="aiUseStoreColors">Usar colores de la sede</label>
                     </div>
                     <div class="form-check m-0">
                         <input class="" type="checkbox" id="aiUseBackgroundRatio" checked>
@@ -1664,7 +1664,7 @@
         const parts = [
             ['users', 'usuarios'],
             ['payment_methods', 'métodos de pago'],
-            ['store_catalog', 'items de tienda'],
+            ['store_catalog', 'items de sede'],
             ['service_catalog', 'servicios'],
             ['schedule_rules', 'horarios'],
             ['social_profiles', 'perfiles sociales'],
@@ -1775,7 +1775,7 @@
         setValue('input[name="name"]', tenant.name);
         setValue(
             'select[name="business_type"]',
-            ['servicio', 'service', 'services'].includes(String(tenant.business_type || '').toLowerCase()) ? 'servicio' : 'tienda'
+            ['servicio', 'service', 'services'].includes(String(tenant.business_type || '').toLowerCase()) ? 'servicio' : 'sede'
         );
         setValue('#phone_code', tenant.phone_code);
         setValue('#phone_number', tenant.phone_number);
@@ -1844,7 +1844,7 @@
         const socialProfiles = buildTenantSocialProfilesPayload();
 
         return [
-            'Investiga la presencia digital y comercial de esta empresa usando solo estas redes sociales y devuelve un JSON estructurado para autocompletar la tienda, incluyendo tenant, usuarios, medios de pago, catalogo, servicios, horarios y social_profiles.',
+            'Investiga la presencia digital y comercial de esta empresa usando solo estas redes sociales y devuelve un JSON estructurado para autocompletar la sede, incluyendo tenant, usuarios, medios de pago, catalogo, servicios, horarios y social_profiles.',
             socialProfiles.length
                 ? `Perfiles sociales: ${socialProfiles.map((profile) => `${profile.platform}: ${profile.handle || profile.url || ''}`.trim()).join(' | ')}.`
                 : 'No se proporcionaron perfiles sociales y debes inferir la estructura base con las senales disponibles.',
@@ -2508,7 +2508,7 @@ function initMap() {
     const tenantHasPendingPlanPayment = {{ $pendingPlanPayment ? 'true' : 'false' }};
 
     const businessCatalog = {
-        tienda: [
+        sede: [
             'Supermercado y Abastos',
             'Panaderia y Pasteleria',
             'Moda y Boutique',
@@ -2518,7 +2518,7 @@ function initMap() {
             'Tecnologia y Computacion',
             'Telefonia y Accesorios',
             'Farmacia y Bienestar',
-            'Mascotas y Agrotienda',
+            'Mascotas y Agrosede',
             'Papeleria, Libros y Juguetes',
             'Repuestos y Accesorios Automotrices'
         ],
@@ -2546,7 +2546,7 @@ function initMap() {
         'Tecnologia y Computacion': 'Computadoras, gaming, electronica, impresoras, consumibles.',
         'Telefonia y Accesorios': 'Celulares, tablets, fundas, cargadores, wearables.',
         'Farmacia y Bienestar': 'Farmacias, suplementos, cuidado personal, ortopedia ligera.',
-        'Mascotas y Agrotienda': 'Pet shop, alimento para mascotas, insumos veterinarios, agroinsumos.',
+        'Mascotas y Agrosede': 'Pet shop, alimento para mascotas, insumos veterinarios, agroinsumos.',
         'Papeleria, Libros y Juguetes': 'Papelerias, librerias, regalos educativos, jugueterias.',
         'Repuestos y Accesorios Automotrices': 'Lubricantes, baterias, repuestos, accesorios para vehiculos.',
         'Restaurante, Cafeteria y Delivery': 'Restaurantes, lunch, cafeterias, dark kitchen, delivery.',
@@ -2566,7 +2566,7 @@ function initMap() {
             return;
         }
 
-        const businessType = ['servicio', 'service', 'services'].includes(String(businessTypeSelect.value || 'tienda').toLowerCase()) ? 'servicio' : 'tienda';
+        const businessType = ['servicio', 'service', 'services'].includes(String(businessTypeSelect.value || 'sede').toLowerCase()) ? 'servicio' : 'sede';
         const options = businessCatalog[businessType] || [];
         const help = document.getElementById('economic_activity_help');
 
@@ -3599,7 +3599,7 @@ if (editUserForm) {
             const data = await response.json().catch(() => ({}));
 
             if (response.ok && data.success) {
-                showTenantToast(data.message || 'Tienda actualizada correctamente.', 'success');
+                showTenantToast(data.message || 'sede actualizada correctamente.', 'success');
                 setTimeout(() => window.location.reload(), 700);
                 return;
             }

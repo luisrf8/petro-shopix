@@ -98,7 +98,7 @@
       $storePhone = preg_replace('/\D+/', '', (string) (($order->tenant->phone_code ?? '') . ($order->tenant->phone_number ?? '')));
       $customerPhone = preg_replace('/\D+/', '', (string) ($order->user->phone_number ?? ''));
       $storeWhatsappUrl = $storePhone !== ''
-        ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'tienda') . ', sobre la orden #' . $order->id . '.')
+        ? 'https://wa.me/' . $storePhone . '?text=' . rawurlencode('Hola ' . ($order->tenant->name ?? 'sede') . ', sobre la orden #' . $order->id . '.')
         : null;
       $publicDeliveryPdfUrl = route('public.order.pdf', ['id' => $order->id, 'type' => 'delivery']);
       $orderProductsSummary = $order->details
@@ -123,7 +123,7 @@
         $orderProductsSummary = 'Productos no especificados';
       }
       $orderDateText = trim((string) ($order->date ?? 'sin fecha registrada'));
-      $tenantNameForMessage = trim((string) ($order->tenant->name ?? 'la tienda'));
+      $tenantNameForMessage = trim((string) ($order->tenant->name ?? 'la sede'));
       $customerWhatsappUrl = $customerPhone !== ''
         ? 'https://wa.me/' . $customerPhone . '?text=' . rawurlencode('Hola ' . ($order->user->name ?? 'cliente') . ', te saludamos de parte de ' . $tenantNameForMessage . '. Te compartimos la orden de entrega número #' . $order->id . '. Productos comprados: ' . $orderProductsSummary . '. Fecha de compra: ' . $orderDateText . '. PDF de la orden:' . "\n" . $publicDeliveryPdfUrl)
         : null;

@@ -18,32 +18,58 @@ class RolesAndAdminSeeder extends Seeder
     public function run()
     {
         // Crear roles
-        $adminRole = Role::create(['name' => 'admin']);
-        $vendorRole = Role::create(['name' => 'vendor']);
-        $userRole = Role::create(['name' => 'user']);
+        $superownerRole = Role::firstOrCreate(['name' => 'superowner']);
+        $adminRole = Role::firstOrCreate(['name' => 'admin']);
+        $sedeAdminRole = Role::firstOrCreate(['name' => 'sede_admin']);
+        $vendorRole = Role::firstOrCreate(['name' => 'vendor']);
+        $userRole = Role::firstOrCreate(['name' => 'user']);
 
-        // Crear el usuario administrador
-        User::create([
-            'name' => 'Admin',
-            'email' => 'admin@example.com',
-            'password' => Hash::make('admin'),
-            'role_id' => $adminRole->id,
-        ]);
+        // Crear el usuario administrador corporativo
+        User::firstOrCreate(
+            ['email' => 'superowner@example.com'],
+            [
+                'name' => 'Superowner',
+                'password' => Hash::make('superowner'),
+                'role_id' => $superownerRole->id,
+            ]
+        );
+
+        User::firstOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'name' => 'Admin',
+                'password' => Hash::make('admin'),
+                'role_id' => $adminRole->id,
+            ]
+        );
+
+        User::firstOrCreate(
+            ['email' => 'sede-admin@example.com'],
+            [
+                'name' => 'Admin de sede',
+                'password' => Hash::make('sede-admin'),
+                'role_id' => $sedeAdminRole->id,
+            ]
+        );
 
         // Crear un usuario vendedor de ejemplo
-        User::create([
-            'name' => 'Vendor',
-            'email' => 'vendor@example.com',
-            'password' => Hash::make('vendor'),
-            'role_id' => $vendorRole->id,
-        ]);
+        User::firstOrCreate(
+            ['email' => 'vendor@example.com'],
+            [
+                'name' => 'Vendor',
+                'password' => Hash::make('vendor'),
+                'role_id' => $vendorRole->id,
+            ]
+        );
 
         // Crear un usuario normal de ejemplo
-        User::create([
-            'name' => 'User',
-            'email' => 'user@example.com',
-            'password' => Hash::make('user'),
-            'role_id' => $userRole->id,
-        ]);
+        User::firstOrCreate(
+            ['email' => 'user@example.com'],
+            [
+                'name' => 'User',
+                'password' => Hash::make('user'),
+                'role_id' => $userRole->id,
+            ]
+        );
     }
 }

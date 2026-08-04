@@ -440,7 +440,7 @@
                       </div>
 
                       @if(($warehouses ?? collect())->isEmpty())
-                        <div class="alert alert-light border text-dark mb-0">No hay almacenes activos configurados para esta tienda.</div>
+                        <div class="alert alert-light border text-dark mb-0">No hay almacenes activos configurados para esta sede.</div>
                       @else
                         <div class="table-responsive">
                           <table class="table align-middle">

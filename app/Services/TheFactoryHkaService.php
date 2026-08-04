@@ -1116,7 +1116,7 @@ class TheFactoryHkaService
             if ($sourceAmount <= 0) {
                 $sourceAmount = round((float) ($payment->amount ?? 0), 2);
             }
-            $paymentDescription = (string) ($payment->payment->name ?? 'Pago tienda');
+            $paymentDescription = (string) ($payment->payment->name ?? 'Pago sede');
 
             if (
                 $emitOtherCurrency
@@ -1154,7 +1154,7 @@ class TheFactoryHkaService
 
         if (empty($payments)) {
             $payments = [[
-                'descripcion' => 'Pago tienda',
+                'descripcion' => 'Pago sede',
                 'fecha' => Carbon::parse((string) ($order->date ?? now()->toDateString()))->format('d/m/Y'),
                 'forma' => '99',
                 'monto' => $this->formatAmount($documentTotalPagar, 2),

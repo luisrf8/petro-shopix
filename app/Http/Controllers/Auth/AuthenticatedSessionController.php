@@ -656,7 +656,7 @@ class AuthenticatedSessionController extends Controller
             $redirectTo = '/' . ltrim($redirectTo, '/');
         }
 
-        if (Str::startsWith($redirectTo, ['/admin', '/dashboard', '/plans', '/notifications'])) {
+        if (Str::startsWith($redirectTo, ['/admin', '/dashboard', '/notifications'])) {
             return '/';
         }
 

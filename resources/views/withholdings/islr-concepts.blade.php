@@ -73,7 +73,7 @@
               <td>{{ number_format((float) $concept->sustraendo_ut, 4) }}</td>
               <td>{{ strtoupper($concept->applicable_person_type) }}</td>
               <td>{{ $concept->applicable_residency_type }}</td>
-              <td>{{ $concept->tenant_id ? 'Tienda' : 'Global' }}</td>
+              <td>{{ $concept->tenant_id ? 'sede' : 'Global' }}</td>
               <td>{{ $concept->is_active ? 'Si' : 'No' }}</td>
             </tr>
           @empty

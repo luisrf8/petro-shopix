@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Tiendas')
+@section('title', 'sedes')
 
 @section('content')
 <style>
@@ -210,36 +210,36 @@
               <div class="h-100 d-flex flex-column justify-content-between">
                 <div>
                   <span class="tenant-stat-eyebrow">Admin Superior</span>
-                  <h3 class="mt-3 mb-2">Dashboard operativo de tiendas</h3>
+                  <h3 class="mt-3 mb-2">Dashboard operativo de sedes</h3>
                   <p class="text-sm text-muted mb-0">
-                    Vista rápida para seguimiento comercial, cobros pendientes y estado de facturación digital en todo SHOPIX.
+                    Vista rápida para seguimiento comercial y estado operativo de las sedes en todo SHOPIX.
                   </p>
                 </div>
                 <div class="d-flex flex-wrap gap-2 mt-3">
-                  <a href="{{ route('tenant.payments.index') }}#pending-payments-section" class="btn btn-dark btn-sm mb-0">Ver pagos pendientes</a>
+                  <a href="#tenants-table" class="btn btn-dark btn-sm mb-0">Ver sedes</a>
                   <a href="{{ route('electronic.documents.index') }}" class="btn btn-outline-dark btn-sm mb-0">Ver facturación digital</a>
                 </div>
               </div>
             </div>
             <div class="col-sm-6 col-xl-2">
               <div class="tenant-stat-card p-3">
-                <span class="tenant-stat-eyebrow">Tiendas</span>
+                <span class="tenant-stat-eyebrow">sedes</span>
                 <div class="tenant-stat-number mt-3">{{ $tenants->count() }}</div>
                 <p class="text-sm text-muted mb-0 mt-2">{{ $activeTenantsCount }} activas y {{ $inactiveTenantsCount }} inactivas.</p>
               </div>
             </div>
             <div class="col-sm-6 col-xl-2">
               <div class="tenant-stat-card p-3">
-                <span class="tenant-stat-eyebrow">Cobranza</span>
+                <span class="tenant-stat-eyebrow">Gestión</span>
                 <div class="tenant-stat-number mt-3">{{ $pendingPayments->count() }}</div>
-                <p class="text-sm text-muted mb-0 mt-2">Pagos de planes esperando revisión.</p>
+                <p class="text-sm text-muted mb-0 mt-2">Solicitudes administrativas en revisión.</p>
               </div>
             </div>
             <div class="col-sm-6 col-xl-2">
               <div class="tenant-stat-card p-3">
-                <span class="tenant-stat-eyebrow">Vencimientos</span>
+                <span class="tenant-stat-eyebrow">Estado</span>
                 <div class="tenant-stat-number mt-3">{{ $nearDueTenants->count() + $overdueTenants->count() }}</div>
-                <p class="text-sm text-muted mb-0 mt-2">{{ $nearDueTenants->count() }} por vencer y {{ $overdueTenants->count() }} vencidas.</p>
+                <p class="text-sm text-muted mb-0 mt-2">{{ $activeTenantsCount }} activas y {{ $inactiveTenantsCount }} inactivas.</p>
               </div>
             </div>
             <div class="col-sm-6 col-xl-2">
@@ -269,7 +269,7 @@
               <table class="table align-items-center mb-0">
                 <thead>
                   <tr>
-                    <th>Tienda</th>
+                    <th>sede</th>
                     <th>Plan</th>
                     <th>Monto</th>
                     <th>Referencia</th>
@@ -336,7 +336,7 @@
               @endforeach
             </div>
           @else
-            <p class="text-sm text-muted mb-0">No hay tiendas próximas de pago dentro de los próximos 7 días.</p>
+            <p class="text-sm text-muted mb-0">No hay sedes próximas de pago dentro de los próximos 7 días.</p>
           @endif
         </div>
       </div>
@@ -362,7 +362,7 @@
               @endforeach
             </div>
           @else
-            <p class="text-sm text-muted mb-0">No hay tiendas vencidas actualmente.</p>
+            <p class="text-sm text-muted mb-0">No hay sedes vencidas actualmente.</p>
           @endif
         </div>
       </div>
@@ -370,15 +370,15 @@
   </div>
 
   <!-- Tabla para mostrar tenants -->
-  <div class="row">
+  <div class="row" id="tenants-table">
     <div class="col-12">
       <div class="card my-4">
         <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
           <div class="bg-gradient-dark shadow-dark border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
-            <h6 class="text-white text-capitalize ps-3">TIENDAS</h6>
+            <h6 class="text-white text-capitalize ps-3">sedeS</h6>
             <a href="/create-tenant" blank="_blank">
               <div class="py-1 px-3 text-end">
-                <label class="text-white">+ Agregar Tienda</label>
+                <label class="text-white">+ Agregar sede</label>
               </div>
             </a>
           </div>
@@ -396,7 +396,7 @@
                   <th>Rubro</th>
                   <th>Facturación digital</th>
                   <th>Contribuyente especial</th>
-                  <th>Envío solo ciudad tienda</th>
+                  <th>Envío solo ciudad sede</th>
                   <th>Estado</th>
                   <th class="tenant-plan-cell">Plan</th>
                   <th class="tenant-actions-head--edit">Editar</th>
@@ -547,8 +547,8 @@
 
   <div id="tenantDeleteOverlay" class="tenant-delete-overlay" aria-hidden="true">
     <div class="tenant-delete-overlay-card">
-      <div class="tenant-delete-overlay-spinner" role="status" aria-label="Eliminando tienda"></div>
-      <h6 class="mb-2">Eliminando tienda</h6>
+      <div class="tenant-delete-overlay-spinner" role="status" aria-label="Eliminando sede"></div>
+      <h6 class="mb-2">Eliminando sede</h6>
       <p class="mb-0 text-muted">Procesando dependencias y limpieza de registros. No cierres esta pantalla.</p>
     </div>
   </div>
@@ -582,7 +582,7 @@
       const tenantId = this.dataset.id;
       if (!tenantId) return;
 
-      if (!window.confirm('¿Eliminar esta tienda? Si tiene datos asociados, el proceso puede tardar unos segundos.')) {
+      if (!window.confirm('¿Eliminar esta sede? Si tiene datos asociados, el proceso puede tardar unos segundos.')) {
         return;
       }
 
@@ -600,17 +600,17 @@
       .then(async response => {
         const data = await response.json();
         if (!response.ok) {
-          throw new Error(data.message || 'Ocurrió un error al eliminar la tienda');
+          throw new Error(data.message || 'Ocurrió un error al eliminar la sede');
         }
         return data;
       })
       .then(data => {
-        alert('Tienda eliminada correctamente');
+        alert('sede eliminada correctamente');
         window.location.reload();
       })
       .catch(error => {
         console.error('Error:', error);
-        alert(error.message || 'Ocurrió un error al eliminar la tienda');
+        alert(error.message || 'Ocurrió un error al eliminar la sede');
       })
       .finally(() => {
         setTenantDeleteLoading(false);
